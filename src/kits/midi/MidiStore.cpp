@@ -312,6 +312,16 @@ BMidiStore::CountEvents() const
 
 
 uint32
+BMidiStore::DurationMs() const
+{
+	if (fEvents == NULL || fEvents->CountItems() == 0)
+		return 0;
+	const_cast<BMidiStore*>(this)->SortEvents(false);
+	return GetEventTime(EventAt(fEvents->CountItems() - 1));
+}
+
+
+uint32
 BMidiStore::CurrentEvent() const
 {
 	return (uint32)fCurrentEvent;
@@ -933,7 +943,9 @@ BMidiStore::Run()
 {
 	// Playback loop on the app thread. Event times are absolute milliseconds
 	// from file start; spray with midi1 time (ms) and let the midi2 façade
-	// scheduler hold them until due.
+	// scheduler hold them until due. Playback starts at fCurrentEvent so a
+	// stop/seek/start resumes from the right place, with the timeline
+	// rebased so the remaining events keep their spacing.
 	SortEvents(false);
 	fFinished = false;
 	uint32 count = CountEvents();
@@ -944,20 +956,25 @@ BMidiStore::Run()
 		return;
 	}
 
+	uint32 first = (uint32)fCurrentEvent;
+	if (first >= count)
+		first = 0;
+	uint32 base = GetEventTime(EventAt((int32)first));
 	uint32 start = B_NOW;
-	fStartTime = start;
+	fStartTime = start - base;
 
-	for (uint32 i = 0; i < count && KeepRunning(); i++) {
+	for (uint32 i = first; i < count && KeepRunning(); i++) {
 		while (fPaused && KeepRunning())
 			snooze(20000);
 		if (!KeepRunning())
 			break;
 
+		fCurrentEvent = (int32)i;
 		BMidiEvent* event = EventAt((int32)i);
 		if (event == NULL)
 			continue;
 
-		uint32 eventTime = start + event->time;
+		uint32 eventTime = fStartTime + GetEventTime(event);
 		SnoozeUntil(eventTime);
 		if (!KeepRunning())
 			break;
@@ -965,12 +982,18 @@ BMidiStore::Run()
 		SprayEvent(event, eventTime);
 	}
 
+	// The hook means "the song ended", not "someone called Stop()"; a
+	// stopped run must not fire it or every stop would advance the
+	// playlist.
+	bool stopped = !KeepRunning();
 	fFinished = true;
-	if (fHookFunc != NULL)
+	if (!stopped && fHookFunc != NULL)
 		fHookFunc(fHookArg);
 
-	if (fLooping && KeepRunning())
+	if (fLooping && !stopped) {
+		fCurrentEvent = 0;
 		Run();
+	}
 }
 
 

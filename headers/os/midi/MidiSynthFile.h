@@ -32,7 +32,7 @@ public:
 
 	int32 Duration(void) const;
 	int32 Position(int32 ticks) const;
-	int32 Seek();
+	int32 Seek(int32 msecs);
 
 	status_t GetPatches(int16* pArray768, int16* pReturnedCount) const;
 

@@ -60,6 +60,9 @@ public:
 	void SortEvents(bool force = false);
 	uint32 CountEvents() const;
 
+	// Song length in milliseconds (time of the last sorted event).
+	uint32 DurationMs() const;
+
 	uint32 CurrentEvent() const;
 	void SetCurrentEvent(uint32 eventNumber);
 

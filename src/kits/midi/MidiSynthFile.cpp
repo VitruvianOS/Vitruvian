@@ -111,21 +111,52 @@ BMidiSynthFile::Resume()
 int32
 BMidiSynthFile::Duration() const
 {
-	return 0;
+	return fStore != NULL ? (int32)fStore->DurationMs() : 0;
 }
 
 
 int32
 BMidiSynthFile::Position(int32) const
 {
-	return 0;
+	if (fStore == NULL)
+		return 0;
+
+	int32 duration = (int32)fStore->DurationMs();
+	if (!fStore->fFinished && fStore->fStartTime != 0) {
+		int32 position = (int32)((uint32)B_NOW - fStore->fStartTime);
+		if (position < 0)
+			position = 0;
+		if (duration > 0 && position > duration)
+			position = duration;
+		return position;
+	}
+
+	// Not running: report the resume point.
+	const BMidiEvent* event = fStore->EventAt(fStore->fCurrentEvent);
+	return event != NULL ? (int32)fStore->GetEventTime(event) : 0;
 }
 
 
 int32
-BMidiSynthFile::Seek()
+BMidiSynthFile::Seek(int32 msecs)
 {
-	return 0;
+	if (fStore == NULL)
+		return -1;
+	if (msecs < 0)
+		msecs = 0;
+	int32 duration = (int32)fStore->DurationMs();
+	if (duration > 0 && msecs > duration)
+		msecs = duration;
+
+	// The run thread reads fCurrentEvent at start; a running seek
+	// restarts it from the new event with the timeline rebased.
+	bool running = fStore->IsRunning();
+	if (running)
+		fStore->Stop();
+	fStore->SetCurrentEvent(fStore->EventAtDelta((uint32)msecs));
+	if (running)
+		fStore->Start();
+	return msecs;
 }
 
 
@@ -143,15 +174,17 @@ BMidiSynthFile::GetPatches(int16* pArray768, int16* pReturnedCount) const
 void
 BMidiSynthFile::SetFileHook(synth_file_hook pSongHook, int32 arg)
 {
-	(void)pSongHook;
-	(void)arg;
+	if (fStore == NULL)
+		return;
+	fStore->fHookFunc = pSongHook;
+	fStore->fHookArg = arg;
 }
 
 
 bool
 BMidiSynthFile::IsFinished() const
 {
-	return true;
+	return fStore != NULL ? fStore->fFinished : true;
 }
 
 

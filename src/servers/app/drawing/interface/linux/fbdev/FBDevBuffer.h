@@ -40,4 +40,29 @@ private:
 			struct fb_fix_screeninfo fInfo;
 };
 
+
+// One page of a panned framebuffer: a non-owning view at
+// page * BytesPerRow() * Height() into the mapping. The front buffer
+// reported to app_server is whichever page the scanout shows.
+class FBDevPage : public RenderingBuffer {
+public:
+								FBDevPage();
+								FBDevPage(FBDevBuffer* buffer, uint32 page);
+								~FBDevPage();
+
+			void				SetTo(FBDevBuffer* buffer, uint32 page);
+
+	virtual	status_t			InitCheck() const;
+
+	virtual	color_space			ColorSpace() const;
+	virtual	void*				Bits() const;
+	virtual	uint32				BytesPerRow() const;
+	virtual	uint32				Width() const;
+	virtual	uint32				Height() const;
+
+private:
+			FBDevBuffer*		fBuffer;
+			uint32				fPage;
+};
+
 #endif // ACCELERANT_BUFFER_H

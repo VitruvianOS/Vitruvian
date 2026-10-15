@@ -97,3 +97,85 @@ FBDevBuffer::Height() const
 	CALLED();
 	return fVInfo.yres;
 }
+
+
+FBDevPage::FBDevPage()
+	:
+	fBuffer(NULL),
+	fPage(0)
+{
+}
+
+
+FBDevPage::FBDevPage(FBDevBuffer* buffer, uint32 page)
+	:
+	fBuffer(buffer),
+	fPage(page)
+{
+}
+
+
+FBDevPage::~FBDevPage()
+{
+}
+
+
+void
+FBDevPage::SetTo(FBDevBuffer* buffer, uint32 page)
+{
+	fBuffer = buffer;
+	fPage = page;
+}
+
+
+status_t
+FBDevPage::InitCheck() const
+{
+	if (fBuffer == NULL || fBuffer->InitCheck() != B_OK)
+		return B_ERROR;
+	if (fBuffer->Bits() == NULL)
+		return B_ERROR;
+	return B_OK;
+}
+
+
+color_space
+FBDevPage::ColorSpace() const
+{
+	if (fBuffer == NULL)
+		return B_RGB32;
+	return fBuffer->ColorSpace();
+}
+
+
+void*
+FBDevPage::Bits() const
+{
+	if (fBuffer == NULL || fBuffer->Bits() == NULL)
+		return NULL;
+
+	uint8_t* base = (uint8_t*)fBuffer->Bits();
+	return base + (uint64)fPage * fBuffer->BytesPerRow()
+		* fBuffer->Height();
+}
+
+
+uint32
+FBDevPage::BytesPerRow() const
+{
+	return fBuffer != NULL ? fBuffer->BytesPerRow() : 0;
+}
+
+
+uint32
+FBDevPage::Width() const
+{
+	return fBuffer != NULL ? fBuffer->Width() : 0;
+}
+
+
+uint32
+FBDevPage::Height() const
+{
+	return fBuffer != NULL ? fBuffer->Height() : 0;
+}

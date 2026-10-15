@@ -8,6 +8,7 @@
 #include "FBDevBuffer.h"
 #include "FBDevFormat.h"
 #include "FBDevMode.h"
+#include "FBDevPanning.h"
 #include "IntRect.h"
 #include "MallocBuffer.h"
 
@@ -33,6 +34,10 @@ FBDevHWInterface::FBDevHWInterface()
 	fTTY(-1),
 	fModeSetSupported(false),
 	fBlankSupported(false),
+	fPanningSupported(false),
+	fVsyncSupported(false),
+	fPageCount(1),
+	fFrontPage(0),
 	fDPMSState(B_DPMS_ON),
 	fEventStream(NULL)
 {
@@ -99,6 +104,10 @@ FBDevHWInterface::FBDevHWInterface()
 		fModeSetSupported ? "supported" : "rejected (fixed mode)",
 		fBlankSupported ? "supported" : "rejected");
 
+	// Before the mmap: on success the mapping has to cover all the
+	// pages the probe just asked the driver for.
+	_ProbePanning();
+
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo);
 	if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK) {
 		fprintf(stderr, "FBDevHWInterface: framebuffer mmap failed\n");
@@ -108,6 +117,7 @@ FBDevHWInterface::FBDevHWInterface()
 		fFrameBuffer = -1;
 		return;
 	}
+	fFrontPageView.SetTo(fFrontBuffer, 0);
 
 	// Drawing goes to an in-memory B_RGBA32 buffer; dirty rects are copied
 	// to the mapped framebuffer on CopyBackToFront.
@@ -156,6 +166,10 @@ FBDevHWInterface::_EnterGraphicsMode()
 void
 FBDevHWInterface::_LeaveGraphicsMode()
 {
+	// The console resumes on page 0; hand the scanout back there before
+	// text mode comes back, or the user reads whatever page we panned to.
+	_RestoreScanoutOrigin();
+
 	if (fTTY < 0)
 		return;
 
@@ -195,6 +209,254 @@ FBDevHWInterface::_AdoptVar(const struct fb_var_screeninfo& var)
 	fDisplayMode.virtual_height = var.yres;
 	fDisplayMode.h_display_start = 0;
 	fDisplayMode.v_display_start = 0;
+}
+
+
+void
+FBDevHWInterface::_ProbePanning()
+{
+	fPanningSupported = false;
+	fPageCount = 1;
+	fFrontPage = 0;
+	fFrontPageView.SetTo(NULL, 0);
+
+	uint32 page;
+	for (page = 0; page < kMaxPanningPages; page++)
+		fPageDirty[page].MakeEmpty();
+
+	if (fFrameBuffer < 0)
+		return;
+
+	struct fbdev_panning_ops ops;
+	ops.context = this;
+	ops.getVar = &FBDevHWInterface::_GetVarOp;
+	ops.getFix = &FBDevHWInterface::_GetFixOp;
+	ops.setVar = &FBDevHWInterface::_SetVarOp;
+	ops.pan = &FBDevHWInterface::_PanOp;
+	ops.waitVsync = &FBDevHWInterface::_WaitVsyncOp;
+
+	struct fbdev_panning_caps caps
+		= fbdev_probe_panning(fVInfo, fInfo, &ops);
+	fVsyncSupported = caps.vsyncSupported;
+
+	// Adopt whatever the probe left the device at: virtual size, fix
+	// info, and the scanout at the origin.
+	if (ioctl(fFrameBuffer, FBIOGET_VSCREENINFO, &fVInfo) != 0)
+		fprintf(stderr, "FBDevHWInterface: FBIOGET_VSCREENINFO after "
+			"the pan probe failed: %m\n");
+	if (ioctl(fFrameBuffer, FBIOGET_FSCREENINFO, &fInfo) != 0)
+		fprintf(stderr, "FBDevHWInterface: FBIOGET_FSCREENINFO after "
+			"the pan probe failed: %m\n");
+
+	if (!caps.supported) {
+		fprintf(stderr, "FBDevHWInterface: panning unsupported, "
+			"keeping the shadow copy path\n");
+		return;
+	}
+
+	fPanningSupported = true;
+	fPageCount = caps.pageCount;
+	fFrontPage = 0;
+
+	// Every page starts stale: the RAM shadow is the only current copy.
+	BRegion full(BRect(0, 0, fVInfo.xres - 1, fVInfo.yres - 1));
+	for (page = 0; page < fPageCount; page++)
+		fPageDirty[page] = full;
+
+	fprintf(stderr, "FBDevHWInterface: panning with %u pages, vsync "
+		"%s\n", fPageCount,
+		fVsyncSupported ? "available" : "unavailable");
+}
+
+
+void
+FBDevHWInterface::_DropPanning(const char* reason)
+{
+	bool wasPanning = fPanningSupported;
+	fPanningSupported = false;
+	fPageCount = 1;
+	fFrontPage = 0;
+
+	uint32 page;
+	for (page = 0; page < kMaxPanningPages; page++)
+		fPageDirty[page].MakeEmpty();
+
+	if (fFrontBuffer == NULL)
+		return;
+	fFrontPageView.SetTo(fFrontBuffer, 0);
+
+	if (!wasPanning)
+		return;
+
+	fprintf(stderr, "FBDevHWInterface: panning disabled: %s\n", reason);
+
+	// Rebuild page 0 from the RAM shadow so the one displayed page is
+	// whole again, then put the scanout at the origin.
+	if (fMemBackBuffer != NULL && fVInfo.xres > 0 && fVInfo.yres > 0) {
+		BRegion full(BRect(0, 0, fVInfo.xres - 1, fVInfo.yres - 1));
+		_BlitToPage(0, full);
+	}
+	_RestoreScanoutOrigin();
+}
+
+
+void
+FBDevHWInterface::_RestoreScanoutOrigin()
+{
+	if (fFrameBuffer < 0)
+		return;
+	if (fVInfo.xoffset == 0 && fVInfo.yoffset == 0)
+		return;
+
+	struct fb_var_screeninfo var = fVInfo;
+	var.xoffset = 0;
+	var.yoffset = 0;
+	var.activate = FB_ACTIVATE_NOW;
+	if (ioctl(fFrameBuffer, FBIOPAN_DISPLAY, &var) == 0
+		|| ioctl(fFrameBuffer, FBIOPUT_VSCREENINFO, &var) == 0) {
+		fVInfo.xoffset = 0;
+		fVInfo.yoffset = 0;
+	} else
+		fprintf(stderr, "FBDevHWInterface: could not restore the "
+			"scanout origin: %m\n");
+}
+
+
+bool
+FBDevHWInterface::_PanTo(uint32 page)
+{
+	if (fFrameBuffer < 0 || fFrontBuffer == NULL)
+		return false;
+
+	struct fb_var_screeninfo var;
+	fbdev_prepare_pan(var, fVInfo, page * fVInfo.yres, fPageCount,
+		fVsyncSupported);
+
+	if (fPageCount == 2 && fVsyncSupported) {
+		// Pace the pan so the just-departed page is not left mid
+		// rewrite. Cache the failure: FB_ACTIVATE_VBL is all that is
+		// left then.
+		uint32 sequence = 0;
+		if (ioctl(fFrameBuffer, FBIO_WAITFORVSYNC, &sequence) != 0)
+			fVsyncSupported = false;
+	}
+
+	if (ioctl(fFrameBuffer, FBIOPAN_DISPLAY, &var) != 0) {
+		fprintf(stderr, "FBDevHWInterface: FBIOPAN_DISPLAY to page "
+			"%u failed: %m\n", page);
+		return false;
+	}
+
+	// The same trap as the mode probe: a driver that takes the ioctl
+	// and ignores it fails the read-back, not the return value.
+	struct fb_var_screeninfo readBack;
+	if (ioctl(fFrameBuffer, FBIOGET_VSCREENINFO, &readBack) != 0) {
+		fprintf(stderr, "FBDevHWInterface: FBIOGET_VSCREENINFO after "
+			"pan failed: %m\n");
+		return false;
+	}
+	if (!fbdev_pan_read_back_ok(readBack, page * fVInfo.yres)) {
+		fprintf(stderr, "FBDevHWInterface: pan to page %u ignored "
+			"(yoffset %u)\n", page, readBack.yoffset);
+		return false;
+	}
+
+	fVInfo = readBack;
+	fFrontPage = page;
+	fFrontPageView.SetTo(fFrontBuffer, page);
+	return true;
+}
+
+
+void
+FBDevHWInterface::_PresentRegion(BRegion& region)
+{
+	if (!fPanningSupported || region.CountRects() == 0)
+		return;
+
+	// The page after the one on screen is the hidden one; it holds a
+	// frame up to N-1 presents old, so it gets everything accumulated
+	// for it, not just this damage.
+	uint32 nextPage = fbdev_next_page(fFrontPage, fPageCount);
+	fPageDirty[nextPage].Include(&region);
+	BRegion toCopy = fPageDirty[nextPage];
+	fPageDirty[nextPage].MakeEmpty();
+
+	uint32 page;
+	for (page = 0; page < fPageCount; page++) {
+		if (page != nextPage)
+			fPageDirty[page].Include(&toCopy);
+	}
+
+	_BlitToPage(nextPage, toCopy);
+
+	if (!_PanTo(nextPage))
+		_DropPanning("FBIOPAN_DISPLAY did not stick");
+}
+
+
+void
+FBDevHWInterface::_BlitToPage(uint32 page, const BRegion& region)
+{
+	if (fMemBackBuffer == NULL || fFrontBuffer == NULL)
+		return;
+
+	FBDevPage target(fFrontBuffer, page);
+	if (target.InitCheck() != B_OK)
+		return;
+
+	uint8* src = (uint8*)fMemBackBuffer->Bits();
+	uint32 srcBPR = fMemBackBuffer->BytesPerRow();
+
+	int32 count = region.CountRects();
+	for (int32 i = 0; i < count; i++) {
+		clipping_rect r = region.RectAtInt(i);
+		uint8* srcOffset = src + (uint64)r.top * srcBPR
+			+ (uint64)r.left * 4;
+		_CopyToBuffer(&target, srcOffset, srcBPR, r.left, r.top, r.right,
+			r.bottom);
+	}
+}
+
+
+/*static*/ int
+FBDevHWInterface::_GetVarOp(void* context, struct fb_var_screeninfo* var)
+{
+	FBDevHWInterface* self = (FBDevHWInterface*)context;
+	return ioctl(self->fFrameBuffer, FBIOGET_VSCREENINFO, var);
+}
+
+
+/*static*/ int
+FBDevHWInterface::_GetFixOp(void* context, struct fb_fix_screeninfo* fix)
+{
+	FBDevHWInterface* self = (FBDevHWInterface*)context;
+	return ioctl(self->fFrameBuffer, FBIOGET_FSCREENINFO, fix);
+}
+
+
+/*static*/ int
+FBDevHWInterface::_SetVarOp(void* context, struct fb_var_screeninfo* var)
+{
+	FBDevHWInterface* self = (FBDevHWInterface*)context;
+	return ioctl(self->fFrameBuffer, FBIOPUT_VSCREENINFO, var);
+}
+
+
+/*static*/ int
+FBDevHWInterface::_PanOp(void* context, const struct fb_var_screeninfo* var)
+{
+	FBDevHWInterface* self = (FBDevHWInterface*)context;
+	return ioctl(self->fFrameBuffer, FBIOPAN_DISPLAY, var);
+}
+
+
+/*static*/ int
+FBDevHWInterface::_WaitVsyncOp(void* context)
+{
+	FBDevHWInterface* self = (FBDevHWInterface*)context;
+	uint32 sequence = 0;
+	return ioctl(self->fFrameBuffer, FBIO_WAITFORVSYNC, &sequence);
 }
 
 
@@ -333,6 +595,7 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 	fMemBackBuffer = NULL;
 	delete fFrontBuffer;
 	fFrontBuffer = NULL;
+	fFrontPageView.SetTo(NULL, 0);
 
 	fVInfo = readBack;
 	_AdoptVar(fVInfo);
@@ -342,6 +605,10 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 	if (ioctl(fFrameBuffer, FBIOGET_FSCREENINFO, &fInfo) != 0)
 		fprintf(stderr, "FBDevHWInterface: FBIOGET_FSCREENINFO "
 			"failed: %m\n");
+
+	// The pages and the mapping change with the mode: re-derive
+	// panning from the driver as it is now, before the mmap.
+	_ProbePanning();
 
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo);
 	if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK) {
@@ -360,8 +627,12 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 			delete fFrontBuffer;
 			fFrontBuffer = NULL;
 		}
+		// The old mode is back on a single-page mapping; whatever
+		// the probe found before the rollback is gone with it.
+		_DropPanning("SetMode rollback");
 		return B_ERROR;
 	}
+	fFrontPageView.SetTo(fFrontBuffer, 0);
 
 	if (fVInfo.xres > 0 && fVInfo.yres > 0)
 		fMemBackBuffer = new MallocBuffer(fVInfo.xres, fVInfo.yres);
@@ -411,12 +682,15 @@ status_t
 FBDevHWInterface::GetFrameBufferConfig(frame_buffer_config& config)
 {
 	CALLED();
-	if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK)
+	// With panning the displayed page, not the mapping base, is what
+	// outside readers must see.
+	RenderingBuffer* buffer = FrontBuffer();
+	if (buffer == NULL || buffer->InitCheck() != B_OK)
 		return B_NO_INIT;
 
-	config.frame_buffer = fFrontBuffer->Bits();
-	config.frame_buffer_dma = fFrontBuffer->Bits();
-	config.bytes_per_row = fFrontBuffer->BytesPerRow();
+	config.frame_buffer = buffer->Bits();
+	config.frame_buffer_dma = buffer->Bits();
+	config.bytes_per_row = buffer->BytesPerRow();
 	return B_OK;
 }
 
@@ -493,10 +767,18 @@ FBDevHWInterface::RetraceSemaphore()
 
 
 status_t
-FBDevHWInterface::WaitForRetrace(bigtime_t timeout)
+FBDevHWInterface::WaitForRetrace(bigtime_t /*timeout*/)
 {
 	CALLED();
-	return B_UNSUPPORTED;
+	// Probed once at Init and after every SetMode; the ioctl blocks
+	// until vblank where the driver implements it at all.
+	if (!fVsyncSupported)
+		return B_UNSUPPORTED;
+
+	uint32 sequence = 0;
+	if (ioctl(fFrameBuffer, FBIO_WAITFORVSYNC, &sequence) != 0)
+		return B_ERROR;
+	return B_OK;
 }
 
 
@@ -574,6 +856,10 @@ RenderingBuffer*
 FBDevHWInterface::FrontBuffer() const
 {
 	CALLED();
+	// With panning the page the scanout shows, not the mapping base;
+	// ReadBitmap and the cursor read what is actually on screen.
+	if (fPanningSupported)
+		return const_cast<FBDevPage*>(&fFrontPageView);
 	return fFrontBuffer;
 }
 
@@ -590,4 +876,103 @@ bool
 FBDevHWInterface::IsDoubleBuffered() const
 {
 	return fMemBackBuffer != NULL;
+}
+
+
+void
+FBDevHWInterface::OnSeatEnabled()
+{
+	if (!LockExclusiveAccess())
+		return;
+
+	// Whatever the old session knew about the driver may be stale, and
+	// the scanout is wherever the console left it. Re-probe, then put
+	// the whole shadow frame back on screen.
+	_ProbePanning();
+
+	if (fMemBackBuffer != NULL && fMemBackBuffer->Width() > 0
+		&& fMemBackBuffer->Height() > 0) {
+		BRegion full(BRect(0, 0, fMemBackBuffer->Width() - 1,
+			fMemBackBuffer->Height() - 1));
+		CopyBackToFront(full);
+	}
+
+	UnlockExclusiveAccess();
+}
+
+
+void
+FBDevHWInterface::OnSeatDisabled()
+{
+	if (!LockExclusiveAccess())
+		return;
+
+	// The console drew to page 0 while we held graphics mode; show it
+	// before janus hands the VT back to text.
+	_RestoreScanoutOrigin();
+	fFrontPage = 0;
+	fFrontPageView.SetTo(fFrontBuffer, 0);
+
+	uint32 page;
+	for (page = 0; page < kMaxPanningPages; page++)
+		fPageDirty[page].MakeEmpty();
+
+	UnlockExclusiveAccess();
+}
+
+
+status_t
+FBDevHWInterface::CopyBackToFront(const BRect& frame)
+{
+	if (!fPanningSupported || fMemBackBuffer == NULL)
+		return HWInterface::CopyBackToFront(frame);
+
+	IntRect area(frame);
+	IntRect bufferClip(fMemBackBuffer->Bounds());
+	if (!area.IsValid() || !area.Intersects(bufferClip))
+		return B_BAD_VALUE;
+	area = bufferClip & area;
+
+	// Same dance as the shadow path: the cursor is blended into the
+	// RAM shadow first, so the pan copy carries it into the hidden
+	// page with the rest of the frame.
+	bool cursorLocked = fFloatingOverlaysLock.Lock();
+	_DrawCursor(area);
+	if (cursorLocked)
+		fFloatingOverlaysLock.Unlock();
+
+	BRegion region((BRect)area);
+	_PresentRegion(region);
+	return B_OK;
+}
+
+
+status_t
+FBDevHWInterface::CopyBackToFront(const BRegion& region)
+{
+	if (!fPanningSupported || fMemBackBuffer == NULL)
+		return HWInterface::CopyBackToFront(region);
+
+	if (fMemBackBuffer->Width() == 0 || fMemBackBuffer->Height() == 0)
+		return B_BAD_VALUE;
+
+	IntRect clip(fMemBackBuffer->Bounds());
+	BRegion clipped;
+	int32 count = region.CountRects();
+	for (int32 i = 0; i < count; i++) {
+		IntRect area(region.RectAt(i));
+		if (area.IsValid() && area.Intersects(clip))
+			clipped.Include((BRect)(clip & area));
+	}
+	if (clipped.CountRects() == 0)
+		return B_BAD_VALUE;
+
+	// One pan for the whole region, cursor blend included.
+	bool cursorLocked = fFloatingOverlaysLock.Lock();
+	_DrawCursor(IntRect(clipped.Frame()));
+	if (cursorLocked)
+		fFloatingOverlaysLock.Unlock();
+
+	_PresentRegion(clipped);
+	return B_OK;
 }

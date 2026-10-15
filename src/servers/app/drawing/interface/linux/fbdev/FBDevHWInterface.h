@@ -8,12 +8,11 @@
 
 #include "HWInterface.h"
 
+#include "FBDevBuffer.h"
 #include "TTy.h"
 
 #include <linux/fb.h>
 
-
-class FBDevBuffer;
 
 class FBDevHWInterface : public HWInterface {
 public:
@@ -60,12 +59,39 @@ public:
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
 
+	virtual	void				OnSeatEnabled();
+	virtual	void				OnSeatDisabled();
+
+	virtual	status_t			CopyBackToFront(const BRect& frame);
+	virtual	status_t			CopyBackToFront(const BRegion& region);
+
 private:
+	enum { kMaxPanningPages = 3 };
+
 			void				_EnterGraphicsMode();
 			void				_LeaveGraphicsMode();
 			void				_AdoptVar(const struct fb_var_screeninfo& var);
 
+			void				_ProbePanning();
+			void				_DropPanning(const char* reason);
+			void				_RestoreScanoutOrigin();
+			bool				_PanTo(uint32 page);
+			void				_PresentRegion(BRegion& region);
+			void				_BlitToPage(uint32 page,
+									const BRegion& region);
+
+	static	int					_GetVarOp(void* context,
+									struct fb_var_screeninfo* var);
+	static	int					_GetFixOp(void* context,
+									struct fb_fix_screeninfo* fix);
+	static	int					_SetVarOp(void* context,
+									struct fb_var_screeninfo* var);
+	static	int					_PanOp(void* context,
+									const struct fb_var_screeninfo* var);
+	static	int					_WaitVsyncOp(void* context);
+
 			FBDevBuffer*		fFrontBuffer;
+			FBDevPage			fFrontPageView;
 			RenderingBuffer*	fMemBackBuffer;
 
 			display_mode		fDisplayMode;
@@ -78,6 +104,11 @@ private:
 
 			bool				fModeSetSupported;
 			bool				fBlankSupported;
+			bool				fPanningSupported;
+			bool				fVsyncSupported;
+			uint32				fPageCount;
+			uint32				fFrontPage;
+			BRegion				fPageDirty[kMaxPanningPages];
 			uint32				fDPMSState;
 
 			EventStream*		fEventStream;

@@ -217,6 +217,12 @@ protected:
 	virtual	void				_CopyToFront(uint8* src, uint32 srcBPR, int32 x,
 									int32 y, int32 right, int32 bottom) const;
 
+	// Transfer into a specific buffer; the panned fbdev backend writes
+	// into a hidden page of the mapping, not into the displayed one.
+			void				_CopyToBuffer(RenderingBuffer* buffer,
+									uint8* src, uint32 srcBPR, int32 x,
+									int32 y, int32 right, int32 bottom) const;
+
 			IntRect				_CursorFrame() const;
 			void				_RestoreCursorArea() const;
 			void				_AdoptDragBitmap();

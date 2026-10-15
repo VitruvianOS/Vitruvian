@@ -30,6 +30,7 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	bool				QuitRequested();
+	virtual	void				Show();
 
 private:
 			void				_ScanDevices();

@@ -194,6 +194,10 @@ JoystickWindow::MessageReceived(BMessage* message)
 			_Poll();
 			break;
 
+		case B_JOYSTICK_DEVICES_CHANGED:
+			_ScanDevices();
+			break;
+
 		default:
 			BWindow::MessageReceived(message);
 			break;
@@ -204,10 +208,19 @@ JoystickWindow::MessageReceived(BMessage* message)
 bool
 JoystickWindow::QuitRequested()
 {
+	watch_joystick_devices(BMessenger(this), false);
 	delete fPollRunner;
 	fPollRunner = NULL;
 	be_app_messenger.SendMessage(B_QUIT_REQUESTED);
 	return BWindow::QuitRequested();
+}
+
+
+void
+JoystickWindow::Show()
+{
+	BWindow::Show();
+	watch_joystick_devices(BMessenger(this), true);
 }
 
 

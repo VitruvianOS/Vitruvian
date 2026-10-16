@@ -48,6 +48,20 @@ public:
 			double				LoadProgress() const;
 			bool				IsLoading() const;
 
+	// Script message handlers: page scripts post with
+	// window.webkit.messageHandlers.<name>.postMessage(...); every
+	// message arrives as B_WEB_SCRIPT_MESSAGE on the target set with
+	// SetTarget(), carrying B_WEB_HANDLER_FIELD and B_WEB_BODY_FIELD.
+			void				AddScriptMessageHandler(const char* name);
+
+	// Runs javascript in the page; the string result of the last
+	// expression is posted to replyTarget as replyWhat with
+	// B_WEB_SCRIPT_RESULT_FIELD. Asynchronous, never blocks the
+	// caller. Ignored while the view is detached.
+			void				EvaluateJavaScript(const char* javascript,
+									const BMessenger& replyTarget,
+									uint32 replyWhat);
+
 	// Messaging
 			void				SetTarget(const BMessenger& target);
 

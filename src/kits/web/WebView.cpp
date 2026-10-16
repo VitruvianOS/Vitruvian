@@ -199,6 +199,9 @@ struct BWebView::WebViewImpl {
 	bool		fLoading;
 	BView*		fHostView;
 
+	// Queued until the bridge exists at attach time.
+	std::vector<std::string>					fScriptMessageHandlers;
+
 #ifdef HAS_WPE
 	CompositorAdapter*	fCompositor;
 	EventAdapter*		fEventAdapter;
@@ -762,6 +765,52 @@ BWebView::AttachedToWindow()
 
 	fImpl->fSelfMessenger = BMessenger(this);
 
+	// Download lifecycle arrives on the GLib thread; hand it to the
+	// window thread as messages.
+	if (fImpl->fBridge->downloadHandler != NULL) {
+		fImpl->fBridge->downloadHandler->onDownloadStarted
+			= [self](const DownloadEntry& entry) {
+			BMessage msg(B_WEB_DOWNLOAD_STARTED);
+			_FillDownloadMessage(msg, entry,
+				B_WEB_DOWNLOAD_STATE_ACTIVE);
+			self.SendMessage(&msg);
+		};
+		fImpl->fBridge->downloadHandler->onDownloadProgress
+			= [self](const DownloadEntry& entry) {
+			BMessage msg(B_WEB_DOWNLOAD_PROGRESS);
+			_FillDownloadMessage(msg, entry,
+				B_WEB_DOWNLOAD_STATE_ACTIVE);
+			self.SendMessage(&msg);
+		};
+		fImpl->fBridge->downloadHandler->onDownloadFinished
+			= [self](const DownloadEntry& entry) {
+			BMessage msg(B_WEB_DOWNLOAD_FINISHED);
+			_FillDownloadMessage(msg, entry,
+				B_WEB_DOWNLOAD_STATE_FINISHED);
+			self.SendMessage(&msg);
+		};
+		fImpl->fBridge->downloadHandler->onDownloadFailed
+			= [self](const DownloadEntry& entry) {
+			BMessage msg(B_WEB_DOWNLOAD_FAILED);
+			_FillDownloadMessage(msg, entry,
+				entry.cancelled ? B_WEB_DOWNLOAD_STATE_CANCELLED
+					: B_WEB_DOWNLOAD_STATE_FAILED);
+			self.SendMessage(&msg);
+		};
+	}
+
+	for (size_t i = 0; i < fImpl->fScriptMessageHandlers.size(); i++) {
+		std::string name = fImpl->fScriptMessageHandlers[i];
+		fImpl->fBridge->RegisterScriptMessageHandler(name,
+			[this, name](const std::string& body) {
+				if (!fTarget.IsValid())
+					return;
+				BMessage msg(B_WEB_SCRIPT_MESSAGE);
+				msg.AddString(B_WEB_HANDLER_FIELD, name.c_str());
+				msg.AddString(B_WEB_BODY_FIELD, body.c_str());
+				fTarget.SendMessage(&msg);
+			});
+	}
 #endif
 }
 
@@ -1944,3 +1993,60 @@ BWebView::AddUserStyleSheet(const char*) {}
 void
 BWebView::NotifyFullScreen(bool) {}
 #endif
+
+
+void
+BWebView::AddScriptMessageHandler(const char* name)
+{
+	if (name == NULL || name[0] == '\0')
+		return;
+
+	fImpl->fScriptMessageHandlers.push_back(std::string(name));
+
+#ifdef HAS_WPE
+	if (fImpl->fBridge != NULL && fImpl->fBridge->IsValid()) {
+		std::string handlerName(name);
+		fImpl->fBridge->RegisterScriptMessageHandler(handlerName,
+			[this, handlerName](const std::string& body) {
+				if (!fTarget.IsValid())
+					return;
+				BMessage msg(B_WEB_SCRIPT_MESSAGE);
+				msg.AddString(B_WEB_HANDLER_FIELD,
+					handlerName.c_str());
+				msg.AddString(B_WEB_BODY_FIELD, body.c_str());
+				fTarget.SendMessage(&msg);
+			});
+	}
+#endif
+}
+
+
+void
+BWebView::EvaluateJavaScript(const char* javascript,
+	const BMessenger& replyTarget, uint32 replyWhat)
+{
+	if (javascript == NULL)
+		return;
+
+#ifdef HAS_WPE
+	if (fImpl->fBridge != NULL && fImpl->fBridge->IsValid()) {
+		fImpl->fBridge->EvaluateJS(std::string(javascript),
+			[replyTarget, replyWhat](const std::string& result,
+				bool /*failed*/) {
+				if (!replyTarget.IsValid())
+					return;
+				BMessage msg(replyWhat);
+				msg.AddString(B_WEB_SCRIPT_RESULT_FIELD,
+					result.c_str());
+				replyTarget.SendMessage(&msg);
+			});
+		return;
+	}
+#endif
+
+	if (replyTarget.IsValid()) {
+		BMessage msg(replyWhat);
+		msg.AddString(B_WEB_SCRIPT_RESULT_FIELD, "");
+		replyTarget.SendMessage(&msg);
+	}
+}

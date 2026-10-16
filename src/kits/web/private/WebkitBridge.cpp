@@ -26,6 +26,14 @@
 #include <vector>
 
 
+// Completes the binding type before the destructor tears the
+// vector down; the GObject signal holds the raw pointer.
+struct WebKitBridge::ScriptMessageBinding {
+	std::function<void(const std::string&)>	callback;
+	std::string								name;
+};
+
+
 //	#pragma mark - Constructor/Destructor
 
 
@@ -847,6 +855,51 @@ WebKitBridge::AddUserStyleSheet(const std::string& css)
 			nullptr, nullptr);
 		webkit_user_content_manager_add_style_sheet(ucm, sheet);
 		webkit_user_style_sheet_unref(sheet);
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+static void
+_OnScriptMessage(WebKitUserContentManager*, JSCValue* value, gpointer data)
+{
+	auto* binding = static_cast<WebKitBridge::ScriptMessageBinding*>(data);
+	if (binding == nullptr || !binding->callback)
+		return;
+	gchar* text = jsc_value_to_string(value);
+	binding->callback(text != nullptr ? text : "");
+	g_free(text);
+}
+
+
+void
+WebKitBridge::RegisterScriptMessageHandler(const std::string& name,
+	std::function<void(const std::string&)> cb)
+{
+	if (!fValid || webView == nullptr || !cb)
+		return;
+
+	auto owned = std::make_unique<ScriptMessageBinding>();
+	owned->callback = cb;
+	owned->name = name;
+	ScriptMessageBinding* binding = owned.get();
+	fScriptBindings.push_back(std::move(owned));
+
+	struct Args {
+		WebKitWebView*			view;
+		ScriptMessageBinding*	binding;
+	};
+	auto* a = new Args{webView, binding};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		WebKitUserContentManager* ucm =
+			webkit_web_view_get_user_content_manager(a->view);
+		std::string signal = "script-message-received::" + a->binding->name;
+		g_signal_connect(ucm, signal.c_str(),
+			G_CALLBACK(_OnScriptMessage), a->binding);
+		webkit_user_content_manager_register_script_message_handler(
+			ucm, a->binding->name.c_str(), nullptr);
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, a);

@@ -27,6 +27,10 @@ class UrlSchemeAdapter;
 
 
 struct WebKitBridge {
+	// Completes in the .cpp; public so the GObject trampoline can
+	// name it.
+	struct	ScriptMessageBinding;
+
 								WebKitBridge(int width, int height,
 									SessionAdapter* session = nullptr);
 								~WebKitBridge();
@@ -45,6 +49,9 @@ struct WebKitBridge {
 			void				AddUserScript(const std::string& js,
 									bool atDocStart);
 			void				AddUserStyleSheet(const std::string& css);
+			void				RegisterScriptMessageHandler(
+										const std::string& name,
+										std::function<void(const std::string&)> cb);
 
 			// Cached state — safe to call from any thread.
 			bool				CanGoBack() const;
@@ -172,6 +179,10 @@ private:
 
 	mutable	std::mutex			fBlockedMutex;
 			std::vector<std::string> fBlockedDomains;
+
+	// Script message handler bindings; the user content manager
+	// keeps the raw pointer, this owns the objects.
+			std::vector<std::unique_ptr<ScriptMessageBinding> >	fScriptBindings;
 
 			// GLib thread only: scripts in the content manager, keyed
 			// by content so a re-add replaces instead of stacking.

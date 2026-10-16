@@ -54,6 +54,10 @@ enum {
 	// B_WEB_DOWNLOAD_ID (uint64), B_WEB_DOWNLOAD_URL, _FILENAME,
 	// _DESTINATION, B_WEB_DOWNLOAD_RECEIVED, B_WEB_DOWNLOAD_TOTAL;
 	// FINISHED and FAILED carry _URL too, FAILED a _CANCELLED bool.
+	// Script message handler post; fields B_WEB_HANDLER_FIELD, B_WEB_BODY_FIELD.
+	B_WEB_SCRIPT_MESSAGE		= 'WhSm',
+	// EvaluateJavaScript() reply. Field: B_WEB_SCRIPT_RESULT_FIELD.
+	B_WEB_SCRIPT_RESULT			= 'WhSr',
 	B_WEB_DOWNLOAD_STARTED		= 'WhDs',
 	B_WEB_DOWNLOAD_PROGRESS		= 'WhDp',
 	B_WEB_DOWNLOAD_FINISHED		= 'WhDf',
@@ -108,6 +112,12 @@ enum {
 #define B_WEB_DOWNLOAD_TOTAL	"web:download_total"
 #define B_WEB_DOWNLOAD_CANCELLED "web:download_cancelled"
 #define B_WEB_SUGGESTED_NAME	"web:suggested_name"
+
+// B_WEB_SCRIPT_MESSAGE fields: handler name, string body.
+#define B_WEB_HANDLER_FIELD		"web:handler"
+#define B_WEB_BODY_FIELD		"web:body"
+// B_WEB_SCRIPT_RESULT field: expression result string.
+#define B_WEB_SCRIPT_RESULT_FIELD	"web:result"
 
 
 #endif // WEB_DEFS_H

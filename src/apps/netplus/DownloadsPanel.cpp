@@ -9,6 +9,7 @@
 #include <Button.h>
 #include <Font.h>
 #include <GroupView.h>
+#include <GroupLayout.h>
 #include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
@@ -59,8 +60,10 @@ _StatusText(const DownloadRecord& item)
 	if (item.totalBytes > 0) {
 		int percent = (int)((item.receivedBytes * 100) / item.totalBytes);
 		text << percent << "% of " << _FormatBytes(item.totalBytes);
-	} else
-		text = _FormatBytes(item.receivedBytes) + " downloaded";
+	} else {
+		text = _FormatBytes(item.receivedBytes);
+		text << " downloaded";
+	}
 	return text;
 }
 
@@ -133,25 +136,22 @@ DownloadsPanelView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	// Route the row buttons at the owner window; the messenger may
-	// only resolve once our looper exists.
-	BHandler* target = fPanel->fTarget->Handler();
-	if (target == NULL)
-		target = Window();
-	BGroupLayout* layout = fRows->GroupLayout();
+	// Row buttons invoke this window; the panel forwards the row
+	// messages to the owner, whose messenger only resolves once the
+	// owner exists.
 	for (int32 i = 0; i < fRows->CountChildren(); i++) {
 		BView* row = fRows->ChildAt(i);
 		for (int32 j = 0; j < row->CountChildren(); j++) {
 			BView* child = row->ChildAt(j);
 			BButton* button = dynamic_cast<BButton*>(child);
 			if (button != NULL)
-				button->SetTarget(target);
+				button->SetTarget(Window());
 		}
 	}
 
 	BButton* clear = dynamic_cast<BButton*>(FindView("Clear finished"));
 	if (clear != NULL)
-		clear->SetTarget(target);
+		clear->SetTarget(Window());
 }
 
 
@@ -241,8 +241,13 @@ DownloadsPanelView::SetContent(const DownloadsModel& model)
 	for (int32 i = 0; i < model.Count(); i++)
 		fRows->GroupLayout()->AddView(_BuildRow(model.ItemAt(i)));
 
-	fEmpty->SetVisible(model.Count() == 0);
-	fRows->SetVisible(model.Count() > 0);
+	if (model.Count() == 0) {
+		fEmpty->Show();
+		fRows->Hide();
+	} else {
+		fEmpty->Hide();
+		fRows->Show();
+	}
 	Invalidate();
 }
 
@@ -368,6 +373,15 @@ DownloadsPanel::MessageReceived(BMessage* message)
 			ResizeTo(size.width, size.height);
 			break;
 		}
+
+		case MSG_DOWNLOAD_CANCEL:
+		case MSG_DOWNLOAD_RETRY:
+		case MSG_DOWNLOAD_SHOW:
+		case MSG_DOWNLOAD_CLEAR:
+			// Row buttons land here; hand them to the owner window.
+			if (fTarget->IsValid())
+				fTarget->SendMessage(message);
+			break;
 
 		default:
 			BWindow::MessageReceived(message);

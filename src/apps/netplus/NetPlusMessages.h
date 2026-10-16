@@ -35,7 +35,7 @@ enum {
 	MSG_ZOOM_IN			= 'zmin',
 	MSG_ZOOM_OUT		= 'zmou',
 	MSG_ZOOM_RESET		= 'zmrz',
-	MSG_DOWNLOADS		= 'dlist',
+	MSG_DOWNLOADS		= 'dlst',
 	MSG_DOWNLOADS_CLOSED = 'dlcz',
 	MSG_DOWNLOAD_CANCEL	= 'dlca',
 	MSG_DOWNLOAD_RETRY	= 'dlry',

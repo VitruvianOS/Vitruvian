@@ -70,7 +70,7 @@ SuggestModel::Count() const
 const SuggestMatch&
 SuggestModel::MatchAt(int32_t index) const
 {
-	static const SuggestMatch kEmpty;
+	static const SuggestMatch kEmpty = { std::string(), 0 };
 	if (index < 0 || index >= (int32_t)fMatches.size())
 		return kEmpty;
 	return fMatches[index];

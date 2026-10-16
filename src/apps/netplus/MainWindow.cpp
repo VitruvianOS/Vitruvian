@@ -38,6 +38,7 @@
 #include <Window.h>
 
 #include <algorithm>
+#include <stdio.h>
 #include <stdlib.h>
 
 // Built-in start page until the homepage becomes a setting.
@@ -370,7 +371,7 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 
 	model.AddSectionLabelRow(root, "Search engine");
 	for (int32 i = 0; i < CountSearchEngines(); i++) {
-		char payload[8];
+		char payload[16];
 		snprintf(payload, sizeof(payload), "%d", i);
 		const char* label = SearchEngineAt(i).name;
 		model.AddActionRow(root, label, MSG_SET_ENGINE, NULL, payload);

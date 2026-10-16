@@ -4,6 +4,7 @@
  */
 
 
+#include "HistoryStore.h"
 #include "NetPlusMessages.h"
 #include "SuggestPopup.h"
 #include "ToolbarIcons.h"
@@ -391,7 +392,7 @@ UrlBarView::_ShowInfo()
 
 	BPoint where = _IconRect().LeftBottom() + BPoint(0, 2);
 	ConvertToScreen(&where);
-	menu.Go(where, false, true, false);
+	menu.Go(where);
 }
 
 

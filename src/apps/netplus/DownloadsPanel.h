@@ -37,6 +37,7 @@ public:
 			void				Go(BPoint where);
 
 	virtual	bool				QuitRequested();
+	virtual void				MessageReceived(BMessage* message);
 
 private:
 	friend class DownloadsPanelView;

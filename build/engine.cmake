@@ -35,8 +35,9 @@ endif()
 # An explicit .interp section makes ld emit PT_INTERP for a -shared link (which
 # -Wl,--dynamic-linker does not); same trick glibc uses to make libc.so.6 runnable.
 set(VOS_RUNNABLE_INTERP_S "${CMAKE_BINARY_DIR}/runnable_addon_interp.S")
-# Without the GNU-stack note the link asks for an executable stack, which
-# glibc 2.41 refuses to dlopen.
+# The GNU-stack note keeps the object from asking for an executable stack:
+# without it older binutils mark the whole link RWE, and glibc 2.41 refuses
+# to dlopen such an object, so Deskbar could not load these add-ons.
 file(WRITE "${VOS_RUNNABLE_INTERP_S}"
 	".section .interp,\"a\"\n.asciz \"${VOS_DYNAMIC_LINKER}\"\n"
 	".section .note.GNU-stack,\"\",%progbits\n")

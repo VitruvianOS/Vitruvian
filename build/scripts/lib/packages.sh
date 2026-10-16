@@ -19,7 +19,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-$(get_kernel_flavour) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
-                " network-manager-openvpn network-manager-vpnc network-manager-l2tp network-manager-openconnect" \
+                " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -39,7 +39,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
-                " network-manager-openvpn network-manager-vpnc network-manager-l2tp network-manager-openconnect" \
+                " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -257,12 +257,12 @@ _board_extra_packages() {
         visionfive2)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-riscv64 u-boot-starfive dosfstools rsync"
+                " linux-image-riscv64 linux-headers-riscv64 u-boot-starfive dosfstools rsync"
             ;;
         licheerv)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-riscv64 dosfstools rsync"
+                " linux-image-riscv64 linux-headers-riscv64 dosfstools rsync"
             ;;
         *)
             die "No board package list for: $_board"

@@ -100,6 +100,7 @@ target_sources(be PRIVATE
 	TextControl.cpp
 	TextInput.cpp
 	TextView.cpp
+	ToolBar.cpp
 	ToolTip.cpp
 	ToolTipManager.cpp
 	TwoDimensionalLayout.cpp

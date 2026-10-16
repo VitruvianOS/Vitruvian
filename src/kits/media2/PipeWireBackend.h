@@ -462,12 +462,12 @@ private:
 			std::mutex				fPortsLock;
 			std::map<uint32, PortRegistryEntry>	fPorts;
 
-		spa_hook				fLinkListener;
-		std::mutex					fLinkToDeviceMapLock;
-		std::map<uint32, uint32>	fLinkToDeviceMap;
-		// Full registry link table for BMediaGraph::GetLinks.
-		std::mutex					fRegistryLinksLock;
-		std::map<uint32, RegistryLinkInfo>	fRegistryLinks;
+			spa_hook				fLinkListener;
+			std::mutex					fLinkToDeviceMapLock;
+			std::map<uint32, uint32>	fLinkToDeviceMap;
+			// Full registry link table for BMediaGraph::GetLinks.
+			std::mutex					fRegistryLinksLock;
+			std::map<uint32, RegistryLinkInfo>	fRegistryLinks;
 			spa_hook				fNodeListener;
 			std::map<uint32, std::string> fNodeNames;
 			std::map<uint32, std::string> fNodeApps;

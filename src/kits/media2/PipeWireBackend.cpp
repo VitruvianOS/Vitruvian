@@ -1169,7 +1169,6 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 
 	uint32 deviceId = 0;
 	uint32 streamNodeId = 0;
-	bool isOutput = false;
 
 	{
 		std::lock_guard<std::mutex> _(fDevicesLock);
@@ -1177,12 +1176,10 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 			if (d.id == outputNodeId) {
 				deviceId = outputNodeId;
 				streamNodeId = inputNodeId;
-				isOutput = false;
 				break;
 			} else if (d.id == inputNodeId) {
 				deviceId = inputNodeId;
 				streamNodeId = outputNodeId;
-				isOutput = true;
 				break;
 			}
 		}

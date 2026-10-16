@@ -25,13 +25,6 @@ static const size_t kSiblingArchitectureCount
 	= sizeof(kSiblingArchitectures) / sizeof(const char*);
 
 
-static bool
-has_secondary_architecture(const char* architecture)
-{
-	return false;
-}
-
-
 // #pragma mark -
 
 

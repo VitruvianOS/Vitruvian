@@ -277,7 +277,10 @@ macro( AddOn name type )
 
 	# -fvisibility-inlines-hidden: keep inline/template instantiations add-on-local
 	# so they don't collide with same-named symbols exported by libbe.so.
-	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h -fvisibility-inlines-hidden")
+	# The flag is C++-only; passing it to C sources makes cc1 warn.
+	target_compile_options(${name} PRIVATE
+		-include LinuxBuildCompatibility.h
+		"$<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>")
 
 	foreach( RDEF_FILE ${_ADDON_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)

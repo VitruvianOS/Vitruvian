@@ -4,6 +4,11 @@
  */
 
 
+// The BeOS-compatible NULL handling below trips -Wnonnull-compare
+// because the compiler knows the POSIX prototypes by heart.
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wnonnull-compare"
+#endif
 #include <string.h>
 #include <stdlib.h>
 

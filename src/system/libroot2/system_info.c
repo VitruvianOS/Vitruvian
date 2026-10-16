@@ -56,7 +56,9 @@ set_string(char* dest, size_t destSize, const char* src)
 		dest[0] = '\0';
 		return;
 	}
-	size_t len = strnlen(src, destSize);
+	size_t len = strlen(src);
+	if (len >= destSize)
+		len = destSize - 1;
 	if (len > 0) {
 		memcpy(dest, src, len);
 		dest[len] = '\0';

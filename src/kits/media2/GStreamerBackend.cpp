@@ -480,7 +480,7 @@ GStreamerBackend::_BoostHwEncoderRanks()
 			kHwEncoders[i].name);
 		if (feat == NULL)
 			continue;
-		kHwEncoders[i].original = gst_plugin_feature_get_rank(feat);
+		kHwEncoders[i].original = (GstRank)gst_plugin_feature_get_rank(feat);
 		gst_plugin_feature_set_rank(feat,
 			(GstRank)(GST_RANK_PRIMARY + 10));
 		kHwEncoders[i].boosted = true;
@@ -516,7 +516,7 @@ GStreamerBackend::_BoostHwDecoderRanks()
 			kHwDecoders[i].name);
 		if (feat == NULL)
 			continue;
-		kHwDecoders[i].original = gst_plugin_feature_get_rank(feat);
+		kHwDecoders[i].original = (GstRank)gst_plugin_feature_get_rank(feat);
 		gst_plugin_feature_set_rank(feat,
 			(GstRank)(GST_RANK_PRIMARY + 10));
 		kHwDecoders[i].boosted = true;

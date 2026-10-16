@@ -190,7 +190,7 @@ list_printq( FILE *out, LIST *l )
 
 	    /* Any embedded "'s?  Escape them */
 
-	    while( p = (char *)memchr( op, '"',  ep - op ) )
+	    while( (p = (char *)memchr( op, '"',  ep - op )) )
 	    {
 		fwrite( op, p - op, 1, out );
 		fputc( '\\', out );

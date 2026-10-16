@@ -1665,8 +1665,9 @@ DCRaw::_AdobeCoefficients(const char *make, const char *model)
 		if (!strncasecmp(model, table[i].prefix, strlen(table[i].prefix))) {
 			if (table[i].black)
 				fMeta.black = table[i].black;
+			double* cameraXYZFlat = &cameraXYZ[0][0];
 			for (uint32 j = 0; j < 12; j++) {
-				((double**)cameraXYZ)[0][j] = table[i].trans[j] / 10000.0;
+				cameraXYZFlat[j] = table[i].trans[j] / 10000.0;
 			}
 			_CameraXYZCoefficients(cameraXYZ);
 			break;
@@ -2842,7 +2843,7 @@ DCRaw::_ParseTIFFImageFileDirectory(off_t baseOffset, uint32 offset)
 	double analogBalance[] = {1, 1, 1, 1};
 	double xyz[] = {1, 1, 1, 1};
 	bool useColorMatrix = false;
-	double cameraCalibration[4][4], colorMatrix[4][3], cameraXYZ[4][3];
+	double cameraCalibration[4][4] = {{0}}, colorMatrix[4][3], cameraXYZ[4][3];
 
 	for (int32 j = 0; j < 4; j++) {
 		for (int32 i = 0; i < 4; i++) {
@@ -3300,11 +3301,20 @@ DCRaw::_ParseTIFFImageFileDirectory(off_t baseOffset, uint32 offset)
 	}
 #endif
 
+	// GCC's flow analysis false-positives on this dcraw-scale function
+	// even though cameraCalibration is zero-initialised at declaration.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 	for (uint32 i = 0; i < fColors; i++) {
 		for (uint32 c = 0; c < fColors; c++) {
 			cameraCalibration[i][c] *= analogBalance[i];
 		}
 	}
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 	if (useColorMatrix) {
 		for (uint32 c = 0; c < fColors; c++) {

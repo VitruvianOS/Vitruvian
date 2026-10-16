@@ -739,11 +739,11 @@ jcache(char *_filename)
 	jamfile_cache* cache = get_jcache();
 	time_t time;
 	// normalize the filename
-    char _normalizedPath[PATH_MAX];
-    char *filename = normalize_path(_filename, _normalizedPath,
-    	sizeof(_normalizedPath));
-    if (!filename)
-    	filename = _filename;
+	char _normalizedPath[PATH_MAX];
+	char *filename = normalize_path(_filename, _normalizedPath,
+		sizeof(_normalizedPath));
+	if (!filename)
+		filename = _filename;
 	// get file time
 	if (!cache)
 		return 0;

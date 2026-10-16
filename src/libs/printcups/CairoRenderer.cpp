@@ -528,10 +528,8 @@ cb_set_stipple_pattern(void* user, pattern p)
 
 
 static void
-cb_set_scale(void* user, float scale)
+cb_set_scale(void* /*user*/, float /*scale*/)
 {
-	CairoState* s = static_cast<CairoState*>(user);
-	(void)scale;
 	// Picture scale is handled by the page transform; ignore per-picture.
 }
 
@@ -979,7 +977,7 @@ InstallCallbackTable(void** table)
 static void
 InitCairoState(CairoState* s, cairo_t* cairo, float scale)
 {
-	memset(s, 0, sizeof(*s));
+	*s = CairoState();
 	s->cairo = cairo;
 	s->scale = scale > 0 ? scale : 1.0f;
 	s->foreColor.red = 0;
@@ -1122,8 +1120,9 @@ printcups_render_bitmap_fallback(const char* pdfPath, BBitmap* bitmap,
 	int32 stride = cairo_image_surface_get_stride(image);
 
 	for (int32 y = 0; y < h; y++) {
-		const rgb_color* row = static_cast<const rgb_color*>(
-			bitmap->Bits() + y * bitmap->BytesPerRow());
+		const rgb_color* row = reinterpret_cast<const rgb_color*>(
+			static_cast<const char*>(bitmap->Bits())
+			+ y * bitmap->BytesPerRow());
 		for (int32 x = 0; x < w; x++) {
 			uint32* dst = reinterpret_cast<uint32*>(base + y * stride + x * 4);
 			*dst = (0xffu << 24) | ((uint32)row[x].red << 16)

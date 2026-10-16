@@ -197,8 +197,8 @@ GlobalFontManager::MessageReceived(BMessage* message)
 					uint64 node;
 					if (message->FindUInt64("device", &devVal) != B_OK
 						|| message->FindUInt64("to directory", &toDir) != B_OK
-						|| message->FindUInt64("from directory", (int64 *)&fromNode) != B_OK
-						|| message->FindUInt64("node", (int64 *)&node) != B_OK
+						|| message->FindUInt64("from directory", &fromNode) != B_OK
+						|| message->FindUInt64("node", &node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 					node_ref nodeRef;
@@ -272,7 +272,7 @@ GlobalFontManager::MessageReceived(BMessage* message)
 					uint64 devVal, nodeVal;
 					uint64 directoryNode;
 					if (message->FindUInt64("device", &devVal) != B_OK
-						|| message->FindUInt64("directory", (int64 *)&directoryNode) != B_OK
+						|| message->FindUInt64("directory", &directoryNode) != B_OK
 						|| message->FindUInt64("node", &nodeVal) != B_OK)
 						break;
 					node_ref nodeRef;

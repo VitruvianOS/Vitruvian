@@ -22,6 +22,7 @@
 #include <driver_settings.h>
 #include <safemode_defs.h>
 #include <syscalls.h>
+#include <sys/stat.h>
 
 
 #ifndef ADD_ON_STABLE_SECONDS
@@ -536,15 +537,16 @@ AddOnMonitorHandler::_HandlePendingEntries()
 			dirNodeRef = info.dir_nref;
 		}
 
-		struct stat st;
-		if (directory.GetStatFor(info.name, &st) != B_OK) {
+		struct statx stx;
+		if (directory.GetStatXFor(info.name, &stx) != B_OK) {
 			// invalid file name, discard this pending entry
 			iter = fPendingEntries.erase(iter);
 			continue;
 		}
 
 		// stat units are seconds, real_time_clock units are seconds
-		if (real_time_clock() - st.st_mtime < ADD_ON_STABLE_SECONDS) {
+		time_t mtime = (time_t)stx.stx_mtime.tv_sec;
+		if (real_time_clock() - mtime < ADD_ON_STABLE_SECONDS) {
 			// entry not stable, skip the entry for this pulse
 			iter++;
 			continue;

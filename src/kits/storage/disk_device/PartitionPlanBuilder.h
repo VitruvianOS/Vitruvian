@@ -25,7 +25,10 @@ public:
 			const BString*		Get(PartitionReference* ref) const;
 
 private:
-			struct Entry;
+			struct Entry {
+				PartitionReference*	ref;
+				BString				opID;
+			};
 
 			BObjectList<Entry, true> fEntries;
 };

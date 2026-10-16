@@ -72,6 +72,7 @@ All rights reserved.
 #include <Volume.h>
 
 #include <fs_info.h>
+#include <string.h>
 
 #include "Bitmaps.h"
 #include "FSUtils.h"
@@ -1705,8 +1706,9 @@ size_t
 NodeCacheEntry::Hash() const
 {
 	ino_t ino = fHashNode;
-	return (size_t)fHashDev ^ ((uint32*)&ino)[0]
-		^ ((uint32*)&ino)[1];
+	uint32 halves[2];
+	memcpy(halves, &ino, sizeof(ino));
+	return (size_t)fHashDev ^ halves[0] ^ halves[1];
 }
 
 
@@ -1714,8 +1716,9 @@ NodeCacheEntry::Hash() const
 NodeCacheEntry::Hash(const node_ref* node)
 {
 	ino_t ino = node->node();
-	return (size_t)node->device() ^ ((uint32*)&ino)[0]
-		^ ((uint32*)&ino)[1];
+	uint32 halves[2];
+	memcpy(halves, &ino, sizeof(ino));
+	return (size_t)node->device() ^ halves[0] ^ halves[1];
 }
 
 

@@ -414,7 +414,7 @@ BPrintJob::CommitJob()
 	if (be_app != NULL)
 		be_app->GetAppInfo(&appInfo);
 	else
-		memset(&appInfo, 0, sizeof(appInfo));
+		appInfo = app_info();
 
 	const char* printerName = "";
 	fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, &printerName);

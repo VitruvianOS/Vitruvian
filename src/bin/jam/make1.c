@@ -186,7 +186,6 @@ static void
 make1b( TARGET *t )
 {
 	TARGETS	*c;
-	const char *failed = "dependents";
 
 	/* If any dependents are still outstanding, wait until they */
 	/* call make1b() to signal their completion. */
@@ -201,7 +200,6 @@ make1b( TARGET *t )
 	for( c = t->depends; c; c = c->next )
 	    if( c->target->status > t->status )
 	{
-	    failed = c->target->name;
 	    t->status = c->target->status;
 	}
 
@@ -306,7 +304,6 @@ make1c( TARGET *t )
 	    if ( globs.comp_db != NULL )
 	    {
 		const char* rule_name = cmd->rule->name;
-		const char* target_name = lol_get( (LOL *)&cmd->args, 0 )->string;
 		const char* source_name = NULL;
 		LIST* sources = lol_get( (LOL *)&cmd->args, 1);
 		if (sources != NULL)
@@ -448,7 +445,6 @@ make1cmds( ACTIONS *a0 )
 	    SETTINGS *boundvars;
 	    LIST    *nt, *ns;
 	    ACTIONS *a1;
-	    CMD	    *cmd;
 	    int	    start, chunk, length, maxline;
 	    int missingTargets = 0;
 	    int ruleFlags = rule->flags;
@@ -709,7 +705,7 @@ static void out_json(char const* str, FILE* f)
      {
          char const* ch;
          char const* subst;
-         if (i >= sizeof(buffer) - 10)
+         if (i >= (int)(sizeof(buffer) - 10))
          {
              buffer[i] = 0;
              fputs(buffer, f);

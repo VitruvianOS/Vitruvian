@@ -654,7 +654,7 @@ ImageFileNavigator::MoveFileToTrash()
 	if (tracker.SendMessage(&trash) != B_OK)
 		return false;
 
-	if (nextRef.vdevice() != -1) {
+	if (nextRef.vdevice() != (dev_t)-1) {
 		SetTo(nextRef, 1, 1);
 		return true;
 	}

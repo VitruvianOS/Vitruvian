@@ -81,10 +81,8 @@ ICNSLoader::ICNSLoader(BPositionIO *stream)
 
 	while ((dataOffset+8) < fIconFamily->resourceSize) {
 		icns_element_t	 iconElement;
-		icns_size_t      iconDataSize;
 
 		memcpy(&iconElement, (dataPtr + dataOffset), 8);
-		iconDataSize = iconElement.elementSize - 8;
 
 		if (IS_SPUPPORTED_TYPE(iconElement.elementType)) {
 				icns_type_t* newTypeItem = new icns_type_t;

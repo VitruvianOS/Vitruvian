@@ -3873,7 +3873,6 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 
 	#ifndef __VOS__
 	char* argv[2] = { const_cast<char*>(path.Path()), 0};
-
 	char** flatArgs = NULL;
 	size_t flatArgsSize;
 	result = __flatten_process_args((const char**)argv, 1,

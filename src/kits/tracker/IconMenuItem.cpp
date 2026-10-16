@@ -164,7 +164,7 @@ ModelMenuItem::DrawIcon()
 
 	// draw small icon, synchronously
 	if (IsEnabled()) {
-		const Model* model = fModel.ResolveIfLink();
+		Model* model = fModel.ResolveIfLink();
 		IconCache::sIconCache->Draw(model, Menu(), where,
 			kNormalIcon, BSize(ListIconSize() - 1, ListIconSize() - 1));
 	} else {

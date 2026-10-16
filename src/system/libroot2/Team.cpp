@@ -3,7 +3,10 @@
  *  Distributed under the terms of the LGPL License.
  */
 
+/* cc1plus predefines _GNU_SOURCE for C++. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include "Team.h"
 
@@ -111,12 +114,16 @@ signal_to_msg(int sig)
 
 
 void
-fault_handler(int sig)
+fault_handler(int sig, siginfo_t* /*info*/, void* /*context*/)
 {
 	debugger(signal_to_msg(sig));
 }
 
 
+// Priority below 100 is reserved, and deliberate: the team must exist
+// before any other libroot constructor runs.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wprio-ctor-dtor"
 void __attribute__ ((constructor(1)))
 init_team(int argc, char** argv)
 {
@@ -152,6 +159,10 @@ deinit_team()
 		gNexusNodeMonitor = -1;
 	}
 }
+
+
+#pragma GCC diagnostic pop
+
 
 void
 Team::InitTeam()

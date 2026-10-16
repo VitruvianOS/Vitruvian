@@ -199,8 +199,6 @@ targetchain(
 	TARGETS	*chain,
 	TARGETS	*targets )
 {
-	TARGETS *c;
-
 	if( !targets )
 	    return chain;
 	else if( !chain )
@@ -311,7 +309,7 @@ addsettings(
 SETTINGS *
 copysettings( SETTINGS *from )
 {
-	SETTINGS *head = 0, *v;
+	SETTINGS *head = 0;
 
 	for( ; from; from = from->next )
 	{

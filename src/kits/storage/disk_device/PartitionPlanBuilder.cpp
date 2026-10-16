@@ -107,12 +107,6 @@ parse_kv_text(const BString& text, BMessage& out)
 }
 
 
-struct PartitionOpIdMap::Entry {
-	PartitionReference*	ref;
-	BString				opID;
-};
-
-
 PartitionOpIdMap::~PartitionOpIdMap()
 {
 }

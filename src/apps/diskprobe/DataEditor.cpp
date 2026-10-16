@@ -451,8 +451,6 @@ DataEditor::SetTo(BEntry &entry, const char *attribute)
 
 	entry.GetRef(&fAttributeRef);
 
-	bool isFileSystem = false;
-
 	if (entry.IsDirectory()) {
 		// we redirect root directories to their volumes
 		BDirectory directory(&entry);
@@ -468,8 +466,6 @@ DataEditor::SetTo(BEntry &entry, const char *attribute)
 			entry.GetStat(&stat);
 
 			fBlockSize = info.block_size;
-			if (fBlockSize > 0 && fBlockSize <= 65536)
-				isFileSystem = true;
 		}
 	}
 

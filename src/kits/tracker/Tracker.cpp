@@ -1130,6 +1130,12 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 	// If no window was activated (none in the current workspace),
 	// we open a new one.
 
+#ifdef __VOS__
+	BEntry rootCheckEntry;
+	if (model != NULL)
+		rootCheckEntry.SetTo(model->EntryRef());
+#endif
+
 	if (openSelector == kRunOpenWithWindow) {
 		BMessage* refList = NULL;
 		if (originalRefsList == NULL) {
@@ -1153,7 +1159,7 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 		window = new VirtualDirectoryWindow(&fWindowList, openFlags);
 #ifdef __VOS__
 	} else if (TrackerSettings().ShowDisksIcon()
-			&& FSIsRootDir(&BEntry(model->EntryRef()))) {
+			&& FSIsRootDir(&rootCheckEntry)) {
 		// On Vitruvian "/" is the real boot fs. Promote the model to kRootNode
 		// so TargetModel()->IsRoot()=true, which causes AddVolumePoses to iterate
 		// all volumes (showing every persistent volume in the Disks window).
@@ -1787,10 +1793,10 @@ TTracker::NeedMoreNodeMonitors()
 	fNodeMonitorCount += kNodeMonitorBumpValue;
 	PRINT(("bumping nodeMonitorCount to %" B_PRId32 "\n", fNodeMonitorCount));
 
+	#ifndef __VOS__
 	struct rlimit rl;
 	rl.rlim_cur = fNodeMonitorCount;
 	rl.rlim_max = RLIM_SAVED_MAX;
-	#ifndef __VOS__
 	if (setrlimit(RLIMIT_NOVMON, &rl) < 0) {
 		fNodeMonitorCount -= kNodeMonitorBumpValue;
 		return -errno;

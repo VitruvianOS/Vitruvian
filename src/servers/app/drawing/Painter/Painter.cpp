@@ -218,10 +218,10 @@ Painter::Painter()
 	fMiterLimit(B_DEFAULT_MITER_LIMIT),
 
 	fPatternHandler(),
+	fInternal(fPatternHandler),
 	fTextRenderer(fSubpixRenderer, fRenderer, fRendererBin, fUnpackedScanline,
 		fSubpixUnpackedScanline, fSubpixRasterizer, fMaskedUnpackedScanline,
-		fTransform),
-	fInternal(fPatternHandler)
+		fTransform)
 {
 	fPixelFormat.SetDrawingMode(fDrawingMode, fAlphaSrcMode, fAlphaFncMode);
 

@@ -61,12 +61,22 @@
 		}																	\
 	} while (0)
 
+// headers/os/support/Debug.h may have defined these already; keep its
+// no-op forms rather than warning about the redefinition.
 #if KDEBUG
-#	define ASSERT(x)						ASSERT_ALWAYS(x)
-#	define ASSERT_PRINT(x, format, args...)	ASSERT_ALWAYS_PRINT(x, format, args)
+#	ifndef ASSERT
+#		define ASSERT(x)					ASSERT_ALWAYS(x)
+#	endif
+#	ifndef ASSERT_PRINT
+#		define ASSERT_PRINT(x, format, args...)	ASSERT_ALWAYS_PRINT(x, format, args)
+#	endif
 #else
-#	define ASSERT(x)						do { } while(0)
-#	define ASSERT_PRINT(x, format, args...)	do { } while(0)
+#	ifndef ASSERT
+#		define ASSERT(x)					do { } while(0)
+#	endif
+#	ifndef ASSERT_PRINT
+#		define ASSERT_PRINT(x, format, args...)	do { } while(0)
+#	endif
 #endif
 
 #if __GNUC__ >= 5 && !defined(__cplusplus)

@@ -298,7 +298,7 @@ GIFTranslator::DerivedTranslate(BPositionIO* inSource,
 	if (debug) {
 		now = system_time() - now;
 		syslog(LOG_INFO, "Translate() - Translation took %lld microseconds\n",
-			now);
+			(long long)now);
 	}
 	return B_OK;
 }

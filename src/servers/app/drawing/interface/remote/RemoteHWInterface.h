@@ -76,6 +76,7 @@ virtual	bool						IsDoubleBuffered() const;
 
 virtual	status_t					InvalidateRegion(const BRegion& region);
 virtual	status_t					Invalidate(const BRect& frame);
+		using HWInterface::CopyBackToFront;
 virtual	status_t					CopyBackToFront(const BRect& frame);
 
 		// drawing engine interface

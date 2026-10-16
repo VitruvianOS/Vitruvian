@@ -19,6 +19,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <Application.h>
 #include <Bitmap.h>
@@ -119,7 +120,9 @@ static inline rgb_color
 get_rgb_color(uint32 value)
 {
 	value = B_HOST_TO_BENDIAN_INT32(value);
-	return *(rgb_color*)&value;
+	union { uint32 asInt; rgb_color asColor; } packed;
+	packed.asInt = value;
+	return packed.asColor;
 }
 
 

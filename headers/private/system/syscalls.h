@@ -318,9 +318,10 @@ extern ssize_t		_kern_read_dir(int fd, struct dirent *buffer,
 extern ssize_t		_kern_read_dents(int fd, void *buffer, size_t bufferSize);
 extern status_t		_kern_rewind_dir(int fd);
 extern status_t		_kern_read_stat(int fd, const char *path, bool traverseLink,
-						struct stat *stat, size_t statSize);
+					struct stat *stat, size_t statSize);
+struct statx;
 extern status_t		_kern_read_statx(int fd, const char *path, bool traverseLink,
-						unsigned int mask, struct statx *stx);
+					unsigned int mask, struct statx *stx);
 extern status_t		_kern_write_stat(int fd, const char *path,
 						bool traverseLink, const struct stat *stat,
 						size_t statSize, int statMask);

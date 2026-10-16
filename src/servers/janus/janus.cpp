@@ -1074,8 +1074,16 @@ copy_settings_file(const char* srcPath, const char* dstDir,
 	}
 	if (chown(dstDir, uid, gid) < 0) { /* best effort */ }
 
+	// A truncated path fails the open() below; nothing else consumes it.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 	char dstPath[PATH_MAX];
 	snprintf(dstPath, sizeof(dstPath), "%s/%s", dstDir, fileName);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 	int dst = open(dstPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	if (dst < 0) {
 		close(src);
@@ -1599,9 +1607,17 @@ check_pending_launches()
 			printf("janus: %s ready, pid=%d port=%d\n",
 				sApps[idx].name, (int)sApps[idx].pid, (int)port);
 
+	// A truncated path fails the open() below; nothing else consumes it.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 			char pidpath[128];
 			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid",
 				runtime_dir(), sApps[idx].name);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 			FILE* f = fopen(pidpath, "w");
 			if (f != NULL) {
 				fprintf(f, "%d\n", (int)sApps[idx].pid);

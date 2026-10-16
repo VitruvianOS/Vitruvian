@@ -1639,7 +1639,7 @@ FindPanel::MessageReceived(BMessage* message)
 			BMenu* menu = invokedItem->Menu();
 			ASSERT(menu);
 
-			if (dev == -1) {
+			if (dev == (dev_t)-1) {
 				// all disks selected, uncheck everything else
 				int32 count = 0;
 				BVolumeRoster roster;

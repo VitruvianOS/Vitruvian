@@ -249,6 +249,8 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 					// has the entry been moved into a monitored directory or
 					// has it been removed from one?
 					const char* name;
+					if (message->FindString("name", &name) != B_OK)
+						break;
 					entry_ref toEntryRef;
 					entry_ref fromEntryRef;
 					node_ref nodeRef;

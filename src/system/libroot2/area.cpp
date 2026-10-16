@@ -3,7 +3,10 @@
  * Distributed under the terms of the LGPL License.
  */
 
+/* cc1plus predefines _GNU_SOURCE for C++. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -631,7 +634,7 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 			haveRecord = true;
 			start = s;
 			end = e;
-			strncpy(perms, p, sizeof(perms) - 1);
+			memcpy(perms, p, sizeof(perms));
 			if (matched >= 4) {
 				// %[^\n] does not skip the leading whitespace that pads the
 				// pathname column, so trim it by hand.
@@ -694,8 +697,7 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 
 	memset(areaInfo, 0, sizeof(area_info));
 	areaInfo->area = areaId;
-	strncpy(areaInfo->name, name, B_OS_NAME_LENGTH - 1);
-	areaInfo->name[B_OS_NAME_LENGTH - 1] = '\0';
+	snprintf(areaInfo->name, sizeof(areaInfo->name), "%s", name);
 	areaInfo->size = (size_t)(end - start);
 	areaInfo->lock = B_NO_LOCK;
 	areaInfo->protection = protection;

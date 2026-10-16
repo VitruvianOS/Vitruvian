@@ -110,43 +110,6 @@ PrintableRectFor(const BRect& paper, const char* media)
 }
 
 
-static void
-FillSettingsFromQueue(BMessage* settings, const printcups_queue_info& info)
-{
-	settings->RemoveName(PSRV_FIELD_CURRENT_PRINTER);
-	settings->AddString(PSRV_FIELD_CURRENT_PRINTER, info.name);
-
-	settings->RemoveName("printer_name");
-	settings->AddString("printer_name", info.name);
-
-	BRect paper(0, 0, info.paper_width - 1, info.paper_height - 1);
-	BRect printable(info.margin_left, info.margin_top,
-		paper.right - info.margin_right, paper.bottom - info.margin_bottom);
-
-	settings->RemoveName(PSRV_FIELD_PAPER_RECT);
-	settings->AddRect(PSRV_FIELD_PAPER_RECT, paper);
-	settings->RemoveName(PSRV_FIELD_PRINTABLE_RECT);
-	settings->AddRect(PSRV_FIELD_PRINTABLE_RECT, printable);
-
-	settings->RemoveName(PSRV_FIELD_XRES);
-	settings->AddInt64(PSRV_FIELD_XRES, info.xres);
-	settings->RemoveName(PSRV_FIELD_YRES);
-	settings->AddInt64(PSRV_FIELD_YRES, info.yres);
-
-	settings->RemoveName("media");
-	settings->AddString("media", info.media);
-
-	if (!settings->HasInt32(PSRV_FIELD_COPIES))
-		settings->AddInt32(PSRV_FIELD_COPIES, 1);
-	if (!settings->HasInt32(PSRV_FIELD_ORIENTATION))
-		settings->AddInt32(PSRV_FIELD_ORIENTATION, 0);
-	if (!settings->HasInt32(PSRV_FIELD_SCALE))
-		settings->AddInt32(PSRV_FIELD_SCALE, 100);
-	if (!settings->HasInt32(PSRV_FIELD_QUALITY))
-		settings->AddInt32(PSRV_FIELD_QUALITY, 100);
-}
-
-
 // #pragma mark - PreviewView
 
 

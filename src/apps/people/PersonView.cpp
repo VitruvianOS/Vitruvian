@@ -230,7 +230,7 @@ PersonView::BuildGroupMenu()
 
 				const char *text = buffer;
 				while (true) {
-					char* offset = strstr(text, ",");
+					char* offset = strstr(const_cast<char*>(text), ",");
 					if (offset != NULL)
 						offset[0] = '\0';
 

@@ -623,7 +623,7 @@ BKeymap::PopulateFromXkb(struct xkb_keymap* xkbKeymap)
 	// Preserve a caller-supplied assignment: this generates characters,
 	// not roles.
 	bool hadModifiers = fChars != NULL;
-	key_map savedModifiers;
+	key_map savedModifiers = key_map();
 	if (hadModifiers)
 		savedModifiers = fKeys;
 

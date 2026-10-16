@@ -242,35 +242,16 @@ Shell::GetActiveProcessInfo(ActiveProcessInfo& _info) const
 	if (error != B_OK)
 		return false;
 
-	dev_t dev;
-	ino_t ino;
-	char refName[B_PATH_NAME_LENGTH];
+	// fallback to cwd path and name
+	const char* cwdName;
+	if (info.FindString("name", &cwdName) != B_OK)
+		return false;
 
-#if 0
-	if (info.FindRef("virtual:cwd directory", &dev, &ino, refName,
-			B_PATH_NAME_LENGTH) == B_OK) {
-		// convert the node ref into a path
-		BPath cwdPath;
-		entry_ref cwdRef(dev, ino, ".");
-		if (cwdPath.SetTo(&cwdRef) != B_OK)
-			return false;
+	const char* path;
+	if (info.FindString("cwd path", &path) != B_OK)
+		return false;
 
-		_info.SetTo(process, refName, cwdPath.Path());
-	} else {
-#endif
-		// fallback to cwd path and name
-		const char* cwdName;
-		if (info.FindString("name", &cwdName) != B_OK)
-			return false;
-
-		const char* path;
-		if (info.FindString("cwd path", &path) != B_OK)
-			return false;
-
-		_info.SetTo(process, cwdName, path);
-#if 0
-	}
-#endif
+	_info.SetTo(process, cwdName, path);
 
 	return true;
 }

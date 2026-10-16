@@ -239,7 +239,7 @@ hashstat( struct hash *hp )
 
 	for( i = nel; i > 0; i-- )
 	{
-		if( here = ( *tab++ != (ITEM *)0 ) )
+		if( (here = ( *tab++ != (ITEM *)0 )) )
 			count++;
 		if( here && !run )
 			sets++;

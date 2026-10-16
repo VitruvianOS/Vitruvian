@@ -71,8 +71,10 @@ BStatusBar::BStatusBar(BMessage *archive)
 	}
 
 	int32 color;
-	if (archive->FindInt32("_bcolor", (int32 *)&color) == B_OK) {
-		fBarColor = *(rgb_color *)&color;
+	if (archive->FindInt32("_bcolor", &color) == B_OK) {
+		union { int32 asInt; rgb_color asColor; } packed;
+		packed.asInt = color;
+		fBarColor = packed.asColor;
 		fInternalFlags |= kCustomBarColor;
 	}
 

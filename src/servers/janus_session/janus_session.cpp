@@ -856,9 +856,17 @@ check_pending_launches()
 				doneEntry->name, (int)doneEntry->pid,
 				(int)doneEntry->port);
 
+	// A truncated path fails the open() below; nothing else consumes it.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 			char pidpath[128];
 			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid",
 				runtime_dir(), doneEntry->name);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 			FILE* f = fopen(pidpath, "w");
 			if (f != NULL) {
 				fprintf(f, "%d\n", (int)doneEntry->pid);
@@ -2005,9 +2013,17 @@ apply_session_proxy_env()
 	if (sGreeterMode || sUserHome[0] == '\0')
 		return;
 
+	// A truncated path fails the open() below; nothing else consumes it.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 	char path[PATH_MAX];
 	snprintf(path, sizeof(path), "%s/config/settings/network_proxy",
 		sUserHome);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 	BFile file(path, B_READ_ONLY);
 	if (file.InitCheck() != B_OK)

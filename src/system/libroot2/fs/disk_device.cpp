@@ -1143,7 +1143,16 @@ _kern_mount_partition(partition_id id, const char* mountPoint,
 	} else {
 		const char* devName = strrchr(devPath, '/');
 		devName = devName ? devName + 1 : devPath;
+		// A truncated mount point makes mkdir() fail below; nothing else
+		// consumes the buffer.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 		snprintf(mountDir, sizeof(mountDir), "%s/%s", DEFAULT_MOUNT_BASE, devName);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 	}
 
 	if (mkdir(mountDir, 0755) < 0 && errno != EEXIST)

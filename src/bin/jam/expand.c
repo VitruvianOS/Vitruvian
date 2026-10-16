@@ -216,7 +216,7 @@ var_expand(
 
 		strcpy( varname, vars->string );
 
-		if( colon = strchr( varname, MAGIC_COLON ) )
+		if( (colon = strchr( varname, MAGIC_COLON )) )
 		{
 		    *colon = '\0';
 		    var_edit_parse( colon + 1, &edits );
@@ -226,11 +226,11 @@ var_expand(
 		/* sub1 is x (0 default) */
 		/* sub2 is length (-1 means forever) */
 
-		if( bracket = strchr( varname, MAGIC_LEFT ) )
+		if( (bracket = strchr( varname, MAGIC_LEFT )) )
 		{
 		    char *dash;
 
-		    if( dash = strchr( bracket + 1, '-' ) )
+		    if( (dash = strchr( bracket + 1, '-' )) )
 			*dash = '\0';
 
 		    sub1 = atoi( bracket + 1 ) - 1;
@@ -462,7 +462,7 @@ var_edit_parse(
 		fp->ptr = "";
 		fp->len = 0;
 	    }
-	    else if( p = strchr( mods, MAGIC_COLON ) )
+	    else if( (p = strchr( mods, MAGIC_COLON )) )
 	    {
 		*p = 0;
 		fp->ptr = ++mods;

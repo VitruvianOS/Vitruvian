@@ -8,6 +8,12 @@
  */
 
 
+#if defined(__GNUC__)
+// message_header/field_header are _PACKED but consist solely of 4-byte
+// members at natural offsets; GCC cannot see the layout guarantee.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
 #include <MessageAdapter.h>
 #include <MessagePrivate.h>
 #include <MessageUtils.h>
@@ -868,3 +874,7 @@ MessageAdapter::_UnflattenDanoMessage(uint32 format, BMessage *into,
 
 
 } // namespace BPrivate
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif

@@ -26,7 +26,16 @@
 using namespace ICO;
 
 
-static const rgba32_color kMagicTransparentColor = *(rgba32_color *)&B_TRANSPARENT_MAGIC_RGBA32;
+static rgba32_color
+magicTransparentColor()
+{
+	rgba32_color color;
+	memcpy(&color, &B_TRANSPARENT_MAGIC_RGBA32, sizeof(color));
+	return color;
+}
+
+
+static const rgba32_color kMagicTransparentColor = magicTransparentColor();
 
 
 class TempAllocator {

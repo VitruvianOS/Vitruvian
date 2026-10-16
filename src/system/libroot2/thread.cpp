@@ -365,7 +365,7 @@ send_data(thread_id thread, int32 code,
 	struct nexus_thread_rw exchange;
 	do {
 		memset(&exchange, 0, sizeof(exchange));
-		exchange.buffer = buffer;
+		exchange.buffer = const_cast<void*>(buffer);
 		exchange.size = bufferSize;
 		exchange.return_code = code;
 		exchange.receiver = thread;
@@ -454,10 +454,18 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 		char* newline = strchr(buffer, '\n');
 		if (newline != NULL)
 			*newline = '\0';
-		strncpy(info->name, buffer, B_OS_NAME_LENGTH - 1);
+		// Thread names deliberately truncate at B_OS_NAME_LENGTH.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+		snprintf(info->name, sizeof(info->name), "%s", buffer);
 	} else {
-		strncpy(info->name, "unknown", B_OS_NAME_LENGTH - 1);
+		snprintf(info->name, sizeof(info->name), "%s", "unknown");
 	}
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 	info->state = B_THREAD_RUNNING;
 	info->priority = GetThreadPriority(id);
@@ -707,7 +715,7 @@ resume_thread(thread_id id)
 	CALLED();
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(nexus, NEXUS_THREAD_RESUME, id);
+	status_t ret = nexus_io(nexus, NEXUS_THREAD_RESUME, (void*)(intptr_t)id);
 	if (ret == B_BAD_THREAD_ID) {
 		if (kill(id, 0) < 0)
 			return B_BAD_THREAD_ID;

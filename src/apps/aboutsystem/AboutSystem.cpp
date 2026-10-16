@@ -115,50 +115,16 @@ static const rgb_color kIdealBeOSRed = { 200, 0, 0, 255 };
 static const rgb_color kBlack = { 0, 0, 0, 255 };
 static const rgb_color kWhite = { 255, 255, 255, 255 };
 
-static const char* kBSDTwoClause = B_TRANSLATE_MARK("BSD (2-clause)");
 static const char* kBSDThreeClause = B_TRANSLATE_MARK("BSD (3-clause)");
 static const char* kBSDFourClause = B_TRANSLATE_MARK("BSD (4-clause)");
 static const char* kGPLv2 = B_TRANSLATE_MARK("GNU GPL v2");
 static const char* kGPLv3 = B_TRANSLATE_MARK("GNU GPL v3");
-static const char* kLGPLv2 = B_TRANSLATE_MARK("GNU LGPL v2");
 static const char* kLGPLv21 = B_TRANSLATE_MARK("GNU LGPL v2.1");
 #if 0
 static const char* kPublicDomain = B_TRANSLATE_MARK("Public Domain");
 #endif
 #ifdef __i386__
 #endif
-
-
-//	#pragma mark - TranslationComparator function
-
-
-static int
-TranslationComparator(const void* left, const void* right)
-{
-	const Translation* leftTranslation = *(const Translation**)left;
-	const Translation* rightTranslation = *(const Translation**)right;
-
-	BLanguage* language;
-	BString leftName;
-	if (BLocaleRoster::Default()->GetLanguage(leftTranslation->languageCode,
-			&language) == B_OK) {
-		language->GetName(leftName);
-		delete language;
-	} else
-		leftName = leftTranslation->languageCode;
-
-	BString rightName;
-	if (BLocaleRoster::Default()->GetLanguage(rightTranslation->languageCode,
-			&language) == B_OK) {
-		language->GetName(rightName);
-		delete language;
-	} else
-		rightName = rightTranslation->languageCode;
-
-	BCollator collator;
-	BLocale::Default()->GetCollator(&collator);
-	return collator.Compare(leftName.String(), rightName.String());
-}
 
 
 //	#pragma mark - class definitions

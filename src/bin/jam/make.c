@@ -176,7 +176,7 @@ make0(
 	COUNTS	*counts,	/* for reporting */
 	int	anyhow )	/* forcibly touch all (real) targets */
 {
-	TARGETS	*c, *d, *incs;
+	TARGETS	*c, *incs;
 	TARGET 	*ptime = t;
 	time_t	last, leaf, hlast;
 	int	fate;
@@ -253,7 +253,7 @@ make0(
 	    case T_BIND_MISSING:
 	    case T_BIND_PARENTS:
 		printf( "time\t--\t%s%s: %s\n",
-			spaces( depth ), t->name, target_bind[ t->binding ] );
+			spaces( depth ), t->name, target_bind[ (unsigned char)t->binding ] );
 		break;
 
 	    case T_BIND_EXISTS:
@@ -481,13 +481,13 @@ make0(
 
 	if( DEBUG_MAKEPROG )
 	    printf( "made%s\t%s\t%s%s\n", 
-		flag, target_fate[ t->fate ], 
+		flag, target_fate[ (unsigned char)t->fate ], 
 		spaces( depth ), t->name );
 
 	if( DEBUG_CAUSES && 
 	    t->fate >= T_FATE_NEWER && 
 	    t->fate <= T_FATE_MISSING )
-		printf( "%s %s\n", target_fate[ t->fate ], t->name );
+		printf( "%s %s\n", target_fate[ (unsigned char)t->fate ], t->name );
 }
 
 /*

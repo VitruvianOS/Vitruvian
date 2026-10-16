@@ -58,7 +58,6 @@ SystemInfoHandler::Archive(BMessage* data, bool deep) const
 void
 SystemInfoHandler::StartWatching()
 {
-	status_t status;
 	fRunningApps = 0;
 	fClipboardSize = 0;
 	fClipboardTextSize = 0;
@@ -83,6 +82,7 @@ SystemInfoHandler::StartWatching()
 	}
 
 #ifndef __VOS__
+	status_t status;
 	if (BMediaRoster::Roster(&status) && (status >= B_OK)) {
 		BMediaRoster::Roster()->StartWatching(BMessenger(this), B_MEDIA_NODE_CREATED);
 		BMediaRoster::Roster()->StartWatching(BMessenger(this), B_MEDIA_NODE_DELETED);
@@ -112,9 +112,9 @@ SystemInfoHandler::StartWatching()
 void
 SystemInfoHandler::StopWatching()
 {
-	status_t status;
 	watch_input_devices(BMessenger(this), false);
 #ifndef __VOS__
+	status_t status;
 	if (BMediaRoster::Roster(&status) && (status >= B_OK)) {
 		BMediaRoster::Roster()->StopWatching(BMessenger(this), B_MEDIA_NODE_CREATED);
 		BMediaRoster::Roster()->StopWatching(BMessenger(this), B_MEDIA_NODE_DELETED);

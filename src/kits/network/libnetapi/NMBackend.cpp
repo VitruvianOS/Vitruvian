@@ -2464,8 +2464,12 @@ _RunDisconnectVPN(gpointer data)
 		message.AddString("reason", "VPN connection is not active");
 	} else {
 		GError* error = NULL;
+		// The sync call still works; switching to the async API is a
+		// functional change, out of scope for the warning cleanup.
+		G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		if (!nm_client_deactivate_connection(job->nmClient, target, NULL,
 				&error)) {
+		G_GNUC_END_IGNORE_DEPRECATIONS
 			message.AddString("reason",
 				error != NULL ? error->message : "unknown error");
 			if (error != NULL)
@@ -2996,10 +3000,14 @@ static gboolean
 _RunSetEnabled(gpointer data)
 {
 	_SetEnabledJob* job = (_SetEnabledJob*)data;
+	// Both setters still work; the async replacements change control
+	// flow and are out of scope for the warning cleanup.
+	G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 	if (job->wireless)
 		nm_client_wireless_set_enabled(job->nmClient, job->enabled);
 	else
 		nm_client_networking_set_enabled(job->nmClient, job->enabled, NULL);
+	G_GNUC_END_IGNORE_DEPRECATIONS
 	delete job;
 	return G_SOURCE_REMOVE;
 }
@@ -3870,7 +3878,9 @@ _FillMobileFromConnection(NMConnection* connection, bool connected,
 		const char* apn = nm_setting_gsm_get_apn(gsm);
 		const char* user = nm_setting_gsm_get_username(gsm);
 		const char* password = nm_setting_gsm_get_password(gsm);
+		G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		const char* number = nm_setting_gsm_get_number(gsm);
+		G_GNUC_END_IGNORE_DEPRECATIONS
 		reply->AddString(kNMFieldMobileAPN, apn != NULL ? apn : "");
 		reply->AddString(kNMFieldMobileUser, user != NULL ? user : "");
 		reply->AddString(kNMFieldMobilePassword,

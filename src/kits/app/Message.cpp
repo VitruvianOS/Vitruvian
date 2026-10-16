@@ -9,6 +9,13 @@
  */
 
 
+#if defined(__GNUC__)
+// message_header/field_header are _PACKED but consist solely of 4-byte
+// members at natural offsets; GCC cannot see the layout guarantee.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
+
 #include <Message.h>
 #include <MessageAdapter.h>
 #include <MessagePrivate.h>
@@ -243,14 +250,6 @@ _CollectSendBufferCaps_walk(char* buffer, dev_t vrefDev,
 	}
 }
 
-
-
-static status_t
-_CollectSendBufferCaps(char* buffer, port_cap_in** outCaps, size_t* outCount)
-{
-	return BMessage::Private::CollectSendBufferCaps(buffer, outCaps,
-		outCount);
-}
 
 
 /*static*/ status_t
@@ -2720,7 +2719,7 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 
 	if (direct == NULL) {
 		// We need to acquire vrefs across process boundaries
-		_HandleMessageVRefs(this, true);
+		_HandleMessageVRefs(const_cast<BMessage*>(this), true);
 		vrefsAcquired = true;
 
 		KTRACE("BMessage send remote: team: %ld, port: %ld, token: %ld, "
@@ -2740,7 +2739,7 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 
 		// If send failed then release the vrefs
 		if (result != B_OK && vrefsAcquired)
-			_HandleMessageVRefs(this, false);
+			_HandleMessageVRefs(const_cast<BMessage*>(this), false);
 	}
 
 	if (result == B_OK && IsSourceWaiting()) {
@@ -3902,3 +3901,7 @@ BMessage::SetData(const char* name, type_code type, const void* data,
 
 	return AddData(name, type, data, numBytes, fixedSize, count);
 }
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif

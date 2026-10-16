@@ -198,6 +198,12 @@ void
 PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 	const char* type, uint32 /*version*/, const struct spa_dict* props)
 {
+	// PW_DEPRECATED's macro trips -Wdeprecated-declarations on every
+	// wrapped call; the replacements are not drop-in.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 	if (type == NULL)
 		return;
 
@@ -397,8 +403,10 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		_Broadcast(kMsgMidiNodesChanged, id);
 		return;
 	}
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 }
-
 
 void
 PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)

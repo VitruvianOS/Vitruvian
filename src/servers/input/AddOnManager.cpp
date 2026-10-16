@@ -130,8 +130,8 @@ instantiate_add_on(image_id image, const char* path, const char* type)
 AddOnManager::AddOnManager()
 	:
 	AddOnMonitor(),
-	fHandler(new(std::nothrow) MonitorHandler(this)),
-	fRetryRunner(NULL)
+	fRetryRunner(NULL),
+	fHandler(new(std::nothrow) MonitorHandler(this))
 {
 	SetHandler(fHandler);
 }

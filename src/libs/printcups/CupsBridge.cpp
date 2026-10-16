@@ -963,8 +963,17 @@ CupsBridge::ListDevices(printcups_device* devices, int maxDevices)
 	ctx.count = 0;
 
 	// cupsGetDevices walks the cupsd backends (DNS-SD, USB, parallel...).
+	// Still the only blocking discovery entry point; the async
+	// replacement changes the control flow of this loader.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 	ipp_status_t status = cupsGetDevices(CUPS_HTTP_DEFAULT, 10, NULL, NULL,
 		DeviceCollectCallback, &ctx);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 	if (status != IPP_STATUS_OK && ctx.count == 0) {
 		_SetError(cupsLastErrorString());
 		return -1;

@@ -6,9 +6,11 @@ Application(
 	DownloadsWindow.cpp
 	MainWindow.cpp
 	SettingsWindow.cpp
+	DeskbarEntry.cpp
 	DownloadsModel.cpp
 	DownloadsPanel.cpp
 	HistoryStore.cpp
+	InstalledAppStore.cpp
 	PanelMenu.cpp
 	PanelMenuModel.cpp
 	StatusBarView.cpp
@@ -18,8 +20,9 @@ Application(
 	ToolbarView.cpp
 	UrlBarView.cpp
 	UrlInput.cpp
+	WebAppManifest.cpp
 
-	LIBS web tracker
+	LIBS web tracker translation
 
 	RDEF NetPlus.rdef
 )

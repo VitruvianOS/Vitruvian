@@ -4,12 +4,15 @@
  */
 
 
+#include "DeskbarEntry.h"
+#include "InstalledAppStore.h"
 #include "DownloadsWindow.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
 
 #include <Alert.h>
+#include <Entry.h>
 #include <Messenger.h>
 #include <Path.h>
 #include <String.h>
@@ -23,11 +26,48 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <unistd.h>
 
 
 static const char* kSettingsFileName = "settings";
 static const char* kBookmarksFileName = "bookmarks.html";
 static const char* kLastURLKey = "last_session_url";
+
+static std::string
+_SelfPath()
+{
+	char buffer[1024];
+	ssize_t length = readlink("/proc/self/exe", buffer,
+		sizeof(buffer) - 1);
+	if (length <= 0)
+		return std::string();
+	buffer[length] = '\0';
+	return std::string(buffer);
+}
+
+
+static std::string
+_BaseName(const std::string& path)
+{
+	size_t slash = path.rfind('/');
+	if (slash == std::string::npos)
+		return path;
+	return path.substr(slash + 1);
+}
+
+
+static bool
+_LookupInstalled(const char* entryName, InstalledApp* into)
+{
+	BPath root;
+	DeskbarEntry::WebAppStorePath(&root);
+	InstalledAppStore store(root.Path());
+	int32_t index = store.IndexOfEntryName(entryName);
+	if (index < 0)
+		return false;
+	*into = store.At(index);
+	return true;
+}
 
 
 NetPlusApp::NetPlusApp()
@@ -132,6 +172,18 @@ void
 NetPlusApp::ArgvReceived(int32 argc, char** argv)
 {
 	for (int32 i = 1; i < argc; i++) {
+		if (strncmp(argv[i], "--pwa=", 6) == 0) {
+			InstalledApp app;
+			if (_LookupInstalled(argv[i] + 6, &app)) {
+				fPwa.installed = true;
+				fPwa.id = app.id;
+				fPwa.name = app.name;
+				fPwa.startUrl = app.startUrl;
+				fPwa.display = app.display;
+				fPwa.iconPath = app.iconPath;
+			}
+			continue;
+		}
 		if (fStartupURL.IsEmpty() && argv[i][0] != '-')
 			fStartupURL = argv[i];
 	}
@@ -157,6 +209,36 @@ NetPlusApp::MessageReceived(BMessage* message)
 
 
 void
+NetPlusApp::RefsReceived(BMessage* message)
+{
+	// The Deskbar entry launches by refs: the symlink's name is the
+	// installed app's name.
+	entry_ref ref;
+	if (message->FindRef("refs", &ref) != B_OK)
+		return;
+
+	InstalledApp app;
+	if (!_LookupInstalled(ref.name, &app)) {
+		BApplication::RefsReceived(message);
+		return;
+	}
+
+	fPwa.installed = true;
+	fPwa.id = app.id;
+	fPwa.name = app.name;
+	fPwa.startUrl = app.startUrl;
+	fPwa.display = app.display;
+	fPwa.iconPath = app.iconPath;
+
+	// Launch refs land before ReadyToRun; only a second launch while
+	// running needs its own window here.
+	if (fReady)
+		OpenWindow(fPwa.startUrl.c_str(), false, &fPwa);
+}
+}
+
+
+void
 NetPlusApp::ReadyToRun()
 {
 	_CreateDirs();
@@ -166,6 +248,26 @@ NetPlusApp::ReadyToRun()
 	// Every window shares one profile session: route its download
 	// events through the app so they arrive once, not once per window.
 	BWebView::SetDownloadTarget(BMessenger(this));
+
+	if (!fPwa.installed) {
+		// A menu symlink launch delivers argv[0] as the link path.
+		InstalledApp app;
+		std::string base = _BaseName(_SelfPath());
+		if (!base.empty() && _LookupInstalled(base.c_str(), &app)) {
+			fPwa.installed = true;
+			fPwa.id = app.id;
+			fPwa.name = app.name;
+			fPwa.startUrl = app.startUrl;
+			fPwa.display = app.display;
+			fPwa.iconPath = app.iconPath;
+		}
+	}
+
+	fReady = true;
+	if (fPwa.installed) {
+		OpenWindow(fPwa.startUrl.c_str(), false, &fPwa);
+		return;
+	}
 
 	const char* url = fStartupURL.String();
 	BString restoreURL;
@@ -181,10 +283,11 @@ NetPlusApp::ReadyToRun()
 
 
 void
-NetPlusApp::OpenWindow(const char* url, bool privateWindow)
+NetPlusApp::OpenWindow(const char* url, bool privateWindow,
+	const PwaLaunchInfo* pwa)
 {
 	BRect frame(100, 100, 1100, 800);
-	MainWindow* window = new MainWindow(frame, url, privateWindow);
+	MainWindow* window = new MainWindow(frame, url, privateWindow, pwa);
 	fWindowCount++;
 	window->Show();
 }

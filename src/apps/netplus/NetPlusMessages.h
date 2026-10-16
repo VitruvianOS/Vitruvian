@@ -42,7 +42,11 @@ enum {
 	MSG_DOWNLOAD_SHOW	= 'dlsh',
 	MSG_DOWNLOAD_CLEAR	= 'dlcl',
 	MSG_SUGGEST_ACCEPTED = 'sgac',
-	MSG_SET_ENGINE		= 'engs'
+	MSG_SET_ENGINE		= 'engs',
+	MSG_INSTALL_APP		= 'inpa',
+	MSG_INSTALL_CONFIRM = 'incf',
+	MSG_ICON_FETCHED	= 'icfl',
+	MSG_ICON_FETCH_JS	= 'icjs'
 };
 
 

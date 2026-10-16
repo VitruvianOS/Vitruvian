@@ -11,6 +11,8 @@
 
 #include "DownloadsModel.h"
 #include "HistoryStore.h"
+#include "InstalledAppStore.h"
+#include "WebAppManifest.h"
 
 
 class BMenuItem;
@@ -23,10 +25,24 @@ class StatusBarView;
 class ToolbarView;
 
 
+/*!	Handed to the window when it comes up as an installed PWA
+	instead of as the browser.
+*/
+struct PwaLaunchInfo {
+	bool		installed = false;
+	std::string	id;
+	std::string	name;
+	std::string	startUrl;
+	std::string	display;
+	std::string	iconPath;
+};
+
+
 class MainWindow : public BWindow {
 public:
 								MainWindow(BRect frame, const char* url,
-									bool privateWindow);
+									bool privateWindow,
+									const PwaLaunchInfo* pwa = NULL);
 	virtual						~MainWindow();
 
 	virtual bool				QuitRequested();
@@ -44,6 +60,11 @@ private:
 			void				_ShowDownloads(BPoint anchor);
 			void				_HandleDownloadMessage(BMessage* message);
 			void				_RefreshDownloadUI();
+			void				_HandleManifestMessage(BMessage* message);
+			void				_HandleIconMessage(BMessage* message);
+			void				_StartInstall();
+			void				_FinishInstall(const std::string& iconPath);
+			InstalledAppStore&	_Store();
 
 			BWebView*			fWebView;
 			ToolbarView*		fToolbar;
@@ -62,6 +83,14 @@ private:
 			DownloadsModel		fDownloadsModel;
 			HistoryStore		fHistory;
 			int32				fSearchEngine;
+
+			bool				fPwaMode;
+			ManifestDisplayMode	fPwaDisplay;
+			PwaLaunchInfo		fPwa;
+			WebAppManifest		fManifest;
+			std::string			fManifestUrl;
+			std::string			fManifestPage;
+			InstalledAppStore*	fStore;
 };
 
 

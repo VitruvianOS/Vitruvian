@@ -5,6 +5,7 @@
 
 
 #include "DownloadsWindow.h"
+#include "DeskbarEntry.h"
 #include "DownloadsPanel.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
@@ -24,7 +25,9 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Button.h>
 #include <Entry.h>
+#include <Invoker.h>
 #include <LayoutBuilder.h>
 #include <Menu.h>
 #include <MenuBar.h>
@@ -40,14 +43,98 @@
 #include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 // Built-in start page until the homepage becomes a setting.
 static const char* kHomePage = "vos-about:";
 
+// The handler name the install script posts to.
+static const char* kInstallHandler = "netplus";
 
-MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
+// Discovers <link rel="manifest"> after each document loads, fetches
+// the manifest and posts it back; also exposes the icon fetch used
+// at install time. Engine-side fetch keeps cookies and the proxy.
+static const char* kInstallScript = (
+	"(function() {"
+	" var post = function(obj) {"
+	"  try {"
+	"   window.webkit.messageHandlers.netplus.postMessage("
+	"    JSON.stringify(obj));"
+	"  } catch (e) {}"
+	" };"
+	" var report = function() {"
+	"  var link = document.querySelector('link[rel=\"manifest\"]');"
+	"  if (link == null || !link.href)"
+	"   return;"
+	"  fetch(link.href, { credentials: 'include' })"
+	"   .then(function(r) { return r.text(); })"
+	"   .then(function(t) {"
+	"    post({ handler: 'netplus-manifest', url: link.href,"
+	"     page: location.href, text: t });"
+	"   }).catch(function() {});"
+	" };"
+	" window.__netplusFetchIcon = function(url) {"
+	"  fetch(url, { credentials: 'include' })"
+	"   .then(function(r) { return r.arrayBuffer(); })"
+	"   .then(function(b) {"
+	"    var bytes = new Uint8Array(b);"
+	"    var s = '';"
+	"    for (var i = 0; i < bytes.length; i++)"
+	"     s += String.fromCharCode(bytes[i]);"
+	"    post({ handler: 'netplus-icon', url: url, data: btoa(s) });"
+	"   }).catch(function() {"
+	"    post({ handler: 'netplus-icon', url: url, data: '' });"
+	"   });"
+	"  return true;"
+	" };"
+	" if (document.readyState === 'loading')"
+	"  document.addEventListener('DOMContentLoaded', report);"
+	" else"
+	"  report();"
+	"})();"
+);
+
+
+static std::string
+_SelfPath()
+{
+	char buffer[1024];
+	ssize_t length = readlink("/proc/self/exe", buffer,
+		sizeof(buffer) - 1);
+	if (length <= 0)
+		return std::string();
+	buffer[length] = '\0';
+	return std::string(buffer);
+}
+
+
+static BRect
+_PwaFrame(const PwaLaunchInfo* pwa, BRect fallback)
+{
+	if (pwa == NULL || !pwa->installed || ManifestDisplayModeFor(
+			pwa->display) != kManifestDisplayFullscreen)
+		return fallback;
+
+	BScreen screen(B_MAIN_SCREEN_ID);
+	return screen.Frame();
+}
+
+
+static std::string
+_PwaTitle(const PwaLaunchInfo* pwa)
+{
+	if (pwa != NULL && pwa->installed && !pwa->name.empty())
+		return pwa->name;
+	return std::string("NetPlus");
+}
+
+
+MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
+	const PwaLaunchInfo* pwa)
 	:
-	BWindow(frame, "NetPlus", B_TITLED_WINDOW, 0),
+	BWindow(_PwaFrame(pwa, frame), _PwaTitle(pwa).c_str(),
+		B_TITLED_WINDOW, 0),
 	fWebView(nullptr),
 	fToolbar(nullptr),
 	fStatusBar(nullptr),
@@ -61,94 +148,125 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 	fSavedFrame(frame),
 	fAppMenu(nullptr),
 	fDownloadsPanel(nullptr),
-	fSearchEngine(0)
+	fSearchEngine(0),
+	fPwaMode(pwa != NULL && pwa->installed),
+	fPwaDisplay(kManifestDisplayStandalone),
+	fStore(nullptr)
 {
-	BRect viewRect(0, 0, frame.Width(), frame.Height());
+	if (fPwaMode) {
+		fPwa = *pwa;
+		fPwaDisplay = ManifestDisplayModeFor(pwa->display);
+		if (fPwaDisplay == kManifestDisplayFullscreen)
+			SetLook(B_NO_BORDER_WINDOW_LOOK);
+	}
 
-	fMenuBar = new BMenuBar("menubar");
+	BRect viewRect(0, 0, Bounds().Width(), Bounds().Height());
 
-	BMenu* fileMenu = new BMenu("File");
-	fileMenu->AddItem(new BMenuItem("Open Location" B_UTF8_ELLIPSIS,
-		new BMessage(MSG_OPEN_LOCATION), 'L'));
-	fileMenu->AddSeparatorItem();
-	fileMenu->AddItem(new BMenuItem("New Window",
-		new BMessage(MSG_OPEN_WINDOW), 'N'));
-	BMenuItem* privateItem = new BMenuItem("New Private Window",
-		new BMessage(MSG_OPEN_WINDOW), 'N', B_SHIFT_KEY);
-	privateItem->Message()->AddBool("private", true);
-	fileMenu->AddItem(privateItem);
-	fileMenu->AddSeparatorItem();
-	fileMenu->AddItem(new BMenuItem("Settings" B_UTF8_ELLIPSIS,
-		new BMessage(MSG_SHOW_SETTINGS)));
-	fileMenu->AddItem(new BMenuItem("Show Downloads",
-		new BMessage(MSG_SHOW_DOWNLOADS), 'J'));
-	fileMenu->AddSeparatorItem();
-	// Quit closes the whole application, like the legacy browser.
-	BMenuItem* quitItem = new BMenuItem("Quit",
-		new BMessage(B_QUIT_REQUESTED), 'Q');
-	quitItem->SetTarget(be_app);
-	fileMenu->AddItem(quitItem);
-	fMenuBar->AddItem(fileMenu);
-
-	BMenu* editMenu = new BMenu("Edit");
-	editMenu->AddItem(new BMenuItem("Cut",
-		new BMessage(B_WEB_EDIT_CUT), 'X'));
-	editMenu->AddItem(new BMenuItem("Copy",
-		new BMessage(B_WEB_EDIT_COPY), 'C'));
-	editMenu->AddItem(new BMenuItem("Paste",
-		new BMessage(B_WEB_EDIT_PASTE), 'V'));
-	editMenu->AddSeparatorItem();
-	editMenu->AddItem(new BMenuItem("Select All",
-		new BMessage(B_WEB_EDIT_SELECT_ALL), 'A'));
-	fMenuBar->AddItem(editMenu);
-
-	BMenu* goMenu = new BMenu("Go");
-	fBackItem = new BMenuItem("Back",
-		new BMessage(MSG_NAV_BACK), B_LEFT_ARROW);
-	fForwardItem = new BMenuItem("Forward",
-		new BMessage(MSG_NAV_FORWARD), B_RIGHT_ARROW);
-	goMenu->AddItem(fBackItem);
-	goMenu->AddItem(fForwardItem);
-	goMenu->AddSeparatorItem();
-	goMenu->AddItem(new BMenuItem("Reload",
-		new BMessage(MSG_NAV_RELOAD), 'R'));
-	goMenu->AddItem(new BMenuItem("Stop",
-		new BMessage(MSG_NAV_STOP), 0));
-	goMenu->AddItem(new BMenuItem("Home",
-		new BMessage(MSG_NAV_HOME), 'H'));
-	fMenuBar->AddItem(goMenu);
-
-	fBookmarksMenu = new BMenu("Bookmarks");
-	fBookmarksMenu->AddItem(new BMenuItem("Add Bookmark",
-		new BMessage(MSG_BOOKMARK_ADD), 'D'));
-	fRemoveBookmarkMenu = new BMenu("Remove Bookmark");
-	fBookmarksMenu->AddItem(fRemoveBookmarkMenu);
-	fBookmarksMenu->AddSeparatorItem();
-	fMenuBar->AddItem(fBookmarksMenu);
-
-	BMenu* helpMenu = new BMenu("Help");
-	helpMenu->AddItem(new BMenuItem("About NetPlus",
-		new BMessage(B_ABOUT_REQUESTED)));
-	fMenuBar->AddItem(helpMenu);
-
-	fToolbar   = new ToolbarView(viewRect, &fHistory);
 	fWebView   = new BWebView(viewRect, "webview");
-	fStatusBar = new StatusBarView(viewRect);
-
 	fWebView->SetTarget(BMessenger(this));
+	fWebView->AddUserScript(kInstallScript, false);
+	fWebView->AddScriptMessageHandler(kInstallHandler);
 
-	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
-		.Add(fMenuBar)
-		.Add(fToolbar)
-		.Add(fWebView, 1.0f)
-		.Add(fStatusBar);
+	if (!fPwaMode) {
+		fMenuBar = new BMenuBar("menubar");
+
+		BMenu* fileMenu = new BMenu("File");
+		fileMenu->AddItem(new BMenuItem("Open Location" B_UTF8_ELLIPSIS,
+			new BMessage(MSG_OPEN_LOCATION), 'L'));
+		fileMenu->AddSeparatorItem();
+		fileMenu->AddItem(new BMenuItem("New Window",
+			new BMessage(MSG_OPEN_WINDOW), 'N'));
+		BMenuItem* privateItem = new BMenuItem("New Private Window",
+			new BMessage(MSG_OPEN_WINDOW), 'N', B_SHIFT_KEY);
+		privateItem->Message()->AddBool("private", true);
+		fileMenu->AddItem(privateItem);
+		fileMenu->AddSeparatorItem();
+		fileMenu->AddItem(new BMenuItem("Settings" B_UTF8_ELLIPSIS,
+			new BMessage(MSG_SHOW_SETTINGS)));
+		fileMenu->AddItem(new BMenuItem("Show Downloads",
+			new BMessage(MSG_SHOW_DOWNLOADS), 'J'));
+		fileMenu->AddSeparatorItem();
+		// Quit closes the whole application, like the legacy browser.
+		BMenuItem* quitItem = new BMenuItem("Quit",
+			new BMessage(B_QUIT_REQUESTED), 'Q');
+		quitItem->SetTarget(be_app);
+		fileMenu->AddItem(quitItem);
+		fMenuBar->AddItem(fileMenu);
+
+		BMenu* editMenu = new BMenu("Edit");
+		editMenu->AddItem(new BMenuItem("Cut",
+			new BMessage(B_WEB_EDIT_CUT), 'X'));
+		editMenu->AddItem(new BMenuItem("Copy",
+			new BMessage(B_WEB_EDIT_COPY), 'C'));
+		editMenu->AddItem(new BMenuItem("Paste",
+			new BMessage(B_WEB_EDIT_PASTE), 'V'));
+		editMenu->AddSeparatorItem();
+		editMenu->AddItem(new BMenuItem("Select All",
+			new BMessage(B_WEB_EDIT_SELECT_ALL), 'A'));
+		fMenuBar->AddItem(editMenu);
+
+		BMenu* goMenu = new BMenu("Go");
+		fBackItem = new BMenuItem("Back",
+			new BMessage(MSG_NAV_BACK), B_LEFT_ARROW);
+		fForwardItem = new BMenuItem("Forward",
+			new BMessage(MSG_NAV_FORWARD), B_RIGHT_ARROW);
+		goMenu->AddItem(fBackItem);
+		goMenu->AddItem(fForwardItem);
+		goMenu->AddSeparatorItem();
+		goMenu->AddItem(new BMenuItem("Reload",
+			new BMessage(MSG_NAV_RELOAD), 'R'));
+		goMenu->AddItem(new BMenuItem("Stop",
+			new BMessage(MSG_NAV_STOP), 0));
+		goMenu->AddItem(new BMenuItem("Home",
+			new BMessage(MSG_NAV_HOME), 'H'));
+		fMenuBar->AddItem(goMenu);
+
+		fBookmarksMenu = new BMenu("Bookmarks");
+		fBookmarksMenu->AddItem(new BMenuItem("Add Bookmark",
+			new BMessage(MSG_BOOKMARK_ADD), 'D'));
+		fRemoveBookmarkMenu = new BMenu("Remove Bookmark");
+		fBookmarksMenu->AddItem(fRemoveBookmarkMenu);
+		fBookmarksMenu->AddSeparatorItem();
+		fMenuBar->AddItem(fBookmarksMenu);
+
+		BMenu* helpMenu = new BMenu("Help");
+		helpMenu->AddItem(new BMenuItem("About NetPlus",
+			new BMessage(B_ABOUT_REQUESTED)));
+		fMenuBar->AddItem(helpMenu);
+
+
+		fToolbar   = new ToolbarView(viewRect, &fHistory);
+		fStatusBar = new StatusBarView(viewRect);
+
+		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+			.Add(fMenuBar)
+			.Add(fToolbar)
+			.Add(fWebView, 1.0f)
+			.Add(fStatusBar);
+	} else if (fPwaDisplay == kManifestDisplayMinimalUi) {
+		// minimal-ui keeps a back/reload strip and nothing else.
+		BView* chrome = new BView(viewRect, "pwachrome", B_FOLLOW_NONE, 0);
+		BButton* back = new BButton("Back", new BMessage(MSG_NAV_BACK));
+		BButton* reload
+			= new BButton("Reload", new BMessage(MSG_NAV_RELOAD));
+		BLayoutBuilder::Group<>(chrome, B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(back)
+			.Add(reload)
+			.AddGlue();
+		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+			.Add(chrome)
+			.Add(fWebView, 1.0f);
+	} else
+		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+			.Add(fWebView, 1.0f);
 
 	BWebSettings* settings = NetPlusApp::Settings();
 
 	fWebView->SetSession(NULL,
 		fPrivateWindow || settings->PrivateBrowsing());
 	_ApplySettings();
-	_RebuildBookmarksMenu();
+	if (!fPwaMode)
+		_RebuildBookmarksMenu();
 
 	const char* startup = (url != NULL && url[0] != '\0')
 		? url : settings->Homepage();
@@ -166,6 +284,22 @@ MainWindow::~MainWindow()
 		fAppMenu->Quit();
 		fAppMenu = nullptr;
 	}
+	delete fStore;
+	fStore = nullptr;
+}
+
+
+InstalledAppStore&
+MainWindow::_Store()
+{
+	if (fStore == NULL) {
+		BPath root;
+		// A failed path leaves the store root empty: Add() fails
+		// cleanly instead of scattering records.
+		DeskbarEntry::WebAppStorePath(&root);
+		fStore = new InstalledAppStore(root.Path());
+	}
+	return *fStore;
 }
 
 
@@ -292,7 +426,8 @@ MainWindow::_SetFullScreen(bool enter)
 
 	if (enter) {
 		fSavedFrame = Frame();
-		fMenuBar->Hide();
+		if (fMenuBar != NULL)
+			fMenuBar->Hide();
 		fToolbar->Hide();
 		fStatusBar->Hide();
 		BRect screen = BScreen(this).Frame();
@@ -301,7 +436,8 @@ MainWindow::_SetFullScreen(bool enter)
 	} else {
 		MoveTo(fSavedFrame.left, fSavedFrame.top);
 		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
-		fMenuBar->Show();
+		if (fMenuBar != NULL)
+			fMenuBar->Show();
 		fToolbar->Show();
 		fStatusBar->Show();
 	}
@@ -389,6 +525,12 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 	}
 
 	model.AddSeparatorRow(root);
+	if (fManifest.IsValid()) {
+		model.AddSectionLabelRow(root, "Web app");
+		model.AddActionRow(root, "Install as app", MSG_INSTALL_APP);
+		model.AddSeparatorRow(root);
+	}
+
 	model.AddSectionLabelRow(root, "Application");
 	model.AddActionRow(root, "Downloads", MSG_SHOW_DOWNLOADS, "Ctrl+J");
 	model.AddActionRow(root, "Settings" B_UTF8_ELLIPSIS, MSG_SHOW_SETTINGS);
@@ -738,9 +880,12 @@ MainWindow::MessageReceived(BMessage* message)
 			const char* title = nullptr;
 			if (message->FindString(B_WEB_TITLE_FIELD, &title) == B_OK
 				&& title != nullptr && title[0] != '\0') {
-				BString windowTitle("NetPlus - ");
-				windowTitle << title;
-				SetTitle(windowTitle.String());
+				// Installed apps keep the manifest name in the title bar.
+				if (!fPwaMode) {
+					BString windowTitle("NetPlus - ");
+					windowTitle << title;
+					SetTitle(windowTitle.String());
+				}
 			}
 			break;
 		}
@@ -843,8 +988,216 @@ MainWindow::MessageReceived(BMessage* message)
 			_HandleDownloadMessage(message);
 			break;
 
+		case B_WEB_SCRIPT_MESSAGE:
+		{
+			const char* handler = nullptr;
+			if (message->FindString(B_WEB_HANDLER_FIELD, &handler)
+				!= B_OK || handler == nullptr)
+				break;
+			if (strcmp(handler, "netplus-manifest") == 0)
+				_HandleManifestMessage(message);
+			else if (strcmp(handler, "netplus-icon") == 0)
+				_HandleIconMessage(message);
+			break;
+		}
+
+		case MSG_INSTALL_APP:
+			_StartInstall();
+			break;
+
+		case MSG_INSTALL_CONFIRM:
+		{
+			int32 which = -1;
+			message->FindInt32("which", &which);
+			if (which != 0 || fWebView == nullptr)
+				break;
+
+			// Icon goes through the page's own fetch so cookies
+			// and the proxy apply; the reply lands as a handler
+			// message with the bytes in base64.
+			const ManifestIcon* icon
+				= PickBestIcon(fManifest, 512 * 512);
+			if (icon == nullptr) {
+				_FinishInstall(std::string());
+				break;
+			}
+			std::string iconUrl = ResolveUrl(
+				fManifestUrl.empty() ? fManifestPage : fManifestUrl,
+				icon->src);
+			if (iconUrl.empty()) {
+				_FinishInstall(std::string());
+				break;
+			}
+			std::string script = "window.__netplusFetchIcon('";
+			for (size_t i = 0; i < iconUrl.size(); i++) {
+				char c = iconUrl[i];
+				if (c == '\'' || c == '\\')
+					script.push_back('\\');
+				script.push_back(c);
+			}
+			script.append("')");
+			fWebView->EvaluateJavaScript(script.c_str(),
+				BMessenger(this), MSG_ICON_FETCH_JS);
+			break;
+		}
+
+		case MSG_ICON_FETCH_JS:
+			// Trigger only; the bytes arrive via the handler.
+			break;
+
 		default:
 			BWindow::MessageReceived(message);
 			break;
 	}
+}
+
+
+void
+MainWindow::_HandleManifestMessage(BMessage* message)
+{
+	const char* body = nullptr;
+	if (message->FindString(B_WEB_BODY_FIELD, &body) != B_OK
+		|| body == nullptr)
+		return;
+
+	size_t length = strlen(body);
+	std::string url;
+	std::string page;
+	std::string text;
+	if (!ExtractJsonString(body, length, "url", &url)
+		|| !ExtractJsonString(body, length, "page", &page)
+		|| !ExtractJsonString(body, length, "text", &text))
+		return;
+
+	WebAppManifest manifest;
+	if (!manifest.Parse(text.c_str(), text.size()))
+		return;
+	// Nothing to install without a start_url to relaunch at.
+	if (manifest.startUrl.empty())
+		return;
+
+	fManifest = manifest;
+	fManifestUrl = url;
+	fManifestPage = page;
+}
+
+
+void
+MainWindow::_HandleIconMessage(BMessage* message)
+{
+	const char* body = nullptr;
+	if (message->FindString(B_WEB_BODY_FIELD, &body) != B_OK
+		|| body == nullptr)
+		return;
+
+	size_t length = strlen(body);
+	std::string data;
+	if (!ExtractJsonString(body, length, "data", &data) || data.empty()) {
+		// No icon this time; install still works, the entry just
+		// carries NetPlus's icon.
+		_FinishInstall(std::string());
+		return;
+	}
+
+	std::vector<uint8_t> bytes;
+	if (!Base64Decode(data.c_str(), data.size(), &bytes)
+		|| bytes.empty()) {
+		_FinishInstall(std::string());
+		return;
+	}
+
+	// Cache the raw bytes as PNG: the Deskbar entry stamps the node
+	// icon from this file, the record points at it afterwards.
+	InstalledAppStore& store = _Store();
+	if (store.Root().empty()) {
+		_FinishInstall(std::string());
+		return;
+	}
+
+	std::string id = InstalledAppStore::IDFromName(
+		(fManifest.name.empty() ? fManifest.shortName : fManifest.name)
+			.c_str());
+	if (id.empty())
+		id = "app";
+	std::string iconPath = store.IconsDirectory() + "/" + id + ".png";
+	FILE* file = fopen(iconPath.c_str(), "wb");
+	if (file == NULL) {
+		_FinishInstall(std::string());
+		return;
+	}
+	fwrite(bytes.data(), 1, bytes.size(), file);
+	fclose(file);
+	_FinishInstall(iconPath);
+}
+
+
+void
+MainWindow::_StartInstall()
+{
+	if (!fManifest.IsValid() || fManifest.startUrl.empty())
+		return;
+
+	std::string startUrl = ResolveUrl(
+		fManifestUrl.empty() ? fManifestPage : fManifestUrl,
+		fManifest.startUrl);
+	std::string name = fManifest.name.empty() ? fManifest.shortName
+		: fManifest.name;
+	if (name.empty() || startUrl.empty())
+		return;
+
+	BString text("Install ");
+	text << name.c_str() << " as an app?\n\nStarts at: "
+		<< startUrl.c_str();
+
+	BAlert* alert = new BAlert("Install app", text.String(), "Install",
+		"Cancel", NULL, B_WIDTH_AS_USUAL, B_INFO_ALERT);
+	alert->Go(new BInvoker(new BMessage(MSG_INSTALL_CONFIRM),
+		BMessenger(this)));
+}
+
+
+void
+MainWindow::_FinishInstall(const std::string& iconPath)
+{
+	std::string name = fManifest.name.empty() ? fManifest.shortName
+		: fManifest.name;
+	std::string startUrl = ResolveUrl(
+		fManifestUrl.empty() ? fManifestPage : fManifestUrl,
+		fManifest.startUrl);
+	if (name.empty() || startUrl.empty())
+		return;
+
+	InstalledApp record;
+	record.id = InstalledAppStore::IDFromName(name.c_str());
+	record.name = name;
+	record.startUrl = startUrl;
+	record.display = fManifest.display;
+	record.manifestUrl = fManifestUrl;
+	record.iconPath = iconPath;
+
+	InstalledAppStore& store = _Store();
+	if (!store.Add(record)) {
+		fprintf(stderr, "NetPlus: could not write the app record\n");
+		return;
+	}
+
+	std::string self = _SelfPath();
+	if (self.empty()) {
+		fprintf(stderr, "NetPlus: could not resolve own path\n");
+		return;
+	}
+
+	status_t error = DeskbarEntry::Create(name.c_str(), self.c_str(),
+		iconPath.empty() ? NULL : iconPath.c_str());
+	if (error != B_OK) {
+		fprintf(stderr, "NetPlus: Deskbar entry failed: %ld\n",
+			(long)error);
+		return;
+	}
+
+	BString done("Installed ");
+	done << name.c_str();
+	BAlert* alert = new BAlert("Install app", done.String(), "OK", NULL,
+		NULL, B_WIDTH_AS_USUAL, B_INFO_ALERT);
+	alert->Go();
 }

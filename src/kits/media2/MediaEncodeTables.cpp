@@ -55,7 +55,7 @@ const int32 kMp3Codecs[] = {
 
 // Enumeration order is the menu order: audio first, then video.
 const EncodeCodecInfo kCodecs[] = {
-	{ B_CODEC_TYPE_WAV, NULL, { NULL, NULL, NULL },
+	{ B_CODEC_TYPE_WAV, "wavenc", { NULL, NULL, NULL },
 		"audio/x-wav", true,
 		B_ENCODE_QUALITY_NONE, NULL, 0.0f, 0.0f },
 	{ B_CODEC_TYPE_MP3, "lamemp3enc", { NULL, NULL, NULL },

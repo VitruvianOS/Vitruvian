@@ -196,8 +196,10 @@ public:
 		if (fAppSink == NULL)
 			return B_NO_INIT;
 		while (true) {
+			// The encoder element runs on its own thread; give it a
+			// short window to emit before deciding the drain is done.
 			GstSample* sample = gst_app_sink_try_pull_sample(
-				GST_APP_SINK(fAppSink), 0);
+				GST_APP_SINK(fAppSink), 100 * GST_MSECOND);
 			if (sample == NULL)
 				break;
 			GstBuffer* gb = gst_sample_get_buffer(sample);

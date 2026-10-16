@@ -10,83 +10,54 @@
 
 #include <gst/gst.h>
 
-#include "GStreamerBackend.h"
+#include "MediaEncodeTables.h"
 
 
-namespace {
-
-
-struct Snapshot {
-	GList* list = NULL;
-	int    size = 0;
-
-	~Snapshot()
-	{
-		if (list != NULL)
-			gst_plugin_feature_list_free(list);
-	}
-};
-
-
-static Snapshot sMuxers;
-static Snapshot sEncoders;
+using namespace BPrivate::media;
 
 
 static void
-ResetSnapshot(Snapshot& s, GstElementFactoryListType type)
+FillFileFormat(const EncodeFileFormat* format, media_file_format* outFormat)
 {
-	if (s.list != NULL) {
-		gst_plugin_feature_list_free(s.list);
-		s.list = NULL;
-		s.size = 0;
+	memset(outFormat, 0, sizeof(*outFormat));
+	outFormat->capabilities = media_file_format::B_READABLE
+		| media_file_format::B_WRITABLE;
+	if (format->containerCaps == NULL)
+		outFormat->capabilities |= media_file_format::B_KNOWS_RAW_AUDIO;
+
+	strncpy(outFormat->pretty_name, format->prettyName,
+		sizeof(outFormat->pretty_name) - 1);
+	strncpy(outFormat->short_name, format->shortName,
+		sizeof(outFormat->short_name) - 1);
+	strncpy(outFormat->mime_type, format->mimeType,
+		sizeof(outFormat->mime_type) - 1);
+	strncpy(outFormat->file_extension, format->extension,
+		sizeof(outFormat->file_extension) - 1);
+}
+
+
+static void
+FillCodecInfo(const EncodeCodecInfo* codec, media_codec_info* outCodecInfo)
+{
+	memset(outCodecInfo, 0, sizeof(*outCodecInfo));
+	outCodecInfo->id = codec->id;
+
+	const char* pretty = NULL;
+	GstElementFactory* factory = FindEncodeFactory(codec);
+	if (factory != NULL) {
+		pretty = gst_element_factory_get_metadata(factory,
+			GST_ELEMENT_METADATA_LONGNAME);
+		if (pretty == NULL)
+			pretty = gst_plugin_feature_get_name(
+				GST_PLUGIN_FEATURE(factory));
+		gst_object_unref(factory);
 	}
-	if (BPrivate::media::GStreamerBackend::GetInstance() == NULL)
-		return;
-	s.list = gst_element_factory_list_get_elements(type, GST_RANK_MARGINAL);
-	for (GList* l = s.list; l != NULL; l = l->next)
-		s.size++;
-}
-
-
-static int32
-MimeToCodecType(const char* mime)
-{
-	if (mime == NULL)
-		return B_CODEC_TYPE_UNKNOWN;
-	if (strstr(mime, "audio/x-wav")   != NULL) return B_CODEC_TYPE_WAV;
-	if (strstr(mime, "application/ogg") != NULL) return B_CODEC_TYPE_OGG;
-	if (strstr(mime, "audio/x-flac")  != NULL) return B_CODEC_TYPE_FLAC;
-	if (strstr(mime, "audio/mpeg")    != NULL) return B_CODEC_TYPE_MP3;
-	if (strstr(mime, "video/quicktime") != NULL
-		|| strstr(mime, "video/mp4")  != NULL) return B_CODEC_TYPE_AAC;
-	if (strstr(mime, "audio/x-opus") != NULL)  return B_CODEC_TYPE_OPUS;
-	return B_CODEC_TYPE_UNKNOWN;
-}
-
-
-static const char*
-FirstSrcMime(GstElementFactory* factory)
-{
-	const GList* templates = gst_element_factory_get_static_pad_templates(factory);
-	for (const GList* t = templates; t != NULL; t = t->next) {
-		GstStaticPadTemplate* tmpl = (GstStaticPadTemplate*)t->data;
-		if (tmpl->direction != GST_PAD_SRC)
-			continue;
-		GstCaps* caps = gst_static_caps_get(&tmpl->static_caps);
-		if (caps == NULL || gst_caps_is_empty(caps)) {
-			if (caps != NULL) gst_caps_unref(caps);
-			continue;
-		}
-		GstStructure* s = gst_caps_get_structure(caps, 0);
-		const char* mime = s != NULL ? gst_structure_get_name(s) : NULL;
-
-		gst_caps_unref(caps);
-		return mime;
-	}
-	return NULL;
-}
-
-
+	if (pretty == NULL)
+		pretty = codec->srcCaps;
+	snprintf(outCodecInfo->pretty_name, sizeof(outCodecInfo->pretty_name),
+		"%s", pretty);
+	snprintf(outCodecInfo->short_name, sizeof(outCodecInfo->short_name),
+		"%s", codec->factory != NULL ? codec->factory : "raw");
 }
 
 
@@ -96,38 +67,16 @@ get_next_file_format(int32* cookie, media_file_format* outFormat)
 	if (cookie == NULL || outFormat == NULL)
 		return B_BAD_VALUE;
 
-	if (*cookie == 0)
-		ResetSnapshot(sMuxers, GST_ELEMENT_FACTORY_TYPE_MUXER);
-	if (*cookie < 0 || *cookie >= sMuxers.size)
-		return B_BAD_INDEX;
-
-	GList* node = g_list_nth(sMuxers.list, *cookie);
-	if (node == NULL)
-		return B_BAD_INDEX;
-	GstElementFactory* factory = (GstElementFactory*)node->data;
-
-	memset(outFormat, 0, sizeof(*outFormat));
-	outFormat->capabilities = media_file_format::B_READABLE
-		| media_file_format::B_WRITABLE
-		| media_file_format::B_KNOWS_RAW_AUDIO;
-
-	const char* pretty = gst_element_factory_get_metadata(factory,
-		GST_ELEMENT_METADATA_LONGNAME);
-	const char* shortname = gst_plugin_feature_get_name(
-		GST_PLUGIN_FEATURE(factory));
-	const char* mime = FirstSrcMime(factory);
-
-	strncpy(outFormat->pretty_name,
-		pretty != NULL ? pretty : (shortname != NULL ? shortname : "Unknown"),
-		sizeof(outFormat->pretty_name) - 1);
-	strncpy(outFormat->short_name,
-		shortname != NULL ? shortname : "",
-		sizeof(outFormat->short_name) - 1);
-	strncpy(outFormat->mime_type, mime != NULL ? mime : "",
-		sizeof(outFormat->mime_type) - 1);
-
-	(*cookie)++;
-	return B_OK;
+	while (true) {
+		const EncodeFileFormat* format = EncodeFileFormatAt(*cookie);
+		if (format == NULL)
+			return B_BAD_INDEX;
+		(*cookie)++;
+		if (!IsEncodeFileFormatAvailable(format))
+			continue;
+		FillFileFormat(format, outFormat);
+		return B_OK;
+	}
 }
 
 
@@ -137,33 +86,52 @@ get_next_encoder(int32* cookie, media_codec_info* outCodecInfo)
 	if (cookie == NULL || outCodecInfo == NULL)
 		return B_BAD_VALUE;
 
-	if (*cookie == 0)
-		ResetSnapshot(sEncoders, GST_ELEMENT_FACTORY_TYPE_ENCODER);
-	if (*cookie < 0 || *cookie >= sEncoders.size)
-		return B_BAD_INDEX;
+	while (true) {
+		const EncodeCodecInfo* codec = EncodeCodecAt(*cookie);
+		if (codec == NULL)
+			return B_BAD_INDEX;
+		(*cookie)++;
+		if (!IsEncodeCodecAvailable(codec->id))
+			continue;
+		FillCodecInfo(codec, outCodecInfo);
+		return B_OK;
+	}
+}
 
-	GList* node = g_list_nth(sEncoders.list, *cookie);
-	if (node == NULL)
-		return B_BAD_INDEX;
-	GstElementFactory* factory = (GstElementFactory*)node->data;
 
-	memset(outCodecInfo, 0, sizeof(*outCodecInfo));
-	const char* pretty = gst_element_factory_get_metadata(factory,
-		GST_ELEMENT_METADATA_LONGNAME);
-	const char* shortname = gst_plugin_feature_get_name(
-		GST_PLUGIN_FEATURE(factory));
-	const char* mime = FirstSrcMime(factory);
+static bool
+FileFormatAcceptsCodec(const EncodeFileFormat* format, int32 codecId)
+{
+	if (format == NULL)
+		return false;
+	for (int32 i = 0; i < format->codecCount; i++) {
+		if (format->codecs[i] == codecId)
+			return true;
+	}
+	return false;
+}
 
-	strncpy(outCodecInfo->pretty_name,
-		pretty != NULL ? pretty : (shortname != NULL ? shortname : "Unknown"),
-		sizeof(outCodecInfo->pretty_name) - 1);
-	strncpy(outCodecInfo->short_name,
-		shortname != NULL ? shortname : "",
-		sizeof(outCodecInfo->short_name) - 1);
-	outCodecInfo->id = MimeToCodecType(mime);
 
-	(*cookie)++;
-	return B_OK;
+static const EncodeFileFormat*
+ResolveFileFormat(const media_file_format* fileFormat)
+{
+	if (fileFormat == NULL)
+		return NULL;
+	const EncodeFileFormat* format = FindEncodeFileFormat(
+		fileFormat->short_name);
+	if (format == NULL) {
+		for (int32 i = 0; ; i++) {
+			const EncodeFileFormat* candidate = EncodeFileFormatAt(i);
+			if (candidate == NULL)
+				break;
+			if (strcmp(candidate->mimeType,
+					fileFormat->mime_type) == 0) {
+				format = candidate;
+				break;
+			}
+		}
+	}
+	return format;
 }
 
 
@@ -175,40 +143,39 @@ get_next_encoder(int32* cookie, const media_file_format* fileFormat,
 	if (cookie == NULL || outCodecInfo == NULL || inputFormat == NULL)
 		return B_BAD_VALUE;
 
+	const EncodeFileFormat* format = ResolveFileFormat(fileFormat);
 	const bool wantAudio = inputFormat->IsAudio();
 	const bool wantVideo = inputFormat->IsVideo();
+	if (!wantAudio && !wantVideo)
+		return B_BAD_VALUE;
 
 	while (true) {
-		media_codec_info ci;
-		status_t err = get_next_encoder(cookie, &ci);
-		if (err != B_OK)
-			return err;
-
-		if (fileFormat != NULL && ci.id == B_CODEC_TYPE_UNKNOWN)
+		const EncodeCodecInfo* codec = EncodeCodecAt(*cookie);
+		if (codec == NULL)
+			return B_BAD_INDEX;
+		(*cookie)++;
+		if (codec->audio != wantAudio)
 			continue;
-
-		const bool encIsAudio = ci.id == B_CODEC_TYPE_MP3
-			|| ci.id == B_CODEC_TYPE_AAC || ci.id == B_CODEC_TYPE_OGG
-			|| ci.id == B_CODEC_TYPE_OPUS || ci.id == B_CODEC_TYPE_FLAC
-			|| ci.id == B_CODEC_TYPE_WAV  || ci.id == B_CODEC_TYPE_PCM;
-		if (wantAudio && !encIsAudio)
+		if (!IsEncodeCodecAvailable(codec->id))
 			continue;
-		if (wantVideo && encIsAudio)
+		if (fileFormat != NULL
+				&& !FileFormatAcceptsCodec(format, codec->id)) {
 			continue;
+		}
 
-		*outCodecInfo = ci;
+		FillCodecInfo(codec, outCodecInfo);
 		if (outOutputFormat != NULL) {
 			outOutputFormat->Clear();
 			if (wantAudio) {
 				outOutputFormat->type = B_MEDIA_ENCODED_AUDIO;
 				outOutputFormat->u.encoded_audio.output
 					= inputFormat->u.raw_audio;
-				outOutputFormat->u.encoded_audio.encoding = ci.id;
-			} else if (wantVideo) {
+				outOutputFormat->u.encoded_audio.encoding = codec->id;
+			} else {
 				outOutputFormat->type = B_MEDIA_ENCODED_VIDEO;
 				outOutputFormat->u.encoded_video.output
 					= inputFormat->u.raw_video;
-				outOutputFormat->u.encoded_video.encoding = ci.id;
+				outOutputFormat->u.encoded_video.encoding = codec->id;
 			}
 		}
 		return B_OK;

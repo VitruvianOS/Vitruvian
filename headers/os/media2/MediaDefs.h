@@ -107,7 +107,11 @@ enum media_codec_type {
 	B_CODEC_TYPE_OGG     = 4,
 	B_CODEC_TYPE_OPUS    = 5,
 	B_CODEC_TYPE_FLAC    = 6,
-	B_CODEC_TYPE_WAV     = 7
+	B_CODEC_TYPE_WAV     = 7,
+	B_CODEC_TYPE_VP8     = 8,
+	B_CODEC_TYPE_VP9     = 9,
+	B_CODEC_TYPE_THEORA  = 10,
+	B_CODEC_TYPE_H264    = 11
 };
 
 

@@ -22,6 +22,7 @@ AddOn(media2
 	MidiRosterExt.cpp
 	MidiUnit.cpp
 	MediaAutomation.cpp
+	MediaEncodeTables.cpp
 	MediaPlayer.cpp
 	MediaRecorder.cpp
 	MediaTheme.cpp

@@ -365,13 +365,25 @@ is_joystick_fd(int fd, char* nameBuffer, size_t nameBufferSize)
 
 
 static bool
+is_device_grabbed(int fd)
+{
+	// Steam Input grabs the physical pad and exposes a virtual one.
+	if (ioctl(fd, EVIOCGRAB, 1) < 0)
+		return errno == EBUSY;
+
+	ioctl(fd, EVIOCGRAB, 0);
+	return false;
+}
+
+
+static bool
 probe_joystick_path(const char* path)
 {
 	int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		return false;
 
-	bool isJoystick = is_joystick_fd(fd, NULL, 0);
+	bool isJoystick = is_joystick_fd(fd, NULL, 0) && !is_device_grabbed(fd);
 	close(fd);
 	return isJoystick;
 }
@@ -757,6 +769,12 @@ BJoystick::Open(const char* portName)
 		fd = open(portName, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		return B_ERROR;
+
+	if (is_device_grabbed(fd)) {
+		// Grabbed elsewhere, reads would never see an event.
+		close(fd);
+		return B_ERROR;
+	}
 
 	JoystickDeviceData* data = new(std::nothrow) JoystickDeviceData();
 	if (data == NULL) {

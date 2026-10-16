@@ -236,6 +236,14 @@ LibEvdevEventStream::_OpenDevice(const char* path)
 		return false;
 	}
 
+	// Stick axes would be read as absolute tablet coordinates below.
+	if (libevdev_has_event_code(evdev, EV_KEY, BTN_GAMEPAD)
+		|| libevdev_has_event_code(evdev, EV_KEY, BTN_JOYSTICK)) {
+		libevdev_free(evdev);
+		close(fd);
+		return false;
+	}
+
 	// Check device capabilities
 	bool isKeyboard = libevdev_has_event_type(evdev, EV_KEY) &&
 					  libevdev_has_event_code(evdev, EV_KEY, KEY_A);

@@ -254,7 +254,7 @@ PanelMenuView::Draw(BRect updateRect)
 		DrawString(kBackArrow, where);
 		where.x += boldFont.StringWidth(kBackArrow) + kRowInset / 2;
 		DrawString(model.CurrentTitle(), where);
-	SetFont(&font);
+		SetFont(&font);
 
 		y = headerBottom;
 		SetHighColor(border);
@@ -388,7 +388,13 @@ PanelMenu::Go(BPoint where)
 
 	Show();
 	Activate();
-	fView->MakeFocus(true);
+
+	// Go() runs on the caller's thread; take our own lock before
+	// touching the view.
+	if (Lock()) {
+		fView->MakeFocus(true);
+		Unlock();
+	}
 
 	// Close on click-outside: wait for the opening click to finish,
 	// then watch for the next press that lands off the panel.
@@ -433,7 +439,12 @@ PanelMenu::_UpdateLayout()
 {
 	// The window layout stretches the view to the window, so only
 	// the window size needs to track the page content.
+	if (!Lock())
+		return;
+
 	BSize size = fView->PreferredSize();
+	Unlock();
+
 	ResizeTo(size.width, size.height);
 
 	// Keep the top edge on the anchor and the left edge aligned; the
@@ -441,7 +452,11 @@ PanelMenu::_UpdateLayout()
 	BRect frame(0, 0, size.width - 1, size.height - 1);
 	frame.OffsetTo(fAnchor);
 	MoveTo(frame.LeftTop());
-	fView->Invalidate();
+
+	if (Lock()) {
+		fView->Invalidate();
+		Unlock();
+	}
 }
 
 

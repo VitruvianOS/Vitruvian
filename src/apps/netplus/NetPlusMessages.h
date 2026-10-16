@@ -27,7 +27,14 @@ enum {
 	// Rebuild the Bookmarks menu after add/remove.
 	MSG_BOOKMARKS_CHANGED = 'bmcg',
 	MSG_SHOW_DOWNLOADS	= 'dlsr',
-	MSG_SHOW_SETTINGS	= 'stsw'
+	MSG_SHOW_SETTINGS	= 'stsw',
+	MSG_APP_MENU		= 'apmn',
+	MSG_PANEL_CLOSED	= 'pclz',
+	MSG_PANEL_NEW_WINDOW = 'pnwn',
+	MSG_OPEN_LOCATION	= 'oloc',
+	MSG_ZOOM_IN			= 'zmin',
+	MSG_ZOOM_OUT		= 'zmou',
+	MSG_ZOOM_RESET		= 'zmrz'
 };
 
 

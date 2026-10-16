@@ -5,76 +5,142 @@
 
 
 #include "NetPlusMessages.h"
+#include "PanelMenu.h"
+#include "ToolbarIcons.h"
 #include "ToolbarView.h"
 
+#include <Bitmap.h>
 #include <Button.h>
+#include <ControlLook.h>
+#include <IconUtils.h>
 #include <LayoutBuilder.h>
 #include <Looper.h>
 #include <Message.h>
+#include <String.h>
 #include <TextControl.h>
+#include <TextView.h>
+#include <ToolBar.h>
+
+
+static BBitmap*
+_LoadIcon(const uint8* hvif, size_t size)
+{
+	BSize iconSize = be_control_look->ComposeIconSize(16);
+	BBitmap* bitmap = new BBitmap(BRect(BPoint(0, 0), iconSize),
+		B_BITMAP_NO_SERVER_LINK, B_RGBA32);
+	if (bitmap == NULL)
+		return NULL;
+	if (bitmap->InitCheck() != B_OK
+		|| BIconUtils::GetVectorIcon(hvif, size, bitmap) != B_OK) {
+		delete bitmap;
+		return NULL;
+	}
+	return bitmap;
+}
 
 
 ToolbarView::ToolbarView(BRect frame)
 	:
 	BView(frame, "toolbar", B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP,
 		B_WILL_DRAW | B_FRAME_EVENTS),
-	fBackButton(nullptr),
-	fForwardButton(nullptr),
-	fReloadStopButton(nullptr),
-	fHomeButton(nullptr),
-	fURLBar(nullptr),
+	fToolBar(NULL),
+	fURLBar(NULL),
+	fReloadIcon(NULL),
+	fStopIcon(NULL),
 	fLoading(false)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 
-	fBackButton       = new BButton("\xe2\x86\x90", new BMessage(MSG_NAV_BACK));
-	fForwardButton    = new BButton("\xe2\x86\x92", new BMessage(MSG_NAV_FORWARD));
-	fReloadStopButton = new BButton("\xe2\x86\xba", new BMessage(MSG_NAV_RELOAD));
-	fHomeButton       = new BButton("\xe2\x8c\x82", new BMessage(MSG_NAV_HOME));
+	fReloadIcon = _LoadIcon(kNetPlusReloadIcon, kNetPlusReloadIconSize);
+	fStopIcon = _LoadIcon(kNetPlusStopIcon, kNetPlusStopIconSize);
 
-	fURLBar = new BTextControl("", "", new BMessage(MSG_OPEN_URL));
-	fURLBar->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
-	fURLBar->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	// The actions are added in AttachedToWindow: BToolBar snapshots
+	// a BMessenger(target) per action, which is only valid once the
+	// view has a looper.
+	fToolBar = new BToolBar(B_HORIZONTAL);
 
-	BLayoutBuilder::Group<>(this, B_HORIZONTAL, B_USE_HALF_ITEM_SPACING)
-		.SetInsets(B_USE_SMALL_SPACING)
-		.Add(fBackButton)
-		.Add(fForwardButton)
-		.Add(fReloadStopButton)
-		.Add(fHomeButton)
-		.AddStrut(B_USE_SMALL_SPACING)
-		.Add(fURLBar, 1.0f);
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
+		.SetInsets(0)
+		.Add(fToolBar, 1.0f);
 }
 
 
-ToolbarView::~ToolbarView() = default;
+ToolbarView::~ToolbarView()
+{
+	delete fReloadIcon;
+	delete fStopIcon;
+}
 
 
 void
 ToolbarView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
-	fBackButton->SetTarget(Window());
-	fForwardButton->SetTarget(Window());
-	fReloadStopButton->SetTarget(Window());
-	fHomeButton->SetTarget(Window());
+
+	// Re-attach would duplicate the actions; they only need the
+	// looper once.
+	if (fToolBar->FindButton(MSG_NAV_BACK) != NULL)
+		return;
+
+	fToolBar->AddAction(MSG_NAV_BACK, Window(), kNetPlusBackIcon,
+		kNetPlusBackIconSize, "Back");
+	fToolBar->AddAction(MSG_NAV_FORWARD, Window(), kNetPlusForwardIcon,
+		kNetPlusForwardIconSize, "Forward");
+	fToolBar->AddAction(new BMessage(MSG_NAV_RELOAD), Window(), fReloadIcon,
+		"Reload");
+	fToolBar->AddAction(MSG_NAV_HOME, Window(), kNetPlusHomeIcon,
+		kNetPlusHomeIconSize, "Home");
+
+	// BToolBar hosts buttons, not arbitrary controls: the address
+	// field is embedded with AddView, so it shares the strip and the
+	// overflow sizing, but never collapses into the overflow menu
+	// itself (only actions do).
+	fURLBar = new BTextControl("", "", new BMessage(MSG_OPEN_URL));
+	fURLBar->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
+	fURLBar->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	fURLBar->SetTarget(Window());
-	fBackButton->SetEnabled(false);
-	fForwardButton->SetEnabled(false);
+	fToolBar->AddView(fURLBar);
+
+	fToolBar->AddAction(MSG_APP_MENU, this, kNetPlusMenuIcon,
+		kNetPlusMenuIconSize, "Main menu");
+
+	fToolBar->SetActionEnabled(MSG_NAV_BACK, false);
+	fToolBar->SetActionEnabled(MSG_NAV_FORWARD, false);
 }
 
 
 void
 ToolbarView::MessageReceived(BMessage* message)
 {
-	BView::MessageReceived(message);
+	switch (message->what) {
+		case MSG_APP_MENU:
+		{
+			// Anchor under the hamburger button, like BToolBar's
+			// own overflow popup does.
+			BButton* button = fToolBar->FindButton(MSG_APP_MENU);
+			if (button == NULL)
+				break;
+			BPoint point = button->Bounds().LeftBottom() + BPoint(0, 1);
+			button->ConvertToScreen(&point);
+
+			BMessage show(MSG_APP_MENU);
+			show.AddPoint("anchor", point);
+			Window()->PostMessage(&show);
+			break;
+		}
+
+		default:
+			BView::MessageReceived(message);
+			break;
+	}
 }
 
 
 void
 ToolbarView::SetURL(const char* url)
 {
-	if (fURLBar) fURLBar->SetText(url);
+	if (fURLBar != NULL)
+		fURLBar->SetText(url);
 }
 
 
@@ -82,13 +148,19 @@ void
 ToolbarView::SetLoading(bool loading)
 {
 	fLoading = loading;
-	if (!fReloadStopButton) return;
+
+	BButton* button = fToolBar->FindButton(MSG_NAV_RELOAD);
+	if (button == NULL)
+		return;
+
 	if (loading) {
-		fReloadStopButton->SetLabel("\xe2\x9c\x95");
-		fReloadStopButton->SetMessage(new BMessage(MSG_NAV_STOP));
+		button->SetMessage(new BMessage(MSG_NAV_STOP));
+		button->SetIcon(fStopIcon);
+		button->SetToolTip("Stop");
 	} else {
-		fReloadStopButton->SetLabel("\xe2\x86\xba");
-		fReloadStopButton->SetMessage(new BMessage(MSG_NAV_RELOAD));
+		button->SetMessage(new BMessage(MSG_NAV_RELOAD));
+		button->SetIcon(fReloadIcon);
+		button->SetToolTip("Reload");
 	}
 }
 
@@ -96,12 +168,23 @@ ToolbarView::SetLoading(bool loading)
 void
 ToolbarView::SetCanGoBack(bool can)
 {
-	if (fBackButton) fBackButton->SetEnabled(can);
+	fToolBar->SetActionEnabled(MSG_NAV_BACK, can);
 }
 
 
 void
 ToolbarView::SetCanGoForward(bool can)
 {
-	if (fForwardButton) fForwardButton->SetEnabled(can);
+	fToolBar->SetActionEnabled(MSG_NAV_FORWARD, can);
+}
+
+
+void
+ToolbarView::FocusURL()
+{
+	if (fURLBar == NULL)
+		return;
+
+	fURLBar->MakeFocus(true);
+	fURLBar->TextView()->SelectAll();
 }

@@ -9,6 +9,8 @@
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
 #include "SettingsWindow.h"
+#include "PanelMenu.h"
+#include "PanelMenuModel.h"
 #include "StatusBarView.h"
 #include "ToolbarView.h"
 
@@ -31,6 +33,13 @@
 #include <View.h>
 #include <Window.h>
 
+#include <algorithm>
+
+// Built-in start page until the homepage becomes a setting.
+static const char* kHomePage = "vos-about:";
+
+static const int32 kMaxHistory = 12;
+
 
 MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 	:
@@ -45,7 +54,8 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 	fForwardItem(nullptr),
 	fPrivateWindow(privateWindow),
 	fFullScreen(false),
-	fSavedFrame(frame)
+	fSavedFrame(frame),
+	fAppMenu(nullptr)
 {
 	BRect viewRect(0, 0, frame.Width(), frame.Height());
 
@@ -53,7 +63,7 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 
 	BMenu* fileMenu = new BMenu("File");
 	fileMenu->AddItem(new BMenuItem("Open Location" B_UTF8_ELLIPSIS,
-		new BMessage(MSG_OPEN_URL), 'L'));
+		new BMessage(MSG_OPEN_LOCATION), 'L'));
 	fileMenu->AddSeparatorItem();
 	fileMenu->AddItem(new BMenuItem("New Window",
 		new BMessage(MSG_OPEN_WINDOW), 'N'));
@@ -142,6 +152,9 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 
 MainWindow::~MainWindow()
 {
+	BString* string;
+	for (int32 i = 0; (string = (BString*)fHistory.ItemAt(i)) != nullptr; i++)
+		delete string;
 }
 
 
@@ -305,6 +318,81 @@ MainWindow::QuitRequested()
 
 
 void
+MainWindow::_AddHistory(const char* url)
+{
+	if (url == nullptr || url[0] == '\0')
+		return;
+
+	// Most recent first, no consecutive duplicates, capped.
+	BString* head = (BString*)fHistory.ItemAt(0);
+	if (head != nullptr && *head == url)
+		return;
+
+	fHistory.AddItem(new BString(url));
+	while (fHistory.CountItems() > kMaxHistory) {
+		delete (BString*)fHistory.RemoveItem(fHistory.CountItems() - 1);
+	}
+}
+
+
+void
+MainWindow::_ShowAppMenu(BPoint anchor)
+{
+	if (fAppMenu != nullptr) {
+		fAppMenu->PostMessage(B_QUIT_REQUESTED);
+		return;
+	}
+
+	// Firefox/Chrome panel layout: window actions on top, page
+	// actions with zoom next, History drills into a sub-page, the
+	// application entries sit at the bottom.
+	PanelMenuModel model;
+	int32_t root = model.AddPage("Main menu");
+
+	model.AddSectionLabelRow(root, "Tab and window");
+	model.AddActionRow(root, "New Window", MSG_PANEL_NEW_WINDOW,
+		"Ctrl+N");
+	model.AddActionRow(root, "Open Location" B_UTF8_ELLIPSIS,
+		MSG_OPEN_LOCATION, "Ctrl+L");
+	model.AddSeparatorRow(root);
+
+	model.AddSectionLabelRow(root, "Page");
+	model.AddActionRow(root, "Back", MSG_NAV_BACK, "Alt+Left");
+	model.AddActionRow(root, "Forward", MSG_NAV_FORWARD, "Alt+Right");
+	model.AddActionRow(root, "Reload", MSG_NAV_RELOAD, "Ctrl+R");
+	model.AddActionRow(root, "Home", MSG_NAV_HOME);
+	model.AddSeparatorRow(root);
+
+	model.AddSectionLabelRow(root, "Zoom");
+	model.AddActionRow(root, "Zoom In", MSG_ZOOM_IN, "Ctrl++");
+	model.AddActionRow(root, "Zoom Out", MSG_ZOOM_OUT, "Ctrl+-");
+	model.AddActionRow(root, "Reset Zoom", MSG_ZOOM_RESET, "Ctrl+0");
+	model.AddSeparatorRow(root);
+
+	int32_t history = model.AddPage("History");
+	model.AddSubPageRow(root, "History", history);
+	int32_t count = fHistory.CountItems();
+	if (count == 0)
+		model.AddSectionLabelRow(history, "No recent pages");
+	for (int32 i = 0; i < count; i++) {
+		BString* url = (BString*)fHistory.ItemAt(i);
+		model.AddActionRow(history, url->String(), MSG_OPEN_URL,
+			nullptr, url->String());
+	}
+
+	model.AddSeparatorRow(root);
+	model.AddSectionLabelRow(root, "Application");
+	model.AddActionRow(root, "Downloads", MSG_SHOW_DOWNLOADS, "Ctrl+J");
+	model.AddActionRow(root, "Settings" B_UTF8_ELLIPSIS, MSG_SHOW_SETTINGS);
+	model.AddActionRow(root, "About NetPlus", B_ABOUT_REQUESTED);
+	model.AddActionRow(root, "Quit NetPlus", B_QUIT_REQUESTED, "Ctrl+Q");
+
+	fAppMenu = new PanelMenu(model, BMessenger(this));
+	fAppMenu->Go(anchor);
+}
+
+
+void
 MainWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
@@ -340,6 +428,10 @@ MainWindow::MessageReceived(BMessage* message)
 				fWebView->LoadURL(NetPlusApp::Settings()->Homepage());
 				if (fToolbar) fToolbar->SetLoading(true);
 			}
+			break;
+
+		case MSG_OPEN_LOCATION:
+			if (fToolbar) fToolbar->FocusURL();
 			break;
 
 		case MSG_OPEN_URL:
@@ -437,6 +529,46 @@ MainWindow::MessageReceived(BMessage* message)
 			if (fWebView) fWebView->SelectAll();
 			break;
 
+		case MSG_APP_MENU:
+		{
+			BPoint anchor;
+			if (message->FindPoint("anchor", &anchor) == B_OK)
+				_ShowAppMenu(anchor);
+			break;
+		}
+
+		case MSG_PANEL_CLOSED:
+			fAppMenu = nullptr;
+				// the panel deletes itself on quit
+			break;
+
+		case MSG_PANEL_NEW_WINDOW:
+		{
+			const char* url = fWebView != nullptr
+				? fWebView->CurrentURL() : nullptr;
+			static_cast<NetPlusApp*>(be_app)->OpenWindow(
+				(url != nullptr && url[0] != '\0') ? url : kHomePage,
+				fPrivateWindow);
+			break;
+		}
+
+		case MSG_ZOOM_IN:
+		case MSG_ZOOM_OUT:
+		case MSG_ZOOM_RESET:
+		{
+			if (fWebView == nullptr)
+				break;
+			float zoom = fWebView->ZoomLevel();
+			if (message->what == MSG_ZOOM_RESET)
+				zoom = 1.0f;
+			else if (message->what == MSG_ZOOM_IN)
+				zoom = std::min(zoom * 1.25f, 5.0f);
+			else
+				zoom = std::max(zoom / 1.25f, 0.2f);
+			fWebView->SetZoomLevel(zoom);
+			break;
+		}
+
 		case B_WEB_PAGE_TITLE_CHANGED:
 		{
 			const char* title = nullptr;
@@ -457,6 +589,7 @@ MainWindow::MessageReceived(BMessage* message)
 				fStatusBase = url;
 				if (fToolbar)    fToolbar->SetURL(url);
 				if (fStatusBar)  fStatusBar->SetStatusText(url);
+				_AddHistory(url);
 			}
 			_UpdateNavState();
 			break;

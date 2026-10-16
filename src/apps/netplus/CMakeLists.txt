@@ -6,7 +6,10 @@ Application(
 	DownloadsWindow.cpp
 	MainWindow.cpp
 	SettingsWindow.cpp
+	PanelMenu.cpp
+	PanelMenuModel.cpp
 	StatusBarView.cpp
+	ToolbarIcons.cpp
 	ToolbarView.cpp
 
 	LIBS web tracker

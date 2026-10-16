@@ -6,6 +6,7 @@
 #define MAIN_WINDOW_H
 
 
+#include <List.h>
 #include <String.h>
 #include <Window.h>
 
@@ -13,6 +14,7 @@ class BMenuItem;
 class BMenu;
 class BMenuBar;
 class BWebView;
+class PanelMenu;
 class StatusBarView;
 class ToolbarView;
 
@@ -33,6 +35,8 @@ private:
 			void				_SetFullScreen(bool enter);
 			void				_OpenURL(const char* text);
 			const char*			_SearchTemplate() const;
+			void				_AddHistory(const char* url);
+			void				_ShowAppMenu(BPoint anchor);
 
 			BWebView*			fWebView;
 			ToolbarView*		fToolbar;
@@ -46,6 +50,9 @@ private:
 			bool				fFullScreen;
 			BRect				fSavedFrame;
 			BString				fStatusBase;
+			PanelMenu*			fAppMenu;
+			BList				fHistory;
+				// owned BStrings, most recent first
 };
 
 

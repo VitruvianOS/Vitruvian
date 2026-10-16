@@ -151,6 +151,14 @@ public:
 			// Destroys a link by its registry id, whoever created it.
 			status_t				DestroyLink(uint32 linkId);
 
+	// PipeWire ids behind an in-process connection. Both are 0 until
+	// the client is started and bound to the server.
+			uint32					GetConnectionNodeId(
+										const BMediaConnection* connection);
+			uint32					GetConnectionPortIds(
+										const BMediaConnection* connection,
+										uint32* outIds, uint32 maxCount);
+
 
 	// MIDI-class registry nodes (media.class "Midi/..."). Distinct from
 	// GetForeignNodes so the audio mixer view does not pick them up.

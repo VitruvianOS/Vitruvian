@@ -239,6 +239,7 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 
 			node->kind = kCortexNodeOwn;
 			node->id = client->Id();
+			node->pwNodeId = 0;
 			node->name.SetTo(client->Name());
 			node->mediaClass.SetTo("in-process client");
 			node->ownClient = client;
@@ -271,6 +272,13 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 				pin->input = NULL;
 				pin->foreignPortId = 0;
 				pin->foreignNodeId = 0;
+				uint32 portBuf[64];
+				uint32 portCount = graph->GetConnectionPortIds(output,
+					portBuf, 64);
+				for (uint32 pi = 0; pi < portCount; pi++)
+					pin->portIds.push_back(portBuf[pi]);
+				if (node->pwNodeId == 0)
+					node->pwNodeId = graph->GetConnectionNodeId(output);
 				pin->connected = output->IsConnected();
 				if (pin->connected)
 					pin->formatText = _FormatText(output->Format());
@@ -292,6 +300,13 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 				pin->output = NULL;
 				pin->foreignPortId = 0;
 				pin->foreignNodeId = 0;
+				uint32 portBuf[64];
+				uint32 portCount = graph->GetConnectionPortIds(input,
+					portBuf, 64);
+				for (uint32 pi = 0; pi < portCount; pi++)
+					pin->portIds.push_back(portBuf[pi]);
+				if (node->pwNodeId == 0)
+					node->pwNodeId = graph->GetConnectionNodeId(input);
 				pin->connected = input->IsConnected();
 				if (pin->connected)
 					pin->formatText = _FormatText(input->Format());
@@ -326,6 +341,7 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 			continue;
 
 		node->id = (media_client_id)foreign->id;
+		node->pwNodeId = (uint32)foreign->id;
 		node->name.SetTo(foreign->name.Length() > 0
 			? foreign->name.String() : foreign->description.String());
 		node->description.SetTo(foreign->description);
@@ -409,6 +425,7 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 			pin->output = NULL;
 			pin->foreignPortId = port->id;
 			pin->foreignNodeId = port->nodeId;
+			pin->portIds.push_back(port->id);
 			pin->formatText.SetTo(port->format);
 			pin->connected = false;
 			node->pins.AddItem(pin);
@@ -437,56 +454,31 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 		fNodes.AddItem(node);
 	}
 
-	for (int32 i = 0; i < streams.CountItems(); i++) {
-		BMediaGraph::StreamInfo* stream = streams.ItemAt(i);
-		if (stream == NULL || stream->deviceId == 0)
-			continue;
-		int32 outIndex = FindNode(kCortexNodeStream,
-			(media_client_id)stream->id);
-		int32 inIndex = FindNode(kCortexNodeDevice,
-			(media_client_id)stream->deviceId);
-		if (outIndex < 0 || inIndex < 0)
-			continue;
-		cortex_pin_kind kind = stream->mediaClass.FindFirst("Video") >= 0
-			? kCortexPinVideo : kCortexPinAudio;
-		_AddLink(outIndex, -1, inIndex, -1, kCortexLinkRouting, kind,
-			"routing");
-	}
-
-	for (int32 n = 0; n < fNodes.CountItems(); n++) {
-		CortexNode* node = fNodes.ItemAt(n);
-		if (node == NULL || node->ownClient == NULL)
-			continue;
-		for (int32 p = 0; p < node->pins.CountItems(); p++) {
-			CortexPin* pin = node->pins.ItemAt(p);
-			if (pin == NULL || !pin->isOutput || pin->output == NULL)
+	// Every real link the server sees, whoever created it, drawn pin to
+	// pin through the port globals both sides reported.
+	BObjectList<BMediaGraph::GraphLink, true> graphLinks;
+	if (graph->GetLinks(&graphLinks) == B_OK) {
+		for (int32 i = 0; i < graphLinks.CountItems(); i++) {
+			BMediaGraph::GraphLink* link = graphLinks.ItemAt(i);
+			if (link == NULL)
 				continue;
-			if (!pin->output->IsConnected() || pin->output->Binding() == NULL)
+			int32 outIndex = _FindNodeByPwId(link->outputNodeId);
+			int32 inIndex = _FindNodeByPwId(link->inputNodeId);
+			if (outIndex < 0 || inIndex < 0)
 				continue;
-			BMediaConnection* binding = pin->output->Binding();
-			BMediaClient* target = binding->Client();
-			int32 inNode = -1;
-			int32 inPin = -1;
-			for (int32 n2 = 0; n2 < fNodes.CountItems(); n2++) {
-				CortexNode* other = fNodes.ItemAt(n2);
-				if (other == NULL || other->ownClient != target)
-					continue;
-				for (int32 p2 = 0; p2 < other->pins.CountItems(); p2++) {
-					if (other->pins.ItemAt(p2)->input == binding) {
-						inNode = n2;
-						inPin = p2;
-						break;
-					}
-				}
-				if (inNode >= 0)
-					break;
-			}
-			if (inNode < 0)
-				continue;
-			cortex_link_state state = pin->output->Format().Type()
-					!= B_MEDIA_NO_TYPE
-				? kCortexLinkActive : kCortexLinkNegotiating;
-			_AddLink(n, p, inNode, inPin, state, pin->kind);
+			CortexNode* outNode = fNodes.ItemAt(outIndex);
+			CortexNode* inNode = fNodes.ItemAt(inIndex);
+			int32 outPin = _FindPinForPort(outNode, true,
+				link->outputPortId);
+			int32 inPin = _FindPinForPort(inNode, false,
+				link->inputPortId);
+			cortex_pin_kind kind = kCortexPinAudio;
+			CortexPin* pin = outPin >= 0
+				? outNode->pins.ItemAt(outPin) : NULL;
+			if (pin != NULL)
+				kind = pin->kind;
+			_AddLink(outIndex, outPin, inIndex, inPin,
+				kCortexLinkActive, kind, link->id);
 		}
 	}
 
@@ -542,7 +534,8 @@ CortexModel::_Layout()
 
 void
 CortexModel::_AddLink(int32 outNode, int32 outPin, int32 inNode, int32 inPin,
-	cortex_link_state state, cortex_pin_kind kind, const char* label)
+	cortex_link_state state, cortex_pin_kind kind, uint32 linkId,
+	const char* label)
 {
 	CortexLink* link = new(std::nothrow) CortexLink();
 	if (link == NULL)
@@ -551,11 +544,51 @@ CortexModel::_AddLink(int32 outNode, int32 outPin, int32 inNode, int32 inPin,
 	link->outputPin = outPin;
 	link->inputNode = inNode;
 	link->inputPin = inPin;
+	link->linkId = linkId;
 	link->state = state;
 	link->kind = kind;
 	if (label != NULL)
 		link->label.SetTo(label);
 	fLinks.AddItem(link);
+}
+
+
+int32
+CortexModel::_FindNodeByPwId(uint32 pwNodeId) const
+{
+	if (pwNodeId == 0)
+		return -1;
+	for (int32 i = 0; i < fNodes.CountItems(); i++) {
+		CortexNode* node = fNodes.ItemAt(i);
+		if (node != NULL && node->pwNodeId == pwNodeId)
+			return i;
+	}
+	return -1;
+}
+
+
+int32
+CortexModel::_FindPinForPort(CortexNode* node, bool output,
+	uint32 portId) const
+{
+	if (node == NULL)
+		return -1;
+	int32 firstMatch = -1;
+	for (int32 p = 0; p < node->pins.CountItems(); p++) {
+		CortexPin* pin = node->pins.ItemAt(p);
+		if (pin == NULL || pin->isOutput != output)
+			continue;
+		if (firstMatch < 0)
+			firstMatch = p;
+		if (portId != 0) {
+			for (size_t i = 0; i < pin->portIds.size(); i++) {
+				if (pin->portIds[i] == portId)
+					return p;
+			}
+		}
+	}
+	// A node-wide link lands on the first pin of that direction.
+	return portId == 0 ? firstMatch : -1;
 }
 
 

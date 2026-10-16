@@ -1043,6 +1043,27 @@ BMediaGraph::DestroyLink(uint32 linkId)
 }
 
 
+uint32
+BMediaGraph::GetConnectionNodeId(const BMediaConnection* connection)
+{
+	if (connection == NULL)
+		return 0;
+
+	return connection->_GetNodeId();
+}
+
+
+uint32
+BMediaGraph::GetConnectionPortIds(const BMediaConnection* connection,
+	uint32* outIds, uint32 maxCount)
+{
+	if (connection == NULL || outIds == NULL)
+		return 0;
+
+	return connection->_GetPortIds(outIds, maxCount);
+}
+
+
 status_t
 BMediaGraph::GetMidiNodes(BObjectList<MidiNode, true>* outNodes)
 {

@@ -148,30 +148,21 @@ _AppendForeignDump(BMediaGraph* graph, BString& text)
 static void
 _AppendLinksDump(BMediaGraph* graph, BString& text)
 {
-	BObjectList<BMediaGraph::StreamInfo, true> streams;
-	if (graph->GetStreams(&streams) != B_OK)
+	BObjectList<BMediaGraph::GraphLink, true> links;
+	if (graph->GetLinks(&links) != B_OK) {
+		text << "links: query failed\n";
 		return;
-
-	int32 count = 0;
-	for (int32 i = 0; i < streams.CountItems(); i++) {
-		if (streams.ItemAt(i)->deviceId != 0)
-			count++;
 	}
 
-	text << "links: " << count << " routing edge(s) visible\n";
-	for (int32 i = 0; i < streams.CountItems(); i++) {
-		BMediaGraph::StreamInfo* stream = streams.ItemAt(i);
-		if (stream->deviceId == 0)
-			continue;
-		text << "  stream " << stream->id << " -> device "
-			<< stream->deviceId << " (active, "
-			<< (stream->mediaClass.FindFirst("Video") >= 0 ? "video"
-				: stream->mediaClass.FindFirst("Midi") >= 0 ? "midi"
-				: "audio") << ")\n";
+	text << "links (" << links.CountItems() << "):\n";
+	for (int32 i = 0; i < links.CountItems(); i++) {
+		BMediaGraph::GraphLink* link = links.ItemAt(i);
+		text << "  id " << link->id
+			<< "  out node " << link->outputNodeId
+			<< " port " << link->outputPortId
+			<< "  ->  in node " << link->inputNodeId
+			<< " port " << link->inputPortId << "\n";
 	}
-	text << "  note: BMediaGraph exposes no link enumeration query;\n"
-		"  only stream-to-device routing edges are visible, own link\n"
-		"  state is readable from in-process BMediaConnection only.\n";
 }
 
 

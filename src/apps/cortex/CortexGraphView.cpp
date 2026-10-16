@@ -675,7 +675,8 @@ CortexModel::LookupOrigin(media_client_id id, cortex_node_kind kind,
 
 CortexGraphView::CortexGraphView(BRect frame)
 	:
-	BView(frame, "cortex graph", B_FOLLOW_ALL, B_WILL_DRAW | B_PULSE_NEEDED),
+	BView(frame, "cortex graph", B_FOLLOW_ALL,
+		B_WILL_DRAW | B_PULSE_NEEDED),
 	fModel(NULL),
 	fDragNode(-1),
 	fDragOffset(0, 0),
@@ -683,7 +684,8 @@ CortexGraphView::CortexGraphView(BRect frame)
 	fLinkFromNode(-1),
 	fLinkFromPin(-1),
 	fTrackingLink(false),
-	fTrackPoint(0, 0)
+	fTrackPoint(0, 0),
+	fSelectedLink(-1)
 {
 }
 
@@ -692,6 +694,7 @@ void
 CortexGraphView::SetModel(CortexModel* model)
 {
 	fModel = model;
+	fSelectedLink = -1;
 	Invalidate();
 }
 
@@ -751,6 +754,73 @@ CortexGraphView::_PinAt(BPoint where, int32* outNode, int32* outPin) const
 }
 
 
+bool
+CortexGraphView::_LinkPoints(int32 linkIndex, BPoint* outFrom,
+	BPoint* outTo) const
+{
+	if (fModel == NULL)
+		return false;
+	CortexLink* link = fModel->LinkAt(linkIndex);
+	if (link == NULL)
+		return false;
+	CortexNode* outNode = fModel->NodeAt(link->outputNode);
+	CortexNode* inNode = fModel->NodeAt(link->inputNode);
+	if (outNode == NULL || inNode == NULL)
+		return false;
+
+	BPoint from;
+	BPoint to;
+	if (link->outputPin >= 0) {
+		CortexPin* pin = outNode->pins.ItemAt(link->outputPin);
+		from = pin != NULL ? pin->position : outNode->Frame().RightTop();
+	} else
+		from = BPoint(outNode->Frame().right, outNode->Frame().top + 16.0f);
+	if (link->inputPin >= 0) {
+		CortexPin* pin = inNode->pins.ItemAt(link->inputPin);
+		to = pin != NULL ? pin->position : inNode->Frame().LeftTop();
+	} else
+		to = BPoint(inNode->Frame().left, inNode->Frame().top + 16.0f);
+
+	if (outFrom != NULL)
+		*outFrom = from;
+	if (outTo != NULL)
+		*outTo = to;
+	return true;
+}
+
+
+int32
+CortexGraphView::_LinkAt(BPoint where) const
+{
+	if (fModel == NULL)
+		return -1;
+	const float kHitDistance = 7.0f;
+	for (int32 i = fModel->CountLinks() - 1; i >= 0; i--) {
+		BPoint from;
+		BPoint to;
+		if (!_LinkPoints(i, &from, &to))
+			continue;
+		BPoint control1(from.x + (to.x - from.x) * 0.5f, from.y);
+		BPoint control2(from.x + (to.x - from.x) * 0.5f, to.y);
+		// Sample the curve; hit testing the control polygon would
+		// swallow clicks near the nodes.
+		for (int32 step = 1; step <= 24; step++) {
+			float t = (float)step / 24.0f;
+			float u = 1.0f - t;
+			BPoint point(u * u * u * from.x + 3 * u * u * t * control1.x
+				+ 3 * u * t * t * control2.x + t * t * t * to.x,
+				u * u * u * from.y + 3 * u * u * t * control1.y
+				+ 3 * u * t * t * control2.y + t * t * t * to.y);
+			BPoint delta = point - where;
+			if (delta.x * delta.x + delta.y * delta.y
+					<= kHitDistance * kHitDistance)
+				return i;
+		}
+	}
+	return -1;
+}
+
+
 void
 CortexGraphView::Draw(BRect updateRect)
 {
@@ -768,32 +838,22 @@ CortexGraphView::Draw(BRect updateRect)
 		CortexLink* link = fModel->LinkAt(i);
 		if (link == NULL)
 			continue;
-		CortexNode* outNode = fModel->NodeAt(link->outputNode);
-		CortexNode* inNode = fModel->NodeAt(link->inputNode);
-		if (outNode == NULL || inNode == NULL)
-			continue;
 
 		BPoint from;
 		BPoint to;
-		if (link->outputPin >= 0) {
-			CortexPin* pin = outNode->pins.ItemAt(link->outputPin);
-			from = pin != NULL ? pin->position : outNode->Frame().RightTop();
-		} else
-			from = BPoint(outNode->Frame().right, outNode->Frame().top + 16.0f);
-		if (link->inputPin >= 0) {
-			CortexPin* pin = inNode->pins.ItemAt(link->inputPin);
-			to = pin != NULL ? pin->position : inNode->Frame().LeftTop();
-		} else
-			to = BPoint(inNode->Frame().left, inNode->Frame().top + 16.0f);
+		if (!_LinkPoints(i, &from, &to))
+			continue;
 
 		rgb_color color = _LinkColor(link->state);
 		SetHighColor(color);
-		SetPenSize(link->state == kCortexLinkRouting ? 1.0f : 2.0f);
+		SetPenSize(i == fSelectedLink ? 3.0f
+			: (link->state == kCortexLinkRouting ? 1.0f : 2.0f));
 		BPoint control1(from.x + (to.x - from.x) * 0.5f, from.y);
 		BPoint control2(from.x + (to.x - from.x) * 0.5f, to.y);
 		BPoint bezier[4] = { from, control1, control2, to };
 		StrokeBezier(bezier);
 	}
+	SetPenSize(1.0f);
 
 	for (int32 i = 0; i < fModel->CountNodes(); i++) {
 		CortexNode* node = fModel->NodeAt(i);
@@ -904,6 +964,8 @@ CortexGraphView::MouseDown(BPoint where)
 	if (fModel == NULL)
 		return;
 
+	MakeFocus();
+
 	BMessage* message = Window()->CurrentMessage();
 	int32 buttons = 0;
 	if (message != NULL)
@@ -924,10 +986,25 @@ CortexGraphView::MouseDown(BPoint where)
 		return;
 	}
 
+	int32 linkIndex = _LinkAt(where);
+	if (linkIndex >= 0) {
+		if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+			_ShowLinkMenu(linkIndex, where);
+			return;
+		}
+		fSelectedLink = linkIndex;
+		Invalidate();
+		return;
+	}
+
+	fSelectedLink = -1;
+
 	BPoint offset;
 	int32 nodeIndex = _NodeAt(where, &offset);
-	if (nodeIndex < 0)
+	if (nodeIndex < 0) {
+		Invalidate();
 		return;
+	}
 
 	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
 		_ShowNodeMenu(nodeIndex, where);
@@ -938,6 +1015,28 @@ CortexGraphView::MouseDown(BPoint where)
 	fDragOffset = offset;
 	fDragging = true;
 	SetMouseEventMask(B_PRIMARY_MOUSE_BUTTON);
+}
+
+
+void
+CortexGraphView::KeyDown(const char* bytes, int32 numBytes)
+{
+	if (numBytes < 1 || fSelectedLink < 0 || fModel == NULL) {
+		BView::KeyDown(bytes, numBytes);
+		return;
+	}
+
+	// Delete or backspace cuts the selected link.
+	if (bytes[0] == B_DELETE || bytes[0] == B_BACKSPACE) {
+		CortexWindow* window = dynamic_cast<CortexWindow*>(Window());
+		if (window != NULL)
+			window->RemoveLink(fSelectedLink);
+		fSelectedLink = -1;
+		Invalidate();
+		return;
+	}
+
+	BView::KeyDown(bytes, numBytes);
 }
 
 
@@ -992,6 +1091,25 @@ CortexGraphView::MouseUp(BPoint where)
 	fTrackingLink = false;
 	fLinkFromNode = -1;
 	fLinkFromPin = -1;
+}
+
+
+void
+CortexGraphView::_ShowLinkMenu(int32 linkIndex, BPoint where)
+{
+	CortexWindow* window = dynamic_cast<CortexWindow*>(Window());
+	if (window == NULL)
+		return;
+
+	BPopUpMenu* menu = new BPopUpMenu("link menu");
+	BMessage* removeMessage = new BMessage(kMsgRemoveLink);
+	removeMessage->AddInt32("link", linkIndex);
+	BMenuItem* removeItem = new BMenuItem("Remove link", removeMessage);
+	removeItem->SetTarget(window);
+	menu->AddItem(removeItem);
+
+	menu->Go(ConvertToScreen(where));
+	delete menu;
 }
 
 

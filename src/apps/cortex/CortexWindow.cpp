@@ -303,6 +303,14 @@ CortexWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgRemoveLink:
+		{
+			int32 linkIndex = -1;
+			message->FindInt32("link", &linkIndex);
+			RemoveLink(linkIndex);
+			break;
+		}
+
 		case kMsgInfo:
 		{
 			int32 nodeIndex = -1;
@@ -625,6 +633,15 @@ CortexWindow::TryConnectPins(int32 outNodeIndex, int32 outPinIndex,
 		return;
 	}
 
+	if (outPin->kind != kCortexPinUnknown && inPin->kind != kCortexPinUnknown
+		&& outPin->kind != inPin->kind) {
+		BAlert* alert = new(std::nothrow) BAlert("Connect",
+			"Those pins carry different media types.", "OK");
+		if (alert != NULL)
+			alert->Go();
+		return;
+	}
+
 	if (outPinNode->ownClient == NULL && inPinNode->ownClient == NULL) {
 		BAlert* alert = new(std::nothrow) BAlert("Connect",
 			"Foreign to foreign links belong to WirePlumber. Cortex is a "
@@ -683,6 +700,57 @@ CortexWindow::TryConnectPins(int32 outNodeIndex, int32 outPinIndex,
 
 	if (status != B_OK)
 		_ReportStatus("connect", status);
+
+	_Rebuild();
+}
+
+
+void
+CortexWindow::RemoveLink(int32 linkIndex)
+{
+	if (fModel == NULL)
+		return;
+
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return;
+
+	CortexLink* link = fModel->LinkAt(linkIndex);
+	if (link == NULL)
+		return;
+
+	CortexNode* outNode = fModel->NodeAt(link->outputNode);
+	CortexNode* inNode = fModel->NodeAt(link->inputNode);
+	CortexPin* outPin = link->outputPin >= 0 && outNode != NULL
+		? outNode->pins.ItemAt(link->outputPin) : NULL;
+	CortexPin* inPin = link->inputPin >= 0 && inNode != NULL
+		? inNode->pins.ItemAt(link->inputPin) : NULL;
+
+	// In-process links have a proper teardown path; everything else is
+	// destroyed by its registry id, whoever created it.
+	status_t status = B_ENTRY_NOT_FOUND;
+	if (outPin != NULL && outPin->output != NULL
+		&& inPin != NULL && inPin->input != NULL)
+		status = graph->Disconnect(outPin->output, inPin->input);
+
+	if (status != B_OK && link->linkId != 0)
+		status = graph->DestroyLink(link->linkId);
+
+	if (status == B_OK) {
+		for (int32 i = fForeignLinks.CountItems() - 1; i >= 0; i--) {
+			CortexForeignLinkEntry* entry = fForeignLinks.ItemAt(i);
+			if (entry == NULL)
+				continue;
+			bool match = (outPin != NULL && entry->outputIsOwn
+					&& entry->ownOutput == outPin->output)
+				|| (inPin != NULL && !entry->outputIsOwn
+					&& entry->ownInput == inPin->input);
+			if (match)
+				fForeignLinks.RemoveItem(i);
+		}
+	}
+
+	_ReportStatus("remove link", status);
 
 	_Rebuild();
 }

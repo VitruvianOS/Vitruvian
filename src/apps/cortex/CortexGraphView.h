@@ -156,6 +156,7 @@ public:
 
 	virtual	void		AttachedToWindow();
 	virtual	void		Draw(BRect updateRect);
+	virtual	void		KeyDown(const char* bytes, int32 numBytes);
 	virtual	void		MouseDown(BPoint where);
 	virtual	void		MouseMoved(BPoint where, uint32 transit,
 					const BMessage* message);
@@ -165,6 +166,10 @@ private:
 	int32			_NodeAt(BPoint where, BPoint* outOffset) const;
 	int32			_PinAt(BPoint where, int32* outNode,
 					int32* outPin) const;
+	int32			_LinkAt(BPoint where) const;
+	bool			_LinkPoints(int32 linkIndex, BPoint* outFrom,
+					BPoint* outTo) const;
+	void			_ShowLinkMenu(int32 linkIndex, BPoint where);
 	void			_ShowNodeMenu(int32 nodeIndex, BPoint where);
 	void			_TrackLink(BPoint where);
 
@@ -176,6 +181,7 @@ private:
 	int32			fLinkFromPin;
 	bool			fTrackingLink;
 	BPoint			fTrackPoint;
+	int32			fSelectedLink;
 };
 
 

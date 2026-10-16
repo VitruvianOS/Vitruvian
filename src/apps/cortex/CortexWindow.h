@@ -36,7 +36,8 @@ enum {
 	kMsgControlPanel		= 'CCPN',
 	kMsgInfo			= 'CINF',
 	kMsgSendTestNote		= 'CNOT',
-	kMsgDisconnectOwn		= 'CDOI'
+	kMsgDisconnectOwn		= 'CDOI',
+	kMsgRemoveLink			= 'CRLK'
 };
 
 
@@ -71,21 +72,22 @@ public:
 	virtual	void		MessageReceived(BMessage* message);
 	virtual	bool		QuitRequested();
 
-			void		ShowNodeMenu(int32 nodeIndex, BPoint screenPoint);
-			void		TryConnectPins(int32 outNode, int32 outPin,
-					int32 inNode, int32 inPin);
+		void		ShowNodeMenu(int32 nodeIndex, BPoint screenPoint);
+		void		TryConnectPins(int32 outNode, int32 outPin,
+				int32 inNode, int32 inPin);
+		void		RemoveLink(int32 linkIndex);
 
 private:
-			void		_GraphReady();
-			void		_Rebuild();
-			void		_OpenInfo(int32 nodeIndex);
-			void		_OpenControlPanel(int32 nodeIndex);
-			void		_OpenVolume(media_client_id id, bool isStream,
-					const BString& title, float value);
-			void		_ReportStatus(const char* action, status_t status);
-			status_t	_ForeignPortById(uint32 nodeId, uint32 portId,
-					BMediaGraph::ForeignPort* outPort);
-			void		_DisconnectOwn(int32 nodeIndex, int32 pinIndex);
+		void		_GraphReady();
+		void		_Rebuild();
+		void		_OpenInfo(int32 nodeIndex);
+		void		_OpenControlPanel(int32 nodeIndex);
+		void		_OpenVolume(media_client_id id, bool isStream,
+				const BString& title, float value);
+		void		_ReportStatus(const char* action, status_t status);
+		status_t	_ForeignPortById(uint32 nodeId, uint32 portId,
+				BMediaGraph::ForeignPort* outPort);
+		void		_DisconnectOwn(int32 nodeIndex, int32 pinIndex);
 
 			CortexGraphView*	fView;
 			CortexModel*		fModel;

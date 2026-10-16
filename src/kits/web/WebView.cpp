@@ -40,6 +40,10 @@
 #include <Entry.h>
 #include <Node.h>
 
+
+// Used from the stub MessageReceived too, so keep it outside HAS_WPE.
+static const uint32 kMsgFrameReady = 'wfrm';
+
 #ifdef HAS_WPE
 #include "clipboard_dragdrop.h"
 #include "notifications_bridge.h"
@@ -53,7 +57,6 @@
 #include "process_manager.h"
 
 
-static const uint32 kMsgFrameReady = 'wfrm';
 // Private messages: view thread only, not part of WebDefs.
 static const uint32 kMsgCursorChanged = '_wcu';
 static const uint32 kMsgShowContextMenu = '_wcm';

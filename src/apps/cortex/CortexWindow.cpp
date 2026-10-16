@@ -372,6 +372,22 @@ CortexWindow::_Rebuild()
 	if (fModel == NULL || fView == NULL)
 		return;
 
+	// The kit meter keeps running across a model swap; carry the last
+	// level over so the bar does not blink to zero on every rebuild.
+	BObjectList<CortexNode, true> oldNodes(true);
+	for (int32 i = 0; i < fModel->CountNodes(); i++) {
+		CortexNode* node = fModel->NodeAt(i);
+		if (node == NULL || !node->metered)
+			continue;
+		CortexNode* copy = new(std::nothrow) CortexNode();
+		if (copy == NULL)
+			continue;
+		copy->kind = node->kind;
+		copy->id = node->id;
+		copy->peak = node->peak;
+		oldNodes.AddItem(copy);
+	}
+
 	media_client_id defaultOut = 0;
 	media_client_id defaultIn = 0;
 	BMediaGraph* graph = BMediaGraph::Instance();
@@ -383,26 +399,56 @@ CortexWindow::_Rebuild()
 	fModel->Rebuild(&fOwnClients, &fForeignLinks);
 
 	if (graph != NULL) {
-		for (int32 i = 0; i < fMeteredIds.CountItems(); i++)
-			graph->StopMeteringDevice((media_client_id)*fMeteredIds.ItemAt(i));
-		fMeteredIds.MakeEmpty();
-
+		// Drop meters for devices that left the default role, keep
+		// the rest: restarting a running meter only loses samples.
 		media_client_id meters[2] = { defaultOut, defaultIn };
+		for (int32 i = fMeteredIds.CountItems() - 1; i >= 0; i--) {
+			uint32 id = *fMeteredIds.ItemAt(i);
+			if (meters[0] == (media_client_id)id
+				|| meters[1] == (media_client_id)id) {
+				continue;
+			}
+			graph->StopMeteringDevice((media_client_id)id);
+			fMeteredIds.RemoveItemAt(i);
+		}
+
 		for (int32 i = 0; i < 2; i++) {
 			if (meters[i] == 0)
+				continue;
+			bool alreadyMetering = false;
+			for (int32 j = 0; j < fMeteredIds.CountItems(); j++) {
+				if ((media_client_id)*fMeteredIds.ItemAt(j) == meters[i]) {
+					alreadyMetering = true;
+					break;
+				}
+			}
+			if (alreadyMetering)
 				continue;
 			if (graph->StartMeteringDevice((media_client_id)meters[i],
 					BMessenger(this)) == B_OK) {
 				uint32* stored = new(std::nothrow) uint32(meters[i]);
 				if (stored != NULL)
 					fMeteredIds.AddItem(stored);
-				int32 index = fModel->FindNode(kCortexNodeDevice, meters[i]);
-				CortexNode* node = index >= 0
-					? fModel->NodeAt(index) : NULL;
-				if (node != NULL)
-					node->metered = true;
 			}
 		}
+
+		for (int32 i = 0; i < fMeteredIds.CountItems(); i++) {
+			int32 index = fModel->FindNode(kCortexNodeDevice,
+				(media_client_id)*fMeteredIds.ItemAt(i));
+			CortexNode* node = index >= 0 ? fModel->NodeAt(index) : NULL;
+			if (node != NULL)
+				node->metered = true;
+		}
+	}
+
+	for (int32 i = 0; i < oldNodes.CountItems(); i++) {
+		CortexNode* oldNode = oldNodes.ItemAt(i);
+		if (oldNode == NULL)
+			continue;
+		int32 index = fModel->FindNode(oldNode->kind, oldNode->id);
+		CortexNode* node = index >= 0 ? fModel->NodeAt(index) : NULL;
+		if (node != NULL && node->metered)
+			node->peak = oldNode->peak;
 	}
 
 	fView->SetModel(fModel);

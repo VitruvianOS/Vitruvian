@@ -80,6 +80,8 @@ public:
 private:
 		void		_GraphReady();
 		void		_Rebuild();
+		void		_LoadSettings();
+		void		_SaveSettings();
 		void		_OpenInfo(int32 nodeIndex);
 		void		_OpenControlPanel(int32 nodeIndex);
 		void		_OpenVolume(media_client_id id, bool isStream,

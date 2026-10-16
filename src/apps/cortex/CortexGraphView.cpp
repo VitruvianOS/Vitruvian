@@ -673,6 +673,57 @@ CortexModel::LookupOrigin(media_client_id id, cortex_node_kind kind,
 }
 
 
+status_t
+CortexModel::SaveOrigins(BMessage* into) const
+{
+	if (into == NULL)
+		return B_BAD_VALUE;
+
+	into->MakeEmpty();
+	for (int32 i = 0; i < fOriginKeys.CountItems(); i++) {
+		int32 kind = 0;
+		long id = 0;
+		if (sscanf(fOriginKeys.ItemAt(i)->String(), "%d:%ld", &kind, &id)
+				!= 2)
+			continue;
+		into->AddInt32("kind", kind);
+		into->AddInt32("id", (int32)id);
+		into->AddFloat("x", fOriginValues.ItemAt(i)->x);
+		into->AddFloat("y", fOriginValues.ItemAt(i)->y);
+	}
+	return B_OK;
+}
+
+
+status_t
+CortexModel::LoadOrigins(const BMessage* from)
+{
+	if (from == NULL)
+		return B_BAD_VALUE;
+
+	fOriginKeys.MakeEmpty();
+	fOriginValues.MakeEmpty();
+
+	int32 kind = 0;
+	int32 index = 0;
+	while (from->FindInt32("kind", index, &kind) == B_OK) {
+		int32 id = 0;
+		float x = 0.0f;
+		float y = 0.0f;
+		if (from->FindInt32("id", index, &id) != B_OK
+			|| from->FindFloat("x", index, &x) != B_OK
+			|| from->FindFloat("y", index, &y) != B_OK) {
+			index++;
+			continue;
+		}
+		RememberOrigin((media_client_id)id, (cortex_node_kind)kind,
+			BPoint(x, y));
+		index++;
+	}
+	return B_OK;
+}
+
+
 CortexGraphView::CortexGraphView(BRect frame)
 	:
 	BView(frame, "cortex graph", B_FOLLOW_ALL,
@@ -938,11 +989,16 @@ CortexGraphView::Draw(BRect updateRect)
 				: (rgb_color){ 150, 150, 150, 255 });
 			StrokeRect(pinRect);
 
-			if (pin->formatText.Length() > 0 && pin->connected) {
-				DrawString(pin->formatText.String(),
-					BPoint(pin->position.x + (pin->isOutput ? -64.0f : 6.0f),
-						pin->position.y + 12.0f));
-			}
+			BString label(pin->name);
+			if (pin->connected && pin->formatText.Length() > 0)
+				label << "  " << pin->formatText;
+			float labelWidth = frame.Width() * 0.5f - 14.0f;
+			TruncateString(&label, B_TRUNCATE_END, labelWidth);
+			float textX = pin->isOutput
+				? pin->position.x - 6.0f - StringWidth(label.String())
+				: pin->position.x + 6.0f;
+			DrawString(label.String(),
+				BPoint(textX, pin->position.y + 4.0f));
 		}
 	}
 

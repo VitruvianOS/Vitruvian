@@ -208,8 +208,7 @@ CortexMidiOutputUnit::SendTestNote()
 BMediaClient**
 CreateCortexDemoClients(int32* outCount)
 {
-	const int32 kCount = 2;
-	CortexToneUnit* tone = new(std::nothrow) CortexToneUnit("Cortex Tone");
+CortexToneUnit* tone = new(std::nothrow) CortexToneUnit("Cortex Tone");
 	CortexMidiOutputUnit* midi
 		= new(std::nothrow) CortexMidiOutputUnit("Cortex MIDI Out");
 

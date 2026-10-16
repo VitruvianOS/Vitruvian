@@ -131,6 +131,10 @@ public:
 	bool			LookupOrigin(media_client_id id, cortex_node_kind kind,
 					BPoint* outOrigin) const;
 
+	// Session layout persistence: origins keyed by kind and id.
+	status_t		SaveOrigins(BMessage* into) const;
+	status_t		LoadOrigins(const BMessage* from);
+
 private:
 	void			_Layout();
 	void			_AddLink(int32 outNode, int32 outPin, int32 inNode,

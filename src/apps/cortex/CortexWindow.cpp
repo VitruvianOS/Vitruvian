@@ -6,6 +6,9 @@
 #include "CortexWindow.h"
 
 #include <Alert.h>
+#include <Directory.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <GroupView.h>
 #include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
@@ -13,6 +16,7 @@
 #include <Menu.h>
 #include <MenuItem.h>
 #include <Message.h>
+#include <Path.h>
 #include <PopUpMenu.h>
 #include <Slider.h>
 #include <String.h>
@@ -329,6 +333,7 @@ CortexWindow::MessageReceived(BMessage* message)
 bool
 CortexWindow::QuitRequested()
 {
+	_SaveSettings();
 	return true;
 }
 
@@ -354,6 +359,8 @@ CortexWindow::_GraphReady()
 	if (graph != NULL)
 		graph->StartWatching(BMessenger(this),
 			BMediaGraph::B_MEDIA_ALL_NOTIFICATIONS);
+
+	_LoadSettings();
 
 	_Rebuild();
 }
@@ -399,6 +406,63 @@ CortexWindow::_Rebuild()
 	}
 
 	fView->SetModel(fModel);
+}
+
+
+static void
+_CortexSettingsPath(BPath* path)
+{
+	if (path == NULL)
+		return;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, path) != B_OK)
+		return;
+	path->Append("Cortex");
+}
+
+
+void
+CortexWindow::_LoadSettings()
+{
+	if (fModel == NULL)
+		return;
+
+	BPath path;
+	_CortexSettingsPath(&path);
+	if (path.Path() == NULL)
+		return;
+
+	BFile file(path.Path(), B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return;
+
+	BMessage archive;
+	if (archive.Unflatten(&file) == B_OK)
+		fModel->LoadOrigins(&archive);
+}
+
+
+void
+CortexWindow::_SaveSettings()
+{
+	if (fModel == NULL)
+		return;
+
+	BPath path;
+	_CortexSettingsPath(&path);
+	if (path.Path() == NULL)
+		return;
+
+	status_t status = create_directory(path.Path(), 0755);
+	if (status != B_OK && status != B_FILE_EXISTS)
+		return;
+
+	BMessage archive;
+	fModel->SaveOrigins(&archive);
+
+	BFile file(path.Path(), B_READ_WRITE | B_CREATE_FILE | B_ERASE_FILE);
+	if (file.InitCheck() != B_OK)
+		return;
+	archive.Flatten(&file);
 }
 
 
@@ -746,7 +810,7 @@ CortexWindow::RemoveLink(int32 linkIndex)
 				|| (inPin != NULL && !entry->outputIsOwn
 					&& entry->ownInput == inPin->input);
 			if (match)
-				fForeignLinks.RemoveItem(i);
+				fForeignLinks.RemoveItemAt(i);
 		}
 	}
 

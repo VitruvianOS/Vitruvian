@@ -21,6 +21,13 @@ set(SYSTEMD_SERVICES
 install(FILES data/tmpfiles.d/vos.conf
   DESTINATION /usr/lib/tmpfiles.d/ COMPONENT data)
 
+# Game input: uinput for Steam Input's virtual devices, hidraw ACLs
+# for controllers. uaccess, never a shared group.
+install(FILES data/udev/60-vos-gameinput.rules
+  DESTINATION /usr/lib/udev/rules.d/ COMPONENT data)
+install(FILES data/etc/modules-load.d/vos-gameinput.conf
+  DESTINATION /usr/lib/modules-load.d/ COMPONENT data)
+
 install(PROGRAMS data/libexec/vos-firstboot-commit
   DESTINATION /usr/libexec/)
 

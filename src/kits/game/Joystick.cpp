@@ -35,7 +35,9 @@
 #include <dirent.h>
 
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 
 #include <AppDefs.h>
 #include <Autolock.h>
@@ -373,6 +375,54 @@ is_device_grabbed(int fd)
 
 	ioctl(fd, EVIOCGRAB, 0);
 	return false;
+}
+
+
+// Fallback when the uaccess ACL was missed: janus passes the fd.
+static int
+open_via_janus(const char* path)
+{
+	int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd < 0)
+		return -1;
+
+	struct sockaddr_un address;
+	memset(&address, 0, sizeof(address));
+	address.sun_family = AF_UNIX;
+	strlcpy(address.sun_path, "/run/vos-input/janus.sock",
+		sizeof(address.sun_path));
+	if (connect(fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	char request[PATH_MAX + 16];
+	int length = snprintf(request, sizeof(request), "OPEN %s\n", path);
+	if (length <= 0 || write(fd, request, (size_t)length) != length) {
+		close(fd);
+		return -1;
+	}
+
+	char ok = 0;
+	struct iovec iov = { &ok, 1 };
+	struct msghdr message;
+	memset(&message, 0, sizeof(message));
+	message.msg_iov = &iov;
+	message.msg_iovlen = 1;
+	char control[CMSG_SPACE(sizeof(int))];
+	memset(control, 0, sizeof(control));
+	message.msg_control = control;
+	message.msg_controllen = sizeof(control);
+
+	int deviceFd = -1;
+	if (recvmsg(fd, &message, 0) == 1 && ok == 'K') {
+		struct cmsghdr* cmsg = CMSG_FIRSTHDR(&message);
+		if (cmsg != NULL && cmsg->cmsg_level == SOL_SOCKET
+			&& cmsg->cmsg_type == SCM_RIGHTS)
+			memcpy(&deviceFd, CMSG_DATA(cmsg), sizeof(int));
+	}
+	close(fd);
+	return deviceFd;
 }
 
 
@@ -767,6 +817,8 @@ BJoystick::Open(const char* portName)
 	int fd = open(portName, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		fd = open(portName, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0 && (errno == EACCES || errno == EPERM))
+		fd = open_via_janus(portName);
 	if (fd < 0)
 		return B_ERROR;
 

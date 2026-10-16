@@ -18,9 +18,14 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/xattr.h>
 #include <unistd.h>
+
+#include <linux/input.h>
 
 extern "C" {
 #include <security/pam_appl.h>
@@ -1402,6 +1407,175 @@ handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
+// Hands uinput, hidraw and joystick event nodes to the session user for
+// clients that missed the uaccess ACL. Nothing else may pass.
+static bool
+input_device_path_allowed(const char* path, bool checkJoystick)
+{
+	if (path == NULL)
+		return false;
+
+	if (strcmp(path, "/dev/uinput") == 0)
+		return true;
+
+	size_t len = strlen(path);
+	if (strncmp(path, "/dev/hidraw", 11) == 0) {
+		for (size_t i = 11; i < len; i++) {
+			if (path[i] < '0' || path[i] > '9')
+				return false;
+		}
+		return len > 11;
+	}
+
+	if (strncmp(path, "/dev/input/event", 16) != 0)
+		return false;
+	for (size_t i = 16; i < len; i++) {
+		if (path[i] < '0' || path[i] > '9')
+			return false;
+	}
+	if (len <= 16)
+		return false;
+	if (!checkJoystick)
+		return true;
+
+	// Only controllers, never arbitrary evdev nodes.
+	int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+	unsigned char bits[(KEY_MAX + 7) / 8];
+	memset(bits, 0, sizeof(bits));
+	bool joystick = false;
+	if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(bits)), bits) >= 0) {
+		joystick = (bits[BTN_JOYSTICK / 8] & (1 << (BTN_JOYSTICK % 8)))
+			|| (bits[BTN_GAMEPAD / 8] & (1 << (BTN_GAMEPAD % 8)));
+	}
+	close(fd);
+	return joystick;
+}
+
+
+static void
+handle_input_open(int client)
+{
+	// A silent client must not stall the bridge.
+	struct timeval timeout = { 2, 0 };
+	setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+	char request[PATH_MAX + 8];
+	ssize_t size = read(client, request, sizeof(request) - 1);
+	if (size <= 0)
+		return;
+	request[size] = '\0';
+
+	if (strncmp(request, "OPEN ", 5) != 0)
+		return;
+	char* path = request + 5;
+	char* newline = strchr(path, '\n');
+	if (newline != NULL)
+		*newline = '\0';
+
+	struct ucred cred;
+	socklen_t credSize = sizeof(cred);
+	if (getsockopt(client, SOL_SOCKET, SO_PEERCRED, &cred, &credSize) < 0)
+		return;
+
+	bool allowed = false;
+	sSessionLock.Lock();
+	allowed = sSession.pid >= 0 && !sSession.greeter
+		&& cred.uid == sSession.uid;
+	sSessionLock.Unlock();
+	if (!allowed) {
+		jdbg("input open rejected: peer uid=%u", (unsigned)cred.uid);
+		char deny = 'E';
+		send(client, &deny, 1, MSG_NOSIGNAL);
+		return;
+	}
+
+	if (!input_device_path_allowed(path, true)) {
+		char deny = 'E';
+		send(client, &deny, 1, MSG_NOSIGNAL);
+		return;
+	}
+
+	int fd = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0)
+		fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0) {
+		char deny = 'E';
+		send(client, &deny, 1, MSG_NOSIGNAL);
+		return;
+	}
+
+	char ok = 'K';
+	struct iovec iov = { &ok, 1 };
+	struct msghdr msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	char control[CMSG_SPACE(sizeof(int))];
+	memset(control, 0, sizeof(control));
+	msg.msg_control = control;
+	msg.msg_controllen = sizeof(control);
+	struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+	cmsg->cmsg_level = SOL_SOCKET;
+	cmsg->cmsg_type = SCM_RIGHTS;
+	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+	memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
+
+	if (sendmsg(client, &msg, MSG_NOSIGNAL) < 0)
+		jdbg("input open: sendmsg failed: %s", strerror(errno));
+	close(fd);
+}
+
+
+static void*
+input_device_socket_thread(void*)
+{
+	// /run/vos is root-only, clients need a traversable directory.
+	const char* socketPath = "/run/vos-input/janus.sock";
+	mkdir("/run/vos-input", 0755);
+
+	int server = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (server < 0)
+		return NULL;
+
+	struct sockaddr_un address;
+	memset(&address, 0, sizeof(address));
+	address.sun_family = AF_UNIX;
+	strlcpy(address.sun_path, socketPath, sizeof(address.sun_path));
+	unlink(socketPath);
+
+	if (bind(server, (struct sockaddr*)&address, sizeof(address)) < 0
+		|| listen(server, 8) < 0) {
+		fprintf(stderr, "janus: input socket %s: %s\n", socketPath,
+			strerror(errno));
+		close(server);
+		return NULL;
+	}
+
+	// Access is checked with SO_PEERCRED, not the mode.
+	chmod(socketPath, 0666);
+	jdbg("input device socket at %s", socketPath);
+
+	while (sRunning) {
+		struct pollfd pollFd = { server, POLLIN, 0 };
+		int ready = poll(&pollFd, 1, 500);
+		if (ready <= 0)
+			continue;
+
+		int client = accept4(server, NULL, NULL, SOCK_CLOEXEC);
+		if (client < 0)
+			continue;
+		handle_input_open(client);
+		close(client);
+	}
+
+	close(server);
+	unlink(socketPath);
+	return NULL;
+}
+
+
 static void
 handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
@@ -1932,6 +2106,16 @@ main(int argc, char** argv)
 			pthread_detach(th);
 		else
 			fprintf(stderr, "janus: logind_watch_thread: %s\n",
+				strerror(errno));
+	}
+
+	// Only the root janus can open these nodes.
+	if (sSystemMode) {
+		pthread_t th;
+		if (pthread_create(&th, NULL, input_device_socket_thread, NULL) == 0)
+			pthread_detach(th);
+		else
+			fprintf(stderr, "janus: input_device_socket_thread: %s\n",
 				strerror(errno));
 	}
 

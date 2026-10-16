@@ -11,6 +11,7 @@ AddOn(media2
 	CameraSource.cpp
 	MediaClient.cpp
 	MediaConnection.cpp
+	MediaEncoder.cpp
 	MediaFile.cpp
 	MediaFiles.cpp
 	MediaFormat.cpp

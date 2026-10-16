@@ -62,6 +62,11 @@ public:
 			status_t			WriteFrames(const void* buffer, int64 frameCount,
 									const media_header* mh = NULL);
 
+			// Swaps the raw chunk most recently handed to WriteFrames
+			// while it is still pending (raw write tracks only).
+			status_t			ReplaceFrames(const void* data,
+									int64 frameCount, int32 flags = 0);
+
 
 			status_t			GetCodecInfo(media_codec_info* info) const;
 			status_t			SetQuality(float quality);

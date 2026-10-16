@@ -21,6 +21,7 @@
 #include <gst/pbutils/gstdiscoverer.h>
 
 #include "GStreamerBackend.h"
+#include "MediaEncodeTables.h"
 
 
 using namespace BPrivate::media;
@@ -50,12 +51,66 @@ public:
 		fKind(kTrackAudio),
 		fStreamIndex(0),
 		fFrameStride(0),
-		fNextPts(0)
+		fNextPts(0),
+		fCodecId(B_CODEC_TYPE_UNKNOWN),
+		fPendingFrames(0),
+		fQuality(-1.0f),
+		fQualityApplied(false)
 	{
 	}
 
+	// Hands the pending raw chunk to the pipeline. WriteFrames keeps the
+	// latest chunk pending so ReplaceFrames can still swap it.
+	status_t PushPending()
+	{
+		if (fPending.empty())
+			return B_OK;
+		if (fAppSrc == NULL)
+			return B_NO_INIT;
+
+		size_t bytes = fPending.size();
+		GstBuffer* gb = gst_buffer_new_allocate(NULL, bytes, NULL);
+		if (gb == NULL)
+			return B_NO_MEMORY;
+		GstMapInfo map;
+		if (!gst_buffer_map(gb, &map, GST_MAP_WRITE)) {
+			gst_buffer_unref(gb);
+			return B_ERROR;
+		}
+		memcpy(map.data, &fPending[0], bytes);
+		gst_buffer_unmap(gb, &map);
+
+		int64 frames = fPendingFrames;
+		fPending.clear();
+		fPendingFrames = 0;
+
+		float rate = 0.0f;
+		if (fKind == kTrackVideo)
+			rate = fFormat.format.u.raw_video.field_rate;
+		else
+			rate = fFormat.format.u.raw_audio.frame_rate;
+		if (rate > 0.0f) {
+			const uint64 durationNs = (uint64)((frames * GST_SECOND)
+				/ (int64)rate);
+			GST_BUFFER_PTS(gb)      = fNextPts;
+			GST_BUFFER_DURATION(gb) = durationNs;
+			fNextPts += durationNs;
+		}
+
+		GstFlowReturn r = gst_app_src_push_buffer(GST_APP_SRC(fAppSrc), gb);
+			// push_buffer takes ownership of gb on success
+		if (r != GST_FLOW_OK)
+			return B_ERROR;
+
+		if (!fQualityApplied && fQuality >= 0.0f) {
+			ApplyEncodeQuality(fPipeline, fCodecId, fQuality);
+			fQualityApplied = true;
+		}
+		return B_OK;
+	}
+
 	GstElement*		fAppSink;	// read mode  (borrowed; owned by pipeline)
-	GstElement*		fAppSrc;	// write mode (borrowed)
+	GstElement*		fAppSrc;	// write mode (borrowed; owned by pipeline)
 	GstElement*		fPipeline;	// borrowed
 	GstElement*	fPlayBin;	// playbin for stream selection (borrowed)
 	BMediaFormat	fFormat;
@@ -67,6 +122,11 @@ public:
 	int32			fStreamIndex;
 	uint32			fFrameStride;
 	uint64			fNextPts;	// nanoseconds since stream start
+	int32			fCodecId;
+	std::vector<uint8>	fPending;
+	int64			fPendingFrames;
+	float			fQuality;
+	bool			fQualityApplied;
 };
 
 
@@ -83,7 +143,8 @@ public:
 		fAppSrc(NULL),
 		fInitErr(B_NO_INIT),
 		fWriteMode(false),
-		fCodecType(0),
+		fFormatInfo(NULL),
+		fCodecType(B_CODEC_TYPE_UNKNOWN),
 		fDurationNs(0)
 	{
 	}
@@ -259,103 +320,190 @@ public:
 		return B_OK;
 	}
 
-	status_t OpenWrite(const entry_ref* ref, int32 codecType)
+	status_t OpenWrite(const entry_ref* ref, const media_file_format* format)
 	{
-		if (ref == NULL)
+		if (ref == NULL || format == NULL)
 			return B_BAD_VALUE;
 		BPath path(ref);
 		if (path.InitCheck() != B_OK)
 			return path.InitCheck();
 		if (GStreamerBackend::GetInstance() == NULL)
 			return B_NO_INIT;
+
+		const EncodeFileFormat* info = FindEncodeFileFormat(
+			format->short_name);
+		if (info == NULL) {
+			for (int32 i = 0; ; i++) {
+				const EncodeFileFormat* candidate
+					= EncodeFileFormatAt(i);
+				if (candidate == NULL)
+					break;
+				if (strcmp(candidate->mimeType,
+						format->mime_type) == 0) {
+					info = candidate;
+					break;
+				}
+			}
+		}
+		if (info == NULL || !IsEncodeFileFormatAvailable(info))
+			return B_BAD_VALUE;
+
 		fOutputPath = path.Path();
-		fCodecType  = codecType;
+		fFormatInfo = info;
+		fCodecType  = DefaultCodecFor(info, true);
 		fWriteMode  = true;
 		fInitErr    = B_OK;
 		return B_OK;
 	}
 
+	// First codec the container accepts for the requested media kind.
+	static int32 DefaultCodecFor(const EncodeFileFormat* format, bool audio)
+	{
+		for (int32 i = 0; i < format->codecCount; i++) {
+			const EncodeCodecInfo* codec = FindEncodeCodec(
+				format->codecs[i]);
+			if (codec != NULL && codec->audio == audio)
+				return codec->id;
+		}
+		return B_CODEC_TYPE_UNKNOWN;
+	}
+
 	BMediaTrack* CreateTrack(const BMediaFormat& outputFormat)
 	{
-		if (!fWriteMode || !fTracks.empty())
+		if (!fWriteMode || fFormatInfo == NULL || fTracks.size() >= 2)
+			return NULL;
+		const bool isAudio = outputFormat.IsRawAudio()
+			|| outputFormat.IsEncodedAudio();
+		const bool isVideo = outputFormat.IsRawVideo()
+			|| outputFormat.IsEncodedVideo();
+		if (!isAudio && !isVideo)
 			return NULL;
 
-		BMediaFormat encFmt = outputFormat;
-		if (!encFmt.IsEncodedAudio()) {
-			// Caller supplied a raw format — wrap it as encoded with our codec.
-			BMediaFormat wrap;
-			wrap.format.type = B_MEDIA_ENCODED_AUDIO;
-			media_encoded_audio_format& enc = wrap.format.u.encoded_audio;
-			memset(&enc, 0, sizeof(enc));
-			enc.encoding = fCodecType;
-			if (outputFormat.IsRawAudio())
-				enc.output = outputFormat.format.u.raw_audio;
-			encFmt = wrap;
-		} else {
-			encFmt.format.u.encoded_audio.encoding = fCodecType;
+		for (size_t i = 0; i < fTracks.size(); i++) {
+			if (fTracks[i]->fImpl->fKind
+					== (isVideo ? kTrackVideo : kTrackAudio)) {
+				return NULL;	// one track per media kind
+			}
 		}
 
-		fPipeline = GStreamerBackend::GetInstance()->CreateEncodePipeline(
-			fOutputPath.c_str(), encFmt);
-		if (fPipeline == NULL)
-			return NULL;
-
-		fAppSrc = gst_bin_get_by_name(GST_BIN(fPipeline), "src");
-		if (fAppSrc == NULL) {
-			gst_element_set_state(fPipeline, GST_STATE_NULL);
-			gst_object_unref(fPipeline);
-			fPipeline = NULL;
-			return NULL;
-		}
-		// gst_bin_get_by_name returns a new ref; we want a borrowed ref to
-		// match the read-mode pattern. Drop the extra ref but keep the ptr —
-		// the bin still owns it.
-		gst_object_unref(fAppSrc);
-
-		// Configure appsrc raw input caps so encodebin knows what's coming in.
 		BMediaFormat rawIn;
-		if (outputFormat.IsRawAudio()) {
-			rawIn = outputFormat;
-		} else {
+		BMediaFormat encFmt;
+		int32 codecId = B_CODEC_TYPE_UNKNOWN;
+		if (outputFormat.IsEncodedAudio()) {
+			codecId = outputFormat.format.u.encoded_audio.encoding;
+			encFmt = outputFormat;
 			rawIn.format.type = B_MEDIA_RAW_AUDIO;
-			rawIn.format.u.raw_audio = encFmt.format.u.encoded_audio.output;
-			// Defaults to interleaved + default positions; matches our
-			// CommitHeader expectations.
+			rawIn.format.u.raw_audio
+				= outputFormat.format.u.encoded_audio.output;
 			rawIn.is_planar = false;
+		} else if (outputFormat.IsEncodedVideo()) {
+			codecId = outputFormat.format.u.encoded_video.encoding;
+			encFmt = outputFormat;
+			rawIn.format.type = B_MEDIA_RAW_VIDEO;
+			rawIn.format.u.raw_video
+				= outputFormat.format.u.encoded_video.output;
+		} else if (outputFormat.IsRawAudio()) {
+			codecId = fCodecType != B_CODEC_TYPE_UNKNOWN
+				? fCodecType : DefaultCodecFor(fFormatInfo, true);
+			rawIn = outputFormat;
+			encFmt.format.type = B_MEDIA_ENCODED_AUDIO;
+			media_encoded_audio_format& enc
+				= encFmt.format.u.encoded_audio;
+			memset(&enc, 0, sizeof(enc));
+			enc.encoding = codecId;
+			enc.output = outputFormat.format.u.raw_audio;
+		} else {
+			codecId = DefaultCodecFor(fFormatInfo, false);
+			rawIn = outputFormat;
+			encFmt.format.type = B_MEDIA_ENCODED_VIDEO;
+			media_encoded_video_format& enc
+				= encFmt.format.u.encoded_video;
+			memset(&enc, 0, sizeof(enc));
+			enc.encoding = codecId;
+			enc.output = outputFormat.format.u.raw_video;
 		}
-		GstCaps* inCaps = GStreamerBackend::RawAudioToGstCaps(rawIn);
-		if (inCaps != NULL) {
-			g_object_set(fAppSrc, "caps", inCaps,
-				"format", GST_FORMAT_TIME,
-				"is-live", FALSE,
-				NULL);
-			gst_caps_unref(inCaps);
-			GStreamerBackend::LinkEncodeSource(fPipeline);
+
+		if (codecId == B_CODEC_TYPE_UNKNOWN)
+			return NULL;
+		const EncodeCodecInfo* codec = FindEncodeCodec(codecId);
+		if (codec == NULL || codec->audio == isVideo)
+			return NULL;
+		bool accepts = false;
+		for (int32 i = 0; i < fFormatInfo->codecCount; i++) {
+			if (fFormatInfo->codecs[i] == codecId)
+				accepts = true;
 		}
+		if (!accepts || !IsEncodeCodecAvailable(codecId))
+			return NULL;
 
 		BMediaTrack* track = new(std::nothrow) BMediaTrack();
 		if (track == NULL)
 			return NULL;
-		track->fImpl->fAppSrc    = fAppSrc;
-		track->fImpl->fPipeline  = fPipeline;
-		track->fImpl->fFormat    = rawIn;
+		track->fImpl->fFormat        = rawIn;
 		track->fImpl->fEncodedFormat = encFmt;
-		track->fImpl->fWriteMode = true;
-		track->fImpl->fKind      = kTrackAudio;
-		const media_raw_audio_format& raw = rawIn.format.u.raw_audio;
-		track->fImpl->fFrameStride = (raw.format
-			& media_raw_audio_format::B_AUDIO_SIZE_MASK) * raw.channel_count;
-		track->fImpl->fInitErr   = B_OK;
+		track->fImpl->fWriteMode     = true;
+		track->fImpl->fKind          = isVideo ? kTrackVideo : kTrackAudio;
+		track->fImpl->fCodecId       = codecId;
+		if (isVideo) {
+			track->fImpl->fFrameStride = rawIn.format.u.raw_video.display
+				.bytes_per_row;
+		} else {
+			const media_raw_audio_format& raw
+				= rawIn.format.u.raw_audio;
+			track->fImpl->fFrameStride = (raw.format
+				& media_raw_audio_format::B_AUDIO_SIZE_MASK)
+				* raw.channel_count;
+		}
+		track->fImpl->fInitErr = B_OK;
 		fTracks.push_back(track);
 		return track;
 	}
 
 	status_t CommitHeader()
 	{
-		if (!fWriteMode || fPipeline == NULL)
+		if (!fWriteMode || fFormatInfo == NULL)
 			return B_NO_INIT;
+		if (fTracks.empty())
+			return B_NO_INIT;
+		if (fPipeline != NULL)
+			return B_OK;
+
+		const int32 count = (int32)fTracks.size();
+		int32 codecIds[2];
+		GstCaps* caps[2] = { NULL, NULL };
+		GstElement* appSrcs[2] = { NULL, NULL };
+		for (int32 i = 0; i < count; i++) {
+			BMediaTrack::Impl* track = fTracks[i]->fImpl;
+			codecIds[i] = track->fCodecId;
+			if (track->fKind == kTrackVideo)
+				caps[i] = GStreamerBackend::RawVideoToGstCaps(
+					track->fFormat);
+			else
+				caps[i] = GStreamerBackend::RawAudioToGstCaps(
+					track->fFormat);
+		}
+
+		fPipeline = CreateEncodePipeline(fOutputPath.c_str(), fFormatInfo,
+			codecIds, count, caps, appSrcs);
+		for (int32 i = 0; i < count; i++) {
+			if (caps[i] != NULL)
+				gst_caps_unref(caps[i]);
+		}
+		if (fPipeline == NULL)
+			return B_ERROR;
+
+		for (int32 i = 0; i < count; i++) {
+			fTracks[i]->fImpl->fPipeline = fPipeline;
+			fTracks[i]->fImpl->fAppSrc = appSrcs[i];
+		}
+		// The single-appsrc shortcuts in the read path never apply here.
+		fAppSrc = appSrcs[0];
+
 		GstStateChangeReturn r = gst_element_set_state(fPipeline,
 			GST_STATE_PLAYING);
+		if (r == GST_STATE_CHANGE_FAILURE)
+			return B_ERROR;
+		r = gst_element_get_state(fPipeline, NULL, NULL, 5 * GST_SECOND);
 		if (r == GST_STATE_CHANGE_FAILURE)
 			return B_ERROR;
 		return B_OK;
@@ -365,8 +513,15 @@ public:
 	{
 		if (!fWriteMode || fPipeline == NULL)
 			return B_OK;
-		if (fAppSrc != NULL) {
-			gst_app_src_end_of_stream(GST_APP_SRC(fAppSrc));
+		for (size_t i = 0; i < fTracks.size(); i++) {
+			BMediaTrack::Impl* track = fTracks[i]->fImpl;
+			status_t err = track->PushPending();
+			if (err != B_OK)
+				return err;
+			if (track->fAppSrc != NULL) {
+				gst_app_src_end_of_stream(
+					GST_APP_SRC(track->fAppSrc));
+			}
 		}
 		// Wait for EOS to propagate to filesink, then bring pipeline down.
 		GstBus* bus = gst_element_get_bus(fPipeline);
@@ -663,6 +818,7 @@ public:
 	std::vector<BMediaTrack*>	fTracks;
 	status_t		fInitErr;
 	bool			fWriteMode;
+	const EncodeFileFormat*	fFormatInfo;
 	int32			fCodecType;
 	std::string		fOutputPath;
 	gint64			fDurationNs;
@@ -702,34 +858,6 @@ BMediaFile::BMediaFile(const BUrl& url)
 }
 
 
-static int32
-CodecTypeFromFileFormat(const media_file_format* f)
-{
-	if (f == NULL)
-		return B_CODEC_TYPE_UNKNOWN;
-	// Match on mime_type first, then short_name; same table as
-	// MediaFormats.cpp's MimeToCodecType but the file_format's mime
-	// is the container mime, so it lines up.
-	const char* mime = f->mime_type;
-	const char* sn   = f->short_name;
-	if ((mime && strstr(mime, "audio/x-wav"))
-		|| (sn && (strstr(sn, "wav") || strstr(sn, "WAV"))))
-		return B_CODEC_TYPE_WAV;
-	if (mime && strstr(mime, "application/ogg"))
-		return B_CODEC_TYPE_OGG;
-	if (mime && strstr(mime, "audio/x-flac"))
-		return B_CODEC_TYPE_FLAC;
-	if (mime && strstr(mime, "audio/mpeg"))
-		return B_CODEC_TYPE_MP3;
-	if (mime && (strstr(mime, "video/quicktime")
-			|| strstr(mime, "video/mp4")))
-		return B_CODEC_TYPE_AAC;
-	if (mime && strstr(mime, "audio/x-opus"))
-		return B_CODEC_TYPE_OPUS;
-	return B_CODEC_TYPE_WAV;	// safe default
-}
-
-
 BMediaFile::BMediaFile(const entry_ref* outputRef,
 	const media_file_format* fileFormat, int32 /*flags*/)
 	:
@@ -737,8 +865,7 @@ BMediaFile::BMediaFile(const entry_ref* outputRef,
 {
 	if (fImpl == NULL)
 		return;
-	fImpl->fInitErr = fImpl->OpenWrite(outputRef,
-		CodecTypeFromFileFormat(fileFormat));
+	fImpl->fInitErr = fImpl->OpenWrite(outputRef, fileFormat);
 }
 
 
@@ -1223,32 +1350,31 @@ BMediaTrack::WriteFrames(const void* buffer, int64 frameCount,
 		return B_BAD_VALUE;
 	}
 
-	const media_raw_audio_format& raw = fImpl->fFormat.format.u.raw_audio;
 	const size_t bytes = (size_t)frameCount * fImpl->fFrameStride;
 
-	GstBuffer* gb = gst_buffer_new_allocate(NULL, bytes, NULL);
-	if (gb == NULL)
-		return B_NO_MEMORY;
-	GstMapInfo map;
-	if (!gst_buffer_map(gb, &map, GST_MAP_WRITE)) {
-		gst_buffer_unref(gb);
-		return B_ERROR;
-	}
-	memcpy(map.data, buffer, bytes);
-	gst_buffer_unmap(gb, &map);
+	// The previous chunk goes out first so ReplaceFrames can still swap
+	// the chunk the caller most recently wrote.
+	status_t err = fImpl->PushPending();
+	if (err != B_OK)
+		return err;
 
-	if (raw.frame_rate > 0.0f) {
-		const uint64 durationNs = (uint64)((frameCount * GST_SECOND)
-			/ (int64)raw.frame_rate);
-		GST_BUFFER_PTS(gb)      = fImpl->fNextPts;
-		GST_BUFFER_DURATION(gb) = durationNs;
-		fImpl->fNextPts += durationNs;
+	fImpl->fPending.assign((const uint8*)buffer, (const uint8*)buffer + bytes);
+	fImpl->fPendingFrames = frameCount;
+	return B_OK;
+}
+
+
+status_t
+BMediaTrack::ReplaceFrames(const void* buffer, int64 frameCount, int32 /*flags*/)
+{
+	if (buffer == NULL || frameCount <= 0 || fImpl == NULL
+			|| !fImpl->fWriteMode || fImpl->fPending.empty()) {
+		return B_BAD_VALUE;
 	}
 
-	GstFlowReturn r = gst_app_src_push_buffer(GST_APP_SRC(fImpl->fAppSrc), gb);
-		// push_buffer takes ownership of gb on success
-	if (r != GST_FLOW_OK)
-		return B_ERROR;
+	const size_t bytes = (size_t)frameCount * fImpl->fFrameStride;
+	fImpl->fPending.assign((const uint8*)buffer, (const uint8*)buffer + bytes);
+	fImpl->fPendingFrames = frameCount;
 	return B_OK;
 }
 
@@ -1264,7 +1390,18 @@ BMediaTrack::GetCodecInfo(media_codec_info* info) const
 		encoding = fImpl->fEncodedFormat.format.u.encoded_audio.encoding;
 	else if (fImpl->fEncodedFormat.format.type == B_MEDIA_ENCODED_VIDEO)
 		encoding = fImpl->fEncodedFormat.format.u.encoded_video.encoding;
+	if (fImpl->fWriteMode)
+		encoding = fImpl->fCodecId;
 	info->id = encoding;
+	const EncodeCodecInfo* codec = fImpl->fWriteMode
+		? FindEncodeCodec(encoding) : NULL;
+	if (codec != NULL) {
+		snprintf(info->short_name, sizeof(info->short_name), "%s",
+			codec->factory != NULL ? codec->factory : "raw");
+		snprintf(info->pretty_name, sizeof(info->pretty_name), "%s",
+			codec->srcCaps);
+		return B_OK;
+	}
 	if (fImpl->fKind == kTrackVideo) {
 		snprintf(info->short_name, sizeof(info->short_name), "video");
 		snprintf(info->pretty_name, sizeof(info->pretty_name),
@@ -1284,11 +1421,19 @@ BMediaTrack::GetCodecInfo(media_codec_info* info) const
 
 
 status_t
-BMediaTrack::SetQuality(float /*quality*/)
+BMediaTrack::SetQuality(float quality)
 {
-	// Encoding profile already carries quality via the GstEncodingProfile API.
-	// Per-track runtime quality changes aren't surfaced by GStreamer's encodebin
-	// for typical audio encoders; returning B_OK keeps legacy callers happy.
+	if (fImpl == NULL || !fImpl->fWriteMode)
+		return B_NO_INIT;
+	if (quality < 0.0f)
+		quality = 0.0f;
+	if (quality > 1.0f)
+		quality = 1.0f;
+	fImpl->fQuality = quality;
+	// The encoder element exists once caps have negotiated; before the
+	// first push this is a no-op and PushPending applies it later.
+	if (fImpl->fPipeline != NULL)
+		ApplyEncodeQuality(fImpl->fPipeline, fImpl->fCodecId, quality);
 	return B_OK;
 }
 
@@ -1296,9 +1441,11 @@ BMediaTrack::SetQuality(float /*quality*/)
 status_t
 BMediaTrack::Flush()
 {
-	if (fImpl == NULL || fImpl->fPipeline == NULL)
+	if (fImpl == NULL)
 		return B_NO_INIT;
-	return B_OK;
+	if (!fImpl->fWriteMode)
+		return fImpl->fPipeline != NULL ? B_OK : B_NO_INIT;
+	return fImpl->PushPending();
 }
 
 

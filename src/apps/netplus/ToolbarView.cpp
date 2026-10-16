@@ -5,9 +5,9 @@
 
 
 #include "NetPlusMessages.h"
-#include "PanelMenu.h"
 #include "ToolbarIcons.h"
 #include "ToolbarView.h"
+#include "UrlBarView.h"
 
 #include <Bitmap.h>
 #include <Button.h>
@@ -17,8 +17,6 @@
 #include <Looper.h>
 #include <Message.h>
 #include <String.h>
-#include <TextControl.h>
-#include <TextView.h>
 #include <ToolBar.h>
 
 
@@ -39,7 +37,7 @@ _LoadIcon(const uint8* hvif, size_t size)
 }
 
 
-ToolbarView::ToolbarView(BRect frame)
+ToolbarView::ToolbarView(BRect frame, HistoryStore* history)
 	:
 	BView(frame, "toolbar", B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP,
 		B_WILL_DRAW | B_FRAME_EVENTS),
@@ -47,17 +45,26 @@ ToolbarView::ToolbarView(BRect frame)
 	fURLBar(NULL),
 	fReloadIcon(NULL),
 	fStopIcon(NULL),
+	fDownloadIcon(NULL),
+	fDownloadActiveIcon(NULL),
 	fLoading(false)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 
 	fReloadIcon = _LoadIcon(kNetPlusReloadIcon, kNetPlusReloadIconSize);
 	fStopIcon = _LoadIcon(kNetPlusStopIcon, kNetPlusStopIconSize);
+	fDownloadIcon = _LoadIcon(kNetPlusDownloadIcon,
+		kNetPlusDownloadIconSize);
+	fDownloadActiveIcon = _LoadIcon(kNetPlusDownloadActiveIcon,
+		kNetPlusDownloadActiveIconSize);
 
 	// The actions are added in AttachedToWindow: BToolBar snapshots
 	// a BMessenger(target) per action, which is only valid once the
 	// view has a looper.
 	fToolBar = new BToolBar(B_HORIZONTAL);
+
+	fURLBar = new UrlBarView(BRect(0, 0, 0, 0));
+	fURLBar->SetHistorySource(history);
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
 		.SetInsets(0)
@@ -69,6 +76,8 @@ ToolbarView::~ToolbarView()
 {
 	delete fReloadIcon;
 	delete fStopIcon;
+	delete fDownloadIcon;
+	delete fDownloadActiveIcon;
 }
 
 
@@ -95,12 +104,10 @@ ToolbarView::AttachedToWindow()
 	// field is embedded with AddView, so it shares the strip and the
 	// overflow sizing, but never collapses into the overflow menu
 	// itself (only actions do).
-	fURLBar = new BTextControl("", "", new BMessage(MSG_OPEN_URL));
-	fURLBar->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
-	fURLBar->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-	fURLBar->SetTarget(Window());
 	fToolBar->AddView(fURLBar);
 
+	fToolBar->AddAction(MSG_DOWNLOADS, Window(), fDownloadIcon,
+		"Downloads");
 	fToolBar->AddAction(MSG_APP_MENU, this, kNetPlusMenuIcon,
 		kNetPlusMenuIconSize, "Main menu");
 
@@ -114,16 +121,17 @@ ToolbarView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case MSG_APP_MENU:
+		case MSG_DOWNLOADS:
 		{
-			// Anchor under the hamburger button, like BToolBar's
-			// own overflow popup does.
-			BButton* button = fToolBar->FindButton(MSG_APP_MENU);
+			// Anchor under the pressed button, like BToolBar's own
+			// overflow popup does.
+			BButton* button = fToolBar->FindButton(message->what);
 			if (button == NULL)
 				break;
 			BPoint point = button->Bounds().LeftBottom() + BPoint(0, 1);
 			button->ConvertToScreen(&point);
 
-			BMessage show(MSG_APP_MENU);
+			BMessage show(message->what);
 			show.AddPoint("anchor", point);
 			Window()->PostMessage(&show);
 			break;
@@ -141,6 +149,18 @@ ToolbarView::SetURL(const char* url)
 {
 	if (fURLBar != NULL)
 		fURLBar->SetText(url);
+
+	// The scheme is all the security state the bridge exposes today;
+	// certificate details need TLS plumbing first.
+	uint8 security = 0;
+	if (url != NULL) {
+		if (BString(url).StartsWith("https:"))
+			security = 2;
+		else if (BString(url).StartsWith("http:"))
+			security = 1;
+	}
+	if (fURLBar != NULL)
+		fURLBar->SetSecurityState(security);
 }
 
 
@@ -185,11 +205,38 @@ ToolbarView::SetCanGoForward(bool can)
 
 
 void
+ToolbarView::SetDownloadsActive(int32 count)
+{
+	BButton* button = fToolBar->FindButton(MSG_DOWNLOADS);
+	if (button == NULL)
+		return;
+
+	if (count > 0) {
+		button->SetIcon(fDownloadActiveIcon);
+		BString tip("Downloads (");
+		tip << count << " in progress)";
+		button->SetToolTip(tip.String());
+	} else {
+		button->SetIcon(fDownloadIcon);
+		button->SetToolTip("Downloads");
+	}
+}
+
+
+void
+ToolbarView::SetSearchEngine(int32 engine)
+{
+	if (fURLBar != NULL)
+		fURLBar->SetSearchEngine(engine);
+}
+
+
+void
 ToolbarView::FocusURL()
 {
 	if (fURLBar == NULL)
 		return;
 
 	fURLBar->MakeFocus(true);
-	fURLBar->TextView()->SelectAll();
+	fURLBar->SelectAll();
 }

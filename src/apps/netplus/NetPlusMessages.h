@@ -34,7 +34,15 @@ enum {
 	MSG_OPEN_LOCATION	= 'oloc',
 	MSG_ZOOM_IN			= 'zmin',
 	MSG_ZOOM_OUT		= 'zmou',
-	MSG_ZOOM_RESET		= 'zmrz'
+	MSG_ZOOM_RESET		= 'zmrz',
+	MSG_DOWNLOADS		= 'dlist',
+	MSG_DOWNLOADS_CLOSED = 'dlcz',
+	MSG_DOWNLOAD_CANCEL	= 'dlca',
+	MSG_DOWNLOAD_RETRY	= 'dlry',
+	MSG_DOWNLOAD_SHOW	= 'dlsh',
+	MSG_DOWNLOAD_CLEAR	= 'dlcl',
+	MSG_SUGGEST_ACCEPTED = 'sgac',
+	MSG_SET_ENGINE		= 'engs'
 };
 
 

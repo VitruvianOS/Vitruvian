@@ -116,7 +116,11 @@ _PostDownloadEvent(uint32 what, const DownloadEntry& entry)
 		msg.AddUInt64(B_WEB_DOWNLOAD_RECEIVED, entry.receivedBytes);
 		msg.AddUInt64(B_WEB_DOWNLOAD_TOTAL, entry.totalBytes);
 	} else if (what == B_WEB_DOWNLOAD_FINISHED) {
+		msg.AddString(B_WEB_DOWNLOAD_URL, entry.url.c_str());
 		msg.AddString(B_WEB_DOWNLOAD_DESTINATION, entry.destination.c_str());
+	} else if (what == B_WEB_DOWNLOAD_FAILED) {
+		msg.AddString(B_WEB_DOWNLOAD_URL, entry.url.c_str());
+		msg.AddBool(B_WEB_DOWNLOAD_CANCELLED, entry.cancelled);
 	}
 	target.SendMessage(&msg);
 }
@@ -705,6 +709,7 @@ BWebView::AttachedToWindow()
 			if (!fTarget.IsValid())
 				return;
 			BMessage msg(B_WEB_DOWNLOAD_FINISHED);
+			msg.AddString(B_WEB_DOWNLOAD_URL, e.url.c_str());
 			msg.AddUInt64(B_WEB_DOWNLOAD_ID, e.id);
 			msg.AddString(B_WEB_DOWNLOAD_FILENAME, e.filename.c_str());
 			msg.AddString(B_WEB_DOWNLOAD_DESTINATION,
@@ -715,6 +720,8 @@ BWebView::AttachedToWindow()
 			if (!fTarget.IsValid())
 				return;
 			BMessage msg(B_WEB_DOWNLOAD_FAILED);
+			msg.AddString(B_WEB_DOWNLOAD_URL, e.url.c_str());
+			msg.AddBool(B_WEB_DOWNLOAD_CANCELLED, e.cancelled);
 			msg.AddUInt64(B_WEB_DOWNLOAD_ID, e.id);
 			msg.AddString(B_WEB_DOWNLOAD_FILENAME, e.filename.c_str());
 			fTarget.SendMessage(&msg);
@@ -754,6 +761,7 @@ BWebView::AttachedToWindow()
 		fImpl->fBridge->AddUserScript(script.first, script.second);
 
 	fImpl->fSelfMessenger = BMessenger(this);
+
 #endif
 }
 

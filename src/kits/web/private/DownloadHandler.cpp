@@ -324,12 +324,15 @@ DownloadHandler::_OnFailed(WebKitDownload* dl, GError* error, gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
 	DownloadEntry updated;
+	bool cancelled = error != NULL && g_error_matches(error,
+		WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED);
 	{
 		std::lock_guard<std::mutex> lock(self->fMutex);
 		auto it = self->fDownloads.find(dl);
 		if (it == self->fDownloads.end())
 			return;
-		it->second.failed = true;
+		it->second.cancelled = it->second.cancelled || cancelled;
+		it->second.failed = !it->second.cancelled;
 		updated = it->second;
 		self->fDownloads.erase(it);
 	}

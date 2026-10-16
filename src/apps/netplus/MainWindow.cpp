@@ -5,6 +5,7 @@
 
 
 #include "DownloadsWindow.h"
+#include "DownloadsPanel.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
@@ -13,8 +14,8 @@
 #include "PanelMenuModel.h"
 #include "StatusBarView.h"
 #include "ToolbarView.h"
+#include "UrlInput.h"
 
-#include <TextControl.h>
 #include <WebDefs.h>
 #include <WebView.h>
 #include <WebBookmarks.h>
@@ -23,22 +24,24 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Entry.h>
 #include <LayoutBuilder.h>
 #include <Menu.h>
 #include <MenuBar.h>
 #include <MenuItem.h>
 #include <Messenger.h>
+#include <Path.h>
 #include <Rect.h>
 #include <Screen.h>
+#include <String.h>
 #include <View.h>
 #include <Window.h>
 
 #include <algorithm>
+#include <stdlib.h>
 
 // Built-in start page until the homepage becomes a setting.
 static const char* kHomePage = "vos-about:";
-
-static const int32 kMaxHistory = 12;
 
 
 MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
@@ -55,7 +58,9 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 	fPrivateWindow(privateWindow),
 	fFullScreen(false),
 	fSavedFrame(frame),
-	fAppMenu(nullptr)
+	fAppMenu(nullptr),
+	fDownloadsPanel(nullptr),
+	fSearchEngine(0)
 {
 	BRect viewRect(0, 0, frame.Width(), frame.Height());
 
@@ -125,7 +130,7 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 		new BMessage(B_ABOUT_REQUESTED)));
 	fMenuBar->AddItem(helpMenu);
 
-	fToolbar   = new ToolbarView(viewRect);
+	fToolbar   = new ToolbarView(viewRect, &fHistory);
 	fWebView   = new BWebView(viewRect, "webview");
 	fStatusBar = new StatusBarView(viewRect);
 
@@ -152,9 +157,14 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 
 MainWindow::~MainWindow()
 {
-	BString* string;
-	for (int32 i = 0; (string = (BString*)fHistory.ItemAt(i)) != nullptr; i++)
-		delete string;
+	if (fDownloadsPanel != NULL) {
+		fDownloadsPanel->Quit();
+		fDownloadsPanel = nullptr;
+	}
+	if (fAppMenu != NULL) {
+		fAppMenu->Quit();
+		fAppMenu = nullptr;
+	}
 }
 
 
@@ -320,18 +330,7 @@ MainWindow::QuitRequested()
 void
 MainWindow::_AddHistory(const char* url)
 {
-	if (url == nullptr || url[0] == '\0')
-		return;
-
-	// Most recent first, no consecutive duplicates, capped.
-	BString* head = (BString*)fHistory.ItemAt(0);
-	if (head != nullptr && *head == url)
-		return;
-
-	fHistory.AddItem(new BString(url));
-	while (fHistory.CountItems() > kMaxHistory) {
-		delete (BString*)fHistory.RemoveItem(fHistory.CountItems() - 1);
-	}
+	fHistory.Add(url);
 }
 
 
@@ -369,15 +368,23 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 	model.AddActionRow(root, "Reset Zoom", MSG_ZOOM_RESET, "Ctrl+0");
 	model.AddSeparatorRow(root);
 
+	model.AddSectionLabelRow(root, "Search engine");
+	for (int32 i = 0; i < CountSearchEngines(); i++) {
+		char payload[8];
+		snprintf(payload, sizeof(payload), "%d", i);
+		const char* label = SearchEngineAt(i).name;
+		model.AddActionRow(root, label, MSG_SET_ENGINE, NULL, payload);
+	}
+	model.AddSeparatorRow(root);
+
 	int32_t history = model.AddPage("History");
 	model.AddSubPageRow(root, "History", history);
-	int32_t count = fHistory.CountItems();
-	if (count == 0)
+	const std::vector<std::string>& entries = fHistory.Entries();
+	if (entries.empty())
 		model.AddSectionLabelRow(history, "No recent pages");
-	for (int32 i = 0; i < count; i++) {
-		BString* url = (BString*)fHistory.ItemAt(i);
-		model.AddActionRow(history, url->String(), MSG_OPEN_URL,
-			nullptr, url->String());
+	for (size_t i = 0; i < entries.size(); i++) {
+		model.AddActionRow(history, entries[i].c_str(), MSG_OPEN_URL,
+			nullptr, entries[i].c_str());
 	}
 
 	model.AddSeparatorRow(root);
@@ -389,6 +396,86 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 
 	fAppMenu = new PanelMenu(model, BMessenger(this));
 	fAppMenu->Go(anchor);
+}
+
+
+void
+MainWindow::_ShowDownloads(BPoint anchor)
+{
+	if (fDownloadsPanel != nullptr) {
+		fDownloadsPanel->Activate();
+		fDownloadsPanel->SetModel(fDownloadsModel);
+		return;
+	}
+
+	fDownloadsPanel = new DownloadsPanel(fDownloadsModel, BMessenger(this));
+	fDownloadsPanel->Go(anchor);
+}
+
+
+void
+MainWindow::_HandleDownloadMessage(BMessage* message)
+{
+	uint64 id = 0;
+	message->FindUInt64(B_WEB_DOWNLOAD_ID, &id);
+
+	const char* name = "";
+	const char* url = "";
+	const char* destination = "";
+	uint64 received = 0;
+	uint64 total = 0;
+	message->FindString(B_WEB_DOWNLOAD_FILENAME, &name);
+	message->FindString(B_WEB_DOWNLOAD_URL, &url);
+	message->FindString(B_WEB_DOWNLOAD_DESTINATION, &destination);
+	message->FindUInt64(B_WEB_DOWNLOAD_RECEIVED, &received);
+	message->FindUInt64(B_WEB_DOWNLOAD_TOTAL, &total);
+
+	switch (message->what) {
+		case B_WEB_DOWNLOAD_STARTED:
+			fDownloadsModel.AddOrUpdate(id, name, url, destination,
+				received, total);
+			fDownloadsModel.MarkState(id, kDownloadStateActive);
+			break;
+
+		case B_WEB_DOWNLOAD_PROGRESS:
+			fDownloadsModel.SetProgress(id, received, total);
+			break;
+
+		case B_WEB_DOWNLOAD_FINISHED:
+		{
+			int32 index = fDownloadsModel.IndexOf(id);
+			uint64 size = index >= 0
+				? fDownloadsModel.ItemAt(index).totalBytes : 0;
+			fDownloadsModel.AddOrUpdate(id, name, url, destination,
+				size, size);
+			fDownloadsModel.MarkState(id, kDownloadStateFinished);
+			break;
+		}
+
+		case B_WEB_DOWNLOAD_FAILED:
+		{
+			bool cancelled = false;
+			message->FindBool(B_WEB_DOWNLOAD_CANCELLED, &cancelled);
+			int32 index = fDownloadsModel.IndexOf(id);
+			if (index < 0)
+				fDownloadsModel.AddOrUpdate(id, name, url, "", 0, 0);
+			fDownloadsModel.MarkState(id, cancelled
+				? kDownloadStateCancelled : kDownloadStateFailed);
+			break;
+		}
+	}
+
+	_RefreshDownloadUI();
+}
+
+
+void
+MainWindow::_RefreshDownloadUI()
+{
+	if (fToolbar != nullptr)
+		fToolbar->SetDownloadsActive(fDownloadsModel.ActiveCount());
+	if (fDownloadsPanel != nullptr)
+		fDownloadsPanel->SetModel(fDownloadsModel);
 }
 
 
@@ -436,15 +523,11 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case MSG_OPEN_URL:
 		{
-			// The URL bar sends no text with its message: read it
-			// from the control. Other senders pass it as "url".
+			// The URL bar and the history rows both pass the final
+			// URL in "url".
 			const char* url = nullptr;
-			BTextControl* source = nullptr;
-			if (message->FindString("url", &url) != B_OK
-				&& message->FindPointer("source", (void**)&source) == B_OK
-				&& source != nullptr)
-				url = source->Text();
-			_OpenURL(url);
+			if (message->FindString("url", &url) == B_OK)
+				_OpenURL(url);
 			break;
 		}
 
@@ -529,6 +612,21 @@ MainWindow::MessageReceived(BMessage* message)
 			if (fWebView) fWebView->SelectAll();
 			break;
 
+		case MSG_SET_ENGINE:
+		{
+			const char* payload = nullptr;
+			if (message->FindString("url", &payload) != B_OK
+				|| payload == nullptr)
+				break;
+			int32 engine = atoi(payload);
+			if (engine < 0 || engine >= CountSearchEngines())
+				break;
+			fSearchEngine = engine;
+			if (fToolbar != nullptr)
+				fToolbar->SetSearchEngine(engine);
+			break;
+		}
+
 		case MSG_APP_MENU:
 		{
 			BPoint anchor;
@@ -540,6 +638,71 @@ MainWindow::MessageReceived(BMessage* message)
 		case MSG_PANEL_CLOSED:
 			fAppMenu = nullptr;
 				// the panel deletes itself on quit
+			break;
+
+		case MSG_DOWNLOADS:
+		{
+			BPoint anchor;
+			if (message->FindPoint("anchor", &anchor) == B_OK)
+				_ShowDownloads(anchor);
+			break;
+		}
+
+		case MSG_DOWNLOADS_CLOSED:
+			fDownloadsPanel = nullptr;
+			break;
+
+		case MSG_DOWNLOAD_CANCEL:
+		{
+			int64 id = 0;
+			if (message->FindInt64("id", &id) == B_OK && fWebView)
+				fWebView->CancelDownload((uint64)id);
+			break;
+		}
+
+		case MSG_DOWNLOAD_RETRY:
+		{
+			int64 id = 0;
+			if (message->FindInt64("id", &id) != B_OK || fWebView == nullptr)
+				break;
+			int32 index = fDownloadsModel.IndexOf((uint64)id);
+			if (index < 0)
+				break;
+			std::string url = fDownloadsModel.ItemAt(index).url;
+			if (!url.empty())
+				fWebView->DownloadURI(url.c_str(), NULL);
+			break;
+		}
+
+		case MSG_DOWNLOAD_SHOW:
+		{
+			int64 id = 0;
+			if (message->FindInt64("id", &id) != B_OK)
+				break;
+			int32 index = fDownloadsModel.IndexOf((uint64)id);
+			if (index < 0)
+				break;
+
+			// Reveal the folder that holds the file; Tracker opens
+			// a window at a directory ref.
+			BPath path(fDownloadsModel.ItemAt(index).destination.c_str());
+			BPath parent;
+			if (path.GetParent(&parent) != B_OK)
+				break;
+			BEntry dir(parent.Path());
+			entry_ref ref;
+			if (dir.GetRef(&ref) != B_OK)
+				break;
+			BMessage show(B_REFS_RECEIVED);
+			show.AddRef("refs", &ref);
+			BMessenger tracker("application/x-vnd.Be-TRAK");
+			tracker.SendMessage(&show);
+			break;
+		}
+
+		case MSG_DOWNLOAD_CLEAR:
+			fDownloadsModel.ClearFinished();
+			_RefreshDownloadUI();
 			break;
 
 		case MSG_PANEL_NEW_WINDOW:
@@ -676,6 +839,7 @@ MainWindow::MessageReceived(BMessage* message)
 		case B_WEB_DOWNLOAD_FINISHED:
 		case B_WEB_DOWNLOAD_FAILED:
 			DownloadsWindow::HandleDownloadMessage(message, fWebView);
+			_HandleDownloadMessage(message);
 			break;
 
 		default:

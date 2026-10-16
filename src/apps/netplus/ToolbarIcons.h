@@ -30,5 +30,17 @@ extern const size_t kNetPlusHomeIconSize;
 extern const uint8 kNetPlusMenuIcon[];
 extern const size_t kNetPlusMenuIconSize;
 
+extern const uint8 kNetPlusDownloadIcon[];
+extern const size_t kNetPlusDownloadIconSize;
+
+extern const uint8 kNetPlusDownloadActiveIcon[];
+extern const size_t kNetPlusDownloadActiveIconSize;
+
+extern const uint8 kNetPlusSecureIcon[];
+extern const size_t kNetPlusSecureIconSize;
+
+extern const uint8 kNetPlusInsecureIcon[];
+extern const size_t kNetPlusInsecureIconSize;
+
 
 #endif // _NET_PLUS_TOOLBAR_ICONS_H

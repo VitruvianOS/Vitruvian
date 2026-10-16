@@ -6,11 +6,18 @@ Application(
 	DownloadsWindow.cpp
 	MainWindow.cpp
 	SettingsWindow.cpp
+	DownloadsModel.cpp
+	DownloadsPanel.cpp
+	HistoryStore.cpp
 	PanelMenu.cpp
 	PanelMenuModel.cpp
 	StatusBarView.cpp
+	SuggestModel.cpp
+	SuggestPopup.cpp
 	ToolbarIcons.cpp
 	ToolbarView.cpp
+	UrlBarView.cpp
+	UrlInput.cpp
 
 	LIBS web tracker
 

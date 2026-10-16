@@ -52,7 +52,8 @@ enum {
 	B_WEB_NOTIFICATION_SHOW		= 'WhNs',
 	// A download started/progressed/finished/failed. Fields:
 	// B_WEB_DOWNLOAD_ID (uint64), B_WEB_DOWNLOAD_URL, _FILENAME,
-	// _DESTINATION, B_WEB_DOWNLOAD_RECEIVED, B_WEB_DOWNLOAD_TOTAL.
+	// _DESTINATION, B_WEB_DOWNLOAD_RECEIVED, B_WEB_DOWNLOAD_TOTAL;
+	// FINISHED and FAILED carry _URL too, FAILED a _CANCELLED bool.
 	B_WEB_DOWNLOAD_STARTED		= 'WhDs',
 	B_WEB_DOWNLOAD_PROGRESS		= 'WhDp',
 	B_WEB_DOWNLOAD_FINISHED		= 'WhDf',
@@ -83,6 +84,7 @@ enum {
 };
 
 
+
 // Web page notification message field names
 #define B_WEB_TITLE_FIELD		"web:title"
 #define B_WEB_URL_FIELD			"web:url"
@@ -104,6 +106,7 @@ enum {
 #define B_WEB_DOWNLOAD_DESTINATION "web:download_destination"
 #define B_WEB_DOWNLOAD_RECEIVED	"web:download_received"
 #define B_WEB_DOWNLOAD_TOTAL	"web:download_total"
+#define B_WEB_DOWNLOAD_CANCELLED "web:download_cancelled"
 #define B_WEB_SUGGESTED_NAME	"web:suggested_name"
 
 

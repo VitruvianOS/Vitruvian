@@ -6,14 +6,18 @@
 #define MAIN_WINDOW_H
 
 
-#include <List.h>
 #include <String.h>
 #include <Window.h>
+
+#include "DownloadsModel.h"
+#include "HistoryStore.h"
+
 
 class BMenuItem;
 class BMenu;
 class BMenuBar;
 class BWebView;
+class DownloadsPanel;
 class PanelMenu;
 class StatusBarView;
 class ToolbarView;
@@ -37,6 +41,9 @@ private:
 			const char*			_SearchTemplate() const;
 			void				_AddHistory(const char* url);
 			void				_ShowAppMenu(BPoint anchor);
+			void				_ShowDownloads(BPoint anchor);
+			void				_HandleDownloadMessage(BMessage* message);
+			void				_RefreshDownloadUI();
 
 			BWebView*			fWebView;
 			ToolbarView*		fToolbar;
@@ -51,8 +58,10 @@ private:
 			BRect				fSavedFrame;
 			BString				fStatusBase;
 			PanelMenu*			fAppMenu;
-			BList				fHistory;
-				// owned BStrings, most recent first
+			DownloadsPanel*		fDownloadsPanel;
+			DownloadsModel		fDownloadsModel;
+			HistoryStore		fHistory;
+			int32				fSearchEngine;
 };
 
 

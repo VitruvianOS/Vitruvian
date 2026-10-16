@@ -321,10 +321,13 @@ PanelMenuView::Draw(BRect updateRect)
 
 PanelMenu::PanelMenu(const PanelMenuModel& model, const BMessenger& target)
 	:
+	// Same flag mix as BMenuWindow: float above the owner, do not
+	// grab focus on show, but accept the explicit focus so Escape
+	// and the arrow keys reach the panel.
 	BWindow(BRect(0, 0, 0, 0), "panel menu", B_NO_BORDER_WINDOW_LOOK,
 		B_FLOATING_APP_WINDOW_FEEL,
-		B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_CLOSE_ON_ESCAPE
-			| kAcceptKeyboardFocusFlag),
+		B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AVOID_FOCUS
+			| B_CLOSE_ON_ESCAPE | kAcceptKeyboardFocusFlag),
 	fModel(model),
 	fTarget(new BMessenger(target)),
 	fView(NULL),

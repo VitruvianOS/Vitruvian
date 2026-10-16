@@ -65,6 +65,7 @@ static void close_include();
 %}
 
 %option noyywrap
+%option nounput
 %option yylineno
 
 LETTER      [a-zA-Z]

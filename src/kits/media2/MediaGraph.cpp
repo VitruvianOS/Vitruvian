@@ -1002,6 +1002,48 @@ BMediaGraph::GetForeignPorts(uint32 nodeId,
 
 
 status_t
+BMediaGraph::GetLinks(BObjectList<GraphLink, true>* outLinks)
+{
+	if (outLinks == NULL)
+		return B_BAD_VALUE;
+	outLinks->MakeEmpty();
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	auto links = backend->Links();
+	for (const auto& link : links) {
+		GraphLink* graphLink = new(std::nothrow) GraphLink();
+		if (graphLink == NULL)
+			continue;
+
+		graphLink->id = link.id;
+		graphLink->outputNodeId = link.outputNodeId;
+		graphLink->outputPortId = link.outputPortId;
+		graphLink->inputNodeId = link.inputNodeId;
+		graphLink->inputPortId = link.inputPortId;
+
+		if (!outLinks->AddItem(graphLink))
+			delete graphLink;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+BMediaGraph::DestroyLink(uint32 linkId)
+{
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	return backend->DestroyLink(linkId);
+}
+
+
+status_t
 BMediaGraph::GetMidiNodes(BObjectList<MidiNode, true>* outNodes)
 {
 	if (outNodes == NULL)

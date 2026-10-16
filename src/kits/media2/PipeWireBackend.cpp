@@ -1149,6 +1149,24 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 	uint32 outputNodeId = (uint32)atoi(outputNode);
 	uint32 inputNodeId = (uint32)atoi(inputNode);
 
+	const char* outputPort = props != NULL
+		? spa_dict_lookup(props, "link.output.port") : NULL;
+	const char* inputPort = props != NULL
+		? spa_dict_lookup(props, "link.input.port") : NULL;
+
+	{
+		std::lock_guard<std::mutex> _(fRegistryLinksLock);
+		RegistryLinkInfo& entry = fRegistryLinks[id];
+		entry.id = id;
+		entry.outputNodeId = outputNodeId;
+		entry.outputPortId = outputPort != NULL
+			? (uint32)atoi(outputPort) : 0;
+		entry.inputNodeId = inputNodeId;
+		entry.inputPortId = inputPort != NULL ? (uint32)atoi(inputPort) : 0;
+	}
+
+	_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED, id);
+
 	uint32 deviceId = 0;
 	uint32 streamNodeId = 0;
 	bool isOutput = false;
@@ -1197,9 +1215,15 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 	}
 }
 
-	void
+void
 PipeWireBackend::_OnLinkRemove(uint32 id)
 {
+	{
+		std::lock_guard<std::mutex> _(fRegistryLinksLock);
+		if (fRegistryLinks.erase(id) > 0)
+			_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED, id);
+	}
+
 	uint32 deviceId = 0;
 	uint32 streamNodeId = 0;
 
@@ -2912,6 +2936,40 @@ PipeWireBackend::ForeignPorts(uint32 nodeId)
 		ports.push_back(port);
 	}
 	return ports;
+}
+
+
+std::vector<PipeWireBackend::RegistryLinkInfo>
+PipeWireBackend::Links()
+{
+	std::lock_guard<std::mutex> _(fRegistryLinksLock);
+	std::vector<RegistryLinkInfo> links;
+	links.reserve(fRegistryLinks.size());
+	for (const auto& kv : fRegistryLinks)
+		links.push_back(kv.second);
+	return links;
+}
+
+
+status_t
+PipeWireBackend::DestroyLink(uint32 linkId)
+{
+	if (linkId == 0)
+		return B_BAD_VALUE;
+	if (fRegistry == NULL || fThreadLoop == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	{
+		std::lock_guard<std::mutex> _(fRegistryLinksLock);
+		if (fRegistryLinks.find(linkId) == fRegistryLinks.end())
+			return B_ENTRY_NOT_FOUND;
+	}
+
+	Lock();
+	pw_registry_destroy(fRegistry, linkId);
+	RoundtripLocked(500000);
+	Unlock();
+	return B_OK;
 }
 
 

@@ -225,6 +225,18 @@ public:
 		std::vector<ForeignNodeInfo>	ForeignNodes();
 		std::vector<ForeignPortInfo>	ForeignPorts(uint32 nodeId);
 
+		// Every link the registry sees, whoever created it. Port ids are
+		// registry global ids, 0 when the link is node-wide.
+		struct RegistryLinkInfo {
+			uint32			id;
+			uint32			outputNodeId;
+			uint32			outputPortId;
+			uint32			inputNodeId;
+			uint32			inputPortId;
+		};
+		std::vector<RegistryLinkInfo>	Links();
+		status_t				DestroyLink(uint32 linkId);
+
 		status_t				ResolveNodePorts(uint32 nodeId,
 									pw_direction direction,
 									std::vector<uint32>& outPortIds,
@@ -450,9 +462,12 @@ private:
 			std::mutex				fPortsLock;
 			std::map<uint32, PortRegistryEntry>	fPorts;
 
-			spa_hook				fLinkListener;
-			std::mutex					fLinkToDeviceMapLock;
-			std::map<uint32, uint32>	fLinkToDeviceMap;
+		spa_hook				fLinkListener;
+		std::mutex					fLinkToDeviceMapLock;
+		std::map<uint32, uint32>	fLinkToDeviceMap;
+		// Full registry link table for BMediaGraph::GetLinks.
+		std::mutex					fRegistryLinksLock;
+		std::map<uint32, RegistryLinkInfo>	fRegistryLinks;
 			spa_hook				fNodeListener;
 			std::map<uint32, std::string> fNodeNames;
 			std::map<uint32, std::string> fNodeApps;

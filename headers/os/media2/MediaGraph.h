@@ -136,6 +136,21 @@ public:
 			status_t				GetForeignPorts(uint32 nodeId,
 										BObjectList<ForeignPort, true>* outPorts);
 
+	// Every link in the server graph, created by this process or any
+	// other client. Port ids are the same globals GetForeignPorts
+	// reports; 0 means the link spans the whole node.
+	struct GraphLink {
+		uint32			id;
+		uint32			outputNodeId;
+		uint32			outputPortId;
+		uint32			inputNodeId;
+		uint32			inputPortId;
+	};
+			status_t				GetLinks(
+										BObjectList<GraphLink, true>* outLinks);
+			// Destroys a link by its registry id, whoever created it.
+			status_t				DestroyLink(uint32 linkId);
+
 
 	// MIDI-class registry nodes (media.class "Midi/..."). Distinct from
 	// GetForeignNodes so the audio mixer view does not pick them up.

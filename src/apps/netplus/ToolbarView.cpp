@@ -153,12 +153,17 @@ ToolbarView::SetLoading(bool loading)
 	if (button == NULL)
 		return;
 
+	// Mutate in place: BToolBar keeps the button's message pointer
+	// for its overflow menu, so swapping the message object would
+	// leave it dangling.
+	BMessage* message = button->Message();
+	if (message != NULL)
+		message->what = loading ? MSG_NAV_STOP : MSG_NAV_RELOAD;
+
 	if (loading) {
-		button->SetMessage(new BMessage(MSG_NAV_STOP));
 		button->SetIcon(fStopIcon);
 		button->SetToolTip("Stop");
 	} else {
-		button->SetMessage(new BMessage(MSG_NAV_RELOAD));
 		button->SetIcon(fReloadIcon);
 		button->SetToolTip("Reload");
 	}

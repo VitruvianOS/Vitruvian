@@ -431,9 +431,10 @@ PanelMenu::QuitRequested()
 void
 PanelMenu::_UpdateLayout()
 {
+	// The window layout stretches the view to the window, so only
+	// the window size needs to track the page content.
 	BSize size = fView->PreferredSize();
 	ResizeTo(size.width, size.height);
-	fView->ResizeTo(size.width - 1, size.height - 1);
 
 	// Keep the top edge on the anchor and the left edge aligned; the
 	// caller clamps the final placement to the screen.

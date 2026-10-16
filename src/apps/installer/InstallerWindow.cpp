@@ -63,7 +63,7 @@
 #define B_TRANSLATION_CONTEXT "InstallerWindow"
 
 
-static const char* kDriveSetupSignature = "application/x-vnd.Haiku-DriveSetup";
+static const char* kDriveSetupSignature = "application/x-vnd.vos-DriveSetup";
 
 static const uint32 kMsgBegin           = 'iBGN';
 static const uint32 kMsgInit            = 'iINI';

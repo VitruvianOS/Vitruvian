@@ -15,6 +15,7 @@
 #define B_TRANSLATION_CONTEXT "Bluetooth"
 
 
+// Existing signature; do not change.
 static const char* kSignature = "application/x-vnd.vos-Bluetooth";
 
 

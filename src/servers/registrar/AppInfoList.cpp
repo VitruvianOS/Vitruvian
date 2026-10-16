@@ -245,8 +245,8 @@ alias_legacy_signature(const char* signature, char* buffer, size_t size)
 	if (signature == NULL || buffer == NULL || size == 0)
 		return false;
 
-	static const char* kOldUpper = "x-vnd.Haiku-";
-	static const char* kOldLower = "x-vnd.haiku-";
+	static const char* kOldUpper = "x-vnd.vos-";
+	static const char* kOldLower = "x-vnd.vos-";
 	static const char* kNew = "x-vnd.vos-";
 
 	const char* hit = strstr(signature, kOldUpper);

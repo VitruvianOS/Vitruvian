@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku.TextSearch	1461663588
+1	greek, modern (1453-)	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Παρακαλώ επιλέξτε τα αρχεία που επιθυμείτε, τα οποία έχουν επιλέγει στον Ιχνηλάτη για σας.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Το ξεκίνημα του προγράμματος xargs απέτυχε!

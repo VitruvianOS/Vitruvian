@@ -718,7 +718,7 @@ BluetoothStatusView::_ScanDevices()
 {
 	// Scanning lives in the preflet's inquiry panel.
 	BMessage openInquiry(kMsgOpenInquiry);
-	be_roster->Launch("application/x-vnd.Haiku-Bluetooth", &openInquiry);
+	be_roster->Launch("application/x-vnd.vos-Bluetooth", &openInquiry);
 }
 
 

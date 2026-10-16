@@ -20,6 +20,7 @@ ImageIncludeFile("${CMAKE_SOURCE_DIR}/src/servers/notification/org.freedesktop.N
 set(INPUT_SERVER_ADDONS
 	keyboard
 	mouse
+	gamepad
 )
 ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 

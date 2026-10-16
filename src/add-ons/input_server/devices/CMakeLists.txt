@@ -3,4 +3,5 @@
 # Superseded by libinput functionality merged into mouse add-on (touchpad/tablet/touchscreen/absolute pointer).
 add_subdirectory(keyboard)
 add_subdirectory(mouse)
+add_subdirectory(gamepad)
 #add_subdirectory(virtualkeyboard)

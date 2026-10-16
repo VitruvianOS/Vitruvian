@@ -322,7 +322,7 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 			break;
 
 		case TM_FORCE_REBOOT:
-			BRoster::Private(be_roster).ShutDown(true, false, false);
+			BRoster::Private().ShutDown(true, false, false);
 			break;
 
 		case TM_KILL_APPLICATION:

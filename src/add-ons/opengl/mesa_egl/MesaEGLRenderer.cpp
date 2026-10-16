@@ -331,7 +331,6 @@ MesaEGLRenderer::_LogGlStrings()
 {
 	const char* eglVendor = eglQueryString(fDisplay, EGL_VENDOR);
 	const char* eglVersion = eglQueryString(fDisplay, EGL_VERSION);
-	const char* glVendor = (const char*)glGetString(GL_VENDOR);
 	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
 	const char* glVersion = (const char*)glGetString(GL_VERSION);
 	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);

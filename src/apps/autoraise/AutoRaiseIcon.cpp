@@ -423,7 +423,6 @@ PRINT(("tok = %" B_PRId32 " cw = %" B_PRId32 "\n", tok, tv->current_window));
 int32 poller(void *arg)
 {
 	TrayView *tv = (TrayView *)arg;
-	volatile int32 tok = tv->current_window;
 	int32 *tl = NULL;
 	int32 i, tlc;
 	window_info *wi = NULL;
@@ -462,7 +461,7 @@ PRINT(("if (!%s && (%li, %li)isin(%" B_PRId32 ")(%" B_PRId32 ", %" B_PRId32
 	", %" B_PRId32 ", %" B_PRId32 ") && (%" B_PRId32 " != %" B_PRId32 ") \n",
 	wi->is_mini?"true":"false", (long)mouse.x, (long)mouse.y, i,
 	wi->window_left, wi->window_right, wi->window_top, wi->window_bottom,
-	wi->server_token, tok));
+	wi->server_token, tv->current_window));
 
 
 
@@ -476,7 +475,6 @@ PRINT(("if (!%s && (%li, %li)isin(%" B_PRId32 ")(%" B_PRId32 ", %" B_PRId32
 
 					if ((tv->_settings->Mode() == Mode_All) || (wi->team == tv->fDeskbarTeam)) {
 						tv->current_window = wi->server_token;
-						tok = wi->server_token;
 						resume_thread(tv->last_raiser_thread = spawn_thread(fronter, "fronter", B_NORMAL_PRIORITY, (void *)tv));
 						goto zzz;
 					} else if (tv->_settings->Mode() == Mode_DeskbarTouch) // give up, before we find Deskbar under it

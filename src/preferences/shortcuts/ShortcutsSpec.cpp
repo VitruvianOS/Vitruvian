@@ -395,7 +395,7 @@ ShortcutsSpec::_AttemptTabCompletion()
 				// with our fragment.
 				while (dir.GetNextEntry(&nextEnt) == B_NO_ERROR) {
 					if (nextEnt.GetPath(&nextPath) == B_NO_ERROR) {
-						char* filePath = strrchr(nextPath.Path(), '/') + 1;
+						const char* filePath = strrchr(nextPath.Path(), '/') + 1;
 						if (strncmp(filePath, fileFragment, fragmentLength) == 0) {
 							int len = strlen(filePath);
 							if (len > maxEntryLen)

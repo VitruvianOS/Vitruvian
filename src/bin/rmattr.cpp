@@ -80,7 +80,7 @@ remove_attribute(int fd, const char* attribute, bool isPattern)
 
 	bool error = false;
 
-	for (int i = 0; i < glob.gl_pathc; i++) {
+	for (size_t i = 0; i < glob.gl_pathc; i++) {
 		if (fs_remove_attr(fd, glob.gl_pathv[i]) != 0)
 			error = true;
 	}

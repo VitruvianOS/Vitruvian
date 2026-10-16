@@ -10,6 +10,7 @@
 
 #include <fs_info.h>
 #include <fs_index.h>
+#include <StorageDefs.h>
 #include <TypeConstants.h>
 
 #include <errno.h>
@@ -159,7 +160,7 @@ remove_indices(dev_t device, const char* indexPattern, bool verbose)
 
 	bool error = false;
 
-	for (int i = 0; i < glob.gl_pathc; i++) {
+	for (size_t i = 0; i < glob.gl_pathc; i++) {
 		if (remove_index(device, glob.gl_pathv[i], verbose) != 0)
 			error = true;
 	}
@@ -175,7 +176,7 @@ main(int argc, char **argv)
 	bool verbose = false;
 	dev_t device = 0;
 	char *indexName = NULL;
-	char *path = NULL;
+	const char *path = NULL;
 	
 	int c;
 	while ((c = getopt_long(argc, argv, "d:ht:pv", longopts, NULL)) != -1) {
@@ -206,7 +207,7 @@ main(int argc, char **argv)
 		path = ".";
 
 	device = dev_for_path(path);
-	if (device < 0) {
+	if (device == B_INVALID_DEV) {
 		fprintf(stderr, "%s: can't get information about volume %s\n", kProgramName, path);
 		return 1;
 	}

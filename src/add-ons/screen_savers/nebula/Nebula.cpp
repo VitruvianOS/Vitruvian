@@ -197,19 +197,19 @@ drawshdisk(int x0, int y0, int r)
 				This is clearly a stupid, unmaintanable, unreadable
 				"optimization". But i like it :)
 			*/
-			if ((uint32)(y0 - y - 1) < gHeight - 3)
+			if ((uint32)(y0 - y - 1) < (uint32)(gHeight - 3))
 				memshset(&gBuffer8[x0 + gWidth * (y0 - y + 1)], c, d, x);
 
-			if ((uint32)(y0 + y - 1) < gHeight - 3)
+			if ((uint32)(y0 + y - 1) < (uint32)(gHeight - 3))
 				memshset(&gBuffer8[x0 + gWidth*(y0 + y)], c, d, x);
 		}
 		TOTO:
 		c = ((r - x + 1) << 13) / r;
 		d = -c / (y);
 
-		if ((uint32)(y0 - x - 1) < gHeight - 3)
+		if ((uint32)(y0 - x - 1) < (uint32)(gHeight - 3))
 			memshset(&gBuffer8[x0 + gWidth*(y0 - x)], c, d, y);
-		if ((uint32)(y0 + x - 1) < gHeight - 3)
+		if ((uint32)(y0 + x - 1) < (uint32)(gHeight - 3))
 			memshset(&gBuffer8[x0 + gWidth * (y0 + x + 1)], c, d, y);
 
 		ly = y;

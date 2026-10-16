@@ -88,7 +88,7 @@ BootPromptApp::MessageReceived(BMessage* message)
 		}
 		case MSG_REBOOT_REQUESTED:
 		{
-			BRoster::Private(be_roster).ShutDown(true, false, false);
+			BRoster::Private().ShutDown(true, false, false);
 			sExitValue = -1;
 			break;
 		}

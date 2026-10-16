@@ -5,7 +5,7 @@
 int main(int argc, char **argv)
 {
 	area_id area, cloned;
-	char *ptr, *p;
+	char *ptr;
 	area_info ai;
 
 	if (argc < 2) {

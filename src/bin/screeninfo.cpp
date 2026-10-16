@@ -74,7 +74,7 @@ ColorSpace table[] =
 void
 print_supported_overlays()
 {
-	for (int32 i = 0; i < sizeof(table) / sizeof(table[0]); i++)
+	for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); i++)
 	{
 		uint32 supportFlags = 0;
 
@@ -94,7 +94,6 @@ main()
 	BScreen screen(B_MAIN_SCREEN_ID);
 
 	do {
-		screen_id screenIndex = screen.ID();
 		accelerant_device_info info;
 
 		// At the moment, screen.ID() is always 0;

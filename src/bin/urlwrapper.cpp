@@ -140,7 +140,7 @@ UrlWrapper::RefsReceived(BMessage* msg)
 				if (f.ReadAt(0LL, buffer, size) < B_OK)
 					continue;
 				printf("webloc\n");
-				if (size > (sizeof(bplist_match) + 2)
+				if (size > (off_t)(sizeof(bplist_match) + 2)
 					&& !strncmp(buffer, bplist_match,
 						sizeof(bplist_match) - 1)) {
 					// binary plist, let's be crude

@@ -34,13 +34,15 @@ list_images_for_team_by_id(team_id id)
 		return result;
 
 	i = asprintf(&header, "   ID   %*s   %*s  Seq#      Init# Name",
-		sizeof(uintptr_t) * 2, "Text", sizeof(uintptr_t) * 2, "Data");
+		(int)(sizeof(uintptr_t) * 2), "Text",
+		(int)(sizeof(uintptr_t) * 2), "Data");
 	if (i == -1)
 		return B_NO_MEMORY;
 
 	i = asprintf(&format, "%%5" B_PRId32 " 0x%%0%" B_PRIu32 PRIxPTR
 		" 0x%%0%" B_PRIu32 PRIxPTR "  %%4" B_PRId32 " %%10" B_PRIu32 " %%s\n",
-		sizeof(uintptr_t) * 2, sizeof(uintptr_t) * 2);
+		(unsigned)(sizeof(uintptr_t) * 2),
+		(unsigned)(sizeof(uintptr_t) * 2));
 	if (i == -1) {
 		free(header);
 		return B_NO_MEMORY;

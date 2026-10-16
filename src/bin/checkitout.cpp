@@ -155,7 +155,6 @@ status_t
 CheckItOut::_DoCheckItOut(entry_ref *ref, const char *name)
 {
 	const char* failc = " || read -p 'Press any key'";
-	const char* pausec = " ; read -p 'Press any key'";
 	char* args[] = { (char *)"/bin/sh", (char *)"-c", NULL, NULL};
 
 	BUrl url(fUrlString, true);

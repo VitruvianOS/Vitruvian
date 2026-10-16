@@ -17,6 +17,7 @@
 #include <TypeConstants.h>
 #include <Directory.h>
 #include <Path.h>
+#include <StorageDefs.h>
 #include <Volume.h>
 
 #include <getopt.h>
@@ -102,7 +103,7 @@ main(int argc, char **argv)
 	int indexType = B_STRING_TYPE;
 	char *indexName = NULL;
 	bool verbose = false;
-	dev_t device = -1, copyFromDevice = -1;
+	dev_t device = B_INVALID_DEV, copyFromDevice = B_INVALID_DEV;
 
 	int c;
 	while ((c = getopt_long(argc, argv, "d:ht:v", kLongOptions, NULL)) != -1) {
@@ -111,7 +112,7 @@ main(int argc, char **argv)
 				break;
 			case 'd':
 				device = dev_for_path(optarg);
-				if (device < 0) {
+				if (device == B_INVALID_DEV) {
 					fprintf(stderr, "%s: can't get information about volume: %s\n",
 						kProgramName, optarg);
 					return -1;
@@ -119,7 +120,7 @@ main(int argc, char **argv)
 				break;
 			case 'f':
 				copyFromDevice = dev_for_path(optarg);
-				if (copyFromDevice < 0) {
+				if (copyFromDevice == B_INVALID_DEV) {
 					fprintf(stderr, "%s: can't get information about volume: %s\n",
 						kProgramName, optarg);
 					return -1;
@@ -152,18 +153,18 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (device == -1) {
+	if (device == B_INVALID_DEV) {
 		// Create the index on the volume of the current
 		// directory if no volume was specified.
 
 		device = dev_for_path(".");
-		if (device < 0) {
+		if (device == B_INVALID_DEV) {
 			fprintf(stderr, "%s: can't get information about current volume\n", kProgramName);
 			return -1;
 		}
 	}
 
-	if (copyFromDevice != -1) {
+	if (copyFromDevice != B_INVALID_DEV) {
 		copy_indexes(copyFromDevice, device, verbose);
 		return 0;
 	}

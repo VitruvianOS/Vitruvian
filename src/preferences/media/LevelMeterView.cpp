@@ -114,16 +114,6 @@ LevelMeterView::Draw(BRect)
 	const float greenMax  = DBToNorm(-6.0f, fMinDB, fMaxDB);
 	const float yellowMax = DBToNorm(-3.0f, fMinDB, fMaxDB);
 
-	BRect fill = fBar;
-	if (fVertical) {
-		float h = fBar.Height() * norm;
-		fill.top = fBar.bottom - h;
-	} else {
-		float w = fBar.Width() * norm;
-		fill.right = fBar.left + w;
-	}
-
-
 	auto seg = [&](float loN, float hiN, rgb_color c) {
 		if (hiN <= loN) return;
 		BRect r = fBar;

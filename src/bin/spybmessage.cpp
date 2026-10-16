@@ -140,10 +140,8 @@ int main(int argc, char **argv)
 {
   int i;
   status_t err;
-  char *trapp_name;
   if (argc < 2)
     return usage(argv[0]);
-  trapp_name = argv[0];
   
   for (i = 1; i < argc; i++) {
     if (strncmp(argv[i], "-", 1))

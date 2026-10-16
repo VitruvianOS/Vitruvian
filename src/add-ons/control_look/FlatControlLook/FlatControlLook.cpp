@@ -422,8 +422,6 @@ FlatControlLook::DrawScrollBarBackground(BView* view, BRect& rect,
 	// set clipping constraints to rect
 	view->ClipToRect(rect);
 
-	bool isEnabled = (flags & B_DISABLED) == 0;
-
 	// fill background, we'll draw arrows and thumb on top
 	view->SetDrawingMode(B_OP_COPY);
 

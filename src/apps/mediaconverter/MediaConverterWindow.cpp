@@ -594,8 +594,17 @@ MediaConverterWindow::BuildAudioVideoMenus()
 */
 	}
 
-	// mark first audio encoder
-	item = menu->ItemAt(0);
+	// mark the first real codec; item 0 is the "No audio" placeholder
+	item = NULL;
+	for (int32 i = 0; ; i++) {
+		BMenuItem* candidate = menu->ItemAt(i);
+		if (candidate == NULL)
+			break;
+		if (dynamic_cast<CodecMenuItem*>(candidate) != NULL) {
+			item = candidate;
+			break;
+		}
+	}
 	if (item != NULL) {
 		fAudioMenu->SetEnabled(fEnabled);
 		fAudioQualitySlider->SetEnabled(fEnabled);
@@ -645,8 +654,17 @@ MediaConverterWindow::BuildAudioVideoMenus()
 		menu->AddItem(cmi);
 	}
 
-	// mark first video encoder
-	item = menu->ItemAt(0);
+	// mark the first real codec; item 0 is the "No video" placeholder
+	item = NULL;
+	for (int32 i = 0; ; i++) {
+		BMenuItem* candidate = menu->ItemAt(i);
+		if (candidate == NULL)
+			break;
+		if (dynamic_cast<CodecMenuItem*>(candidate) != NULL) {
+			item = candidate;
+			break;
+		}
+	}
 	if (item != NULL) {
 		fVideoMenu->SetEnabled(fEnabled);
 		fVideoQualitySlider->SetEnabled(fEnabled);

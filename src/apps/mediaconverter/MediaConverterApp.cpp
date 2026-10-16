@@ -351,6 +351,11 @@ MediaConverterApp::_RunConvert()
 					fWin->Lock();
 					if (r == B_OK) {
 						fWin->RemoveSourceFile(srcIndex);
+					} else if (r == B_CANCELED) {
+						// A half-written file only confuses; drop it.
+						outEntry.Remove();
+						fWin->Unlock();
+						break;
 					} else {
 						srcIndex++;
 						BString error(
@@ -517,7 +522,7 @@ MediaConverterApp::_ConvertFile(BMediaFile* inFile, BMediaFile* outFile,
 					videoQualitySupport
 						= B_TRANSLATE("Video using parameters form settings");
 				} else if (outVidTrack->SetQuality(videoQuality / 100.0f)
-					>= B_OK) {
+					< B_OK) {
 					videoQualitySupport
 						= B_TRANSLATE("Video quality not supported");
 				}
@@ -564,7 +569,14 @@ MediaConverterApp::_ConvertFile(BMediaFile* inFile, BMediaFile* outFile,
 		return ret;
 	}
 
-	outFile->CommitHeader();
+	ret = outFile->CommitHeader();
+	if (ret != B_OK) {
+		SetStatusMessage(B_TRANSLATE("Error committing output header."));
+		delete[] audioBuffer;
+		delete[] videoBuffer;
+		delete outFile;
+		return ret;
+	}
 	// this is where you would call outFile->AddCopyright(...)
 
 	int64 framesRead;
@@ -607,7 +619,7 @@ MediaConverterApp::_ConvertFile(BMediaFile* inFile, BMediaFile* outFile,
 			}
 
 			if ((ret = outVidTrack->WriteFrames(videoBuffer, framesRead,
-					mh.u.encoded_video.field_flags)) != B_OK) {
+					0)) != B_OK) {
 				fprintf(stderr, "Error writing video frame %" B_PRId64 ": %s\n", i, strerror(ret));
 				status.SetToFormat(B_TRANSLATE("Error writing video frame %" B_PRId64), i);
 				SetStatusMessage(status.String());

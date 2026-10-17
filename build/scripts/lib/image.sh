@@ -924,7 +924,7 @@ create_raspberry() {
     mkdir -p "$_basedir/output"
 
     log_step "Creating $(board_config "$_board" label) RAW image..."
-    qemu-img create "$_raw" 4G
+    qemu-img create "$_raw" 6G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -1196,7 +1196,7 @@ create_uboot_board() {
     fi
 
     log_step "Creating $_label RAW image..."
-    qemu-img create "$_raw" 4G
+    qemu-img create "$_raw" 6G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"

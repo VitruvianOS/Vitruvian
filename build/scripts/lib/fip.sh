@@ -235,11 +235,14 @@ fip_licheerv_assemble() {
         _fip_log "Building OpenSBI (PLATFORM=generic)..."
         # GCC 15+ defaults to C23, where bool is a keyword; OpenSBI v1.5.1
         # typedefs it and dies under -Werror (2026-10-16 riscv64 leg).
-        # Command-line CFLAGS+= appends to the Makefile's own CFLAGS.
+        # Strip -Werror from the Makefile itself — a command-line CFLAGS+=
+        # would override the Makefile's whole CFLAGS (losing its -I paths;
+        # that failure mode was hit 2026-10-17, "sbi/riscv_asm.h: No such
+        # file"). Same treatment the U-Boot half of this build gets.
+        sed -i 's/ -Werror\b/ /' "$_opensbi_work/Makefile"
         if ! make -C "$_opensbi_work" \
                 CROSS_COMPILE="$FIP_LICHEERV_CROSS_COMPILE" \
                 PLATFORM=generic \
-                CFLAGS+=-Wno-error \
                 -j"$(nproc 2>/dev/null || echo 4)" \
                 >"$_opensbi_dir/opensbi-build.log" 2>&1; then
             tail -20 "$_opensbi_dir/opensbi-build.log" >&2

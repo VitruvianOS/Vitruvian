@@ -251,8 +251,11 @@ _board_extra_packages() {
         amlogic)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 dosfstools rsync"
+                " linux-image-arm64 linux-headers-arm64 dosfstools rsync"
             # No Debian Amlogic U-Boot since bookworm; fip.sh builds the blob.
+            # linux-headers-arm64 is load-bearing: nexus-dkms' preinst
+            # interlock refuses to unpack without a headers tree under
+            # /usr/src (2026-10-17 amlogic leg 20261017T171747Z-3395292).
             ;;
         visionfive2)
             printf '%s' \

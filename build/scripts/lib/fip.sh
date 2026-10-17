@@ -64,6 +64,12 @@ SHIMEOF
     # must keep its own arm-none-eabi- values.
     _scp_mk="$_dir/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile"
     if [ -f "$_scp_mk" ]; then
+        # Debian's arm-none-eabi gcc keeps stdint.h in its internal include
+        # dir; this tree's scp_task flags never add it and newer toolchains
+        # stopped injecting it implicitly (uart.c: stdint.h not found,
+        # amlogic attempt 3, 2026-10-17). Harmless when already found.
+        grep -q 'print-file-name=include' "$_scp_mk" 2>/dev/null ||
+            printf '\nCFLAGS += -I$(shell $(CC) -print-file-name=include)\n' >> "$_scp_mk"
         sed -i 's/^CROSS_COMPILE=arm-none-eabi-/override CROSS_COMPILE=arm-none-eabi-/' "$_scp_mk"
         sed -i 's/^CPP=\$(CROSS_COMPILE)cpp/override CPP=\$(CROSS_COMPILE)cpp/' "$_scp_mk"
         sed -i 's/^CC=\$(CROSS_COMPILE)gcc/override CC=\$(CROSS_COMPILE)gcc/' "$_scp_mk"

@@ -24,8 +24,11 @@ _fip_die()  { printf '[fip] ERROR: %s\n' "$*" >&2; return 1; }
 _fip_apply_compat_patches() {
     _dir="$1"
 
-    # compiler-gcc{12,13,14}.h shims; the tree only ships gcc3/4.
-    for _ver in 12 13 14; do
+    # compiler-gcc{12..16}.h shims; the tree only ships gcc3/4. The list
+    # must cover the builder's current cross-GCC major — GCC 16 asked for
+    # compiler-gcc16.h and the 2026-10-17 amlogic leg died on it after
+    # the list stopped at 14 (job ...3967500).
+    for _ver in 12 13 14 15 16 17; do
         _h="$_dir/include/linux/compiler-gcc${_ver}.h"
         if [ ! -f "$_h" ]; then
             cat > "$_h" <<'SHIMEOF'

@@ -35,7 +35,7 @@ board_config() {
                 label)          printf 'Raspberry Pi 4/5' ;;
                 partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'rpi-firmware' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'rpi-bootloader' ;;
                 extra_pkgs)     printf 'raspberrypi-bootloader libraspberrypi-bin' ;;
@@ -48,7 +48,7 @@ board_config() {
                 label)          printf 'Raspberry Pi 1/2/Zero' ;;
                 partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'rpi-firmware' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'rpi-bootloader' ;;
                 extra_pkgs)     printf 'raspberrypi-bootloader libraspberrypi-bin' ;;
@@ -63,7 +63,7 @@ board_config() {
                 label)          printf 'Rockchip (RK3399 Rock Pi 4)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # Verified present in the built rootfs 2026-09-14.
@@ -90,7 +90,7 @@ board_config() {
                 # has nothing there (as on allwinner-h3).
                 partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # Variant list verified against u-boot-sunxi 2025.01-3+deb13u1;
@@ -116,7 +116,7 @@ board_config() {
                 label)          printf 'Allwinner H2+/H3 (Orange Pi Zero/R1/One/PC)' ;;
                 partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # sunxi loads one combined blob at 8KiB; no separate stage.
@@ -134,7 +134,7 @@ board_config() {
                 label)          printf 'BeaglePlay (AM62x)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # POSIX case executes the FIRST matching arm only; a second
@@ -164,7 +164,7 @@ board_config() {
                 label)          printf 'BeagleBone Black' ;;
                 partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 spl_offset_sectors) printf '1' ;;
@@ -181,7 +181,7 @@ board_config() {
                 label)          printf 'NXP i.MX8M (8MQ/8MP)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # No arm64 Debian U-Boot here; flash.bin comes from firmware/nxp/.
@@ -209,7 +209,7 @@ board_config() {
                 boot_style)     printf 'spl-uboot' ;;
                 # uart_AO_A at 115200, per the DTB and Hardkernel U-Boot.
                 console)        printf 'ttyS0,115200' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # Mainline u-boot only; the G12B BootROM requires the vendor
@@ -237,7 +237,7 @@ board_config() {
                 label)          printf 'StarFive VisionFive 2 (JH7110)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # JH7110 boot chain, in the sectors the BootROM scans.
@@ -263,7 +263,7 @@ board_config() {
                 label)          printf 'Sipeed LicheeRV (D1)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
-                boot_size_mb)   printf '256' ;;
+                boot_size_mb)   printf '512' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # The D1 BROM also reads sector 256, clear of the GPT that

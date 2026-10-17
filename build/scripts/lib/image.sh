@@ -1416,6 +1416,20 @@ apt-get clean" || die "uboot chroot bash-c failed"
     _boot_dtb="$(board_config "$_board" boot_dtb 2>/dev/null)"
     _fdt_line=""
     [ -n "$_boot_dtb" ] && _fdt_line="    fdt /dtbs/$_boot_dtb"
+    # FAT has no symlinks and the partition is small: reference the
+    # versioned kernel/initrd directly instead of duplicating them under
+    # fixed names (riscv64's uncompressed vmlinux alone is ~200 MB; two
+    # initrd copies overflowed a 240 MiB boot partition, 2026-10-17).
+    # Nothing updates extlinux.conf on a running system (no flash-kernel),
+    # so bake-time names are what the config would hold anyway.
+    if [ -f "$_mnt/boot/vmlinuz-$_kver" ]; then
+        _ext_linux="/vmlinuz-$_kver"
+    elif [ -f "$_mnt/boot/vmlinux-$_kver" ]; then
+        _ext_linux="/vmlinux-$_kver"
+    else
+        die "no kernel image for $_kver under /boot"
+    fi
+    _ext_initrd="/initrd.img-$_kver"
     sudo mkdir -p "$_mnt/boot/extlinux"
     sudo sh -c "cat > '$_mnt/boot/extlinux/extlinux.conf'" <<EXTLINUX
 menu title Vitruvian Boot
@@ -1424,8 +1438,8 @@ default vitruvian
 
 label vitruvian
     menu label Vitruvian
-    linux /vmlinuz
-    initrd /initrd.img
+    linux $_ext_linux
+    initrd $_ext_initrd
     fdtdir /dtbs/
 $_fdt_line
     append root=$_ext_rootdev rootfstype=EXTROOTFS rw rootwait console=$_ext_console $_append_tail
@@ -1447,8 +1461,8 @@ EXTLINUX
 echo 'V\OS U-Boot boot.ini ($_board)'
 setenv bootargs root=$_ext_rootdev rootfstype=$_root_fs rw rootwait console=$_ext_console $_append_tail
 for dev in 0 1; do
-  if load mmc \${dev}:1 \${kernel_addr_r} /vmlinuz; then
-    if load mmc \${dev}:1 \${ramdisk_addr_r} /initrd.img; then
+  if load mmc \${dev}:1 \${kernel_addr_r} $_ext_linux; then
+    if load mmc \${dev}:1 \${ramdisk_addr_r} $_ext_initrd; then
       if load mmc \${dev}:1 \${fdt_addr_r} /dtbs/$_dtb_bootini; then
         booti \${kernel_addr_r} \${ramdisk_addr_r} \${fdt_addr_r}
       fi
@@ -1459,14 +1473,9 @@ BBOOTINI
         log_info "  wrote /boot/boot.ini (Hardkernel boot_scripts path) dtb=$_dtb_bootini console=$_ext_console"
     fi
 
-    # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
-    # see the same fallback in create_iso() above.
-    if [ ! -f "$_mnt/boot/vmlinuz-$_kver" ] && [ -f "$_mnt/boot/vmlinux-$_kver" ]; then
-        sudo cp "$_mnt/boot/vmlinux-$_kver" "$_mnt/boot/vmlinuz"
-    else
-        sudo cp "$_mnt/boot/vmlinuz-$_kver" "$_mnt/boot/vmlinuz"
-    fi
-    sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/initrd.img"
+    # Kernel and initrd stay under their versioned names only — the boot
+    # configs reference them directly (see _ext_linux/_ext_initrd above);
+    # duplicating them onto the FAT partition is what overflowed it.
 
     case "$_root_fs" in
         # passno 0: fsck.xfs is a no-op; do not schedule a fake check.

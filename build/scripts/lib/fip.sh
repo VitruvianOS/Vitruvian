@@ -195,6 +195,12 @@ fip_amlogic_assemble() {
     # The AML BootROM magic must sit at offset 0x211 or the image will
     # not load.
     if ! dd if="$_output" bs=1 skip=529 count=3 2>/dev/null | grep -q "AML"; then
+        # Diagnose before dying (2026-10-18: GCC 16 build produced a blob
+        # without the magic at 0x211; need ground truth on where/if it is).
+        _fip_warn "first bytes of sd_fuse/u-boot.bin:"
+        od -A x -t x1z -N 560 "$_output" 2>/dev/null | tail -8 >&2
+        _fip_warn "AML occurrences (offset: ): $(grep -abo 'AML' "$_output" | head -5 | tr '\n' ' ')"
+        ls -la "$_workdir/sd_fuse/" >&2 2>/dev/null
         _fip_die "AML BootROM signature not found at offset 0x211, refusing."
         return 1
     fi

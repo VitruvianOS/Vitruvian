@@ -192,9 +192,14 @@ fip_amlogic_assemble() {
     _size=$(wc -c < "$_output")
     _fip_log "FIP assembly complete: $_output ($_size bytes)"
 
-    # The AML BootROM magic must sit at offset 0x211 or the image will
-    # not load.
-    if ! dd if="$_output" bs=1 skip=529 count=3 2>/dev/null | grep -q "AML"; then
+    # The AML BootROM magic must sit at DISK offset 0x211 (529). The blob
+    # is written at sector 1 (create_uboot_board dd seek=1; boards.sh
+    # amlogic: "The FIP is written from sector 1"), so the file offset to
+    # check is 529 - 512 = 17. Byte-level dump 2026-10-18 (job
+    # ...1759606): "AML" present at file offset 17 — on disk that IS
+    # 0x211. The old skip=529 checked as if the file carried sector-0
+    # padding and refused a correct blob.
+    if ! dd if="$_output" bs=1 skip=17 count=3 2>/dev/null | grep -q "AML"; then
         # Diagnose before dying (2026-10-18: GCC 16 build produced a blob
         # without the magic at 0x211; need ground truth on where/if it is).
         _fip_warn "first bytes of sd_fuse/u-boot.bin:"

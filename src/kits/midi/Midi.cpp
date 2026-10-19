@@ -16,6 +16,48 @@
 #include <Locker.h>
 
 
+namespace {
+
+// Hands events that reach a BMidi's consumer to the object's own hooks, as
+// the legacy kit does; a plain BMidiLocalConsumer drops them.
+class MidiForwarder : public BMidiLocalConsumer {
+public:
+	MidiForwarder(BMidi* owner) : fOwner(owner) {}
+
+	void NoteOff(uchar c, uchar n, uchar v, bigtime_t t)
+		{ fOwner->NoteOff(c, n, v, _Ms(t)); }
+	void NoteOn(uchar c, uchar n, uchar v, bigtime_t t)
+		{ fOwner->NoteOn(c, n, v, _Ms(t)); }
+	void KeyPressure(uchar c, uchar n, uchar p, bigtime_t t)
+		{ fOwner->KeyPressure(c, n, p, _Ms(t)); }
+	void ControlChange(uchar c, uchar n, uchar v, bigtime_t t)
+		{ fOwner->ControlChange(c, n, v, _Ms(t)); }
+	void ProgramChange(uchar c, uchar n, bigtime_t t)
+		{ fOwner->ProgramChange(c, n, _Ms(t)); }
+	void ChannelPressure(uchar c, uchar p, bigtime_t t)
+		{ fOwner->ChannelPressure(c, p, _Ms(t)); }
+	void PitchBend(uchar c, uchar l, uchar m, bigtime_t t)
+		{ fOwner->PitchBend(c, l, m, _Ms(t)); }
+	void SystemExclusive(void* d, size_t l, bigtime_t t)
+		{ fOwner->SystemExclusive(d, l, _Ms(t)); }
+	void SystemCommon(uchar s, uchar d1, uchar d2, bigtime_t t)
+		{ fOwner->SystemCommon(s, d1, d2, _Ms(t)); }
+	void SystemRealTime(uchar s, bigtime_t t)
+		{ fOwner->SystemRealTime(s, _Ms(t)); }
+	void TempoChange(int32 bpm, bigtime_t t)
+		{ fOwner->TempoChange(bpm, _Ms(t)); }
+	void AllNotesOff(bool justChannel, bigtime_t t)
+		{ fOwner->AllNotesOff(justChannel, _Ms(t)); }
+
+private:
+	static uint32 _Ms(bigtime_t t) { return (uint32)(t / 1000); }
+
+	BMidi*	fOwner;
+};
+
+}	// namespace
+
+
 static BLocker sConnectionsLock("midi connections");
 
 
@@ -52,7 +94,7 @@ _run_thread(void* data)
 BMidi::BMidi()
 {
 	fProducer = new(std::nothrow) BMidiLocalProducer();
-	fConsumer = new(std::nothrow) BMidiLocalConsumer();
+	fConsumer = new(std::nothrow) MidiForwarder(this);
 	fConnections = new BList;
 	fThreadId = -1;
 	fIsRunning = false;
@@ -203,12 +245,10 @@ BMidi::Connect(BMidi* toObject)
 	if (toObject == NULL)
 		return;
 
-	// Wire our producer to their consumer, and their producer to our
-	// consumer: full duplex, matching upstream structure.
+	// One way: what we spray reaches them. A return path would feed their
+	// output back in, and a BMidiStore records whatever it receives.
 	if (fProducer != NULL && toObject->fConsumer != NULL)
 		fProducer->Connect(toObject->fConsumer);
-	if (toObject->fProducer != NULL && fConsumer != NULL)
-		toObject->fProducer->Connect(fConsumer);
 
 	BAutolock lock(sConnectionsLock);
 	fConnections->AddItem(toObject);
@@ -223,8 +263,6 @@ BMidi::Disconnect(BMidi* fromObject)
 
 	if (fProducer != NULL && fromObject->fConsumer != NULL)
 		fProducer->Disconnect(fromObject->fConsumer);
-	if (fromObject->fProducer != NULL && fConsumer != NULL)
-		fromObject->fProducer->Disconnect(fConsumer);
 
 	BAutolock lock(sConnectionsLock);
 	fConnections->RemoveItem(fromObject);

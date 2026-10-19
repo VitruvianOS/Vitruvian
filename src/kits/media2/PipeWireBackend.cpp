@@ -1213,10 +1213,9 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 			std::lock_guard<std::mutex> _(fLinkToDeviceMapLock);
 			fLinkToDeviceMap[id] = deviceId;
 		}
+		// Watchers get the broadcast; a desktop notification per app stream
+		// link (two per stereo stream) flooded every player switch.
 		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamNodeId);
-
-		ShowNotification(kNotificationDeviceConnected, "Audio Stream Connected",
-			"Stream routed to audio device", streamNodeId);
 	}
 }
 
@@ -1255,9 +1254,6 @@ PipeWireBackend::_OnLinkRemove(uint32 id)
 
 	if (streamNodeId != 0) {
 		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamNodeId);
-
-		ShowNotification(kNotificationDeviceDisconnected, "Audio Stream Disconnected",
-			"Stream unlinked from audio device", streamNodeId);
 	}
 }
 

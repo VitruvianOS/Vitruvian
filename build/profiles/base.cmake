@@ -57,6 +57,8 @@ set(SYSTEM_LIBS
 	shared
 	vpackage
 	localestub
+	midi
+	midi2
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 
@@ -94,6 +96,13 @@ set(TRACKER_ADDONS
 #	mark_as: needs libmail (not ported); skipped
 )
 ImageInclude("/system/add-ons/Tracker" ${TRACKER_ADDONS})
+
+# media2 units and the LV2/LADSPA plugin adapter.
+set(MEDIA_ADDONS
+	equalizer
+	plugin_adapter
+)
+ImageInclude("/system/add-ons/media" ${MEDIA_ADDONS})
 
 set(DECORATORS
 	BeDecorator

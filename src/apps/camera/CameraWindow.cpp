@@ -17,6 +17,7 @@
 #include <Directory.h>
 #include <Entry.h>
 #include <FindDirectory.h>
+#include <LayoutBuilder.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <MessageRunner.h>
@@ -285,19 +286,19 @@ CameraWindow::CameraWindow(BRect frame)
 	}
 	fModeMenu->SetTargetForItems(this);
 	fModeMenu->ItemAt(0)->SetMarked(true);
-	fModeField = new BMenuField("mode", fModeMenu, NULL);
+	fModeField = new BMenuField("mode", "Mode", fModeMenu);
 
 	fCameraMenu = new BPopUpMenu("camera");
-	fCameraField = new BMenuField("camera", fCameraMenu, "Camera");
+	fCameraField = new BMenuField("camera", "Camera", fCameraMenu);
 
 	fResolutionMenu = new BPopUpMenu("resolution");
-	fResolutionField = new BMenuField("res", fResolutionMenu, "Resolution");
+	fResolutionField = new BMenuField("res", "Resolution", fResolutionMenu);
 
 	fFilterMenu = new BPopUpMenu("filter");
-	fFilterField = new BMenuField("filter", fFilterMenu, "Filter");
+	fFilterField = new BMenuField("filter", "Filter", fFilterMenu);
 
 	fMicMenu = new BPopUpMenu("mic");
-	fMicField = new BMenuField("mic", fMicMenu, "Microphone");
+	fMicField = new BMenuField("mic", "Microphone", fMicMenu);
 
 	fZoomSlider = new BSlider("zoom", "Zoom",
 		new BMessage(kMsgZoomChanged), 10, 40, B_HORIZONTAL);
@@ -323,30 +324,34 @@ CameraWindow::CameraWindow(BRect frame)
 
 	fStatusLabel = new BStringView("status", "Starting...");
 
-	BView* controls = new BView("controls", B_WILL_DRAW);
-	controls->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	controls->AddChild(fCameraField);
-	controls->AddChild(fModeField);
-	controls->AddChild(fResolutionField);
-	controls->AddChild(fFilterField);
-	controls->AddChild(fMicField);
-	controls->AddChild(fZoomSlider);
-	controls->AddChild(fBrightnessSlider);
-	controls->AddChild(fContrastSlider);
-	controls->AddChild(fSaturationSlider);
-	controls->AddChild(fShutterButton);
-	controls->AddChild(fThumbButton);
-	controls->AddChild(fStatusLabel);
+	fView->SetExplicitMinSize(BSize(320, 240));
+	fView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 
-	BView* root = new BView(Bounds(), "root", B_FOLLOW_ALL, B_WILL_DRAW);
-	root->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	root->AddChild(fView);
-	root->AddChild(controls);
-	AddChild(root);
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
+		.Add(fView, 3.0f)
+		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1.0f)
+			.SetInsets(B_USE_WINDOW_SPACING)
+			.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+				.AddMenuField(fCameraField, 0, 0)
+				.AddMenuField(fModeField, 0, 1)
+				.AddMenuField(fResolutionField, 0, 2)
+				.AddMenuField(fFilterField, 0, 3)
+				.AddMenuField(fMicField, 0, 4)
+			.End()
+			.Add(fZoomSlider)
+			.Add(fBrightnessSlider)
+			.Add(fContrastSlider)
+			.Add(fSaturationSlider)
+			.AddGlue()
+			.Add(fStatusLabel)
+			.AddGroup(B_HORIZONTAL)
+				.Add(fShutterButton, 3.0f)
+				.Add(fThumbButton, 2.0f)
+			.End()
+		.End();
 
 	_BuildGraph();
 	_RefreshFilterMenu();
-	_LayoutControls();
 	_LoadSettings();
 
 }
@@ -516,55 +521,6 @@ CameraWindow::_FrameArrived(BMessage* message)
 }
 
 
-void
-CameraWindow::_LayoutControls()
-{
-	BView* root = FindView("root");
-	if (root == NULL)
-		return;
-
-	BView* controls = FindView("controls");
-	const BRect bounds = root->Bounds();
-	const bool portrait = bounds.Height() >= bounds.Width();
-
-	const float kPanel = 280;
-	if (portrait) {
-		fView->MoveTo(0, 0);
-		fView->ResizeTo(bounds.Width(), bounds.Height() - kPanel);
-		controls->MoveTo(0, bounds.Height() - kPanel);
-		controls->ResizeTo(bounds.Width(), kPanel);
-	} else {
-		fView->MoveTo(0, 0);
-		fView->ResizeTo(bounds.Width() - kPanel, bounds.Height());
-		controls->MoveTo(bounds.Width() - kPanel, 0);
-		controls->ResizeTo(kPanel, bounds.Height());
-	}
-
-	const BRect panel = controls->Bounds();
-	float y = 8;
-	const float w = panel.Width() - 16;
-	BView* rows[] = { fCameraField, fModeField, fResolutionField,
-		fFilterField, fMicField, fZoomSlider, fBrightnessSlider,
-		fContrastSlider, fSaturationSlider, NULL };
-	for (int32 i = 0; rows[i] != NULL; i++) {
-		rows[i]->MoveTo(8, y);
-		rows[i]->ResizeTo(w, 28);
-		y += 32;
-	}
-	fShutterButton->MoveTo(8, panel.Height() - 56);
-	fShutterButton->ResizeTo(w * 0.6f, 48);
-	fThumbButton->MoveTo(12 + w * 0.6f, panel.Height() - 56);
-	fThumbButton->ResizeTo(w * 0.4f, 48);
-	fStatusLabel->MoveTo(8, panel.Height() - 84);
-	fStatusLabel->ResizeTo(w, 20);
-}
-
-
-void
-CameraWindow::FrameResized(float /*width*/, float /*height*/)
-{
-	_LayoutControls();
-}
 
 
 void

@@ -36,7 +36,6 @@ public:
 	virtual						~CameraWindow();
 
 	virtual	bool				QuitRequested();
-	virtual	void				FrameResized(float width, float height);
 	virtual	void				MessageReceived(BMessage* message);
 
 			void				HandleFrame(const uint8* bits, size_t size,
@@ -58,7 +57,6 @@ private:
 			void				_StartRecording();
 			void				_StopRecording();
 			void				_PlayShutter();
-			void				_LayoutControls();
 			void				_LoadSettings();
 			void				_StoreSettings();
 			void				_FrameArrived(BMessage* message);

@@ -1019,7 +1019,7 @@ BMidiOutput::FillBuffer(void* buffer, size_t maxSize)
 			continue;
 		if (spa_pod_builder_bytes(&b, event.data, event.length) < 0)
 			continue;
-		written += sizeof(struct spa_pod_control) + SPA_POD_BODY_SIZE(event.length);
+		written = b.state.offset;
 	}
 
 	uint8 sysExChunk[256];
@@ -1027,7 +1027,7 @@ BMidiOutput::FillBuffer(void* buffer, size_t maxSize)
 	if (sysExLength > 0 && written < (maxSize - 128)) {
 		if (spa_pod_builder_control(&b, 0, SPA_CONTROL_Midi) >= 0
 				&& spa_pod_builder_bytes(&b, sysExChunk, sysExLength) >= 0) {
-			written += sizeof(struct spa_pod_control) + SPA_POD_BODY_SIZE(sysExLength);
+			written = b.state.offset;
 		}
 	}
 

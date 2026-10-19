@@ -5,6 +5,8 @@
 
 #include <media2/VideoFilter.h>
 
+#include <media2/MediaGraph.h>
+
 #include <Autolock.h>
 #include <math.h>
 #include <new>
@@ -567,7 +569,10 @@ BVideoSplitter::RemoveOutput(BMediaOutput* output)
 		if (fOutputs == NULL || fOutputs->RemoveItem(output) == false)
 			return B_ENTRY_NOT_FOUND;
 	}
-	output->Disconnect();
+	BMediaGraph* graph = BMediaGraph::Instance();
+	BMediaInput* input = dynamic_cast<BMediaInput*>(output->Binding());
+	if (graph != NULL && input != NULL && output->IsConnected())
+		graph->Disconnect(output, input);
 	UnregisterOutput(output);
 	delete output;
 	return B_OK;

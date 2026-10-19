@@ -6,8 +6,8 @@
 #include "GStreamerBackend.h"
 
 #include <mutex>
+#include <string>
 #include <stdlib.h>
-#include <String.h>
 #include <string.h>
 
 #include <gst/audio/audio.h>
@@ -835,21 +835,24 @@ GStreamerBackend::CreateAVEncodePipeline(const char* path,
 			muxer = encoding == B_CODEC_TYPE_AAC ? "mp4mux" : "webmmux";
 	}
 
-	BString description;
+	std::string description;
 	if (videoChain != NULL) {
-		description << "appsrc name=vsrc is-live=true format=time block=true"
-			<< " ! queue ! videoconvert ! video/x-raw,format=I420"
-			<< " ! " << videoChain << " ! queue ! mux. ";
+		description += "appsrc name=vsrc is-live=true format=time block=true"
+			" ! queue ! videoconvert ! video/x-raw,format=I420 ! ";
+		description += videoChain;
+		description += " ! queue ! mux. ";
 	}
 	if (audioChain != NULL) {
-		description << "appsrc name=asrc is-live=true format=time block=true"
-			<< " ! queue ! audioconvert ! audioresample"
-			<< " ! " << audioChain << " ! queue ! mux. ";
+		description += "appsrc name=asrc is-live=true format=time block=true"
+			" ! queue ! audioconvert ! audioresample ! ";
+		description += audioChain;
+		description += " ! queue ! mux. ";
 	}
-	description << muxer << " name=mux ! filesink name=sink";
+	description += muxer;
+	description += " name=mux ! filesink name=sink";
 
 	GError* error = NULL;
-	GstElement* pipeline = gst_parse_launch(description.String(), &error);
+	GstElement* pipeline = gst_parse_launch(description.c_str(), &error);
 	if (error != NULL)
 		g_error_free(error);
 	if (pipeline == NULL)

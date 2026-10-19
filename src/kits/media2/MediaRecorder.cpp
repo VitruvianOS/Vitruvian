@@ -342,6 +342,14 @@ BMediaRecorder::Impl::Start()
 	status_t err = fClient != NULL ? fClient->Start() : fNode->Start();
 	if (err != B_OK)
 		return err;
+
+	// A leg nobody feeds must not hold the muxer back.
+	if (fClient != NULL && fEncodePipeline != NULL) {
+		if (!fClient->AudioInput()->IsConnected() && fEncodeAudioSrc != NULL)
+			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAudioSrc));
+		if (!fClient->VideoInput()->IsConnected() && fEncodeVideoSrc != NULL)
+			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeVideoSrc));
+	}
 	if (fNotifyFunc != NULL)
 		fNotifyFunc(fCookie, BMediaRecorder::B_STARTED);
 	return B_OK;

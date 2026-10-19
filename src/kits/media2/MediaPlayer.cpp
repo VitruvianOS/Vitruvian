@@ -852,9 +852,21 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 		return;
 	}
 
+	// Decoded buffers rarely match the cycle; keep reading until it is full.
 	int64 wantFrames = size / fFrameStride;
-	int64 gotFrames  = wantFrames;
-	status_t err = fTrack->ReadFrames(buffer, &gotFrames);
+	int64 gotFrames  = 0;
+	status_t err = B_OK;
+	while (gotFrames < wantFrames) {
+		int64 frames = wantFrames - gotFrames;
+		err = fTrack->ReadFrames((uint8_t*)buffer + gotFrames * fFrameStride,
+			&frames);
+		if (err != B_OK || frames <= 0)
+			break;
+		gotFrames += frames;
+	}
+	// Audio already in hand plays out; end of stream is seen next cycle.
+	if (err == B_LAST_BUFFER_ERROR && gotFrames > 0)
+		err = B_OK;
 	if ((err == B_OK || err == B_LAST_BUFFER_ERROR) && gotFrames > 0)
 		fPlayedFrames += gotFrames;
 

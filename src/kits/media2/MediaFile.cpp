@@ -54,6 +54,7 @@ public:
 		fNextPts(0),
 		fCodecId(B_CODEC_TYPE_UNKNOWN),
 		fPendingFrames(0),
+		fCarryOffset(0),
 		fQuality(-1.0f),
 		fQualityApplied(false)
 	{
@@ -125,6 +126,9 @@ public:
 	int32			fCodecId;
 	std::vector<uint8>	fPending;
 	int64			fPendingFrames;
+	// Decoded audio past what the last ReadFrames asked for.
+	std::vector<uint8>	fCarry;
+	size_t			fCarryOffset;
 	float			fQuality;
 	bool			fQualityApplied;
 };
@@ -1213,6 +1217,28 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 		}
 	}
 
+	if (fImpl->fKind != kTrackVideo
+		&& fImpl->fCarryOffset < fImpl->fCarry.size()) {
+		const media_raw_audio_format& raw = fImpl->fFormat.format.u.raw_audio;
+		const uint32 stride = (raw.format
+			& media_raw_audio_format::B_AUDIO_SIZE_MASK) * raw.channel_count;
+		const int64 framesAvail = stride > 0
+			? (int64)((fImpl->fCarry.size() - fImpl->fCarryOffset) / stride) : 0;
+		if (framesAvail > 0) {
+			const int64 frames = framesAvail < requested ? framesAvail : requested;
+			memcpy(buffer, &fImpl->fCarry[fImpl->fCarryOffset], frames * stride);
+			fImpl->fCarryOffset += frames * stride;
+			*outFrameCount = frames;
+			if (mh != NULL) {
+				memset(mh, 0, sizeof(*mh));
+				mh->size_used = (uint32)(frames * stride);
+			}
+			return B_OK;
+		}
+	}
+	fImpl->fCarry.clear();
+	fImpl->fCarryOffset = 0;
+
 	GstAppSink* sink = GST_APP_SINK(fImpl->fAppSink);
 	// A seek through a sibling track on the shared pipeline clears the
 	// sink's EOS without touching this track's flag.
@@ -1273,6 +1299,11 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 		int64 framesToCopy = framesAvail < requested ? framesAvail : requested;
 		const size_t bytes = framesToCopy * stride;
 		memcpy(buffer, map.data, bytes);
+		if (framesAvail > framesToCopy) {
+			fImpl->fCarry.assign(map.data + bytes,
+				map.data + framesAvail * stride);
+			fImpl->fCarryOffset = 0;
+		}
 		*outFrameCount = framesToCopy;
 		if (mh != NULL) {
 			memset(mh, 0, sizeof(*mh));
@@ -1314,6 +1345,8 @@ BMediaTrack::SeekToTime(bigtime_t* inOutTime, int32 flags)
 		return B_ERROR;
 	}
 	fImpl->fEOS = false;
+	fImpl->fCarry.clear();
+	fImpl->fCarryOffset = 0;
 	*inOutTime = (bigtime_t)(ns / 1000);
 	return B_OK;
 }

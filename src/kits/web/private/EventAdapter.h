@@ -36,7 +36,7 @@ private:
 	static uint32_t		_LegacyPointerModsToWPE(uint32 legacyMods);
 	static uint32_t		_LegacyButtonToWPE(int32 buttons);
 	static uint32_t		_LegacyKeyToXKB(int32 rawKey, const char* bytes,
-							int32 numBytes);
+							int32 numBytes, uint32 modifiers);
 
 			void		_DispatchKey(uint32_t keyCode, uint32_t modifiers,
 							bool pressed);

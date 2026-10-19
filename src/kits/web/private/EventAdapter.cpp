@@ -103,14 +103,20 @@ EventAdapter::_LegacyButtonToWPE(int32 buttons)
 
 
 uint32_t
-EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes)
+EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes,
+	uint32 modifiers)
 {
+	// Special keys first: Enter, Tab and Backspace also arrive as 0x0a,
+	// 0x09 and 0x08, which would unfold to j, i and h below.
+	uint32_t special = web_special_key_to_keysym(rawKey);
+	if (special != 0)
+		return special;
+
 	// Ctrl+letter arrives folded to 0x01-0x1a by xkb; expand it back so
 	// the page sees the real letter key with the control modifier.
-	if (numBytes > 0 && bytes != NULL) {
-		unsigned char b0 = (unsigned char)bytes[0];
-		uint32_t letter = web_unfold_ctrl_letter(b0);
-		if (letter != 0 && numBytes == 1)
+	if ((modifiers & B_CONTROL_KEY) != 0 && numBytes == 1 && bytes != NULL) {
+		uint32_t letter = web_unfold_ctrl_letter((unsigned char)bytes[0]);
+		if (letter != 0)
 			return wpe_unicode_to_key_code(letter);
 	}
 
@@ -127,8 +133,7 @@ EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes)
 		}
 	}
 
-	// Special keys (legacy keycodes and raw evdev media keys).
-	return web_special_key_to_keysym(rawKey);
+	return 0;
 }
 
 
@@ -204,7 +209,7 @@ EventAdapter::TranslateKeyDown(const BMessage* msg)
 		}
 	}
 
-	_DispatchKey(_LegacyKeyToXKB(rawKey, bytes, numBytes),
+	_DispatchKey(_LegacyKeyToXKB(rawKey, bytes, numBytes, modifiers),
 		_LegacyModsToWPE(modifiers), true);
 }
 
@@ -230,7 +235,7 @@ EventAdapter::TranslateKeyUp(const BMessage* msg)
 	// Release the key we pressed even if the mapping changed in between
 	// (layout switch while held): find it in the held set by the mapping
 	// of this release, else release everything that went down.
-	uint32_t keyCode = _LegacyKeyToXKB(rawKey, bytes, numBytes);
+	uint32_t keyCode = _LegacyKeyToXKB(rawKey, bytes, numBytes, modifiers);
 	if (keyCode != 0 && fHeldKeys.find(keyCode) != fHeldKeys.end()) {
 		_DispatchKey(keyCode, _LegacyModsToWPE(modifiers), false);
 		return;

@@ -80,7 +80,7 @@ BSoundFontSynth::BSoundFontSynth(const char* name, uint32 channelCount)
 	BMediaSynth(name, channelCount),
 	fFluid(NULL),
 	fInitStatus(B_NO_INIT),
-	fGain(0.2f),
+	fGain(0.6f),
 	fInterpolation(1),
 	fReverb(true),
 	fPolyphony(256),
@@ -161,7 +161,7 @@ BSoundFontSynth::_ApplySettingsToSynth()
 {
 	if (fFluid == NULL || fFluid->settings == NULL)
 		return;
-	fluid_settings_setnum(fFluid->settings, "synth.gain", fGain);
+	fluid_settings_setnum(fFluid->settings, "synth.gain", fGain * fVolume);
 	fluid_settings_setint(fFluid->settings, "synth.polyphony",
 		(int)fPolyphony);
 	fluid_settings_setint(fFluid->settings, "synth.reverb.active",
@@ -288,7 +288,7 @@ BSoundFontSynth::SetGain(float gain)
 {
 	fGain = gain;
 	if (fFluid != NULL && fFluid->synth != NULL)
-		fluid_synth_set_gain(fFluid->synth, gain);
+		fluid_synth_set_gain(fFluid->synth, fGain * fVolume);
 }
 
 
@@ -354,8 +354,9 @@ void
 BSoundFontSynth::SetVolume(float volume)
 {
 	fVolume = volume;
-	// fluidsynth gain is the volume surface; keep both in sync.
-	SetGain(fGain * volume);
+	// The engine runs at gain times volume; storing the product as the
+	// gain would shrink it again on every volume change.
+	SetGain(fGain);
 }
 
 

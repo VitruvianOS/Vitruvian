@@ -483,7 +483,7 @@ MediaWindow::_OnPipeWireChanged(uint32 what, uint32 deviceId)
 		}
 	}
 
-	if (what == kMsgPWDeviceProfileChanged || what == kMsgPWDevicePortChanged)
+	if (what == kMsgDeviceProfileChanged || what == kMsgDevicePortChanged)
 		_PopulateHardwareProfiles();
 
 	if (what == BMediaGraph::B_MEDIA_CLIENT_ADDED
@@ -602,12 +602,13 @@ MediaWindow::MessageReceived(BMessage* msg)
 		break;
 		}
 
-		case kMsgPWDevicesChanged:
-		case kMsgPWStreamsChanged:
-		case kMsgPWDefaultChanged:
-		case kMsgPWDeviceVolumeChanged:
-		case kMsgPWDevicePortChanged:
-		case kMsgPWDeviceProfileChanged:
+		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
+		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
+		case BMediaGraph::B_MEDIA_STREAMS_CHANGED:
+		case BMediaGraph::B_MEDIA_DEFAULTS_CHANGED:
+		case BMediaGraph::B_MEDIA_VOLUME_CHANGED:
+		case kMsgDevicePortChanged:
+		case kMsgDeviceProfileChanged:
 			_OnPipeWireChanged(msg->what,
 				msg->GetUInt32("device_id", 0));
 			break;

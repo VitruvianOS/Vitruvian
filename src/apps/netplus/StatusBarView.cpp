@@ -27,6 +27,10 @@ StatusBarView::StatusBarView(BRect frame)
 	fProgressBar->Hide();
 
 	fStatusText = new BStringView("status", "");
+	// A hovered link can be thousands of pixels wide; left to size the
+	// layout it stretched the web view far past the window.
+	fStatusText->SetTruncation(B_TRUNCATE_MIDDLE);
+	fStatusText->SetExplicitMinSize(BSize(0, B_SIZE_UNSET));
 	fStatusText->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, B_USE_HALF_ITEM_SPACING)

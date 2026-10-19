@@ -6,6 +6,7 @@
 
 #include "compositor_adapter.h"
 #include "logging.h"
+#include "process_manager.h"
 
 #include <Bitmap.h>
 #include <GraphicsDefs.h>
@@ -50,7 +51,8 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fWidth(w),
 	fHeight(h),
 	fFillColor(0xFFFFFFFF),
-	fFrameReady(false)
+	fFrameReady(false),
+	fCompletePending(false)
 {
 	init_fdo_backend();
 
@@ -76,8 +78,7 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 			}
 			wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(
 				self->fExportable, buffer);
-			wpe_view_backend_exportable_fdo_dispatch_frame_complete(
-				self->fExportable);
+			self->ScheduleFrameComplete();
 		};
 
 	fExportable = wpe_view_backend_exportable_fdo_create(
@@ -202,6 +203,25 @@ CompositorAdapter::Resize(int newWidth, int newHeight)
 	fHeight = newHeight;
 	_AllocateBitmaps(frontBitmap);
 	// Caller (WebKitBridge::Resize) dispatches set_size to WPE on the GLib thread.
+}
+
+
+void
+CompositorAdapter::ScheduleFrameComplete()
+{
+	// Dispatching inside the export callback could drop the completion
+	// while a resize was in flight, and WebKit then waits forever for it.
+	// Queued after the bridge's other GLib work, so teardown flushes it.
+	if (fCompletePending.exchange(true))
+		return;
+	ProcessManager::Instance().InvokeOnGLibThread([](void* data) -> gboolean {
+		auto* self = static_cast<CompositorAdapter*>(data);
+		self->fCompletePending.store(false);
+		if (self->fExportable != NULL)
+			wpe_view_backend_exportable_fdo_dispatch_frame_complete(
+				self->fExportable);
+		return G_SOURCE_REMOVE;
+	}, this);
 }
 
 

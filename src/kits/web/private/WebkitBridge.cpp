@@ -935,6 +935,9 @@ WebKitBridge::Resize(int width, int height)
 		self->compositor->Resize(w, h);
 		wpe_view_backend_dispatch_set_size(self->backend,
 			(uint32_t)w, (uint32_t)h);
+		// A completion lost across the size change would stall WebKit;
+		// an extra one with no frame pending is ignored.
+		self->compositor->ScheduleFrameComplete();
 		return G_SOURCE_REMOVE;
 	}, this);
 }

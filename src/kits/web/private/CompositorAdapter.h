@@ -23,6 +23,8 @@ struct CompositorAdapter {
 			// Keeps the old frame's overlap; the rest takes the fill colour
 			// until the next frame arrives.
 			void				Resize(int newWidth, int newHeight);
+			// Tells WebKit the last frame is done, from the GLib queue.
+			void				ScheduleFrameComplete();
 			void				SetFillColor(uint32_t bgra);
 
 			BBitmap*			AcquireFront();
@@ -53,6 +55,7 @@ private:
 
 			std::mutex				fBitmapMutex;
 			std::atomic<bool>		fFrameReady;
+			std::atomic<bool>		fCompletePending;
 };
 
 

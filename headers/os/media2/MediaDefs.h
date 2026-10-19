@@ -111,7 +111,8 @@ enum media_codec_type {
 	B_CODEC_TYPE_VP8     = 8,
 	B_CODEC_TYPE_VP9     = 9,
 	B_CODEC_TYPE_THEORA  = 10,
-	B_CODEC_TYPE_H264    = 11
+	B_CODEC_TYPE_H264    = 11,
+	B_CODEC_TYPE_MJPEG   = 12
 };
 
 

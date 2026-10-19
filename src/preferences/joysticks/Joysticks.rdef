@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  *
  * Version resources for the Joysticks preferences app; the vector icon
- * is the one from the Haiku Joysticks preflet.
+ * is the legacy Joysticks preflet icon.
  */
 
 resource app_signature "application/x-vnd.Haiku-Joysticks";

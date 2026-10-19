@@ -26,9 +26,9 @@ public:
 			void		TranslateMouseWheel(const BMessage* msg);
 
 private:
-	static uint32_t		_HaikuModsToWPE(uint32 haikuMods);
-	static uint32_t		_HaikuButtonToWPE(int32 buttons);
-	static uint32_t		_HaikuKeyToXKB(uint8 rawKey, const char* bytes,
+	static uint32_t		_LegacyModsToWPE(uint32 legacyMods);
+	static uint32_t		_LegacyButtonToWPE(int32 buttons);
+	static uint32_t		_LegacyKeyToXKB(uint8 rawKey, const char* bytes,
 							int32 numBytes);
 
 	struct wpe_view_backend* fBackend;

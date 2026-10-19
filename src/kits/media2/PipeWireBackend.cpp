@@ -2748,7 +2748,7 @@ PipeWireBackend::ShowNotification(NotificationType type, const char* title,
 
 	// Volume is a state change, not an operation with a progress bar;
 	// watchers already receive 'PWVC'. Progress type would need SetProgress.
-	notification_type haikuType;
+	notification_type legacyType;
 	switch (type) {
 		case kNotificationDeviceAdded:
 		case kNotificationDeviceRemoved:
@@ -2756,13 +2756,13 @@ PipeWireBackend::ShowNotification(NotificationType type, const char* title,
 		case kNotificationDeviceDisconnected:
 		case kNotificationDefaultChanged:
 		case kNotificationVolumeChanged:
-			haikuType = B_INFORMATION_NOTIFICATION;
+			legacyType = B_INFORMATION_NOTIFICATION;
 			break;
 		default:
-			haikuType = B_INFORMATION_NOTIFICATION;
+			legacyType = B_INFORMATION_NOTIFICATION;
 			break;
 	}
-	BNotification notification(haikuType);
+	BNotification notification(legacyType);
 	notification.SetTitle(title);
 	notification.SetContent(message);
 	notification.SetGroup("AudioDevices");

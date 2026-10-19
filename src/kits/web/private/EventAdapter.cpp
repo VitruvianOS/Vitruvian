@@ -59,41 +59,41 @@ EventAdapter::~EventAdapter()
 //	#pragma mark - Private
 
 
-// V\OS hybrid keycode space: <=0x7f is the Haiku legacy keycode, not an
+// V\OS hybrid keycode space: <=0x7f is the legacy keycode, not an
 // evdev code and not the ASCII byte constants in InterfaceDefs.h.
 // Values match the input_server mapping (see LinuxKeycodeMap.h).
 enum {
-	kHaikuEscKey		= 0x01,
-	kHaikuBackspaceKey	= 0x1e,
-	kHaikuInsertKey		= 0x1f,
-	kHaikuHomeKey		= 0x20,
-	kHaikuPageUpKey		= 0x21,
-	kHaikuTabKey		= 0x26,
-	kHaikuDeleteKey		= 0x34,
-	kHaikuEndKey		= 0x35,
-	kHaikuPageDownKey	= 0x36,
-	kHaikuEnterKey		= 0x47,
-	kHaikuUpKey		= 0x57,
-	kHaikuLeftKey		= 0x61,
-	kHaikuDownKey		= 0x62,
-	kHaikuRightKey		= 0x63
+	kLegacyEscKey		= 0x01,
+	kLegacyBackspaceKey	= 0x1e,
+	kLegacyInsertKey		= 0x1f,
+	kLegacyHomeKey		= 0x20,
+	kLegacyPageUpKey		= 0x21,
+	kLegacyTabKey		= 0x26,
+	kLegacyDeleteKey		= 0x34,
+	kLegacyEndKey		= 0x35,
+	kLegacyPageDownKey	= 0x36,
+	kLegacyEnterKey		= 0x47,
+	kLegacyUpKey		= 0x57,
+	kLegacyLeftKey		= 0x61,
+	kLegacyDownKey		= 0x62,
+	kLegacyRightKey		= 0x63
 };
 
 
 uint32_t
-EventAdapter::_HaikuModsToWPE(uint32 haikuMods)
+EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 {
 	uint32_t wpe = 0;
-	if (haikuMods & B_SHIFT_KEY)    wpe |= wpe_input_keyboard_modifier_shift;
-	if (haikuMods & B_CONTROL_KEY)  wpe |= wpe_input_keyboard_modifier_control;
-	if (haikuMods & B_COMMAND_KEY)  wpe |= wpe_input_keyboard_modifier_control;
-	if (haikuMods & B_OPTION_KEY)   wpe |= wpe_input_keyboard_modifier_alt;
+	if (legacyMods & B_SHIFT_KEY)    wpe |= wpe_input_keyboard_modifier_shift;
+	if (legacyMods & B_CONTROL_KEY)  wpe |= wpe_input_keyboard_modifier_control;
+	if (legacyMods & B_COMMAND_KEY)  wpe |= wpe_input_keyboard_modifier_control;
+	if (legacyMods & B_OPTION_KEY)   wpe |= wpe_input_keyboard_modifier_alt;
 	return wpe;
 }
 
 
 uint32_t
-EventAdapter::_HaikuButtonToWPE(int32 buttons)
+EventAdapter::_LegacyButtonToWPE(int32 buttons)
 {
 	// WPE wants one button number: 1 primary, 2 secondary, 3 middle.
 	if (buttons & B_PRIMARY_MOUSE_BUTTON)
@@ -107,13 +107,13 @@ EventAdapter::_HaikuButtonToWPE(int32 buttons)
 
 
 uint32_t
-EventAdapter::_HaikuKeyToXKB(uint8 rawKey, const char* bytes, int32 numBytes)
+EventAdapter::_LegacyKeyToXKB(uint8 rawKey, const char* bytes, int32 numBytes)
 {
 	if (numBytes > 0 && bytes[0] >= 0x20 && bytes[0] < 0x7f)
 		return wpe_unicode_to_key_code((uint32_t)(unsigned char)bytes[0]);
 
 	switch (rawKey) {
-		case kHaikuEscKey:       return 0xff1b;
+		case kLegacyEscKey:       return 0xff1b;
 		case B_F1_KEY:           return 0xffbe;
 		case B_F2_KEY:           return 0xffbf;
 		case B_F3_KEY:           return 0xffc0;
@@ -126,19 +126,19 @@ EventAdapter::_HaikuKeyToXKB(uint8 rawKey, const char* bytes, int32 numBytes)
 		case B_F10_KEY:          return 0xffc7;
 		case B_F11_KEY:          return 0xffc8;
 		case B_F12_KEY:          return 0xffc9;
-		case kHaikuBackspaceKey: return 0xff08;
-		case kHaikuInsertKey:    return 0xff63;
-		case kHaikuHomeKey:      return 0xff50;
-		case kHaikuPageUpKey:    return 0xff55;
-		case kHaikuTabKey:       return 0xff09;
-		case kHaikuDeleteKey:    return 0xffff;
-		case kHaikuEndKey:       return 0xff57;
-		case kHaikuPageDownKey:  return 0xff56;
-		case kHaikuEnterKey:     return 0xff0d;
-		case kHaikuUpKey:        return 0xff52;
-		case kHaikuLeftKey:      return 0xff51;
-		case kHaikuDownKey:      return 0xff54;
-		case kHaikuRightKey:     return 0xff53;
+		case kLegacyBackspaceKey: return 0xff08;
+		case kLegacyInsertKey:    return 0xff63;
+		case kLegacyHomeKey:      return 0xff50;
+		case kLegacyPageUpKey:    return 0xff55;
+		case kLegacyTabKey:       return 0xff09;
+		case kLegacyDeleteKey:    return 0xffff;
+		case kLegacyEndKey:       return 0xff57;
+		case kLegacyPageDownKey:  return 0xff56;
+		case kLegacyEnterKey:     return 0xff0d;
+		case kLegacyUpKey:        return 0xff52;
+		case kLegacyLeftKey:      return 0xff51;
+		case kLegacyDownKey:      return 0xff54;
+		case kLegacyRightKey:     return 0xff53;
 		default:                 return 0;
 	}
 }
@@ -170,8 +170,8 @@ EventAdapter::TranslateKeyDown(const BMessage* msg)
 	int32 rawKey = 0;
 	msg->FindInt32("key", &rawKey);
 
-	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
-	uint32_t wpeMods = _HaikuModsToWPE(modifiers);
+	uint32_t keyCode = _LegacyKeyToXKB(rawKey, bytes, numBytes);
+	uint32_t wpeMods = _LegacyModsToWPE(modifiers);
 
 	struct wpe_input_keyboard_event event;
 	memset(&event, 0, sizeof(event));
@@ -206,8 +206,8 @@ EventAdapter::TranslateKeyUp(const BMessage* msg)
 	int32 rawKey = 0;
 	msg->FindInt32("key", &rawKey);
 
-	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
-	uint32_t wpeMods = _HaikuModsToWPE(modifiers);
+	uint32_t keyCode = _LegacyKeyToXKB(rawKey, bytes, numBytes);
+	uint32_t wpeMods = _LegacyModsToWPE(modifiers);
 
 	struct wpe_input_keyboard_event event;
 	memset(&event, 0, sizeof(event));
@@ -238,7 +238,7 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 	event.type = wpe_input_pointer_event_type_button;
 	event.x = (int32)where.x;
 	event.y = (int32)where.y;
-	event.button = _HaikuButtonToWPE(buttons);
+	event.button = _LegacyButtonToWPE(buttons);
 	event.state = 1;
 	fPressedButton = event.button;
 	event.modifiers = 0;

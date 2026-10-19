@@ -303,6 +303,13 @@ FilterUnitCore::ProcessBuffer(void* buffer, size_t size,
 		return B_OK;
 	}
 
+	if (fImpl->capsSet && format.IsRawVideo()) {
+		const media_raw_video_format& now = format.format.u.raw_video;
+		const media_raw_video_format& was = fImpl->format.format.u.raw_video;
+		if (now.width != was.width || now.height != was.height
+			|| now.color_space != was.color_space)
+			fImpl->capsSet = false;
+	}
 	if (!fImpl->capsSet) {
 		GstCaps* caps = _CapsForFormat(format);
 		if (caps == NULL)

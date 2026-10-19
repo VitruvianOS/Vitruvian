@@ -227,8 +227,10 @@ BVideoFilterUnit::_ForwardThunk(void* cookie, void* buffer, size_t size,
 	const BMediaFormat& format)
 {
 	BVideoFilterUnit* self = (BVideoFilterUnit*)cookie;
-	if (self->fOutput != NULL)
+	if (self->fOutput != NULL) {
+		self->fOutput->SetFormat(format);
 		self->fOutput->SendBuffer(buffer, size);
+	}
 }
 
 
@@ -456,8 +458,11 @@ protected:
 		BAutolock _(fOwner->fLock);
 		for (int32 i = 0; i < fOwner->fOutputs->CountItems(); i++) {
 			BMediaOutput* output = fOwner->fOutputs->ItemAt(i);
-			if (output != NULL && output->IsConnected())
+			if (output != NULL && output->IsConnected()) {
+				// Frames carry their own shape; it changes with the mode.
+				output->SetFormat(format);
 				output->SendBuffer(buffer, size);
+			}
 		}
 	}
 

@@ -8,6 +8,8 @@
 #include <Alert.h>
 #include <Button.h>
 #include <Directory.h>
+#include <Entry.h>
+#include <FilePanel.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <GroupView.h>
@@ -24,6 +26,7 @@
 #include <View.h>
 #include <Window.h>
 
+#include <image.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -35,9 +38,38 @@
 #include <media2/RoutingStore.h>
 #include <media2/VideoFilter.h>
 
+#include <MediaUnitAddOn.h>
+
 #include "CortexGraphView.h"
 #include "CortexMonitor.h"
 #include "CortexNodes.h"
+
+
+// A scanned media add-on image and the units it offers.
+struct CortexAddOn {
+	BString			path;
+	image_id		image;
+	int32			count;
+	BObjectList<BString, true>	names;
+	BMediaUnit*		(*instantiate)(int32);
+	BMediaUnit*		(*loadFile)(const char*);
+
+	CortexAddOn()
+		:
+		image(-1),
+		count(0),
+		names(true),
+		instantiate(NULL),
+		loadFile(NULL)
+	{
+	}
+
+	~CortexAddOn()
+	{
+		if (image >= 0)
+			unload_add_on(image);
+	}
+};
 
 
 struct CortexEndpoint {
@@ -152,7 +184,10 @@ CortexWindow::CortexWindow()
 	fGraphReady(false),
 	fRebuildPending(false),
 	fMeteredIds(true),
-	fMonitors(true)
+	fMonitors(true),
+	fAddMenu(NULL),
+	fFilePanel(NULL),
+	fAddOns(true)
 {
 	BRect bounds = Bounds();
 
@@ -160,8 +195,11 @@ CortexWindow::CortexWindow()
 	fileMenu->AddItem(new BMenuItem("Quit",
 		new BMessage(B_QUIT_REQUESTED), 'Q'));
 
+	fAddMenu = new BMenu("Add");
+
 	BMenuBar* menuBar = new BMenuBar("menu bar");
 	menuBar->AddItem(fileMenu);
+	menuBar->AddItem(fAddMenu);
 	fileMenu->SetTargetForItems(this);
 
 	BRect graphFrame = bounds;
@@ -219,6 +257,10 @@ CortexWindow::~CortexWindow()
 		delete client;
 	}
 	fOwnClients.MakeEmpty();
+
+	// Units are gone; the add-on images can unload now.
+	fAddOns.MakeEmpty();
+	delete fFilePanel;
 
 	delete fModel;
 	fModel = NULL;
@@ -367,6 +409,36 @@ CortexWindow::MessageReceived(BMessage* message)
 		case kMsgRestoreRoutes:
 			_RestoreRoutes();
 			break;
+
+		case kMsgAddUnit:
+			_AddUnit(message);
+			break;
+
+		case kMsgLoadPlugin:
+		{
+			if (fFilePanel == NULL) {
+				BMessage panelMessage(B_REFS_RECEIVED);
+				fFilePanel = new(std::nothrow) BFilePanel(B_OPEN_PANEL,
+					new BMessenger(this), NULL, B_FILE_NODE | B_DIRECTORY_NODE,
+					false, &panelMessage);
+			}
+			if (fFilePanel != NULL)
+				fFilePanel->Show();
+			else
+				_ReportStatus("load plugin", B_NO_MEMORY);
+			break;
+		}
+
+		case B_REFS_RECEIVED:
+		{
+			entry_ref ref;
+			if (message->FindRef("refs", &ref) == B_OK) {
+				BPath path(&ref);
+				if (path.InitCheck() == B_OK)
+					_LoadPluginFile(path.Path());
+			}
+			break;
+		}
 
 		case kMsgInsertFilter:
 		{
@@ -1676,4 +1748,282 @@ CortexWindow::_DropMonitorsOn(BMediaClient* client)
 			|| (entry->target != NULL && entry->target->Client() == client))
 			_CloseMonitor(entry);
 	}
+}
+
+
+void
+CortexWindow::MenusBeginning()
+{
+	if (fAddMenu != NULL)
+		_PopulateAddMenu(fAddMenu, NULL);
+}
+
+
+void
+CortexWindow::ShowAddMenu(BPoint viewPoint, BPoint screenPoint)
+{
+	BPopUpMenu* menu = new(std::nothrow) BPopUpMenu("add menu", false, false);
+	if (menu == NULL)
+		return;
+	_PopulateAddMenu(menu, &viewPoint);
+	menu->Go(screenPoint, true, true, true);
+	delete menu;
+}
+
+
+// Lists catalog units by group, then add-on units, then "Load plugin...".
+// With a point the unit lands there; otherwise the model lays it out.
+void
+CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
+{
+	while (menu->CountItems() > 0)
+		delete menu->RemoveItem((int32)0);
+
+	BObjectList<BFilterCatalog::Entry, true> entries;
+	BFilterCatalog::ListEntries(&entries, NULL);
+	BObjectList<BString, true> groups(true);
+	for (int32 i = 0; i < entries.CountItems(); i++) {
+		const BString& group = entries.ItemAt(i)->group;
+		bool known = false;
+		for (int32 j = 0; j < groups.CountItems(); j++) {
+			if (*groups.ItemAt(j) == group) {
+				known = true;
+				break;
+			}
+		}
+		if (!known)
+			groups.AddItem(new BString(group));
+	}
+
+	for (int32 g = 0; g < groups.CountItems(); g++) {
+		BMenu* groupMenu = new BMenu(groups.ItemAt(g)->String());
+		for (int32 i = 0; i < entries.CountItems(); i++) {
+			BFilterCatalog::Entry* entry = entries.ItemAt(i);
+			if (entry->group != *groups.ItemAt(g))
+				continue;
+			BString label(entry->name);
+			label << " (" << entry->kind << ")";
+			BMessage* message = new BMessage(kMsgAddUnit);
+			message->AddString("source", "catalog");
+			message->AddString("id", entry->id);
+			message->AddString("kind", entry->kind);
+			if (at != NULL) {
+				message->AddFloat("x", at->x);
+				message->AddFloat("y", at->y);
+			}
+			groupMenu->AddItem(new BMenuItem(label.String(), message));
+		}
+		groupMenu->SetTargetForItems(this);
+		menu->AddItem(groupMenu);
+	}
+
+	_ScanAddOns();
+	bool separated = false;
+	for (int32 i = 0; i < fAddOns.CountItems(); i++) {
+		CortexAddOn* addOn = fAddOns.ItemAt(i);
+		for (int32 u = 0; u < addOn->count; u++) {
+			if (!separated) {
+				if (menu->CountItems() > 0)
+					menu->AddSeparatorItem();
+				separated = true;
+			}
+			BMessage* message = new BMessage(kMsgAddUnit);
+			message->AddString("source", "addon");
+			message->AddString("path", addOn->path);
+			message->AddInt32("index", u);
+			if (at != NULL) {
+				message->AddFloat("x", at->x);
+				message->AddFloat("y", at->y);
+			}
+			BMenuItem* item = new BMenuItem(addOn->names.ItemAt(u)->String(),
+				message);
+			item->SetTarget(this);
+			menu->AddItem(item);
+		}
+	}
+
+	if (menu->CountItems() > 0)
+		menu->AddSeparatorItem();
+	BMenuItem* loadItem = new BMenuItem("Load plugin" B_UTF8_ELLIPSIS,
+		new BMessage(kMsgLoadPlugin));
+	loadItem->SetTarget(this);
+	menu->AddItem(loadItem);
+}
+
+
+// Loads every media add-on not seen yet. Images stay in fAddOns; failed
+// ones are remembered with image -1 so they are not retried per click.
+void
+CortexWindow::_ScanAddOns()
+{
+	static const directory_which kDirectories[]
+		= { B_SYSTEM_ADDONS_DIRECTORY, B_USER_NONPACKAGED_ADDONS_DIRECTORY };
+
+	for (size_t d = 0; d < sizeof(kDirectories) / sizeof(kDirectories[0]);
+			d++) {
+		BPath dirPath;
+		if (find_directory(kDirectories[d], &dirPath) != B_OK
+			|| dirPath.Append("media") != B_OK) {
+			continue;
+		}
+
+		BDirectory directory(dirPath.Path());
+		if (directory.InitCheck() != B_OK)
+			continue;
+
+		BEntry entry;
+		while (directory.GetNextEntry(&entry, true) == B_OK) {
+			if (!entry.IsFile())
+				continue;
+			BPath path;
+			if (entry.GetPath(&path) != B_OK)
+				continue;
+
+			bool known = false;
+			for (int32 i = 0; i < fAddOns.CountItems(); i++) {
+				if (fAddOns.ItemAt(i)->path == path.Path()) {
+					known = true;
+					break;
+				}
+			}
+			if (known)
+				continue;
+
+			CortexAddOn* addOn = new(std::nothrow) CortexAddOn();
+			if (addOn == NULL)
+				return;
+			addOn->path = path.Path();
+			fAddOns.AddItem(addOn);
+
+			image_id image = load_add_on(path.Path());
+			if (image < 0)
+				continue;
+
+			int32 (*countFn)() = NULL;
+			const char* (*nameFn)(int32) = NULL;
+			get_image_symbol(image, MEDIA_PLUGIN_LOAD_FILE_SYMBOL,
+				B_SYMBOL_TYPE_TEXT, (void**)&addOn->loadFile);
+			if (get_image_symbol(image, MEDIA_UNIT_COUNT_SYMBOL,
+					B_SYMBOL_TYPE_TEXT, (void**)&countFn) == B_OK
+				&& get_image_symbol(image, MEDIA_UNIT_NAME_SYMBOL,
+					B_SYMBOL_TYPE_TEXT, (void**)&nameFn) == B_OK
+				&& get_image_symbol(image, MEDIA_UNIT_INSTANTIATE_SYMBOL,
+					B_SYMBOL_TYPE_TEXT, (void**)&addOn->instantiate) == B_OK) {
+				int32 count = countFn();
+				for (int32 u = 0; u < count; u++) {
+					const char* name = nameFn(u);
+					addOn->names.AddItem(new BString(
+						name != NULL ? name : path.Leaf()));
+				}
+				addOn->count = addOn->names.CountItems();
+			}
+
+			if (addOn->count == 0 && addOn->loadFile == NULL) {
+				unload_add_on(image);
+				continue;
+			}
+			addOn->image = image;
+		}
+	}
+}
+
+
+void
+CortexWindow::_AddUnit(BMessage* message)
+{
+	BPoint point;
+	bool hasPoint = message->FindFloat("x", &point.x) == B_OK
+		&& message->FindFloat("y", &point.y) == B_OK;
+
+	const char* source = NULL;
+	message->FindString("source", &source);
+	if (source == NULL)
+		return;
+
+	if (strcmp(source, "catalog") == 0) {
+		const char* id = NULL;
+		const char* kind = NULL;
+		if (message->FindString("id", &id) != B_OK
+			|| message->FindString("kind", &kind) != B_OK) {
+			return;
+		}
+
+		BObjectList<BFilterCatalog::Entry, true> entries;
+		BFilterCatalog::ListEntries(&entries, kind);
+		BFilterCatalog::Entry* chosen = NULL;
+		for (int32 i = 0; i < entries.CountItems(); i++) {
+			if (entries.ItemAt(i)->id == id) {
+				chosen = entries.ItemAt(i);
+				break;
+			}
+		}
+		if (chosen == NULL) {
+			_ReportStatus("add unit", B_ENTRY_NOT_FOUND);
+			return;
+		}
+
+		BMediaClient* unit = strcmp(kind, "video") == 0
+			? (BMediaClient*)BFilterCatalog::CreateVideoUnit(*chosen)
+			: (BMediaClient*)BFilterCatalog::CreateAudioUnit(*chosen);
+		_AdoptUnit(unit, "add unit", hasPoint ? &point : NULL);
+		return;
+	}
+
+	const char* path = NULL;
+	int32 index = 0;
+	message->FindString("path", &path);
+	message->FindInt32("index", &index);
+	for (int32 i = 0; path != NULL && i < fAddOns.CountItems(); i++) {
+		CortexAddOn* addOn = fAddOns.ItemAt(i);
+		if (addOn->path != path)
+			continue;
+		if (addOn->instantiate == NULL || index < 0 || index >= addOn->count)
+			break;
+		_AdoptUnit(addOn->instantiate(index), "add unit",
+			hasPoint ? &point : NULL);
+		return;
+	}
+	_ReportStatus("add unit", B_ENTRY_NOT_FOUND);
+}
+
+
+void
+CortexWindow::_LoadPluginFile(const char* path)
+{
+	_ScanAddOns();
+	for (int32 i = 0; i < fAddOns.CountItems(); i++) {
+		CortexAddOn* addOn = fAddOns.ItemAt(i);
+		if (addOn->loadFile == NULL)
+			continue;
+		BMediaClient* unit = addOn->loadFile(path);
+		_AdoptUnit(unit, "load plugin", NULL);
+		return;
+	}
+	_ReportStatus("load plugin", B_NOT_SUPPORTED);
+}
+
+
+// Takes ownership of unit (may be NULL) and shows it as an own node.
+void
+CortexWindow::_AdoptUnit(BMediaClient* unit, const char* action,
+	const BPoint* at)
+{
+	if (unit == NULL || unit->InitCheck() != B_OK) {
+		delete unit;
+		_ReportStatus(action, B_NO_INIT);
+		return;
+	}
+
+	// A failed start still leaves wireable pins; the link reports its own
+	// errors.
+	unit->Start();
+	if (!fOwnClients.AddItem(unit)) {
+		delete unit;
+		_ReportStatus(action, B_NO_MEMORY);
+		return;
+	}
+
+	if (at != NULL && fModel != NULL)
+		fModel->RememberOrigin(unit->Id(), kCortexNodeOwn, *at);
+	_Rebuild();
 }

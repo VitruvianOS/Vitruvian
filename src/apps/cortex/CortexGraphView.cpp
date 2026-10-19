@@ -1094,6 +1094,11 @@ CortexGraphView::MouseDown(BPoint where)
 	BPoint offset;
 	int32 nodeIndex = _NodeAt(where, &offset);
 	if (nodeIndex < 0) {
+		if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+			CortexWindow* window = dynamic_cast<CortexWindow*>(Window());
+			if (window != NULL)
+				window->ShowAddMenu(where, ConvertToScreen(where));
+		}
 		Invalidate();
 		return;
 	}

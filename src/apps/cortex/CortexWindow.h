@@ -15,7 +15,10 @@
 #include <media2/MediaGraph.h>
 
 
+class BFilePanel;
+class BMenu;
 class BSlider;
+struct CortexAddOn;
 class CortexGraphView;
 class CortexModel;
 class CortexMonitorWindow;
@@ -47,7 +50,9 @@ enum {
 	kMsgInsertFilter		= 'CIFL',
 	kMsgRemoveFilter		= 'CRFL',
 	kMsgMonitorPin			= 'CMPN',
-	kMsgMonitorClosed		= 'CMCL'
+	kMsgMonitorClosed		= 'CMCL',
+	kMsgAddUnit			= 'CAUN',
+	kMsgLoadPlugin			= 'CLPL'
 };
 
 
@@ -81,12 +86,14 @@ public:
 
 	virtual	void		MessageReceived(BMessage* message);
 	virtual	bool		QuitRequested();
+	virtual	void		MenusBeginning();
 
 			void		ShowNodeMenu(int32 nodeIndex, BPoint screenPoint);
 			void		TryConnectPins(int32 outNode, int32 outPin,
 					int32 inNode, int32 inPin);
 			void		RemoveLink(int32 linkIndex);
 			bool		LinkHasFilter(int32 linkIndex) const;
+			void		ShowAddMenu(BPoint viewPoint, BPoint screenPoint);
 
 private:
 			void		_GraphReady();
@@ -112,6 +119,12 @@ private:
 					const CortexEndpoint& input);
 			void		_InsertFilter(int32 linkIndex, const char* id);
 			void		_RemoveFilter(int32 linkIndex);
+			void		_PopulateAddMenu(BMenu* menu, const BPoint* at);
+			void		_ScanAddOns();
+			void		_AddUnit(BMessage* message);
+			void		_AdoptUnit(BMediaClient* unit, const char* action,
+					const BPoint* at);
+			void		_LoadPluginFile(const char* path);
 			void		_OpenMonitor(int32 nodeIndex, int32 pinIndex);
 			void		_CloseMonitor(CortexMonitorEntry* entry);
 			void		_DropMonitorsOn(BMediaClient* client);
@@ -125,6 +138,11 @@ private:
 			bool			fRebuildPending;
 			BObjectList<uint32, true>	fMeteredIds;
 			BObjectList<CortexMonitorEntry, true>	fMonitors;
+			BMenu*			fAddMenu;
+			BFilePanel*		fFilePanel;
+			// Media add-on images; kept loaded until the window closes
+			// because the units they created may outlive any single click.
+			BObjectList<CortexAddOn, true>	fAddOns;
 };
 
 

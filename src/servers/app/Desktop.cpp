@@ -1103,9 +1103,12 @@ Desktop::SetBrightness(int32 id, float brightness)
 status_t
 Desktop::SetRotation(int32 id, int32 rotation)
 {
-	// Not locked: HWInterface notifies listeners synchronously and
-	// Desktop::ScreenChanged() takes the window lock for writing.
+	// The buffers are replaced before listeners hear of it; hold the window
+	// lock so nothing draws with the old clipping in between. The
+	// synchronous ScreenChanged() nests it.
+	AutoWriteLocker windowLocker(fWindowLock);
 	status_t result = HWInterface()->SetPanelOrientation(rotation);
+	windowLocker.Unlock();
 
 	// While an unconfirmed change is pending, only the live state moves;
 	// Confirm folds it into the stored configuration, so nothing

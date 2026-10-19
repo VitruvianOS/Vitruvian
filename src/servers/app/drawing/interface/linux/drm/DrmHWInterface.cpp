@@ -2951,17 +2951,12 @@ void
 DrmHWInterface::_ApplyResize()
 {
 	while (fResizePending.exchange(false)) {
-		display_mode mode;
-		if (GetPreferredMode(&mode) != B_OK)
-			break;
-
-		// SetMode() itself must stay silent; app-initiated callers already
-		// trigger Desktop's own _ScreenChanged().
-		if (SetMode(mode) == B_OK) {
-			// External resize is the new baseline; re-arm the poll.
-			fUserSetMode = false;
-			_NotifyScreenChanged();
-		}
+		// Desktop::ScreenChanged() applies the preferred mode under the window
+		// write lock and reclips every window before drawing resumes. Calling
+		// SetMode() here first let windows draw into the new, smaller buffer
+		// with clipping still sized for the old screen.
+		fUserSetMode = false;
+		_NotifyScreenChanged();
 	}
 
 	fResizeBusy.store(false);

@@ -249,12 +249,11 @@ CortexWindow::~CortexWindow()
 	while (fMonitors.CountItems() > 0)
 		_CloseMonitor(fMonitors.ItemAt(0));
 
+	// The list owns the clients and deletes them in MakeEmpty().
 	for (int32 i = 0; i < fOwnClients.CountItems(); i++) {
 		BMediaClient* client = fOwnClients.ItemAt(i);
-		if (client == NULL)
-			continue;
-		client->Stop();
-		delete client;
+		if (client != NULL)
+			client->Stop();
 	}
 	fOwnClients.MakeEmpty();
 

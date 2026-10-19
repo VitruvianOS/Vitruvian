@@ -77,6 +77,8 @@ private:
 			bool				fPrivateWindow;
 			bool				fFullScreen;
 			BRect				fSavedFrame;
+			window_look			fSavedLook;
+			float				fSavedLimits[4];
 			BString				fStatusBase;
 			PanelMenu*			fAppMenu;
 			DownloadsPanel*		fDownloadsPanel;

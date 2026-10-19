@@ -421,27 +421,49 @@ MainWindow::_RebuildBookmarksMenu()
 void
 MainWindow::_SetFullScreen(bool enter)
 {
-	if (enter == fFullScreen)
+	if (enter == fFullScreen) {
+		fWebView->NotifyFullScreen(enter);
 		return;
+	}
 
 	if (enter) {
 		fSavedFrame = Frame();
+		fSavedLook = Look();
+		GetSizeLimits(&fSavedLimits[0], &fSavedLimits[1], &fSavedLimits[2],
+			&fSavedLimits[3]);
 		if (fMenuBar != NULL)
 			fMenuBar->Hide();
-		fToolbar->Hide();
-		fStatusBar->Hide();
+		if (fToolbar != NULL)
+			fToolbar->Hide();
+		if (fStatusBar != NULL)
+			fStatusBar->Hide();
+
 		BRect screen = BScreen(this).Frame();
+		SetLook(B_NO_BORDER_WINDOW_LOOK);
+		SetSizeLimits(fSavedLimits[0], std::max(fSavedLimits[1],
+			screen.Width()), fSavedLimits[2], std::max(fSavedLimits[3],
+			screen.Height()));
 		MoveTo(screen.left, screen.top);
 		ResizeTo(screen.Width(), screen.Height());
 	} else {
+		SetLook(fSavedLook);
+		SetSizeLimits(fSavedLimits[0], fSavedLimits[1], fSavedLimits[2],
+			fSavedLimits[3]);
 		MoveTo(fSavedFrame.left, fSavedFrame.top);
 		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
 		if (fMenuBar != NULL)
 			fMenuBar->Show();
-		fToolbar->Show();
-		fStatusBar->Show();
+		if (fToolbar != NULL)
+			fToolbar->Show();
+		if (fStatusBar != NULL)
+			fStatusBar->Show();
 	}
 	fFullScreen = enter;
+
+	// WebKit is told only once the view has its final size.
+	Layout(true);
+	Sync();
+	fWebView->NotifyFullScreen(enter);
 }
 
 

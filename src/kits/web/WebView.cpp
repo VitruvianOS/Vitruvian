@@ -343,6 +343,20 @@ sync_view_size(const BView* view, Impl* impl)
 #endif
 
 
+// True when the target took the message and will report back through
+// NotifyFullScreen() once its window resized.
+static bool
+send_fullscreen(const BMessenger& target, bool entered)
+{
+	if (!target.IsValid())
+		return false;
+
+	BMessage msg(B_WEB_PAGE_FULLSCREEN);
+	msg.AddBool(B_WEB_FULLSCREEN_FIELD, entered);
+	return target.SendMessage(&msg) == B_OK;
+}
+
+
 BWebView::BWebView(BRect frame, const char* name)
 	:
 	BView(frame, name, B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP,
@@ -1051,15 +1065,11 @@ BWebView::MessageReceived(BMessage* message)
 			// The window thread resizes the window itself (there is
 			// no SetFullScreen); then WebKit is told the transition
 			// is done so the page lays out for the new size.
-			if (fTarget.IsValid()) {
-				BMessage msg(B_WEB_PAGE_FULLSCREEN);
-				msg.AddBool(B_WEB_FULLSCREEN_FIELD, entered);
-				fTarget.SendMessage(&msg);
-			}
-			if (entered)
-				fImpl->fBridge->NotifyDidEnterFullscreen();
-			else
-				fImpl->fBridge->NotifyDidExitFullscreen();
+			// A target that handles the message calls NotifyFullScreen()
+			// once its window has the new size; without one, WebKit is
+			// told right away.
+			if (!send_fullscreen(fTarget, entered))
+				NotifyFullScreen(entered);
 			break;
 		}
 
@@ -1488,13 +1498,8 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 	if (fImpl->fFullScreen.load() && bytes != NULL && numBytes > 0
 		&& bytes[0] == B_ESCAPE) {
 		fImpl->fFullScreen.store(false);
-		if (fImpl->fBridge != NULL)
-			fImpl->fBridge->NotifyDidExitFullscreen();
-		if (fTarget.IsValid()) {
-			BMessage msg(B_WEB_PAGE_FULLSCREEN);
-			msg.AddBool(B_WEB_FULLSCREEN_FIELD, false);
-			fTarget.SendMessage(&msg);
-		}
+		if (!send_fullscreen(fTarget, false))
+			NotifyFullScreen(false);
 		return;
 	}
 
@@ -1974,6 +1979,9 @@ BWebView::NotifyFullScreen(bool entered)
 {
 	if (fImpl->fBridge == NULL)
 		return;
+
+	// The size must reach WebKit before the transition is reported.
+	sync_view_size(this, fImpl);
 	if (entered)
 		fImpl->fBridge->NotifyDidEnterFullscreen();
 	else

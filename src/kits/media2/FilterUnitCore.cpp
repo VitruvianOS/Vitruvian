@@ -202,12 +202,12 @@ FilterUnitCore::FilterUnitCore(const char* name, const char* description,
 
 	BString pipelineText;
 	if ((acceptedTypes & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO)) != 0) {
-		pipelineText << "appsrc name=src is-live=true format=time"
+		pipelineText << "appsrc name=src is-live=true format=time do-timestamp=true"
 			<< " block=true ! videoconvert ! " << description
 			<< " ! videoconvert ! video/x-raw,format=BGRx"
 			<< " ! appsink name=sink sync=false max-buffers=2";
 	} else {
-		pipelineText << "appsrc name=src is-live=true format=time"
+		pipelineText << "appsrc name=src is-live=true format=time do-timestamp=true"
 			<< " block=true ! audioconvert ! audioresample ! "
 			<< description
 			<< " ! audioconvert ! audioresample"
@@ -231,6 +231,10 @@ FilterUnitCore::FilterUnitCore(const char* name, const char* description,
 		fImpl->appSink = NULL;
 		return;
 	}
+
+	// Without this the chain never produces output and the second push
+	// blocks forever on a full appsrc queue.
+	gst_element_set_state(pipeline, GST_STATE_PLAYING);
 
 	// Parameter list over every non-helper element in the chain.
 	GstIterator* it = gst_bin_iterate_elements(GST_BIN(pipeline));

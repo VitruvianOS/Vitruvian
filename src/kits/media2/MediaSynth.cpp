@@ -550,9 +550,16 @@ BMediaSynth::ProcessCycle(uint32 frameCount)
 			outputs[outIndex++] = (float*)buffer;
 	}
 
-	// A cycle with no events is one Render() call: the common case.
-	if (converted == 0 || !fEngineReady || outputs[0] == NULL) {
+	if (!fEngineReady || outputs[0] == NULL) {
 		_ZeroTail(outputs, frameCount);
+		fMidiHook->Clear();
+		return;
+	}
+
+	// A cycle with no events is one Render() call: the common case. Held
+	// notes keep sounding through it.
+	if (converted == 0) {
+		Render(outputs, outIndex, frameCount);
 		fMidiHook->Clear();
 		return;
 	}

@@ -11,7 +11,9 @@
 
 #include <new>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <Bitmap.h>
 #include <GLView.h>
@@ -19,6 +21,10 @@
 
 #ifndef EGL_PLATFORM_SURFACELESS_MESA
 #define EGL_PLATFORM_SURFACELESS_MESA 0x31DD
+#endif
+
+#ifndef EGL_OPENGL_ES3_BIT_KHR
+#define EGL_OPENGL_ES3_BIT_KHR 0x00000040
 #endif
 
 
@@ -32,12 +38,19 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fFbo(0),
 	fColorRb(0),
 	fDepthRb(0),
+	fIsGles(false),
+	fContextMajor(0),
+	fContextMinor(0),
+	fDebug(false),
+	fFirstFrameDumped(false),
 	fWidth(1),
 	fHeight(1),
 	fInitialized(false),
 	fFboReady(false),
 	fBitmap(NULL)
 {
+	fDebug = getenv("VOS_GL_DEBUG") != NULL;
+
 	pthread_mutex_init(&fBitmapLock, NULL);
 
 	pthread_mutexattr_t attr;
@@ -68,6 +81,155 @@ MesaSurfacelessRenderer::~MesaSurfacelessRenderer()
 
 
 status_t
+MesaSurfacelessRenderer::_ChooseEglConfig()
+{
+	// Prefer desktop GL; GLES keeps a GLES-only stack working.
+	static const EGLint kRenderable[] = {
+		EGL_OPENGL_BIT,
+		EGL_OPENGL_ES_BIT | EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT_KHR
+	};
+
+	for (int api = 0; api < 2; api++) {
+		if (api == 0)
+			eglBindAPI(EGL_OPENGL_API);
+		else
+			eglBindAPI(EGL_OPENGL_ES_API);
+
+		const EGLint configAttribs[] = {
+			EGL_SURFACE_TYPE,    EGL_DONT_CARE,
+			EGL_RED_SIZE,        8,
+			EGL_GREEN_SIZE,      8,
+			EGL_BLUE_SIZE,       8,
+			EGL_ALPHA_SIZE,      8,
+			EGL_RENDERABLE_TYPE, kRenderable[api],
+			EGL_NONE
+		};
+		EGLint numConfigs = 0;
+		if (eglChooseConfig(fDisplay, configAttribs, &fConfig, 1,
+				&numConfigs) && numConfigs > 0) {
+			fIsGles = api == 1;
+			return B_OK;
+		}
+	}
+
+	fprintf(stderr, "MesaSurfacelessRenderer: no EGL config\n");
+	return B_ERROR;
+}
+
+
+bool
+MesaSurfacelessRenderer::_TryCreateContext(int major, int minor)
+{
+	EGLint attribs[7];
+	int index = 0;
+	attribs[index++] = EGL_CONTEXT_MAJOR_VERSION;
+	attribs[index++] = major;
+	attribs[index++] = EGL_CONTEXT_MINOR_VERSION;
+	attribs[index++] = minor;
+	// Compat from 3.2 up; Mesa refuses what it cannot honour.
+	if (!fIsGles && (major > 3 || (major == 3 && minor >= 2))) {
+		attribs[index++] = EGL_CONTEXT_OPENGL_PROFILE_MASK;
+		attribs[index++] = EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
+	}
+	attribs[index] = EGL_NONE;
+
+	fContext = eglCreateContext(fDisplay, fConfig, EGL_NO_CONTEXT, attribs);
+	if (fContext == EGL_NO_CONTEXT)
+		return false;
+
+	eglQueryContext(fDisplay, fContext, EGL_CONTEXT_MAJOR_VERSION,
+		&fContextMajor);
+	eglQueryContext(fDisplay, fContext, EGL_CONTEXT_MINOR_VERSION,
+		&fContextMinor);
+
+	// 3.1 has no profiles: keep it only with ARB_compatibility.
+	if (!fIsGles && major == 3 && minor == 1) {
+		if (!eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+				fContext)) {
+			eglDestroyContext(fDisplay, fContext);
+			fContext = EGL_NO_CONTEXT;
+			return false;
+		}
+		const char* extensions
+			= (const char*)glGetString(GL_EXTENSIONS);
+		bool hasCompat = extensions != NULL
+			&& strstr(extensions, "GL_ARB_compatibility") != NULL;
+		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			EGL_NO_CONTEXT);
+		if (!hasCompat) {
+			eglDestroyContext(fDisplay, fContext);
+			fContext = EGL_NO_CONTEXT;
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+status_t
+MesaSurfacelessRenderer::_CreateContext()
+{
+	// BGLView clients may use fixed-function GL: take the highest
+	// compatibility context.
+	if (!fIsGles) {
+		static const struct { int maj, min; } kVersions[] = {
+			{4, 6}, {4, 5}, {4, 3}, {4, 0}, {3, 3},
+			{3, 2}, {3, 1}, {3, 0}, {2, 1}, {0, 0}
+		};
+		for (int i = 0; kVersions[i].maj > 0; i++) {
+			if (_TryCreateContext(kVersions[i].maj, kVersions[i].min))
+				return B_OK;
+		}
+	} else {
+		static const struct { int maj, min; } kEsVersions[] = {
+			{3, 2}, {3, 1}, {3, 0}, {2, 0}, {0, 0}
+		};
+		for (int i = 0; kEsVersions[i].maj > 0; i++) {
+			if (_TryCreateContext(kEsVersions[i].maj,
+					kEsVersions[i].min))
+				return B_OK;
+		}
+	}
+
+	fprintf(stderr, "MesaSurfacelessRenderer: cannot create GL context\n");
+	return B_ERROR;
+}
+
+
+// Context must be current.
+void
+MesaSurfacelessRenderer::_LogGlStrings()
+{
+	const char* eglVendor = eglQueryString(fDisplay, EGL_VENDOR);
+	const char* eglVersion = eglQueryString(fDisplay, EGL_VERSION);
+	const char* glVendor = (const char*)glGetString(GL_VENDOR);
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	const char* glVersion = (const char*)glGetString(GL_VERSION);
+	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
+	bool hasCompat = extensions != NULL
+		&& strstr(extensions, "GL_ARB_compatibility") != NULL;
+
+	printf("MesaSurfacelessRenderer: EGL %s vendor=%s\n",
+		eglVersion != NULL ? eglVersion : "?",
+		eglVendor != NULL ? eglVendor : "?");
+	printf("MesaSurfacelessRenderer: GL %s renderer=%s (%s%s)\n",
+		glVersion != NULL ? glVersion : "?",
+		glRenderer != NULL ? glRenderer : "?",
+		fIsGles ? "GLES" : "desktop GL",
+		hasCompat ? ", ARB_compatibility" : "");
+
+	syslog(LOG_INFO, "MesaSurfacelessRenderer: EGL %s vendor=%s",
+		eglVersion != NULL ? eglVersion : "?",
+		eglVendor != NULL ? eglVendor : "?");
+	syslog(LOG_INFO, "MesaSurfacelessRenderer: GL %s renderer=%s api=%s "
+		"arb_compatibility=%s", glVersion != NULL ? glVersion : "?",
+		glRenderer != NULL ? glRenderer : "?",
+		fIsGles ? "GLES" : "desktop", hasCompat ? "yes" : "no");
+}
+
+
+status_t
 MesaSurfacelessRenderer::_Init()
 {
 	PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
@@ -91,38 +253,13 @@ MesaSurfacelessRenderer::_Init()
 		_Cleanup();
 		return B_ERROR;
 	}
-	printf("MesaSurfacelessRenderer: EGL %d.%d\n", major, minor);
 
-	eglBindAPI(EGL_OPENGL_API);
-
-	const EGLint configAttribs[] = {
-		EGL_SURFACE_TYPE,    EGL_DONT_CARE,
-		EGL_RED_SIZE,        8,
-		EGL_GREEN_SIZE,      8,
-		EGL_BLUE_SIZE,       8,
-		EGL_ALPHA_SIZE,      8,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-		EGL_NONE
-	};
-	EGLint numConfigs = 0;
-	if (!eglChooseConfig(fDisplay, configAttribs, &fConfig, 1, &numConfigs)
-			|| numConfigs == 0) {
-		fprintf(stderr, "MesaSurfacelessRenderer: no EGL config\n");
+	if (_ChooseEglConfig() != B_OK) {
 		_Cleanup();
 		return B_ERROR;
 	}
 
-	static const struct { int maj, min; } kVersions[] = {
-		{4, 6}, {4, 5}, {4, 0}, {3, 3}, {3, 1}, {2, 0}, {0, 0}
-	};
-	for (int i = 0; kVersions[i].maj > 0; i++) {
-		if (_TryCreateContext(kVersions[i].maj, kVersions[i].min))
-			break;
-	}
-	if (fContext == EGL_NO_CONTEXT)
-		fContext = eglCreateContext(fDisplay, fConfig, EGL_NO_CONTEXT, NULL);
-	if (fContext == EGL_NO_CONTEXT) {
-		fprintf(stderr, "MesaSurfacelessRenderer: cannot create GL context\n");
+	if (_CreateContext() != B_OK) {
 		_Cleanup();
 		return B_ERROR;
 	}
@@ -134,6 +271,8 @@ MesaSurfacelessRenderer::_Init()
 		_Cleanup();
 		return B_ERROR;
 	}
+
+	_LogGlStrings();
 
 	_CreateFbo(fWidth, fHeight);
 
@@ -147,25 +286,6 @@ MesaSurfacelessRenderer::_Init()
 	fInitialized = true;
 	printf("MesaSurfacelessRenderer: ready %dx%d\n", fWidth, fHeight);
 	return B_OK;
-}
-
-
-bool
-MesaSurfacelessRenderer::_TryCreateContext(int major, int minor)
-{
-	const EGLint attribs[] = {
-		EGL_CONTEXT_MAJOR_VERSION, major,
-		EGL_CONTEXT_MINOR_VERSION, minor,
-		EGL_CONTEXT_OPENGL_PROFILE_MASK,
-			EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT,
-		EGL_NONE
-	};
-	fContext = eglCreateContext(fDisplay, fConfig, EGL_NO_CONTEXT, attribs);
-	if (fContext != EGL_NO_CONTEXT) {
-		printf("MesaSurfacelessRenderer: GL %d.%d context\n", major, minor);
-		return true;
-	}
-	return false;
 }
 
 
@@ -277,22 +397,63 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 	}
 
 	if (fBitmap != NULL && fBitmap->IsValid()) {
-		// BBitmap B_RGBA32 is BGRA byte order on Haiku.
+		// GLES has no GL_BGRA readback: read RGBA and swizzle.
+		uint8* bits = (uint8*)fBitmap->Bits();
+		uint32 bpr  = (uint32)fBitmap->BytesPerRow();
+		GLenum readFormat = fIsGles ? GL_RGBA : GL_BGRA;
+
 		glPixelStorei(GL_PACK_ALIGNMENT, 4);
-		glPixelStorei(GL_PACK_ROW_LENGTH,
-			(GLint)(fBitmap->BytesPerRow() / 4));
-		glReadPixels(0, 0, fWidth, fHeight, GL_BGRA, GL_UNSIGNED_BYTE,
-			fBitmap->Bits());
-		glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+		if (!fIsGles || fContextMajor >= 3) {
+			glPixelStorei(GL_PACK_ROW_LENGTH,
+				(GLint)(bpr / 4));
+			glReadPixels(0, 0, fWidth, fHeight, readFormat,
+				GL_UNSIGNED_BYTE, bits);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+		} else {
+			// ES 2 has no GL_PACK_ROW_LENGTH; read row by row.
+			uint8* row = (uint8*)malloc((size_t)fWidth * 4);
+			if (row != NULL) {
+				for (int32 y = 0; y < fHeight; y++) {
+					glReadPixels(0, y, fWidth, 1, readFormat,
+						GL_UNSIGNED_BYTE, row);
+					memcpy(bits + y * bpr, row,
+						(size_t)fWidth * 4);
+				}
+				free(row);
+			}
+		}
+
+		if (fIsGles) {
+			for (int32 y = 0; y < fHeight; y++) {
+				uint8* row = bits + y * bpr;
+				for (int32 x = 0; x < fWidth; x++) {
+					uint8 tmp = row[x * 4];
+					row[x * 4] = row[x * 4 + 2];
+					row[x * 4 + 2] = tmp;
+				}
+			}
+		}
 
 		// glReadPixels returns bottom-up; flip in place.
-		uint8_t* bits = (uint8_t*)fBitmap->Bits();
-		uint32_t bpr  = (uint32_t)fBitmap->BytesPerRow();
 		for (int32 y = 0; y < fHeight / 2; y++) {
 			uint8_t* a = bits + y * bpr;
 			uint8_t* b = bits + (fHeight - 1 - y) * bpr;
 			for (uint32_t x = 0; x < bpr; x++) {
 				uint8_t t = a[x]; a[x] = b[x]; b[x] = t;
+			}
+		}
+
+		if (!fFirstFrameDumped) {
+			fFirstFrameDumped = true;
+			if (fDebug) {
+				const uint8* pixel = bits
+					+ (fHeight / 2) * bpr + (fWidth / 2) * 4;
+				fprintf(stderr, "VOS_GL_DEBUG: center pixel (BGRA) "
+					"%02x %02x %02x %02x (FBO readback)\n",
+					pixel[0], pixel[1], pixel[2], pixel[3]);
+				syslog(LOG_INFO, "VOS_GL_DEBUG: center pixel (BGRA) "
+					"%02x %02x %02x %02x (FBO readback)",
+					pixel[0], pixel[1], pixel[2], pixel[3]);
 			}
 		}
 	}
@@ -317,15 +478,32 @@ MesaSurfacelessRenderer::GetGLProcAddress(const char* name)
 status_t
 MesaSurfacelessRenderer::CopyPixelsOut(BPoint source, BBitmap* dest)
 {
-	if (!fInitialized || !dest)
+	if (!fInitialized || dest == NULL)
 		return B_ERROR;
 
 	LockGL();
 	BRect bounds = dest->Bounds();
 	int32 w = (int32)(bounds.Width()  + 1);
 	int32 h = (int32)(bounds.Height() + 1);
-	glReadPixels((GLint)source.x, (GLint)source.y, (GLsizei)w, (GLsizei)h,
-		GL_BGRA, GL_UNSIGNED_BYTE, dest->Bits());
+
+	if (fIsGles) {
+		// GLES glReadPixels has no GL_BGRA; read RGBA and swizzle.
+		glReadPixels((GLint)source.x, (GLint)source.y, (GLsizei)w,
+			(GLsizei)h, GL_RGBA, GL_UNSIGNED_BYTE, dest->Bits());
+		uint8* bits = (uint8*)dest->Bits();
+		uint32 bpr = (uint32)dest->BytesPerRow();
+		for (int32 y = 0; y < h; y++) {
+			uint8* row = bits + y * bpr;
+			for (int32 x = 0; x < w; x++) {
+				uint8 tmp = row[x * 4];
+				row[x * 4] = row[x * 4 + 2];
+				row[x * 4 + 2] = tmp;
+			}
+		}
+	} else {
+		glReadPixels((GLint)source.x, (GLint)source.y, (GLsizei)w,
+			(GLsizei)h, GL_BGRA, GL_UNSIGNED_BYTE, dest->Bits());
+	}
 	UnlockGL();
 	return B_OK;
 }

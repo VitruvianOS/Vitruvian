@@ -615,13 +615,15 @@ DesktopSettingsPrivate::ShowAllDraggers() const
 
 
 void
-DesktopSettingsPrivate::SetWorkspacesLayout(int32 columns, int32 rows)
+DesktopSettingsPrivate::SetWorkspacesLayout(int32 columns, int32 rows,
+	bool save)
 {
 	_ValidateWorkspacesLayout(columns, rows);
 	fWorkspacesColumns = columns;
 	fWorkspacesRows = rows;
 
-	Save(kWorkspacesSettings);
+	if (save)
+		Save(kWorkspacesSettings);
 }
 
 

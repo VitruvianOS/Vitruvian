@@ -20,6 +20,25 @@ class BMenu;
 class ProgressReporter;
 
 
+// Everything the confirmed install must do beyond the copy: the
+// partition plan (DriveSetup's format) and where the bootloader goes.
+struct InstallSpec {
+								InstallSpec();
+
+		BString				planText;
+		// Empty: derive the target from the plan's role=root volume.
+		BString				targetPath;
+		// "vitruvian", "removable" or "none"; BIOS handled separately.
+		BString				efiMode;
+		// "disk", a devnode, or "none".
+		BString				biosMode;
+		BString				espPath;
+		bool				allowReformatEsp;
+		bool				allowClobberEfi;
+		bool				nvram;
+};
+
+
 class WorkerThread : public BLooper {
 public:
 								WorkerThread(const BMessenger& owner);
@@ -39,7 +58,8 @@ public:
 			void				SetInPlace(bool inPlace)
 									{ fInPlace = inPlace; }
 
-			void				StartInstall(partition_id targetPartitionID);
+			void				StartInstall(partition_id targetPartitionID,
+									const InstallSpec& spec);
 
 		// Posted to this looper so fork()+waitpid() never blocks the caller.
 		void				InstallBootloader(partition_id id);
@@ -49,9 +69,11 @@ public:
 		void				BootloaderSetup();
 
 private:
-			status_t			_PerformInstall(partition_id targetPartitionID);
+			status_t			_PerformInstall(partition_id targetPartitionID,
+									const InstallSpec& spec);
 			status_t			_PerformInPlaceInstall();
 			status_t			_RunFullInstall(const char* devicePath,
+									const InstallSpec& spec,
 									BString* detail = NULL);
 			void				_DoInstallBootloader(partition_id id);
 			void				_DoBootloaderSetup();
@@ -69,6 +91,7 @@ private:
 			BDiskDeviceRoster	fDDRoster;
 			sem_id				fCancelSemaphore;
 			BString				fSetupConf;
+			InstallSpec			fInstallSpec;
 			bool				fInPlace;
 			int					fLastReportedPercent;
 };

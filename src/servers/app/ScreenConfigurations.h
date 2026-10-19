@@ -22,7 +22,11 @@ struct screen_configuration {
 	BRect			frame;
 	display_mode	mode;
 	float			brightness;
+	// The user's rotation, relative to the panel mounting.
 	int32			rotation;
+	// An absolute rotation saved before rotation became relative, or -1;
+	// Desktop converts it once it knows the mounting.
+	int32			legacy_rotation;
 	int32			reflection;
 	float			temperature;
 	bool			has_info;
@@ -46,6 +50,7 @@ public:
 			float				Brightness(int32 id);
 			void				SetRotation(int32 id, int32 rotation);
 			int32				Rotation(int32 id);
+			int32				LegacyRotation(int32 id);
 			void				SetReflection(int32 id, int32 reflection);
 			int32				Reflection(int32 id);
 			void				SetTemperature(int32 id, float temperature);

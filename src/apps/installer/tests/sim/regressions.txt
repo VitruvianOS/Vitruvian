@@ -1,0 +1,4 @@
+# Seeds that previously broke an invariant; always replayed by fuzz.py.
+# 99991299991: set_string on a node with no signature aborted apply under
+# set -e (blkid rc 2) after create_table had already written the disk.
+99991299991

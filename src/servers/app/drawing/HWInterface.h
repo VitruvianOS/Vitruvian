@@ -97,11 +97,16 @@ public:
 	virtual	status_t			GetPreferredMode(display_mode* mode);
 	virtual status_t			GetMonitorInfo(monitor_info* info);
 
-	// 0..3, matching DRM_MODE_PANEL_ORIENTATION_*; NORMAL unless overridden.
+	// The user's rotation, 0..3 as DRM_MODE_PANEL_ORIENTATION_*, relative
+	// to how the panel is mounted: NORMAL is upright as the device is held.
 	virtual	int32				PanelOrientation() const { return 0; }
-	// -1 restores auto-detected; B_UNSUPPORTED backends hide the control.
+	// -1 is the same as NORMAL; B_UNSUPPORTED backends hide the control.
 	virtual	status_t			SetPanelOrientation(int32)
 									{ return B_UNSUPPORTED; }
+	// What the scanout applies: the mounting composed with the user's
+	// rotation. Devices glued to the panel are mapped through this.
+	virtual	int32				PanelScanoutOrientation() const
+									{ return PanelOrientation(); }
 
 	// B_PANEL_REFLECTION_*; NONE unless overridden. No auto-detected state.
 	virtual	int32				PanelReflection() const { return 0; }

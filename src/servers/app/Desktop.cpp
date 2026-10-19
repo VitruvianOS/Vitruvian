@@ -72,6 +72,7 @@
 
 #include <LaunchDaemonDefs.h>
 #include <kernel/util/KMessage.h>
+#include <PanelOrientationTransform.h>
 
 #if TEST_MODE
 #	include "EventStream.h"
@@ -501,9 +502,14 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 	fFocus(NULL),
 	fFront(NULL),
-	fBack(NULL)
+	fBack(NULL),
+
+	fScreenChangeTimer(-1),
+	fScreenChangeWakeup(-1),
+	fScreenChangeStoreDeferred(false)
 {
 	memset(fLastWorkspaceFocus, 0, sizeof(fLastWorkspaceFocus));
+	memset(&fScreenChangeSnapshot, 0, sizeof(fScreenChangeSnapshot));
 
 	char name[B_OS_NAME_LENGTH];
 	Desktop::_GetLooperName(name, sizeof(name));
@@ -526,6 +532,22 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 Desktop::~Desktop()
 {
+	{
+		// Resolve any pending change so waiting timer threads exit
+		// instead of reverting a display that is being torn down.
+		BAutolock _(fScreenChangeLock);
+		fScreenChangeTracker.Timeout(fScreenChangeTracker.Generation());
+	}
+
+	if (fScreenChangeWakeup >= B_OK) {
+		release_sem(fScreenChangeWakeup);
+		if (fScreenChangeTimer >= B_OK) {
+			status_t threadStatus;
+			wait_for_thread(fScreenChangeTimer, &threadStatus);
+		}
+		delete_sem(fScreenChangeWakeup);
+	}
+
 	delete fPowerManager;
 	delete_area(fSharedReadOnlyArea);
 	delete_port(fMessagePort);
@@ -549,6 +571,10 @@ Desktop::Init()
 	if (fMessagePort < B_OK)
 		return fMessagePort;
 
+	fScreenChangeWakeup = create_sem(0, "screen change");
+	if (fScreenChangeWakeup < B_OK)
+		return fScreenChangeWakeup;
+
 	// the system palette needs to be initialized before the
 	// desktop settings, since it is used there already
 	InitializeColorMap();
@@ -569,16 +595,26 @@ Desktop::Init()
 	}
 
 	// Before the screen is acquired, so SetConfiguration() sees the rotated
-	// geometry and the change notification has no listeners yet. -1 is auto,
-	// i.e. keep whatever the backend detected.
-	int32 rotation = fWorkspaces[0].StoredScreenConfiguration().Rotation(0);
-	if (rotation >= 0) {
-		gScreenManager->Lock();
-		Screen* rotated = gScreenManager->ScreenAt(0);
-		if (rotated != NULL)
-			rotated->HWInterface()->SetPanelOrientation(rotation);
-		gScreenManager->Unlock();
+	// geometry. The stored rotation is relative to the panel mounting; an
+	// absolute one from an older version is converted once here, while the
+	// scanout still shows the bare mounting.
+	ScreenConfigurations& storedScreens
+		= fWorkspaces[0].StoredScreenConfiguration();
+	gScreenManager->Lock();
+	Screen* rotated = gScreenManager->ScreenAt(0);
+	if (rotated != NULL) {
+		::HWInterface* hw = rotated->HWInterface();
+		int32 rotation = storedScreens.Rotation(0);
+		int32 legacy = storedScreens.LegacyRotation(0);
+		if (legacy >= 0) {
+			rotation = panel_relative_orientation(legacy,
+				hw->PanelScanoutOrientation());
+			storedScreens.SetRotation(0, rotation);
+		}
+		if (rotation != B_PANEL_ORIENTATION_NORMAL)
+			hw->SetPanelOrientation(rotation);
 	}
+	gScreenManager->Unlock();
 
 	// No auto state for reflection, unlike rotation above, so apply
 	// unconditionally rather than guarding on >= 0.
@@ -692,7 +728,8 @@ Desktop::Init()
 	// _ScreenChanged() normally does this, but nothing calls it at cold
 	// boot, only on later mode changes.
 	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
-		HWInterface()->PanelOrientation(), HWInterface()->PanelReflection());
+		HWInterface()->PanelScanoutOrientation(),
+		HWInterface()->PanelReflection());
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -914,7 +951,7 @@ Desktop::SetScreenMode(int32 workspace, int32 id, const display_mode& mode,
 
 	fWorkspaces[workspace].CurrentScreenConfiguration().Set(id,
 		hasInfo ? &info : NULL, screen->Frame(), mode);
-	if (makeDefault) {
+	if (makeDefault && !_ScreenChangeStoreDeferred()) {
 		fWorkspaces[workspace].StoredScreenConfiguration().Set(id,
 			hasInfo ? &info : NULL, screen->Frame(), mode);
 		StoreWorkspaceConfiguration(workspace);
@@ -1070,7 +1107,10 @@ Desktop::SetRotation(int32 id, int32 rotation)
 	// Desktop::ScreenChanged() takes the window lock for writing.
 	status_t result = HWInterface()->SetPanelOrientation(rotation);
 
-	if (result == B_OK) {
+	// While an unconfirmed change is pending, only the live state moves;
+	// Confirm folds it into the stored configuration, so nothing
+	// unconfirmed can reach the boot configuration.
+	if (result == B_OK && !_ScreenChangeStoreDeferred()) {
 		ScreenConfigurations& stored
 			= fWorkspaces[0].StoredScreenConfiguration();
 		if (stored.CurrentByID(id) == NULL) {
@@ -1079,7 +1119,8 @@ Desktop::SetRotation(int32 id, int32 rotation)
 			stored.Set(id, current->has_info ? &current->info : NULL,
 				current->frame, current->mode);
 		}
-		stored.SetRotation(id, rotation);
+		stored.SetRotation(id, rotation < 0
+			? B_PANEL_ORIENTATION_NORMAL : rotation);
 		StoreWorkspaceConfiguration(0);
 	}
 
@@ -1101,7 +1142,8 @@ Desktop::SetReflection(int32 id, int32 reflection)
 	// Desktop::ScreenChanged() takes the window lock for writing.
 	status_t result = HWInterface()->SetPanelReflection(reflection);
 
-	if (result == B_OK) {
+	// Same rule as SetRotation: pending changes touch live state only.
+	if (result == B_OK && !_ScreenChangeStoreDeferred()) {
 		ScreenConfigurations& stored
 			= fWorkspaces[0].StoredScreenConfiguration();
 		if (stored.CurrentByID(id) == NULL) {
@@ -1122,6 +1164,271 @@ int32
 Desktop::Reflection(int32 id) const
 {
 	return HWInterface()->PanelReflection();
+}
+
+
+// The Screen preflet's countdown is 6 seconds; waiting a grace period
+// longer means a Keep pressed at the last dialog instant still wins
+// the race against this deadline.
+static const bigtime_t kScreenChangeDeadline = 6500000LL;
+
+
+struct screen_change_timer_args {
+	Desktop*			desktop;
+	uint32				generation;
+};
+
+
+status_t
+Desktop::BeginScreenChange(team_id owner)
+{
+	// Snapshotted without fScreenChangeLock: GetScreenMode() takes the
+	// screen lock, and setters take fScreenChangeLock under it.
+	screen_change_snapshot snapshot;
+	_TakeScreenChangeSnapshot(snapshot);
+
+	{
+		BAutolock _(fScreenChangeLock);
+		if (!fScreenChangeTracker.IsPending())
+			fScreenChangeSnapshot = snapshot;
+
+		fScreenChangeTracker.Begin(owner);
+		fScreenChangeStoreDeferred = true;
+	}
+
+	_StartScreenChangeTimer();
+	return B_OK;
+}
+
+
+status_t
+Desktop::ConfirmScreenChange(team_id owner)
+{
+	{
+		BAutolock _(fScreenChangeLock);
+		if (!fScreenChangeTracker.Confirm(owner))
+			return B_ERROR;
+
+		fScreenChangeStoreDeferred = false;
+	}
+
+	_StopScreenChangeTimer();
+	_StoreScreenChange();
+	return B_OK;
+}
+
+
+status_t
+Desktop::CancelScreenChange(team_id owner)
+{
+	{
+		BAutolock _(fScreenChangeLock);
+		if (!fScreenChangeTracker.Cancel(owner))
+			return B_ERROR;
+
+		// Stays deferred for the restore below: the old values belong
+		// in memory only, disk still holds them.
+		fScreenChangeStoreDeferred = true;
+	}
+
+	_StopScreenChangeTimer();
+	_RestoreScreenChange();
+	_FinishScreenChangeRestore();
+	return B_OK;
+}
+
+
+void
+Desktop::ScreenChangeOwnerDied(team_id owner)
+{
+	{
+		BAutolock _(fScreenChangeLock);
+		if (!fScreenChangeTracker.OwnerDied(owner))
+			return;
+
+		fScreenChangeStoreDeferred = true;
+	}
+
+	_StopScreenChangeTimer();
+	_RestoreScreenChange();
+	_FinishScreenChangeRestore();
+}
+
+
+bool
+Desktop::_ScreenChangeStoreDeferred()
+{
+	BAutolock _(fScreenChangeLock);
+	return fScreenChangeStoreDeferred;
+}
+
+
+void
+Desktop::_FinishScreenChangeRestore()
+{
+	BAutolock _(fScreenChangeLock);
+	if (!fScreenChangeTracker.IsPending())
+		fScreenChangeStoreDeferred = false;
+}
+
+
+void
+Desktop::_TakeScreenChangeSnapshot(screen_change_snapshot& snapshot)
+{
+	memset(&snapshot, 0, sizeof(snapshot));
+	snapshot.modeCount = 0;
+
+	if (HWInterface() != NULL) {
+		snapshot.rotation = HWInterface()->PanelOrientation();
+		snapshot.reflection = HWInterface()->PanelReflection();
+	}
+
+	snapshot.columns = fSettings->WorkspacesColumns();
+	snapshot.rows = fSettings->WorkspacesRows();
+
+	int32 workspaces = fSettings->WorkspacesCount();
+	if (workspaces > kMaxWorkspaces)
+		workspaces = kMaxWorkspaces;
+
+	for (int32 workspace = 0; workspace < workspaces; workspace++) {
+		display_mode mode;
+		if (GetScreenMode(workspace, 0, mode) == B_OK) {
+			snapshot.modes[workspace] = mode;
+			snapshot.hasModes[workspace] = true;
+		}
+		snapshot.modeCount = workspace + 1;
+	}
+}
+
+
+void
+Desktop::_RestoreScreenChange()
+{
+	screen_change_snapshot snapshot;
+	{
+		BAutolock _(fScreenChangeLock);
+		snapshot = fScreenChangeSnapshot;
+	}
+
+	for (int32 workspace = 0; workspace < snapshot.modeCount; workspace++) {
+		if (snapshot.hasModes[workspace])
+			SetScreenMode(workspace, 0, snapshot.modes[workspace], true);
+	}
+
+	if (HWInterface() != NULL) {
+		SetRotation(0, snapshot.rotation);
+		SetReflection(0, snapshot.reflection);
+	}
+
+	if (snapshot.columns != fSettings->WorkspacesColumns()
+		|| snapshot.rows != fSettings->WorkspacesRows()) {
+		SetWorkspacesLayout(snapshot.columns, snapshot.rows);
+	}
+}
+
+
+void
+Desktop::_StoreScreenChange()
+{
+	// The live state is the confirmed one now: fold it into the stored
+	// configurations, then write them out.
+	Screen* screen = fVirtualScreen.ScreenAt(0);
+	if (screen == NULL || HWInterface() == NULL)
+		return;
+
+	int32 id = screen->ID();
+
+	monitor_info info;
+	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+
+	int32 workspaces = fSettings->WorkspacesCount();
+	if (workspaces > kMaxWorkspaces)
+		workspaces = kMaxWorkspaces;
+
+	for (int32 workspace = 0; workspace < workspaces; workspace++) {
+		display_mode mode;
+		if (GetScreenMode(workspace, id, mode) != B_OK)
+			continue;
+
+		ScreenConfigurations& stored
+			= fWorkspaces[workspace].StoredScreenConfiguration();
+		stored.Set(id, hasInfo ? &info : NULL, screen->Frame(), mode);
+		stored.SetRotation(id, HWInterface()->PanelOrientation());
+		stored.SetReflection(id, HWInterface()->PanelReflection());
+
+		StoreWorkspaceConfiguration(workspace);
+	}
+}
+
+
+int32
+Desktop::_ScreenChangeTimerEntry(void* data)
+{
+	screen_change_timer_args* args = (screen_change_timer_args*)data;
+	Desktop* desktop = args->desktop;
+	uint32 generation = args->generation;
+	delete args;
+
+	acquire_sem_etc(desktop->fScreenChangeWakeup, 1, B_RELATIVE_TIMEOUT,
+		kScreenChangeDeadline);
+
+	desktop->_ScreenChangeTimer(generation);
+	return 0;
+}
+
+
+void
+Desktop::_StartScreenChangeTimer()
+{
+	screen_change_timer_args* args = new screen_change_timer_args;
+	if (args == NULL)
+		return;
+
+	args->desktop = this;
+	{
+		BAutolock _(fScreenChangeLock);
+		args->generation = fScreenChangeTracker.Generation();
+	}
+
+	// Drain any permit left by an early stop so the new wait is full
+	// length; this also wakes an older timer, whose generation is stale.
+	while (acquire_sem_etc(fScreenChangeWakeup, 1, B_RELATIVE_TIMEOUT, 0)
+			== B_OK) {
+	}
+
+	// Older timers carry an older generation and exit without reverting.
+	thread_id thread = spawn_thread(_ScreenChangeTimerEntry,
+		"screen change deadline", B_DISPLAY_PRIORITY, args);
+	if (thread < B_OK) {
+		delete args;
+		return;
+	}
+
+	fScreenChangeTimer = thread;
+	resume_thread(thread);
+}
+
+
+void
+Desktop::_StopScreenChangeTimer()
+{
+	// Wakes the deadline wait early; the thread finds the window
+	// resolved and exits.
+	release_sem(fScreenChangeWakeup);
+}
+
+
+void
+Desktop::_ScreenChangeTimer(uint32 generation)
+{
+	{
+		BAutolock _(fScreenChangeLock);
+		if (!fScreenChangeTracker.Timeout(generation))
+			return;
+	}
+
+	_RestoreScreenChange();
+	_FinishScreenChangeRestore();
 }
 
 
@@ -1228,10 +1535,12 @@ Desktop::SetWorkspacesLayout(int32 newColumns, int32 newRows)
 	if (newCount < 1 || newCount > kMaxWorkspaces)
 		return B_BAD_VALUE;
 
+	bool deferStore = _ScreenChangeStoreDeferred();
+
 	if (!LockAllWindows())
 		return B_ERROR;
 
-	fSettings->SetWorkspacesLayout(newColumns, newRows);
+	fSettings->SetWorkspacesLayout(newColumns, newRows, !deferStore);
 
 	// either update the workspaces window, or switch to
 	// the last available workspace - which will update
@@ -4066,7 +4375,7 @@ Desktop::_ScreenChanged(Screen* screen)
 	// update our cached screen region
 	fScreenRegion.Set(newFrame);
 	gInputManager->UpdateScreenBounds(newFrame,
-		screen->HWInterface()->PanelOrientation(),
+		screen->HWInterface()->PanelScanoutOrientation(),
 		screen->HWInterface()->PanelReflection());
 
 	BRegion background;

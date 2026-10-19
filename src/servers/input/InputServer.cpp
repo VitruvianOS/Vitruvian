@@ -30,6 +30,7 @@
 #include <Message.h>
 #include <OS.h>
 #include <Path.h>
+#include <PanelOrientationTransform.h>
 #include <Roster.h>
 #include <String.h>
 
@@ -576,8 +577,13 @@ InputServer::MessageReceived(BMessage* message)
 				&& reflection == fScreenReflection)
 				return;
 
-			BPoint pos(fMousePos.x * frame.Width() / fFrame.Width(),
-				fMousePos.y * frame.Height() / fFrame.Height());
+			// The pointer lives in logical space, so it only rescales, also
+			// across a rotation, as on other desktops.
+			BPoint pos = fMousePos;
+			if (fFrame.Width() > 0 && fFrame.Height() > 0) {
+				pos.x = fMousePos.x * frame.Width() / fFrame.Width();
+				pos.y = fMousePos.y * frame.Height() / fFrame.Height();
+			}
 			fFrame = frame;
 			fScreenOrientation = orientation;
 			fScreenReflection = reflection;
@@ -1793,10 +1799,9 @@ InputServer::_SanitizeEvents(EventList& events)
 						"\n", where.x, where.y, x, y));
 				} else if (event->FindFloat("x", &absX) == B_OK
 					&& event->FindFloat("y", &absY) == B_OK) {
-					// The device gives us absolute screen coords in range 0..1;
-					// convert them to absolute screen position
-					// (the message is supposed to contain the original
-					// absolute coordinates as "be:tablet_x/y").
+					// Tablet add-ons are external pen tablets, which keep
+					// their own orientation; panel digitizers come through
+					// the mouse add-on, which applies the panel transform.
 					where.x = absX * fFrame.Width();
 					where.y = absY * fFrame.Height();
 

@@ -517,6 +517,13 @@ _unmount_binds() {
 _setup_swapfile() {
     _sw_target="$1"; _sw_fstype="$2"
 
+    # Image builds and the host harness configure a tree that is not the
+    # running system; a RAM-sized swapfile does not belong there.
+    if [ "${VOS_INSTALL_NO_SWAPFILE:-0}" = "1" ]; then
+        log "hibernate: VOS_INSTALL_NO_SWAPFILE set; skipping swapfile"
+        return 0
+    fi
+
     case "$_sw_fstype" in
         ext4) : ;;
         *)
@@ -595,12 +602,52 @@ _setup_swapfile() {
     return 0
 }
 
+# btrfs targets: fstab and the GRUB cmdline must name the @ subvolume,
+# or boot mounts the empty top level.
+_btrfs_subvols_active() {
+    [ -f "$1/etc/vos/btrfs-subvols" ]
+}
+
+# Creates the @/@home layout while the fresh target btrfs is mounted, the
+# only moment subvolumes can be created. Failure keeps the flat layout.
+_btrfs_setup_subvols() {
+    _bs_root="$1"
+    command -v btrfs >/dev/null 2>&1 || {
+        log "btrfs: btrfs-progs missing; keeping flat layout"; return 1; }
+    if ! btrfs subvolume show "$_bs_root/@" >/dev/null 2>&1; then
+        btrfs subvolume create "$_bs_root/@" || {
+            log "btrfs: could not create @ subvolume"; return 1; }
+    fi
+    if ! btrfs subvolume show "$_bs_root/@home" >/dev/null 2>&1; then
+        btrfs subvolume create "$_bs_root/@home" || {
+            log "btrfs: could not create @home subvolume"; return 1; }
+    fi
+    _bs_id="$(btrfs subvolume list -p "$_bs_root" 2>/dev/null \
+        | awk '$NF == "@" {print $2; exit}')"
+    case "$_bs_id" in
+        ''|*[!0-9]*)
+            log "btrfs: cannot resolve @ subvolume id; keeping flat layout"
+            return 1 ;;
+    esac
+    btrfs subvolume set-default "$_bs_id" "$_bs_root" || {
+        log "btrfs: could not set @ as default subvolume"; return 1; }
+    log "btrfs: @ and @home subvolumes created (@ is default)"
+    return 0
+}
+
+# TARGET, plus SOURCE/FSTYPE for an unmounted target. _VOS_CFG_ESP
+# overrides the ESP auto-scan.
 _do_config() {
     TARGET="$1"
 
     _live_source="$(findmnt -no SOURCE / || true)"
-    _target_source="$(findmnt -no SOURCE "$TARGET" || true)"
-    _target_fstype="$(findmnt -no FSTYPE "$TARGET" || true)"
+    if [ -n "${2:-}" ]; then
+        _target_source="$2"
+        _target_fstype="${3:-$(blkid -p -s TYPE -o value "$2" 2>/dev/null)}"
+    else
+        _target_source="$(findmnt -no SOURCE "$TARGET" || true)"
+        _target_fstype="$(findmnt -no FSTYPE "$TARGET" || true)"
+    fi
 
     if [ -z "$_target_source" ] || [ -z "$_target_fstype" ]; then
         log "cannot resolve target block device / fstype"
@@ -615,7 +662,8 @@ _do_config() {
 
     : > "$TARGET/etc/machine-id"
     rm -f "$TARGET/var/lib/dbus/machine-id"
-    systemd-machine-id-setup --root="$TARGET"
+    systemd-machine-id-setup --root="$TARGET" \
+        || log "warn: systemd-machine-id-setup failed"
 
     # Create host keys
     mkdir -p "$TARGET/etc/ssh"
@@ -634,8 +682,14 @@ _do_config() {
     # passno 0: no boot check (btrfs scrub is separate; fsck.xfs is a no-op).
     # passno 1: e2fsck preen in the initramfs via initramfs-tools checkfs.
     _fsck_pass=1
+    _home_line=""
     case "$_target_fstype" in
-        btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
+        btrfs)
+            _root_opts="defaults"; _fsck_pass=0
+            if _btrfs_subvols_active "$TARGET"; then
+                _root_opts="defaults,subvol=@"
+                _home_line="UUID=$_target_uuid  /home  btrfs  defaults,subvol=@home  0  0"
+            fi ;;
         xfs)   _root_opts="defaults" ; _fsck_pass=0 ;;
         *)     _root_opts="errors=remount-ro" ;;
     esac
@@ -644,11 +698,14 @@ _do_config() {
     _SWAP_RESUME_OFFSET=""
     _setup_swapfile "$TARGET" "$_target_fstype"
 
+    mkdir -p "$TARGET/etc/vos"
+    printf '%s\n' "$_target_fstype" > "$TARGET/etc/vos/root-fstype"
     cat > "$TARGET/etc/fstab" <<EOF
-# /etc/fstab — written by vos-install-helper
+# /etc/fstab - written by vos-install-helper
 UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
 tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
 EOF
+    [ -n "$_home_line" ] && printf '%s\n' "$_home_line" >> "$TARGET/etc/fstab"
     if [ "$_SWAP_CREATED" -eq 1 ]; then
         printf '/swapfile  none  swap  sw  0  0\n' >> "$TARGET/etc/fstab"
     fi
@@ -662,14 +719,18 @@ EOF
     fi
     cp "$TARGET/usr/share/vos/grub/grub" "$TARGET/etc/default/grub"
 
-    _target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
-    _esp_part=""
-    if [ -n "$_target_disk" ]; then
-        for _cand in $(lsblk -lnpo NAME "/dev/$_target_disk" 2>/dev/null | tail -n +2); do
-            [ "$(lsblk -no PARTTYPE "$_cand" 2>/dev/null | head -n1)" \
-                = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ] || continue
-            _esp_part="$_cand"; break
-        done
+    # The installer passes the ESP the user chose; fall back to scanning
+    # the target's own disk for one.
+    _esp_part="${_VOS_CFG_ESP:-}"
+    if [ -z "$_esp_part" ]; then
+        _target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
+        if [ -n "$_target_disk" ]; then
+            for _cand in $(lsblk -lnpo NAME "/dev/$_target_disk" 2>/dev/null | tail -n +2); do
+                [ "$(lsblk -no PARTTYPE "$_cand" 2>/dev/null | head -n1)" \
+                    = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ] || continue
+                _esp_part="$_cand"; break
+            done
+        fi
     fi
     if [ -n "$_esp_part" ]; then
         _esp_uuid="$(blkid -s UUID -o value "$_esp_part" || true)"
@@ -679,10 +740,12 @@ EOF
 
     for _fs in dev proc sys; do
         mkdir -p "$TARGET/$_fs"
-        mount --rbind "/$_fs" "$TARGET/$_fs"
+        mount --rbind "/$_fs" "$TARGET/$_fs" \
+            || log "warn: cannot bind $_fs into target (chroot steps may fail)"
     done
     mkdir -p "$TARGET/run"
-    mount -t tmpfs tmpfs "$TARGET/run"
+    mount -t tmpfs tmpfs "$TARGET/run" \
+        || log "warn: cannot mount tmpfs on target /run"
 
     rm -f "$TARGET"/usr/share/initramfs-tools/hooks/live* \
           "$TARGET"/usr/share/initramfs-tools/scripts/live* \
@@ -745,11 +808,25 @@ _write_shim_grubcfg() {
         _resume_cmdline="$(cat "$_troot/etc/vos/resume-cmdline")"
     fi
 
+    # The root fs driver must be embedded or GRUB cannot read its own
+    # kernel; btrfs boots land in the @ subvolume via rootflags.
+    _rootfstype="ext4"
+    [ -f "$_troot/etc/vos/root-fstype" ] \
+        && _rootfstype="$(cat "$_troot/etc/vos/root-fstype")"
+    _fs_insmod="insmod ext2"
+    _rootflags=""
+    case "$_rootfstype" in
+        xfs)   _fs_insmod="insmod xfs" ;;
+        btrfs) _fs_insmod="insmod btrfs"
+               _btrfs_subvols_active "$_troot" && _rootflags="rootflags=subvol=@" ;;
+        fat)   _fs_insmod="insmod fat" ;;
+    esac
+
     # Debug builds ship vos-sshdebug.service; only then offer the Debug entry.
     _debug_menuentry=""
     if [ -f "$_troot/etc/systemd/system/vos-sshdebug.service" ]; then
         _debug_menuentry="menuentry \"Vitruvian (SSH Debug)\" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug $_resume_cmdline
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw $_rootflags console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }"
     fi
@@ -757,7 +834,7 @@ _write_shim_grubcfg() {
     cat > "$_sc" <<EOF
 insmod part_gpt
 insmod fat
-insmod ext2
+$_fs_insmod
 insmod search
 insmod search_fs_uuid
 insmod linux
@@ -767,13 +844,13 @@ insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_su
 set timeout=5
 menuentry "Vitruvian" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash fsck.mode=auto fsck.repair=preen $_resume_cmdline
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw $_rootflags quiet splash fsck.mode=auto fsck.repair=preen $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }
 menuentry "Vitruvian (Safe Mode)" {
     insmod all_video
     set gfxpayload=1024x768x32,1024x768,800x600,auto
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw $_rootflags nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd (\$root)/boot/initrd.img-$_kv
 }
 $_debug_menuentry
@@ -785,8 +862,11 @@ fi
 EOF
 }
 
+# vitruvian writes \EFI\Vitruvian\ only; removable writes \EFI\BOOT\ and
+# never replaces another OS's loader unless allow-clobber is set.
 _install_grub_efi() {
     _esp="$1"; _ruuid="$2"; _rmount="$3"
+    _efi_mode="${4:-vitruvian}"; _allow_clobber="${5:-0}"
     command -v grub-mkstandalone >/dev/null 2>&1 || {
         log "grub-mkstandalone not found (grub-common missing)"; return 1; }
     _kver="$(ls -1 "$_rmount"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
@@ -794,38 +874,74 @@ _install_grub_efi() {
         log "no /boot/vmlinuz-* in target root; cannot build boot entry"; return 1
     fi
     case "$(uname -m)" in
-        x86_64)          _efi_fmt="x86_64-efi";  _boot_efi="BOOTX64.EFI" ;;
-        aarch64|arm64)   _efi_fmt="arm64-efi";   _boot_efi="BOOTAA64.EFI" ;;
-        riscv64)         _efi_fmt="riscv64-efi"; _boot_efi="BOOTRISCV64.EFI" ;;
-        i386|i486|i586|i686) _efi_fmt="i386-efi"; _boot_efi="BOOTIA32.EFI" ;;
+        x86_64)          _efi_fmt="x86_64-efi";  _boot_efi="BOOTX64.EFI"; _vendor_efi="grubx64.efi" ;;
+        aarch64|arm64)   _efi_fmt="arm64-efi";   _boot_efi="BOOTAA64.EFI"; _vendor_efi="grubaa64.efi" ;;
+        riscv64)         _efi_fmt="riscv64-efi"; _boot_efi="BOOTRISCV64.EFI"; _vendor_efi="grubriscv64.efi" ;;
+        i386|i486|i586|i686) _efi_fmt="i386-efi"; _boot_efi="BOOTIA32.EFI"; _vendor_efi="grubia32.efi" ;;
         *) log "unsupported arch for EFI GRUB: $(uname -m)"; return 1 ;;
     esac
+
+    if [ "$_efi_mode" = "removable" ]; then
+        _efi_out="$_esp/EFI/BOOT/$_boot_efi"
+        # The fallback path is shared: refuse to replace whatever is
+        # already there unless the user said so explicitly.
+        if [ -f "$_efi_out" ] && [ "$_allow_clobber" -ne 1 ]; then
+            log "refusing to replace existing $_efi_out (possibly another OS's fallback loader); pass --allow-clobber-efi to overwrite"
+            return 1
+        fi
+    else
+        _efi_mode="vitruvian"
+        _efi_out="$_esp/EFI/Vitruvian/$_vendor_efi"
+    fi
+
     _tmpcfg="$(mktemp)" || return 1
     _write_shim_grubcfg "$_ruuid" "$_tmpcfg" "$_kver" "$_rmount"
-    mkdir -p "$_esp/EFI/BOOT"
+    mkdir -p "$(dirname "$_efi_out")"
     if ! grub-mkstandalone --format="$_efi_fmt" \
-            --output="$_esp/EFI/BOOT/$_boot_efi" --locales="" --fonts="" \
+            --output="$_efi_out" --locales="" --fonts="" \
             "boot/grub/grub.cfg=$_tmpcfg"; then
         rm -f "$_tmpcfg"; log "grub-mkstandalone ($_efi_fmt) failed"; return 1
     fi
     rm -f "$_tmpcfg"
-    log "EFI bootloader installed: $_esp/EFI/BOOT/$_boot_efi"
+    if [ "$_efi_mode" = "vitruvian" ]; then
+        mkdir -p "$_esp/EFI/Vitruvian"
+        : > "$_esp/EFI/Vitruvian/installed-by-vos"
+    fi
+    log "EFI bootloader installed ($_efi_mode): $_efi_out"
     return 0
 }
 
+# target: "disk" writes the MBR / BIOS boot area of the whole disk; a
+# partition devnode writes that partition's boot sector instead.
 _install_grub_bios() {
-    _disk="$1"; _root="$2"
+    _disk="$1"; _root="$2"; _bios_target="${3:-disk}"
     [ -d /usr/lib/grub/i386-pc ] || {
         log "no i386-pc GRUB modules; skipping BIOS bootloader"; return 1; }
     command -v grub-install >/dev/null 2>&1 || {
         log "grub-install not found; skipping BIOS bootloader"; return 1; }
+
+    if [ "$_bios_target" = "disk" ] || [ -z "$_bios_target" ]; then
+        _bios_dev="$_disk"; _bios_target="disk"
+        # GRUB's BIOS core needs a bios_boot gap on GPT; without one the
+        # install silently cannot boot, so refuse with the reason.
+        if sfdisk -d "$_disk" 2>/dev/null | grep -q '^label: gpt'; then
+            if ! sfdisk -d "$_disk" 2>/dev/null \
+                    | grep -qi '21686148-6449-6e6f-744f-656e63656453'; then
+                log "GPT disk $_disk has no bios_grub partition; BIOS boot needs one (create it in the plan, or choose the ESP/none instead)"
+                return 1
+            fi
+        fi
+    else
+        _bios_dev="$_bios_target"
+    fi
+
     mkdir -p "$_root/boot/grub"
     if ! grub-install --target=i386-pc --boot-directory="$_root/boot" \
-            --modules="part_gpt" "$_disk" >/dev/null 2>&1; then
-        log "grub-install i386-pc failed (no bios_grub partition on $_disk?)"
+            --modules="part_gpt part_msdos" "$_bios_dev" >/dev/null 2>&1; then
+        log "grub-install i386-pc failed for $_bios_dev"
         return 1
     fi
-    log "BIOS bootloader (i386-pc) installed to $_disk"
+    log "BIOS bootloader (i386-pc) installed to $_bios_target ($_bios_dev)"
     return 0
 }
 
@@ -836,15 +952,104 @@ _bootloader_cleanup() {
     rmdir "$_BOOTROOT" 2>/dev/null || true
 }
 
+# Installs the bootloader onto an already-mounted target root.
+#   $1 root mount   $2 root devnode (for BIOS disk target)   $3 root UUID
+#   $4 ESP devnode or empty (empty: no EFI install)
+#   $5 efi mode: vitruvian|removable|none
+#   $6 bios mode: disk|<devnode>|none
+#   $7 allow-clobber-efi   $8 nvram (1: also register a firmware entry)
+_bootloader_core() {
+    _bl_root="$1"; _bl_rootdev="$2"; _bl_ruuid="$3"
+    _bl_esp="$4"; _bl_efi="$5"; _bl_bios="$6"
+    _bl_clobber="${7:-0}"; _bl_nvram="${8:-0}"
+
+    _bl_esp_owns=""
+    if [ -n "$_bl_esp" ] && [ "$_bl_efi" != "none" ]; then
+        mkdir -p "$_bl_root/boot/efi"
+        if ! mountpoint -q "$_bl_root/boot/efi"; then
+            if ! mount "$_bl_esp" "$_bl_root/boot/efi" \
+                    || ! mountpoint -q "$_bl_root/boot/efi"; then
+                log "warn: could not mount ESP $_bl_esp; EFI bootloader skipped"
+                _bl_esp=""
+            else
+                _bl_esp_owns=1
+            fi
+        fi
+    fi
+
+    _bl_rc=0
+    if [ "$_bl_efi" != "none" ]; then
+        if [ -z "$_bl_esp" ]; then
+            log "EFI bootloader requested but no ESP available"; _bl_rc=1
+        elif ! _install_grub_efi "$_bl_root/boot/efi" "$_bl_ruuid" \
+                "$_bl_root" "$_bl_efi" "$_bl_clobber"; then
+            _bl_rc=1
+        elif [ "$_bl_nvram" -eq 1 ]; then
+            case "$(uname -m)" in
+                x86_64) _bl_efi_fmt="x86_64-efi" ;;
+                aarch64|arm64) _bl_efi_fmt="arm64-efi" ;;
+                *) _bl_efi_fmt="" ;;
+            esac
+            if [ -n "$_bl_efi_fmt" ] && command -v grub-install >/dev/null 2>&1; then
+                grub-install --target="$_bl_efi_fmt" \
+                    --efi-directory="$_bl_root/boot/efi" \
+                    --bootloader-id=Vitruvian --recheck >/dev/null 2>&1 \
+                    || log "warn: NVRAM boot entry registration failed (file install is still in place)"
+            fi
+        fi
+    fi
+
+    if [ "$_bl_bios" != "none" ] && [ -n "$_bl_bios" ]; then
+        _bl_disk="$_bl_rootdev"
+        if [ "$_bl_bios" = "disk" ]; then
+            _bl_disk="$(lsblk -no PKNAME "$_bl_rootdev" 2>/dev/null | head -n1)"
+            [ -n "$_bl_disk" ] && _bl_disk="/dev/$_bl_disk"
+            [ -b "$_bl_disk" ] || {
+                log "cannot resolve target disk from $_bl_rootdev"; _bl_rc=1; _bl_disk="" ; }
+        fi
+        if [ -n "$_bl_disk" ]; then
+            _install_grub_bios "$_bl_disk" "$_bl_root" "$_bl_bios" \
+                || _bl_rc=1
+        fi
+    fi
+
+    [ -n "$_bl_esp_owns" ] && umount "$_bl_root/boot/efi" 2>/dev/null
+    return $_bl_rc
+}
+
+# usage: vos-install-helper bootloader <device-on-target-disk>
+#        [--esp <devnode>|none] [--bios disk|<devnode>|none]
+#        [--removable] [--nvram] [--allow-clobber-efi]
+# Without flags the historical auto mode runs: every ESP and the disk MBR.
 _do_bootloader() {
     _arg="${1:-}"
     if [ -z "$_arg" ]; then
         echo "usage: vos-install-helper bootloader <device-on-target-disk>" >&2
+        echo "       [--esp <devnode>|none] [--bios disk|<devnode>|none]" >&2
+        echo "       [--removable] [--nvram] [--allow-clobber-efi]" >&2
         return 1
     fi
     if [ ! -b "$_arg" ]; then
         log "not a block device: $_arg"; return 2
     fi
+    shift
+
+    _esp_choice=""; _bios_choice=""; _efi_mode="vitruvian"
+    _allow_clobber=0; _nvram=0; _explicit=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --esp)
+                [ $# -ge 2 ] || { log "--esp needs a value"; return 2; }
+                _esp_choice="$2"; _explicit=1; shift 2 ;;
+            --bios)
+                [ $# -ge 2 ] || { log "--bios needs a value"; return 2; }
+                _bios_choice="$2"; _explicit=1; shift 2 ;;
+            --removable) _efi_mode="removable"; shift ;;
+            --nvram) _nvram=1; shift ;;
+            --allow-clobber-efi) _allow_clobber=1; shift ;;
+            *) log "unknown bootloader option: $1"; return 2 ;;
+        esac
+    done
 
     # Resolve the whole disk ($_arg may be a partition or the disk itself).
     _disk="$(lsblk -no PKNAME "$_arg" 2>/dev/null | head -n1)"
@@ -864,17 +1069,27 @@ _do_bootloader() {
         _rc=0
         for _p in $(lsblk -lnpo NAME "$_disk" 2>/dev/null | tail -n +2); do
             case "$(blkid -s TYPE -o value "$_p" 2>/dev/null || true)" in
-                ext4|ext3) _rc=$((_rc + 1)); _root_part="$_p" ;;
+                ext4|ext3|ext2|xfs|btrfs) _rc=$((_rc + 1)); _root_part="$_p" ;;
             esac
         done
         if [ "$_rc" -gt 1 ]; then
-            log "multiple ext partitions on $_disk and none labelled vitruvian-*; refusing to guess"
+            log "multiple candidate root partitions on $_disk and none labelled vitruvian-*; refusing to guess"
             return 2
         fi
     fi
     [ -n "$_root_part" ] || { log "no Vitruvian root filesystem found on $_disk"; return 2; }
     _ruuid="$(blkid -s UUID -o value "$_root_part" || true)"
     [ -n "$_ruuid" ] || { log "cannot read root UUID of $_root_part"; return 2; }
+
+    if [ "$_explicit" -eq 0 ]; then
+        _esp_choice="$_esp_part"; [ -z "$_esp_choice" ] && _esp_choice="none"
+        _bios_choice="disk"
+    fi
+    case "$_esp_choice" in
+        none) _esp_part="" ;;
+        '')   _esp_part="" ;;
+        *)    _esp_part="$_esp_choice" ;;
+    esac
 
     mkdir -p "$_BOOTROOT"
     if mountpoint -q "$_BOOTROOT"; then
@@ -883,19 +1098,10 @@ _do_bootloader() {
     mount "$_root_part" "$_BOOTROOT" || { log "cannot mount root $_root_part"; return 2; }
     trap '_bootloader_cleanup' EXIT INT TERM
 
-    _esp_mounted=""
-    if [ -n "$_esp_part" ]; then
-        mkdir -p "$_BOOTROOT/boot/efi"
-        if mount "$_esp_part" "$_BOOTROOT/boot/efi" \
-                && mountpoint -q "$_BOOTROOT/boot/efi"; then
-            _esp_mounted=1
-        else
-            log "warn: could not mount ESP $_esp_part; skipping EFI bootloader"
-            _esp_part=""
-        fi
-    fi
     for _fs in dev proc sys run; do
-        mkdir -p "$_BOOTROOT/$_fs"; mount --rbind "/$_fs" "$_BOOTROOT/$_fs"
+        mkdir -p "$_BOOTROOT/$_fs"
+        mount --rbind "/$_fs" "$_BOOTROOT/$_fs" \
+            || log "warn: cannot bind $_fs into bootroot"
     done
 
     _kver="$(ls -1 "$_BOOTROOT"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
@@ -907,20 +1113,13 @@ _do_bootloader() {
         log "warn: no /boot/vmlinuz-* under target; skipping BIOS grub.cfg"
     fi
 
-    _efi_ok=1; _bios_ok=1
-    if [ -n "$_esp_part" ]; then
-        _install_grub_efi "$_BOOTROOT/boot/efi" "$_ruuid" "$_BOOTROOT" && _efi_ok=0
-    else
-        log "no ESP on $_disk; skipping EFI bootloader"
+    if _bootloader_core "$_BOOTROOT" "$_root_part" "$_ruuid" "$_esp_part" \
+            "$_efi_mode" "$_bios_choice" "$_allow_clobber" "$_nvram"; then
+        log "bootloader install complete on $_disk (efi=$_efi_mode bios=${_bios_choice:-none})"
+        return 0
     fi
-    _install_grub_bios "$_disk" "$_BOOTROOT" && _bios_ok=0
-
-    if [ "$_efi_ok" -ne 0 ] && [ "$_bios_ok" -ne 0 ]; then
-        log "bootloader install failed: neither EFI nor BIOS succeeded on $_disk"
-        return 3
-    fi
-    log "bootloader install complete on $_disk (efi=$_efi_ok bios=$_bios_ok; 0=ok)"
-    return 0
+    log "bootloader install failed on $_disk"
+    return 3
 }
 
 _do_bootloader_setup() {
@@ -1294,6 +1493,11 @@ _validate_one_op() {
                 *) log "[$_id]: invalid string_kind: $_skind (must be label|gpt_name)"
                    _validate_rc=2; _PARTLIB_ABORT=1; return ;;
             esac
+            if _partition_check_devnode "$_tref" && [ ! -b "$_tref" ] \
+                    && [ ! -f "$_tref" ]; then
+                log "[$_id]: not a block device: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
             log "  [$_id] set_string target_ref=$_tref string_kind=$_skind value=$_value"
             ;;
         set_flags)
@@ -1391,7 +1595,9 @@ _partition_apply_cleanup() {
 
 _partition_detect_fs() {
     _devnode="$1"
-    _t="$(blkid -p -s TYPE -o value "$_devnode" 2>/dev/null)"
+    # blkid exits 2 when there is no signature; that is data, not an
+    # error, and must not abort an in-flight apply under set -e.
+    _t="$(blkid -p -s TYPE -o value "$_devnode" 2>/dev/null || true)"
     case "$_t" in
         ext2|ext3|ext4) printf 'ext4\n' ;;
         vfat)           printf 'fat32\n' ;;
@@ -1728,18 +1934,48 @@ if [ "${1:-}" = "bootloader" ]; then
         _do_bootloader_setup "${1:-}" "${2:-}"
         exit $?
     fi
-    _do_bootloader "${1:-}"
+    _do_bootloader "$@"
     exit $?
 fi
 
 if [ "${1:-}" = "--full-install" ]; then
     shift
-    DEV="${1:-}"
-    if [ -z "$DEV" ]; then
-        echo "usage: vos-install-helper --full-install /dev/DEVICE" >&2
+    DEV=""; FI_PLAN=""; FI_ALLOW_ESP=0
+    FI_ESP=""; FI_BIOS=""; FI_EFI_MODE="vitruvian"
+    FI_ALLOW_CLOBBER=0; FI_NVRAM=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --plan)
+                [ $# -ge 2 ] || { log "--plan needs a value"; exit 2; }
+                FI_PLAN="$2"; shift 2 ;;
+            --allow-reformat-esp) FI_ALLOW_ESP=1; shift ;;
+            --esp)
+                [ $# -ge 2 ] || { log "--esp needs a value"; exit 2; }
+                FI_ESP="$2"; shift 2 ;;
+            --bios)
+                [ $# -ge 2 ] || { log "--bios needs a value"; exit 2; }
+                FI_BIOS="$2"; shift 2 ;;
+            --removable) FI_EFI_MODE="removable"; shift ;;
+            --nvram) FI_NVRAM=1; shift ;;
+            --allow-clobber-efi) FI_ALLOW_CLOBBER=1; shift ;;
+            --*) log "unknown --full-install option: $1"; exit 2 ;;
+            *)
+                if [ -n "$DEV" ]; then
+                    log "unexpected argument: $1"; exit 2
+                fi
+                DEV="$1"; shift ;;
+        esac
+    done
+
+    # A plan can create the target, so DEV may legitimately arrive from
+    # the plan's role=root volume instead of the command line.
+    if [ -z "$DEV" ] && [ -z "$FI_PLAN" ]; then
+        echo "usage: vos-install-helper --full-install [/dev/DEVICE] [--plan <file>]" >&2
+        echo "       [--esp <devnode>|none] [--bios disk|<devnode>|none] [--removable]" >&2
+        echo "       [--nvram] [--allow-clobber-efi] [--allow-reformat-esp]" >&2
         exit 1
     fi
-    if [ ! -b "$DEV" ]; then
+    if [ -n "$DEV" ] && [ ! -b "$DEV" ]; then
         log "not a block device: $DEV"
         exit 1
     fi
@@ -1748,6 +1984,38 @@ if [ "${1:-}" = "--full-install" ]; then
     if [ ! -e /etc/vos/live ]; then
         log "refusing --full-install: not on live media (/etc/vos/live absent)"
         exit 2
+    fi
+
+    # The confirmed plan runs first; a failure here aborts before the
+    # copy, so the disk holds only what the plan itself applied.
+    if [ -n "$FI_PLAN" ]; then
+        if [ "$FI_ALLOW_ESP" -eq 1 ]; then
+            _do_partition_apply "$FI_PLAN" --allow-reformat-esp || {
+                log "full-install: partition plan failed; nothing copied"
+                exit 3
+            }
+        else
+            _do_partition_apply "$FI_PLAN" || {
+                log "full-install: partition plan failed; nothing copied"
+                exit 3
+            }
+        fi
+        if [ -z "$DEV" ]; then
+            # Prefer the volume the plan labelled as the install root.
+            _root_devnode="$(awk '
+                /^\[volume\]$/ { v=1; d=""; r=0; next }
+                v && /^devnode=/ { d=substr($0, 9) }
+                v && /^role=root$/ { r=1 }
+                /^\[/ { if (v && r && d != "") { print d; exit } v=0 }
+                END { if (v && r && d != "") print d }
+            ' "${FI_PLAN}.result" 2>/dev/null | head -n1)"
+            [ -n "$_root_devnode" ] && DEV="$_root_devnode"
+        fi
+        if [ -z "$DEV" ] || [ ! -b "$DEV" ]; then
+            log "full-install: plan applied but no root volume devnode found"
+            exit 3
+        fi
+        log "full-install: plan applied, target is $DEV"
     fi
 
     MNT="$FULL_INSTALL_MOUNT"
@@ -1774,6 +2042,15 @@ if [ "${1:-}" = "--full-install" ]; then
 
     log "full-install: mounted $DEV at $TARGET"
 
+    # btrfs gets @/@home while the fresh fs is mounted; the copy then
+    # lands inside @ so /home can be the @home subvolume at boot.
+    _FI_BTRFS_SUBVOLS=0
+    if [ "$(findmnt -no FSTYPE "$TARGET" 2>/dev/null)" = "btrfs" ]; then
+        _btrfs_setup_subvols "$TARGET" && _FI_BTRFS_SUBVOLS=1
+    fi
+    _COPY_DEST="$TARGET"
+    [ "$_FI_BTRFS_SUBVOLS" -eq 1 ] && _COPY_DEST="$TARGET/@"
+
     _src_kib="$(du -sx -k / 2>/dev/null | awk 'NR==1{print $1}')"
     _free_kib="$(df -P -k "$TARGET" 2>/dev/null | awk 'NR==2{print $4}')"
     if [ -n "$_src_kib" ] && [ -n "$_free_kib" ]; then
@@ -1788,17 +2065,82 @@ if [ "${1:-}" = "--full-install" ]; then
         log "warn: could not compute free space (src=$_src_kib free=$_free_kib); skipping check"
     fi
 
-    rsync -aAX --outbuf=N --info=progress2 --exclude-from="$EXCLUDES" / "$TARGET/"
+    if [ "$_FI_BTRFS_SUBVOLS" -eq 1 ]; then
+        # Live /home belongs to the live persona; @home stays pristine.
+        rsync -aAX --outbuf=N --info=progress2 --exclude-from="$EXCLUDES" \
+            --exclude=/home / "$_COPY_DEST/"
+        mkdir -p "$_COPY_DEST/etc/vos"
+        : > "$_COPY_DEST/etc/vos/btrfs-subvols"
+    else
+        rsync -aAX --outbuf=N --info=progress2 --exclude-from="$EXCLUDES" \
+            / "$_COPY_DEST/"
+    fi
 
-    _do_config "$TARGET"
+    _do_config "$_COPY_DEST" "$DEV"
 
-    _do_commit_setup "$TARGET"
+    _do_commit_setup "$_COPY_DEST"
+
+    if [ "$FI_ESP" = "none" ]; then
+        _fi_esp=""; _fi_esp_chosen=1
+    else
+        _fi_esp="$FI_ESP"; _fi_esp_chosen=0
+    fi
+    if [ -z "$_fi_esp" ] && [ "$FI_EFI_MODE" != "none" ] && [ "$_fi_esp_chosen" -eq 0 ]; then
+        # No explicit choice: reuse the first ESP on the target disk.
+        _fi_disk="$(lsblk -no PKNAME "$DEV" 2>/dev/null | head -n1)"
+        if [ -n "$_fi_disk" ]; then
+            for _cand in $(lsblk -lnpo NAME "/dev/$_fi_disk" 2>/dev/null | tail -n +2); do
+                [ "$(lsblk -no PARTTYPE "$_cand" 2>/dev/null | head -n1)" \
+                    = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ] || continue
+                _fi_esp="$_cand"; break
+            done
+        fi
+    fi
+    [ "$FI_BIOS" = "none" ] && FI_BIOS=""
+
+    if [ "$FI_EFI_MODE" = "none" ] && [ -z "$FI_BIOS" ]; then
+        log "full-install: bootloader skipped by choice"
+    else
+        _ruuid="$(blkid -s UUID -o value "$DEV" || true)"
+        [ -n "$_ruuid" ] || { log "cannot read root UUID of $DEV"; exit 3; }
+        # fstab's ESP entry follows the user's choice, not the disk scan.
+        if [ -n "$_fi_esp" ]; then
+            _fi_esp_uuid="$(blkid -s UUID -o value "$_fi_esp" || true)"
+            if [ -n "$_fi_esp_uuid" ] \
+                    && ! grep -q "/boot/efi" "$_COPY_DEST/etc/fstab" 2>/dev/null; then
+                printf 'UUID=%s  /boot/efi  vfat  umask=0077,shortname=mixed  0  2\n' \
+                    "$_fi_esp_uuid" >> "$_COPY_DEST/etc/fstab"
+            fi
+        fi
+        if ! _bootloader_core "$_COPY_DEST" "$DEV" "$_ruuid" "$_fi_esp" \
+                "$FI_EFI_MODE" "${FI_BIOS:-none}" "$FI_ALLOW_CLOBBER" "$FI_NVRAM"; then
+            log "full-install: bootloader step failed"
+            exit 3
+        fi
+    fi
 
     umount -R "$TARGET" 2>/dev/null || true
     trap - EXIT INT TERM
 
     log "full-install complete for $DEV"
     exit 0
+fi
+
+# configure: config stage on an explicitly described target, no live mount.
+if [ "${1:-}" = "configure" ]; then
+    shift
+    _cfg_target="${1:-}"
+    if [ -z "$_cfg_target" ] || [ ! -d "$_cfg_target" ]; then
+        echo "usage: vos-install-helper configure <target-dir> <source-devnode> [<fstype>]" >&2
+        exit 1
+    fi
+    if [ "$_cfg_target" = "/" ]; then
+        log "refusing to operate on / in configure mode"
+        exit 2
+    fi
+    shift
+    _do_config "$_cfg_target" "$@"
+    exit $?
 fi
 
 MODE="config"
@@ -1810,7 +2152,8 @@ fi
 _arg="${1:-}"
 if [ -z "$_arg" ]; then
     echo "usage: vos-install-helper [--commit-setup] /path/to/target" >&2
-    echo "       vos-install-helper --full-install /dev/DEVICE" >&2
+    echo "       vos-install-helper configure <target-dir> <source-devnode> [<fstype>]" >&2
+    echo "       vos-install-helper --full-install [/dev/DEVICE] [--plan <file>] [bootloader options]" >&2
     exit 1
 fi
 

@@ -32,6 +32,7 @@ Server(
 		DesktopListener.cpp
 		DesktopSettings.cpp
 		DirectWindowInfo.cpp
+		DisplayChangeTracker.cpp
 		DrawState.cpp
 		EventDispatcher.cpp
 		PowerManager.cpp

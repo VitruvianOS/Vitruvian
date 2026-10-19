@@ -35,8 +35,11 @@ endif()
 # An explicit .interp section makes ld emit PT_INTERP for a -shared link (which
 # -Wl,--dynamic-linker does not); same trick glibc uses to make libc.so.6 runnable.
 set(VOS_RUNNABLE_INTERP_S "${CMAKE_BINARY_DIR}/runnable_addon_interp.S")
+# Without the GNU-stack note the link asks for an executable stack, which
+# glibc 2.41 refuses to dlopen.
 file(WRITE "${VOS_RUNNABLE_INTERP_S}"
-	".section .interp,\"a\"\n.asciz \"${VOS_DYNAMIC_LINKER}\"\n")
+	".section .interp,\"a\"\n.asciz \"${VOS_DYNAMIC_LINKER}\"\n"
+	".section .note.GNU-stack,\"\",%progbits\n")
 # Pre-assemble to an object (the project enables only C/CXX, not ASM).
 set(VOS_RUNNABLE_INTERP_O "${CMAKE_BINARY_DIR}/runnable_addon_interp.o")
 execute_process(
@@ -306,6 +309,7 @@ macro( RunnableAddOn name )
 	target_link_options(${name} PRIVATE
 		"-Wl,-e,_start"                                # entry -> CRT _start
 		"-nostartfiles"                                # we add Scrt1.o ourselves
+		"-Wl,-z,noexecstack"                           # must stay dlopen-able
 		${VOS_RUNNABLE_GP_DEF}                         # riscv64 only, see above
 		)
 	# Stock PIE CRT: Scrt1.o provides _start -> __libc_start_main(main,...);

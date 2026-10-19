@@ -141,8 +141,8 @@ ScreenConfigurations::Set(int32 id, const monitor_info* info,
 
 		// POD with no constructor, and Set() does not touch either field.
 		configuration->brightness = 1.0f;
-		configuration->rotation = -1;
-		// Unlike rotation, reflection has no auto/hardware-detected state.
+		configuration->rotation = 0;
+		configuration->legacy_rotation = -1;
 		configuration->reflection = 0;
 		configuration->temperature = 6500.0f;
 
@@ -178,8 +178,10 @@ void
 ScreenConfigurations::SetRotation(int32 id, int32 rotation)
 {
 	screen_configuration* configuration = _FindByID(id);
-	if (configuration != NULL)
+	if (configuration != NULL) {
 		configuration->rotation = rotation;
+		configuration->legacy_rotation = -1;
+	}
 }
 
 
@@ -187,12 +189,21 @@ int32
 ScreenConfigurations::Rotation(int32 id)
 {
 	screen_configuration* configuration = _FindByID(id);
+	if (configuration == NULL)
+		return 0;
 
-	// -1 is "auto", i.e. whatever the backend detected.
+	return configuration->rotation;
+}
+
+
+int32
+ScreenConfigurations::LegacyRotation(int32 id)
+{
+	screen_configuration* configuration = _FindByID(id);
 	if (configuration == NULL)
 		return -1;
 
-	return configuration->rotation;
+	return configuration->legacy_rotation;
 }
 
 
@@ -293,7 +304,8 @@ ScreenConfigurations::Store(BMessage& settings) const
 		screenSettings.AddData("mode", B_RAW_TYPE, &configuration->mode,
 			sizeof(display_mode));
 		screenSettings.AddFloat("brightness", configuration->brightness);
-		screenSettings.AddInt32("rotation", configuration->rotation);
+		// A new key: "rotation" held absolute values, see LegacyRotation().
+		screenSettings.AddInt32("user_rotation", configuration->rotation);
 		screenSettings.AddInt32("reflection", configuration->reflection);
 		screenSettings.AddFloat("temperature", configuration->temperature);
 
@@ -358,8 +370,14 @@ ScreenConfigurations::Restore(const BMessage& settings)
 
 		if (stored.FindFloat("brightness", &configuration->brightness) != B_OK)
 			configuration->brightness = 1.0f;
-		if (stored.FindInt32("rotation", &configuration->rotation) != B_OK)
-			configuration->rotation = -1;
+		configuration->legacy_rotation = -1;
+		if (stored.FindInt32("user_rotation", &configuration->rotation)
+				!= B_OK) {
+			configuration->rotation = 0;
+			if (stored.FindInt32("rotation",
+					&configuration->legacy_rotation) != B_OK)
+				configuration->legacy_rotation = -1;
+		}
 		if (stored.FindInt32("reflection", &configuration->reflection) != B_OK)
 			configuration->reflection = 0;
 		if (stored.FindFloat("temperature", &configuration->temperature) != B_OK)

@@ -42,7 +42,10 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " grub-common grub2-common grub-efi-arm64-bin"
+                " firmware-brcm80211 firmware-realtek firmware-atheros firmware-libertas firmware-mediatek firmware-iwlwifi" \
+                " firmware-ti-connectivity firmware-zd1211 firmware-ath9k-htc firmware-carl9170 bluez-firmware firmware-misc-nonfree" \
+                " firmware-amd-graphics firmware-nvidia-graphics firmware-samsung firmware-siano" \
+                " raspi-firmware grub-common grub2-common grub-efi-arm64-bin"
             ;;
         arm32)
             printf '%s' \
@@ -195,12 +198,12 @@ _board_extra_packages() {
         raspberry)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
+                " linux-image-arm64 linux-headers-arm64 raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rpi-arm32)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-armmp raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
+                " linux-image-armmp linux-headers-armmp raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rockchip)
             printf '%s' \

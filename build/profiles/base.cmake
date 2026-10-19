@@ -32,7 +32,10 @@ set(INPUT_SERVER_FILTERS
 ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})
 
 
+# BGLView prefers mesa_egl and falls back to mesa_surfaceless without a
+# usable render node.
 set(OPENGL_RENDERERS
+	mesa_egl
 	mesa_surfaceless
 )
 ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})

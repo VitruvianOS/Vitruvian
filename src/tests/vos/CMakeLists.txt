@@ -11,12 +11,26 @@ Application(testsuspend SOURCES testsuspend.cpp)
 
 add_executable(testinject testinject.cpp)
 
+# Unconfirmed display change revert state machine (pure helpers, the
+# same sources app_server links; also runnable on a plain host).
+add_executable(test_display_change_tracker
+	test_display_change_tracker.cpp
+	${CMAKE_SOURCE_DIR}/src/servers/app/DisplayChangeTracker.cpp
+)
+target_include_directories(test_display_change_tracker PRIVATE
+	${CMAKE_SOURCE_DIR}/src/servers/app)
+
 # Screen-change relayout policy (pure helpers, no window server).
 Application(test_screen_relayout
 	SOURCES test_screen_relayout.cpp
 		${CMAKE_SOURCE_DIR}/src/servers/app/ScreenRelayout.cpp
 	INCLUDES ${CMAKE_SOURCE_DIR}/src/servers/app)
 UsePrivateHeaders(test_screen_relayout interface)
+
+# Panel orientation rules (header only, no window server).
+Application(test_panel_orientation
+	SOURCES test_panel_orientation.cpp)
+UsePrivateHeaders(test_panel_orientation interface)
 
 # CUPS end-to-end test (V\OS printing, no print server).
 Application(test_printcups

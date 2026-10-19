@@ -85,6 +85,60 @@ parse_panel_reflection(const char* value, int32& outReflection)
 }
 
 
+// Quarter turns an orientation applies, in rotate_panel_point()'s direction.
+static inline int32
+panel_orientation_turns(int32 orientation)
+{
+	switch (orientation) {
+		case B_PANEL_ORIENTATION_LEFT_UP:
+			return 1;
+		case B_PANEL_ORIENTATION_UPSIDE_DOWN:
+			return 2;
+		case B_PANEL_ORIENTATION_RIGHT_UP:
+			return 3;
+		default:
+			return 0;
+	}
+}
+
+
+static inline int32
+panel_orientation_from_turns(int32 turns)
+{
+	switch (((turns % 4) + 4) % 4) {
+		case 1:
+			return B_PANEL_ORIENTATION_LEFT_UP;
+		case 2:
+			return B_PANEL_ORIENTATION_UPSIDE_DOWN;
+		case 3:
+			return B_PANEL_ORIENTATION_RIGHT_UP;
+		default:
+			return B_PANEL_ORIENTATION_NORMAL;
+	}
+}
+
+
+// The user's rotation is relative to how the panel is mounted, as on other
+// desktops: "normal" is upright for the device as it is meant to be held.
+// The scanout needs both combined.
+static inline int32
+panel_compose_orientation(int32 mounting, int32 user)
+{
+	return panel_orientation_from_turns(panel_orientation_turns(mounting)
+		+ panel_orientation_turns(user));
+}
+
+
+// Inverse of panel_compose_orientation(): the user rotation that gives
+// the absolute one on this mounting.
+static inline int32
+panel_relative_orientation(int32 absolute, int32 mounting)
+{
+	return panel_orientation_from_turns(panel_orientation_turns(absolute)
+		- panel_orientation_turns(mounting));
+}
+
+
 // Rotates a normalized (0..1) point in physical panel space into
 // normalized logical (landscape, post-rotation) desktop space. Reflection
 // composes as a post-step here because the forward mapping reflects before
@@ -117,35 +171,37 @@ rotate_panel_point(int32 orientation, float u, float v, float& outU,
 }
 
 
-// Rotates a relative motion or scroll delta the same way, without the
-// translation component (pure vector rotation) — keep this in the same
-// direction convention as rotate_panel_point() or the pointer moves
-// correctly on one axis and inverted on the other.
+// Logical to physical pixel index for present-time blits, the inverse of
+// rotate_panel_point(). Every per-pixel present blit must use it.
+// Reflection applies in logical space before the rotation.
 static inline void
-rotate_panel_delta(int32 orientation, float dx, float dy, float& outDx,
-	float& outDy, int32 reflection = B_PANEL_REFLECTION_NONE)
+rotate_point(int32 orientation, int32 lx, int32 ly, int32 logicalW,
+	int32 logicalH, int32& px, int32& py,
+	int32 reflection = B_PANEL_REFLECTION_NONE)
 {
-	float rdx, rdy;
+	int32 rx = (reflection & B_PANEL_REFLECTION_X) != 0
+		? logicalW - 1 - lx : lx;
+	int32 ry = (reflection & B_PANEL_REFLECTION_Y) != 0
+		? logicalH - 1 - ly : ly;
+
 	switch (orientation) {
 		case B_PANEL_ORIENTATION_UPSIDE_DOWN:
-			rdx = -dx;
-			rdy = -dy;
+			px = logicalW - 1 - rx;
+			py = logicalH - 1 - ry;
 			break;
 		case B_PANEL_ORIENTATION_LEFT_UP:
-			rdx = -dy;
-			rdy = dx;
+			px = ry;
+			py = logicalW - 1 - rx;
 			break;
 		case B_PANEL_ORIENTATION_RIGHT_UP:
-			rdx = dy;
-			rdy = -dx;
+			px = logicalH - 1 - ry;
+			py = rx;
 			break;
 		default:
-			rdx = dx;
-			rdy = dy;
+			px = rx;
+			py = ry;
 			break;
 	}
-	outDx = (reflection & B_PANEL_REFLECTION_X) != 0 ? -rdx : rdx;
-	outDy = (reflection & B_PANEL_REFLECTION_Y) != 0 ? -rdy : rdy;
 }
 
 

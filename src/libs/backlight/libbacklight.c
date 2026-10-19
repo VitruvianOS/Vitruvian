@@ -43,6 +43,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 
 static long backlight_get(struct backlight *backlight, char *node)
 {
@@ -153,6 +154,93 @@ backlight_entry_score(enum backlight_type type, int pciMatch,
 	return (int)type;
 }
 
+
+// True if name is a path component of path, not a substring of a longer name.
+static int
+path_has_component(const char* path, const char* name)
+{
+	const char* scan;
+	size_t length;
+
+	if (path == NULL || name == NULL || name[0] == '\0')
+		return 0;
+
+	length = strlen(name);
+	for (scan = path; (scan = strstr(scan, name)) != NULL; scan += length) {
+		char before = (scan == path) ? '/' : scan[-1];
+		char after = scan[length];
+		if ((before == '/' || before == '\0')
+				&& (after == '/' || after == '\0'))
+			return 1;
+	}
+	return 0;
+}
+
+
+// amdgpu parents amdgpu_blN on the connector, not the PCI device: walk the
+// device links until the GPU's PCI name appears.
+static int
+raw_parent_matches(const char* backlight_path, const char* pci_name)
+{
+	char walk[PATH_MAX];
+	char linkPath[PATH_MAX + 16];
+	char target[PATH_MAX];
+	int depth;
+
+	if (backlight_path == NULL || pci_name == NULL || pci_name[0] == '\0')
+		return 0;
+
+	if (strlen(backlight_path) >= sizeof(walk))
+		return 0;
+
+	snprintf(walk, sizeof(walk), "%s", backlight_path);
+	for (depth = 0; depth < 6; depth++) {
+		char *source = NULL;
+		char *resolved;
+		ssize_t ret;
+
+		snprintf(linkPath, sizeof(linkPath), "%s/device", walk);
+		ret = readlink(linkPath, target, sizeof(target) - 1);
+		if (ret < 0) {
+			ret = readlink(walk, target, sizeof(target) - 1);
+			if (ret < 0)
+				break;
+		}
+		target[ret] = '\0';
+
+		if (path_has_component(target, pci_name))
+			return 1;
+
+		if (target[0] == '/') {
+			// Absolute link target: walk it directly.
+			if (strlen(target) >= sizeof(walk))
+				break;
+			snprintf(walk, sizeof(walk), "%s", target);
+			continue;
+		}
+
+		// Relative to the link's own directory. Use the allocating NULL form:
+		// fortified glibc realpath() aborts on buffers below PATH_MAX.
+		if (asprintf(&source, "%s/%s", walk, target) < 0)
+			break;
+		if (strlen(source) >= PATH_MAX) {
+			free(source);
+			break;
+		}
+		resolved = realpath(source, NULL);
+		free(source);
+		if (resolved == NULL)
+			break;
+		if (strlen(resolved) >= sizeof(walk)) {
+			free(resolved);
+			break;
+		}
+		snprintf(walk, sizeof(walk), "%s", resolved);
+		free(resolved);
+	}
+	return 0;
+}
+
 struct backlight *
 backlight_init_from_class(const char* class_dir, const char* pci_name,
 	uint32_t connector_type)
@@ -190,7 +278,7 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		char *parent = NULL;
 		enum backlight_type entry_type;
 		int score;
-		int fd;
+		int fd = -1;
 
 		if (entry->d_name[0] == '.')
 			continue;
@@ -207,8 +295,9 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		if (fd < 0)
 			goto out;
 
-		ret = read (fd, &buffer, sizeof(buffer));
-		close (fd);
+		ret = read(fd, buffer, sizeof(buffer) - 1);
+		close(fd);
+		fd = -1;
 
 		if (ret < 1)
 			goto out;
@@ -248,7 +337,9 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		if (entry_type == BACKLIGHT_RAW) {
 			// Raw nodes are GPU-owned; without a PCI match they
 			// cannot be this card's panel backlight.
-			if (!(pci_name && parent && !strcmp(pci_name, parent)))
+			if (!(pci_name && ((parent && !strcmp(pci_name, parent))
+					|| raw_parent_matches(backlight_path,
+						pci_name))))
 				goto out;
 			pciMatch = 1;
 		} else if (entry_type == BACKLIGHT_FIRMWARE) {
@@ -271,6 +362,8 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		chosen_path = strdup(backlight_path);
 
 	out:
+		if (fd >= 0)
+			close(fd);
 		free(backlight_path);
 		free(path);
 		path = NULL;

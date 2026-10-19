@@ -382,6 +382,12 @@ enum {
 	// Appended at the end: inserting mid-enum renumbers later codes.
 	AS_SCREEN_GET_CONNECTOR_NAME,
 
+	// Unconfirmed display change: app_server holds the deadline and
+	// reverts on its own if the client never confirms.
+	AS_SCREEN_BEGIN_CHANGE,
+	AS_SCREEN_CONFIRM_CHANGE,
+	AS_SCREEN_CANCEL_CHANGE,
+
 	AS_LAST_CODE
 };
 

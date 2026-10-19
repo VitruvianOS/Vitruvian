@@ -6,7 +6,10 @@
 #include <GLView.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <syslog.h>
 
 #include <Autolock.h>
 #include <Directory.h>
@@ -22,6 +25,43 @@ typedef BGLRenderer* (*renderer_factory_t)(BGLView* view, ulong options,
 
 
 static const char* kRendererDir = "/system/add-ons/opengl";
+
+
+// Tried in this order. mesa_egl needs a DRM/GBM device; without one its
+// factory returns NULL and mesa_surfaceless (llvmpipe-capable) runs.
+static const char* kPreferredRenderers[] = {
+	"mesa_egl",
+	"mesa_surfaceless",
+};
+
+
+// Returns the renderer, or NULL with the add-on unloaded and *failureReason
+// set.
+static BGLRenderer*
+_TryRenderer(const char* path, BGLView* view, ulong options,
+	const char** failureReason)
+{
+	image_id img = load_add_on(path);
+	if (img < 0) {
+		*failureReason = "add-on failed to load";
+		return NULL;
+	}
+
+	renderer_factory_t factory = NULL;
+	status_t err = get_image_symbol(img, "instantiate_gl_renderer",
+		B_SYMBOL_TYPE_TEXT, (void**)&factory);
+
+	if (err == B_OK && factory != NULL) {
+		BGLRenderer* renderer = factory(view, options, NULL);
+		if (renderer != NULL)
+			return renderer;
+		*failureReason = "probe failed (no usable DRM/GBM/EGL device)";
+	} else
+		*failureReason = "no instantiate_gl_renderer symbol";
+
+	unload_add_on(img);
+	return NULL;
+}
 
 
 BGLView::BGLView(BRect rect, const char* name, ulong resizingMode,
@@ -108,6 +148,8 @@ void*
 BGLView::GetGLProcAddress(const char* procName)
 {
 	// Delegate to renderer if available
+	if (fRenderer)
+		return fRenderer->GetGLProcAddress(procName);
 	return NULL;
 }
 
@@ -288,35 +330,88 @@ BGLView::_LoadRenderer()
 		return;
 	}
 
+	const int32 preferredCount = sizeof(kPreferredRenderers)
+		/ sizeof(kPreferredRenderers[0]);
+	char failedProbes[256];
+	failedProbes[0] = '\0';
+
+	// Preferred pass: strict order, so mesa_egl always wins when its
+	// DRM/GBM probe succeeds, and mesa_surfaceless is the silent fallback.
+	for (int32 i = 0; i < preferredCount; i++) {
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", kRendererDir,
+			kPreferredRenderers[i]);
+
+		BEntry entry(path);
+		if (!entry.Exists() || !entry.IsFile())
+			continue;
+
+		const char* reason = NULL;
+		BGLRenderer* renderer = _TryRenderer(path, this, fOptions, &reason);
+		if (renderer != NULL) {
+			fRenderer = renderer;
+			printf("BGLView: loaded renderer %s\n", path);
+			if (failedProbes[0] == '\0') {
+				syslog(LOG_INFO, "BGLView: using renderer %s "
+					"(preferred)", kPreferredRenderers[i]);
+			} else {
+				syslog(LOG_INFO, "BGLView: using renderer %s "
+					"(fallback after: %s)", kPreferredRenderers[i],
+					failedProbes);
+			}
+			return;
+		}
+
+		size_t used = strlen(failedProbes);
+		snprintf(failedProbes + used, sizeof(failedProbes) - used,
+			"%s%s: %s", used == 0 ? "" : "; ",
+			kPreferredRenderers[i], reason);
+	}
+
+	// Anything else found in the renderer dir still gets a chance, so a
+	// third-party add-on keeps working. Preferred names are not retried.
 	BEntry entry;
 	while (dir.GetNextEntry(&entry) == B_OK) {
 		if (!entry.IsFile())
 			continue;
 
+		char name[B_FILE_NAME_LENGTH];
+		if (entry.GetName(name) != B_OK)
+			continue;
+
+		bool preferred = false;
+		for (int32 i = 0; i < preferredCount; i++) {
+			if (strcmp(name, kPreferredRenderers[i]) == 0) {
+				preferred = true;
+				break;
+			}
+		}
+		if (preferred)
+			continue;
+
 		BPath path;
 		entry.GetPath(&path);
 
-		image_id img = load_add_on(path.Path());
-		if (img < 0)
-			continue;
-
-		renderer_factory_t factory = NULL;
-		status_t err = get_image_symbol(img, "instantiate_gl_renderer",
-			B_SYMBOL_TYPE_TEXT, (void**)&factory);
-
-		if (err == B_OK && factory != NULL) {
-			fRenderer = factory(this, fOptions, NULL);
-			if (fRenderer != NULL) {
-				printf("BGLView: loaded renderer %s\n", path.Path());
-				return;
-			}
+		const char* reason = NULL;
+		BGLRenderer* renderer = _TryRenderer(path.Path(), this, fOptions,
+			&reason);
+		if (renderer != NULL) {
+			fRenderer = renderer;
+			printf("BGLView: loaded renderer %s\n", path.Path());
+			syslog(LOG_INFO, "BGLView: using renderer %s "
+				"(non-preferred add-on)", path.Path());
+			return;
 		}
-
-		unload_add_on(img);
 	}
 
 	fprintf(stderr, "BGLView: no suitable renderer found in %s\n",
 		kRendererDir);
+	if (failedProbes[0] != '\0')
+		syslog(LOG_ERR, "BGLView: no suitable renderer in %s (%s)",
+			kRendererDir, failedProbes);
+	else
+		syslog(LOG_ERR, "BGLView: no suitable renderer in %s",
+			kRendererDir);
 }
 
 

@@ -39,18 +39,38 @@
 
 int DrmHWInterface::fFd = -1;
 
+
+// New dumb and render buffers come back uninitialized, often holding the
+// previous rotation; fill opaque black (cursor blending assumes alpha 255).
+static void
+_ClearBufferToBlack(RenderingBuffer* buffer)
+{
+	if (buffer == NULL || buffer->Bits() == NULL)
+		return;
+	// B_RGB32 is B, G, R, A in memory: 0xFF000000 is opaque black, while
+	// a 0xFF byte fill is opaque white.
+	uint8* row = (uint8*)buffer->Bits();
+	const uint32 width = buffer->Width();
+	for (uint32 y = 0; y < buffer->Height(); y++) {
+		uint32* pixel = (uint32*)row;
+		for (uint32 x = 0; x < width; x++)
+			pixel[x] = 0xFF000000;
+		row += buffer->BytesPerRow();
+	}
+}
+
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
-	hw->_OnSessionEnable();
+	// Through the locked wrapper: enable rebuilds and restores buffers.
+	hw->OnSeatEnabled();
 
 }
 
 extern "C" void seat_disable_cb(struct libseat* seat, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
-
-	hw->_OnSessionDisable();
+	hw->OnSeatDisabled();
 
 }
 
@@ -109,6 +129,8 @@ DrmHWInterface::DrmHWInterface()
 	fVRRSupported(false),
 	fVRREnabled(false),
 	fPanelOrientation(PANEL_ORIENTATION_NORMAL),
+	fMountingOrientation(B_PANEL_ORIENTATION_NORMAL),
+	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
@@ -304,6 +326,12 @@ DrmHWInterface::_OnSessionEnable()
 	uint32_t logW, logH;
 	_ApplyOrientationSwap(get_dev()->width, get_dev()->height, logW, logH);
 	fRenderBuffer = new MallocBuffer(logW, logH);
+
+	// The modeset below scans out fFrontBuffer at once; a fresh dumb
+	// buffer is uninitialized memory, so hand the CRTC defined contents.
+	_ClearBufferToBlack(fFrontBuffer);
+	_ClearBufferToBlack(fBackBuffer);
+	_ClearBufferToBlack(fRenderBuffer);
 
 	_ProbeAtomic();
 	if (fAtomicSupported)
@@ -604,7 +632,12 @@ DrmHWInterface::_EventThreadMain()
 					.version           = DRM_EVENT_CONTEXT_VERSION,
 					.page_flip_handler = DrmHWInterface::_PageFlipHandler,
 				};
+				// The handler swaps the buffer pointers; SetMode() replaces
+				// them under the same lock.
+				bool locked = LockExclusiveAccess();
 				drmHandleEvent(fFd, &evctx);
+				if (locked)
+					UnlockExclusiveAccess();
 			}
 			if (wake_idx >= 0 && (pfds[wake_idx].revents & POLLIN)) {
 				uint64_t v;
@@ -618,8 +651,20 @@ DrmHWInterface::_EventThreadMain()
 		if (active && _CheckResume())
 			_OnResume();
 
-		if (active && fPageFlipEnabled && !fPageFlipPending
-				&& fBackBuffer != NULL
+		// SetMode() deletes and recreates the buffers under the exclusive
+		// lock; reading fWriteTarget outside it used a freed buffer (#303).
+		bool flipLocked = false;
+		if (active && fPageFlipEnabled && !fPageFlipPending) {
+			// Idle frames must not drain the drawing threads every poll.
+			pthread_mutex_lock(&fDirtyMutex);
+			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
+			pthread_mutex_unlock(&fDirtyMutex);
+			if (wantFlip)
+				flipLocked = LockExclusiveAccess();
+		}
+
+		if (flipLocked && fPageFlipEnabled && !fPageFlipPending
+				&& fBackBuffer != NULL && fWriteTarget != NULL
 				&& fDpmsState == B_DPMS_ON) {
 			pthread_mutex_lock(&fDirtyMutex);
 			bool hasDirty = (fAccumulatedDirty.CountRects() > 0)
@@ -657,6 +702,8 @@ DrmHWInterface::_EventThreadMain()
 				}
 			}
 		}
+		if (flipLocked)
+			UnlockExclusiveAccess();
 
 		// QEMU resize may not emit HOTPLUG=1: poll the preferred geometry (no
 		// reprobe), but not while a user-set mode is active or it would undo it.
@@ -938,6 +985,12 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	_ApplyOrientationSwap(dev->width, dev->height, logW, logH);
 	fRenderBuffer = new MallocBuffer(logW, logH);
 
+	// The modeset below starts scanning out fFrontBuffer immediately;
+	// give it defined contents instead of recycled old-rotation pages.
+	_ClearBufferToBlack(fFrontBuffer);
+	_ClearBufferToBlack(fBackBuffer);
+	_ClearBufferToBlack(fRenderBuffer);
+
 	int ret;
 	if (fAtomicSupported && fPrimaryPlaneId) {
 		if (_AtomicModeset(dev->fb, &dev->mode) != B_OK) {
@@ -988,6 +1041,30 @@ DrmHWInterface::SetMode(const display_mode& mode)
 		if (fCursorLocation.y < 0)
 			fCursorLocation.y = 0;
 		SetCursor(fCursor);
+	}
+
+	// Both scanout buffers were just rebuilt: re-present the whole frame
+	// through rotate_point(), or recycled pages keep the old rotation.
+	{
+		const BRect fullFrame(0, 0,
+			fDisplayMode.virtual_width - 1, fDisplayMode.virtual_height - 1);
+
+		pthread_mutex_lock(&fDirtyMutex);
+		fAccumulatedDirty.MakeEmpty();
+		fPreviousDirty.MakeEmpty();
+		fAccumulatedDirty.Include(fullFrame);
+		fNeedsFlip = fPageFlipEnabled;
+		pthread_mutex_unlock(&fDirtyMutex);
+
+		// Single-buffered has no flip to ride in on: present now, or the
+		// cleared buffers stay on screen until the first damage blit.
+		if (!fPageFlipEnabled && fRenderBuffer != NULL)
+			_BlitRect(fRenderBuffer, fWriteTarget, fullFrame);
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
 	}
 
 	_NotifyFrameBufferChanged();
@@ -1801,49 +1878,7 @@ DrmHWInterface::IsDoubleBuffered() const
 }
 
 
-namespace {
-
-// The one place the rotation and reflection direction convention lives.
-// Logical (lx, ly) is a pixel index into a logicalW x logicalH buffer; the
-// result is the corresponding pixel index into the (swapped, for 90/270)
-// physical buffer. Cross-checked against libweston/backend-drm (modes.c's
-// get_panel_orientation() + shared/matrix.c's weston_matrix_init_transform()):
-// LEFT_UP is a 90 degree CCW content rotation, RIGHT_UP a 270 degree CCW
-// (= 90 CW) rotation. If this ships mirrored, flip the two cases below.
-// Reflection is a pre-step in logical space, applied before rotation, with
-// no dimension swap; composition order matches weston_matrix_init_transform's
-// Sc . T3 . R . T2 . S . T1 (flip S runs before rotate R).
-inline void
-rotate_point(PanelOrientation orientation, int32 lx, int32 ly,
-	int32 logicalW, int32 logicalH, int32& px, int32& py,
-	int32 reflection = B_PANEL_REFLECTION_NONE)
-{
-	int32 rx = (reflection & B_PANEL_REFLECTION_X) != 0
-		? logicalW - 1 - lx : lx;
-	int32 ry = (reflection & B_PANEL_REFLECTION_Y) != 0
-		? logicalH - 1 - ly : ly;
-
-	switch (orientation) {
-		case PANEL_ORIENTATION_UPSIDE_DOWN:
-			px = logicalW - 1 - rx;
-			py = logicalH - 1 - ry;
-			break;
-		case PANEL_ORIENTATION_LEFT_UP:
-			px = ry;
-			py = logicalW - 1 - rx;
-			break;
-		case PANEL_ORIENTATION_RIGHT_UP:
-			px = logicalH - 1 - ry;
-			py = rx;
-			break;
-		default:
-			px = rx;
-			py = ry;
-			break;
-	}
-}
-
-}	// namespace
+// The rotation convention lives in PanelOrientationTransform.h.
 
 
 void
@@ -2370,7 +2405,12 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	const int32 oldPx = (int32)floorf(fCursorLocation.x - hot.x);
 	const int32 oldPy = (int32)floorf(fCursorLocation.y - hot.y);
 
+	// The software cursor blits into fWriteTarget; SetMode() replaces it
+	// under the exclusive lock. HW lock first, then overlays, as SetMode().
+	if (!LockParallelAccess())
+		return;
 	HWInterface::MoveCursorTo(x, y);
+	UnlockParallelAccess();
 
 	// When the HW sprite is off (software composite / drag), the base
 	// MoveCursorTo already handled the cursor draw — no plane update.
@@ -2574,8 +2614,13 @@ DrmHWInterface::_OnResume()
 
 	// Monitors may change while asleep with no guaranteed HOTPLUG uevent, so rescan unconditionally.
 	// A changed mode on a known connector is not picked up (see modeset_add_connector()).
+	// Rescan and restore touch the device list and fFrontBuffer, which
+	// SetMode() replaces under the same lock.
+	bool locked = LockExclusiveAccess();
 	bool resizePrimary = _RescanConnectors();
 	if (resizePrimary) {
+		if (locked)
+			UnlockExclusiveAccess();
 		_ScheduleResize();
 		return;
 	}
@@ -2594,6 +2639,8 @@ DrmHWInterface::_OnResume()
 
 	// The driver resets gamma LUTs on some paths, so re-apply night light if one was active.
 	SetTemperature(fTemperature);
+	if (locked)
+		UnlockExclusiveAccess();
 
 	// Force a full repaint, unless DPMS had the display deliberately off before sleeping.
 	if (fDpmsState == B_DPMS_ON) {
@@ -2950,11 +2997,23 @@ DrmHWInterface::_DiscoverPanelOrientation()
 		case B_PANEL_ENV_UNSET:
 			break;
 	}
+
+	// Everything above found the mounting; the user's rotation goes on top.
+	fMountingOrientation = fPanelOrientation;
+	fPanelOrientation = (enum PanelOrientation)panel_compose_orientation(
+		fMountingOrientation, fUserOrientation);
 }
 
 
 int32
 DrmHWInterface::PanelOrientation() const
+{
+	return fUserOrientation;
+}
+
+
+int32
+DrmHWInterface::PanelScanoutOrientation() const
 {
 	return (int32)fPanelOrientation;
 }
@@ -2965,12 +3024,14 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 {
 	if (orientation < -1 || orientation > PANEL_ORIENTATION_RIGHT_UP)
 		return B_BAD_VALUE;
+	if (orientation < 0)
+		orientation = B_PANEL_ORIENTATION_NORMAL;
 
 	enum PanelOrientation previous = fPanelOrientation;
-	if (orientation < 0)
-		_DiscoverPanelOrientation();
-	else
-		fPanelOrientation = (enum PanelOrientation)orientation;
+	int32 previousUser = fUserOrientation;
+	fUserOrientation = orientation;
+	fPanelOrientation = (enum PanelOrientation)panel_compose_orientation(
+		fMountingOrientation, fUserOrientation);
 
 	if (fPanelOrientation == previous)
 		return B_OK;
@@ -2978,6 +3039,7 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	struct modeset_dev* dev = get_dev();
 	if (dev == NULL) {
 		fPanelOrientation = previous;
+		fUserOrientation = previousUser;
 		return B_ERROR;
 	}
 
@@ -2993,6 +3055,7 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	status_t status = SetMode(mode);
 	if (status != B_OK) {
 		fPanelOrientation = previous;
+		fUserOrientation = previousUser;
 		return status;
 	}
 
@@ -3106,6 +3169,8 @@ struct PanelOrientationQuirk {
 // these vendors pad, and exact on the product name.
 const PanelOrientationQuirk kPanelOrientationQuirks[] = {
 	{ "CHUWI", "MiniBook X", 1200, 1920, PANEL_ORIENTATION_RIGHT_UP },
+	// No Kootigers N100 entry until its 90-degree direction is known;
+	// VOS_PANEL_ORIENTATION=left-up|right-up overrides it at runtime.
 };
 
 bool

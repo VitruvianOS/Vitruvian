@@ -22,18 +22,23 @@
 #include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
+#include <DiskDevice.h>
 #include <DiskDeviceRoster.h>
+#include <DiskDeviceVisitor.h>
+#include <Entry.h>
 #include <File.h>
 #include <FindDirectory.h>
+#include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <Menu.h>
 #include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
-#include <PopUpMenu.h>
-#include <InterfaceDefs.h>
+#include <Partition.h>
 #include <Path.h>
+#include <PopUpMenu.h>
+#include <Roster.h>
 #include <Screen.h>
 #include <StatusBar.h>
 #include <StringView.h>
@@ -44,11 +49,14 @@
 
 #include "InstallerDefs.h"
 #include "PartitionMenuItem.h"
+#include "TargetSetupWindow.h"
 #include "WorkerThread.h"
 
 
 #define B_TRANSLATION_CONTEXT "InstallerWindow"
 
+
+static const char* kDriveSetupSignature = "application/x-vnd.Haiku-DriveSetup";
 
 static const uint32 kMsgBegin           = 'iBGN';
 static const uint32 kMsgInit            = 'iINI';
@@ -56,9 +64,55 @@ static const uint32 kMsgQuit            = 'iQTA';
 static const uint32 kMsgAdvancedToggled = 'iADV';
 static const uint32 kMsgPasswordChanged = 'iPWC';
 static const uint32 kMsgInPlaceSelected = 'iINP';
+static const uint32 kMsgBootChoice      = 'iBCH';
 
 // Real partition IDs are >= 0; -2 tags the in-place pseudo-item.
 static const int32 kInPlacePartitionId = -2;
+
+
+// Collects ESPs for the bootloader destination menu.
+class BootloaderEspVisitor : public BDiskDeviceVisitor {
+public:
+	BootloaderEspVisitor(BMenu* menu)
+		:
+		fMenu(menu)
+	{
+	}
+
+	virtual bool Visit(BDiskDevice* /*device*/)
+	{
+		return false;
+	}
+
+	virtual bool Visit(BPartition* partition, int32 /*level*/)
+	{
+		if (partition == NULL || partition->ContentSize() <= 0)
+			return false;
+		const char* type = partition->Type();
+		if (type == NULL)
+			return false;
+		if (strcmp(type, "c12a7328-f81f-11d2-ba4b-00a0c93ec93b") != 0
+			&& strcasecmp(type, "EFI") != 0) {
+			return false;
+		}
+		BPath path;
+		if (partition->GetPath(&path) != B_OK)
+			return false;
+		BString contentName = partition->ContentName();
+		BString label;
+		if (!contentName.IsEmpty())
+			label.SetToFormat("%s (%s)", contentName.String(), path.Path());
+		else
+			label.SetToFormat(B_TRANSLATE("ESP (%s)"), path.Path());
+		BMessage* message = new BMessage(kMsgBootChoice);
+		message->AddString("choice", BString() << "esp:" << path.Path());
+		fMenu->AddItem(new BMenuItem(label.String(), message));
+		return false;
+	}
+
+private:
+	BMenu* fMenu;
+};
 
 
 // Live ISO's / is read-only squashfs; statvfs ST_RDONLY excludes it.
@@ -180,6 +234,19 @@ InstallerWindow::InstallerWindow()
 	fQuitButton = new BButton("quit", B_TRANSLATE("Quit"),
 		new BMessage(kMsgQuit));
 
+	fLaunchDriveSetupButton = new BButton("setup_button",
+		B_TRANSLATE("Set up partitions" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_LAUNCH_DRIVE_SETUP));
+
+	fTargetSetupButton = new BButton("target_setup",
+		B_TRANSLATE("Create or format target" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_TARGET_SETUP));
+
+	fBootloaderChoiceMenu = new BPopUpMenu("bootloaderChoice");
+	fBootloaderField = new BMenuField("bootloaderField",
+		B_TRANSLATE("Bootloader:"), fBootloaderChoiceMenu);
+	fBootloaderChoiceMenu->SetTargetForItems(this);
+
 	BBox* setupBox = new BBox("setup");
 	setupBox->SetLabel(B_TRANSLATE("Set up your account"));
 	BLayoutBuilder::Group<>(setupBox, B_VERTICAL, B_USE_SMALL_SPACING)
@@ -213,10 +280,13 @@ InstallerWindow::InstallerWindow()
 		.Add(fMenuBar)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fDestMenuField)
+			.Add(fBootloaderField)
 		.End()
 		.Add(setupBox)
 		.Add(fProgressBar)
 		.AddGroup(B_HORIZONTAL)
+			.Add(fLaunchDriveSetupButton)
+			.Add(fTargetSetupButton)
 			.AddGlue()
 			.Add(fQuitButton)
 			.Add(fInstallButton)
@@ -231,6 +301,9 @@ InstallerWindow::InstallerWindow()
 	// Subscribe to disk device add/remove so a USB stick plugged in while
 	// the installer is open triggers a rescan of the target menu.
 	BDiskDeviceRoster().StartWatching(BMessenger(this));
+	// DriveSetup quits after the user repartitions; rescan on its exit so
+	// the fresh layout is offered without a manual refresh.
+	be_roster->StartWatching(BMessenger(this));
 
 	PostMessage(kMsgInit);
 }
@@ -239,6 +312,7 @@ InstallerWindow::InstallerWindow()
 InstallerWindow::~InstallerWindow()
 {
 	BDiskDeviceRoster().StopWatching(BMessenger(this));
+	be_roster->StopWatching(BMessenger(this));
 	_SetCopyEngineCancelSemaphore(-1);
 }
 
@@ -259,9 +333,79 @@ InstallerWindow::MessageReceived(BMessage* message)
 			if (item != NULL) {
 				fDestMenuField->MenuItem()->SetLabel(item->Label());
 				fWorkerThread->SetInPlace(
-					item->ID() == kInPlacePartitionId);
+					item->ID() == (partition_id)kInPlacePartitionId);
+				// A plan describes one specific target; picking another
+				// one drops it rather than silently reusing it.
+				if (!fPlanText.IsEmpty()
+					&& item->ID() != (partition_id)kPlannedPartitionId) {
+					_ClearPlan();
+				}
 			}
 			_UpdateControls();
+			break;
+		}
+
+		case MSG_LAUNCH_DRIVE_SETUP:
+			_LaunchDriveSetup();
+			break;
+
+		case MSG_TARGET_SETUP:
+		{
+			if (fInstallStatus != kReadyForInstall)
+				break;
+			TargetSetupWindow* window = new TargetSetupWindow(
+				BMessenger(this));
+			window->Show();
+			break;
+		}
+
+		case MSG_PLAN_READY:
+		{
+			const char* plan = NULL;
+			if (message->FindString("plan", &plan) == B_OK) {
+				fPlanText = plan;
+				// _ScanPartitions adds and marks the planned item.
+				_ScanPartitions();
+				PartitionMenuItem* planned
+					= (PartitionMenuItem*)fDestMenu->FindMarked();
+				if (planned != NULL)
+					fDestMenuField->MenuItem()->SetLabel(
+						planned->Label());
+				fWorkerThread->SetInPlace(false);
+				_UpdateControls();
+			}
+			break;
+		}
+
+		case kMsgBootChoice:
+		{
+			const char* choice = NULL;
+			if (message->FindString("choice", &choice) == B_OK)
+				fBootloaderChoice = choice;
+			break;
+		}
+
+		case B_SOME_APP_LAUNCHED:
+		{
+			entry_ref app;
+			if (message->FindRef("ref", &app) == B_OK
+				&& app.name != NULL
+				&& strcmp(app.name, "DriveSetup") == 0) {
+				fLaunchDriveSetupButton->SetEnabled(false);
+			}
+			break;
+		}
+
+		case B_SOME_APP_QUIT:
+		{
+			entry_ref app;
+			if (message->FindRef("ref", &app) == B_OK
+				&& app.name != NULL
+				&& strcmp(app.name, "DriveSetup") == 0) {
+				fLaunchDriveSetupButton->SetEnabled(true);
+				// DriveSetup may have repartitioned; refresh targets.
+				_ScanPartitions();
+			}
 			break;
 		}
 
@@ -302,16 +446,31 @@ InstallerWindow::MessageReceived(BMessage* message)
 				fInstallButton->SetEnabled(false);
 				break;
 			}
-			bool inPlace = (item->ID() == kInPlacePartitionId);
-			const char* prompt = inPlace
-				? B_TRANSLATE("Set up this system with the account "
-					"details above? The live persona will be removed "
-					"and the machine will reboot into normal login.")
-				: B_TRANSLATE("The selected volume will be erased and "
-					"Vitruvian will be installed to it. This cannot be "
-					"undone. Continue?");
+			bool inPlace = (item->ID() == (partition_id)kInPlacePartitionId);
+
+			InstallSpec spec;
+			spec.planText = fPlanText;
+			_ReadBootloaderChoice();
+			if (!inPlace) {
+				if (fBootloaderChoice.StartsWith("esp:")) {
+					spec.efiMode = "vitruvian";
+					spec.biosMode = "none";
+					spec.espPath = fBootloaderChoice.String() + 4;
+				} else if (fBootloaderChoice == "bios:disk") {
+					spec.efiMode = "none";
+					spec.biosMode = "disk";
+					spec.espPath = "none";
+				} else {
+					spec.efiMode = "none";
+					spec.biosMode = "none";
+					spec.espPath = "none";
+				}
+			}
+
+			BString targetLabel = item->Label();
+			BString prompt = _ComposeSummary(targetLabel.String(), inPlace);
 			BAlert* alert = new BAlert(B_TRANSLATE("Confirm install"),
-				prompt,
+				prompt.String(),
 				B_TRANSLATE("Cancel"),
 				inPlace ? B_TRANSLATE("Set up") : B_TRANSLATE("Install"),
 				NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
@@ -339,6 +498,8 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fRootPasswordField->SetEnabled(false);
 			fRootConfirmField->SetEnabled(false);
 			fBootloaderSetupItem->SetEnabled(false);
+			fLaunchDriveSetupButton->SetEnabled(false);
+			fTargetSetupButton->SetEnabled(false);
 
 			sem_id cancelSem = create_sem(0, "installer_cancel");
 			_SetCopyEngineCancelSemaphore(cancelSem);
@@ -346,7 +507,7 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fWorkerThread->SetSetupConf(conf);
 			explicit_bzero(conf.LockBuffer(0), conf.Length());
 			conf.UnlockBuffer(0);
-			fWorkerThread->StartInstall(item->ID());
+			fWorkerThread->StartInstall(item->ID(), spec);
 			break;
 		}
 
@@ -370,7 +531,7 @@ InstallerWindow::MessageReceived(BMessage* message)
 			PartitionMenuItem* target =
 				(PartitionMenuItem*)fDestMenu->FindMarked();
 			bool canBootloader = target != NULL
-				&& target->ID() != kInPlacePartitionId;
+				&& target->ID() != (partition_id)kInPlacePartitionId;
 
 			if (canBootloader) {
 				BAlert* alert = new BAlert(B_TRANSLATE("Installation complete"),
@@ -415,6 +576,8 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fAdvancedCheck->SetEnabled(true);
 			_UpdateAdvancedEnabled();
 			fBootloaderSetupItem->SetEnabled(fDestMenu->FindMarked() != NULL);
+			fLaunchDriveSetupButton->SetEnabled(true);
+			fTargetSetupButton->SetEnabled(true);
 
 			BString detail;
 			message->FindString("detail", &detail);
@@ -475,6 +638,18 @@ InstallerWindow::_ScanPartitions()
 
 	fWorkerThread->ScanDisksPartitions(fDestMenu, fBootloaderMenu);
 
+	if (!fPlanText.IsEmpty()) {
+		PartitionMenuItem* planned = new PartitionMenuItem(
+			"planned",
+			B_TRANSLATE("New Vitruvian partition (created at install "
+				"time)"),
+			B_TRANSLATE("New Vitruvian partition"),
+			new BMessage(TARGET_PARTITION), kPlannedPartitionId);
+		planned->SetIsValidTarget(true);
+		fDestMenu->AddItem(planned, 0);
+		planned->SetMarked(true);
+	}
+
 	if (fBootloaderMenu->CountItems() == 0) {
 		BMenuItem* noEsp = new BMenuItem(
 			B_TRANSLATE("No EFI System Partitions found"), NULL);
@@ -491,13 +666,20 @@ InstallerWindow::_ScanPartitions()
 		fDestMenu->AddItem(inPlace, 0);
 	}
 
+	_RebuildBootloaderMenu();
+
 	if (fDestMenu->CountItems() == 0) {
 		fDestMenuField->MenuItem()->SetLabel(
 			B_TRANSLATE("No writable partitions found"));
 		fInstallButton->SetEnabled(false);
 	} else {
-		fDestMenuField->MenuItem()->SetLabel(
-			B_TRANSLATE("Choose target volume"));
+		PartitionMenuItem* marked
+			= (PartitionMenuItem*)fDestMenu->FindMarked();
+		if (marked != NULL)
+			fDestMenuField->MenuItem()->SetLabel(marked->Label());
+		else
+			fDestMenuField->MenuItem()->SetLabel(
+				B_TRANSLATE("Choose target volume"));
 	}
 }
 
@@ -822,4 +1004,216 @@ InstallerWindow::_QuitCopyEngine(bool /*askUser*/)
 {
 	if (fWorkerThread != NULL)
 		fWorkerThread->Cancel();
+}
+
+
+void
+InstallerWindow::_LaunchDriveSetup()
+{
+	if (be_roster->Launch(kDriveSetupSignature) != B_OK) {
+		// The mime database can be incomplete on live media; fall back
+		// to the known install path like the legacy installer did.
+		BPath path;
+		if (find_directory(B_SYSTEM_APPS_DIRECTORY, &path) != B_OK
+			|| path.Append("DriveSetup") != B_OK) {
+			path.SetTo("/boot/system/apps/DriveSetup");
+		}
+		BEntry entry(path.Path());
+		entry_ref ref;
+		if (entry.GetRef(&ref) != B_OK || be_roster->Launch(&ref) != B_OK) {
+			BAlert* alert = new BAlert(B_TRANSLATE("DriveSetup"),
+				B_TRANSLATE("DriveSetup, the application to configure "
+					"disk partitions, could not be launched."),
+				B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL,
+				B_STOP_ALERT);
+			alert->Go();
+			return;
+		}
+	}
+	fLaunchDriveSetupButton->SetEnabled(false);
+}
+
+
+void
+InstallerWindow::_ClearPlan()
+{
+	fPlanText.Truncate(0);
+	_ScanPartitions();
+}
+
+
+void
+InstallerWindow::_RebuildBootloaderMenu()
+{
+	BMenuItem* item;
+	while ((item = fBootloaderChoiceMenu->RemoveItem((int32)0)) != NULL)
+		delete item;
+
+	bool uefi = access("/sys/firmware/efi", F_OK) == 0;
+	if (uefi) {
+		BDiskDeviceRoster roster;
+		roster.RewindDevices();
+		BDiskDevice device;
+		while (roster.GetNextDevice(&device) == B_OK) {
+			BootloaderEspVisitor visitor(fBootloaderChoiceMenu);
+			device.VisitEachDescendant(&visitor);
+		}
+	} else {
+		BMessage* message = new BMessage(kMsgBootChoice);
+		message->AddString("choice", "bios:disk");
+		fBootloaderChoiceMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("Master boot record of the target disk"), message));
+	}
+
+	BMessage* noneMessage = new BMessage(kMsgBootChoice);
+	noneMessage->AddString("choice", "none");
+	fBootloaderChoiceMenu->AddItem(new BMenuItem(
+		B_TRANSLATE("None (the system will not boot)"), noneMessage));
+
+	int32 count = fBootloaderChoiceMenu->CountItems();
+	int32 mark = 0;
+	for (int32 i = 0; i < count; i++) {
+		BMenuItem* menuItem = fBootloaderChoiceMenu->ItemAt(i);
+		const char* choice = NULL;
+		if (menuItem->Message() != NULL
+			&& menuItem->Message()->FindString("choice", &choice) == B_OK
+			&& fBootloaderChoice == choice) {
+			mark = i;
+			break;
+		}
+	}
+	if (mark < count) {
+		fBootloaderChoiceMenu->ItemAt(mark)->SetMarked(true);
+		BMenuItem* marked = fBootloaderChoiceMenu->FindMarked();
+		const char* choice = NULL;
+		if (marked != NULL && marked->Message() != NULL
+			&& marked->Message()->FindString("choice", &choice) == B_OK) {
+			fBootloaderChoice = choice;
+		}
+	}
+	if (fBootloaderChoice.IsEmpty())
+		fBootloaderChoice = uefi ? "none" : "bios:disk";
+}
+
+
+void
+InstallerWindow::_ReadBootloaderChoice()
+{
+	BMenuItem* marked = fBootloaderChoiceMenu->FindMarked();
+	const char* choice = NULL;
+	if (marked != NULL && marked->Message() != NULL
+		&& marked->Message()->FindString("choice", &choice) == B_OK) {
+		fBootloaderChoice = choice;
+	}
+}
+
+
+// The single confirmation lists every change; nothing is written until
+// the user accepts this summary.
+BString
+InstallerWindow::_ComposeSummary(const char* targetLabel, bool inPlace)
+{
+	BString summary;
+	if (inPlace) {
+		summary = B_TRANSLATE("Set up this system with the account "
+			"details above? The live persona will be removed and the "
+			"machine will reboot into normal login.");
+		return summary;
+	}
+
+	summary = B_TRANSLATE("Nothing is written until you confirm. "
+		"Afterwards, in order:");
+	summary << "\n\n";
+
+	if (!fPlanText.IsEmpty()) {
+		BString kind, id, ref, fs, gtype, role, size, start;
+		int32 offset = 0;
+		while (offset < fPlanText.Length()) {
+			int32 end = fPlanText.FindFirst('\n', offset);
+			if (end < 0)
+				end = fPlanText.Length();
+			BString line;
+			fPlanText.CopyInto(line, offset, end - offset);
+			offset = end + 1;
+			line.Trim();
+
+			if (line == "[op]") {
+				kind.Truncate(0); id.Truncate(0); ref.Truncate(0);
+				fs.Truncate(0); gtype.Truncate(0); role.Truncate(0);
+				size.Truncate(0); start.Truncate(0);
+				continue;
+			}
+			if (!line.StartsWith("[") && line.FindFirst('=') > 0) {
+				int32 equals = line.FindFirst('=');
+				BString key, value;
+				line.CopyInto(key, 0, equals);
+				line.CopyInto(value, equals + 1,
+					line.Length() - equals - 1);
+				if (key == "kind") kind = value;
+				else if (key == "id") id = value;
+				else if (key == "target_ref") ref = value;
+				else if (key == "filesystem") fs = value;
+				else if (key == "gpt_type") gtype = value;
+				else if (key == "role") role = value;
+				else if (key == "size_mib") size = value;
+				else if (key == "start_mib") start = value;
+				continue;
+			}
+			if (kind.IsEmpty())
+				continue;
+			summary << "- ";
+			if (kind == "create_table") {
+				summary << B_TRANSLATE("Create a new partition table")
+					<< " (" << gtype << ")";
+			} else if (kind == "create") {
+				summary << B_TRANSLATE("Create partition") << " "
+					<< id;
+				if (size != "-1")
+					summary << " (" << size << " MiB, "
+						<< B_TRANSLATE("at") << " " << start
+						<< " MiB, " << gtype << ")";
+				else
+					summary << " (" << B_TRANSLATE("rest of disk")
+						<< ", " << gtype << ")";
+				if (!role.IsEmpty() && role != "none")
+					summary << ", " << role;
+			} else if (kind == "format") {
+				summary << B_TRANSLATE("Format") << " " << ref
+					<< " " << B_TRANSLATE("as") << " " << fs;
+				if (!role.IsEmpty() && role != "none")
+					summary << " (" << role << ")";
+			} else if (kind == "delete") {
+				summary << B_TRANSLATE("Delete") << " " << ref;
+			} else if (kind == "set_flags") {
+				summary << B_TRANSLATE("Set boot flags on") << " "
+					<< ref;
+			} else {
+				summary << kind << " " << ref;
+			}
+			summary << "\n";
+			kind.Truncate(0);
+		}
+		summary << "\n";
+	}
+
+	summary << "- " << B_TRANSLATE("Copy the running system to:")
+		<< " " << targetLabel << "\n";
+	summary << "- " << B_TRANSLATE("Create the user account; write "
+		"fstab, hostname, locale and initramfs") << "\n";
+
+	if (fBootloaderChoice.StartsWith("esp:")) {
+		summary << "- " << B_TRANSLATE("Install the UEFI bootloader to "
+			"the chosen ESP. Files go under \\EFI\\Vitruvian; "
+			"existing boot entries are kept.") << "\n";
+	} else if (fBootloaderChoice == "bios:disk") {
+		summary << "- " << B_TRANSLATE("Install the BIOS bootloader "
+			"(GRUB) to the master boot record of the target disk.")
+			<< "\n";
+	} else {
+		summary << "- " << B_TRANSLATE("No bootloader. The installed "
+			"system will not boot until you install one.") << "\n";
+	}
+
+	summary << "\n" << B_TRANSLATE("This cannot be undone. Continue?");
+	return summary;
 }

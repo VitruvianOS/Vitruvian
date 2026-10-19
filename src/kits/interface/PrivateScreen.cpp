@@ -747,6 +747,45 @@ BPrivateScreen::SetReflection(int32 reflection)
 
 
 status_t
+BPrivateScreen::BeginScreenChange()
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_BEGIN_CHANGE);
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::ConfirmScreenChange()
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_CONFIRM_CHANGE);
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::CancelScreenChange()
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_CANCEL_CHANGE);
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
+	return status;
+}
+
+
+status_t
 BPrivateScreen::SetBrightness(float brightness)
 {
 	BPrivate::AppServerLink link;

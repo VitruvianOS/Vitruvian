@@ -57,8 +57,6 @@ FlatIconImporter::Import(Icon* icon, BPositionIO* stream)
 	status_t ret = Init(icon);
 	if (ret < B_OK)
 		return ret;
-#else
-	status_t ret;
 #endif
 
 	// seek around in the stream to figure out the size
@@ -78,9 +76,7 @@ FlatIconImporter::Import(Icon* icon, BPositionIO* stream)
 	if (stream->Read(buffer.Buffer(), size) != size)
 		return B_ERROR;
 
-	ret = _ParseSections(buffer, icon);
-
-	return ret;
+	return _Parse(buffer, icon, size);
 }
 
 // Import
@@ -99,14 +95,34 @@ FlatIconImporter::Import(Icon* icon, uint8* _buffer, size_t size)
 	// attach LittleEndianBuffer to buffer
 	LittleEndianBuffer buffer(_buffer, size);
 
-	return _ParseSections(buffer, icon);
+	return _Parse(buffer, icon, size);
 }
 
 // #pragma mark -
 
+// _Parse
+status_t
+FlatIconImporter::_Parse(LittleEndianBuffer& buffer, Icon* icon, size_t size)
+{
+	// Stroke and contour carry three parameter bytes; some blobs (upstream
+	// R_PersonIcon) carry a fourth, shorten. Take whichever reading
+	// consumes the blob exactly, else the three-byte one.
+	for (uint8 strokeParams = 3; strokeParams <= 4; strokeParams++) {
+		buffer.Reset();
+		status_t ret = _ParseSections(buffer, icon, strokeParams);
+		if (ret >= B_OK && buffer.SizeUsed() == size)
+			return B_OK;
+		icon->MakeEmpty();
+	}
+
+	buffer.Reset();
+	return _ParseSections(buffer, icon, 3);
+}
+
 // _ParseSections
 status_t
-FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
+FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon,
+								 uint8 strokeParams)
 {
 	// test if this is an icon at all
 	uint32 magic;
@@ -116,28 +132,19 @@ FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
 	// styles
 	Container<Style>* styles = icon->Styles();
 	status_t ret = _ParseStyles(buffer, styles);
-	if (ret < B_OK) {
-		printf("FlatIconImporter::_ParseSections() - "
-			   "error parsing styles: %s\n", strerror(ret));
+	if (ret < B_OK)
 		return ret;
-	}
 
 	// paths
 	Container<VectorPath>* paths = icon->Paths();
 	ret = _ParsePaths(buffer, paths);
-	if (ret < B_OK) {
-		printf("FlatIconImporter::_ParseSections() - "
-			   "error parsing paths: %s\n", strerror(ret));
+	if (ret < B_OK)
 		return ret;
-	}
 
 	// shapes
-	ret = _ParseShapes(buffer, styles, paths, icon->Shapes());
-	if (ret < B_OK) {
-		printf("FlatIconImporter::_ParseSections() - "
-			   "error parsing shapes: %s\n", strerror(ret));
+	ret = _ParseShapes(buffer, styles, paths, icon->Shapes(), strokeParams);
+	if (ret < B_OK)
 		return ret;
-	}
 
 	return B_OK;
 }
@@ -439,7 +446,8 @@ FlatIconImporter::_ParsePaths(LittleEndianBuffer& buffer,
 
 // _ReadTransformer
 static Transformer*
-_ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
+_ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source,
+				 Shape* shape, uint8 strokeParams)
 {
 	uint8 transformerType;
 	if (!buffer.Read(transformerType))
@@ -476,6 +484,15 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
 				delete contour;
 				return NULL;
 			}
+			// fourth byte is shorten in some HVIF writers; conv_contour
+			// has no shorten, so it is only consumed here
+			if (strokeParams > 3) {
+				uint8 unused;
+				if (!buffer.Read(unused)) {
+					delete contour;
+					return NULL;
+				}
+			}
 			contour->width(width - 128.0);
 			contour->line_join((agg::line_join_e)lineJoin);
 			contour->miter_limit(miterLimit);
@@ -504,11 +521,15 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
 			uint8 width;
 			uint8 lineOptions;
 			uint8 miterLimit;
-//			uint8 shorten;
+			uint8 shorten = 0;
 			if (!stroke
 				|| !buffer.Read(width)
 				|| !buffer.Read(lineOptions)
 				|| !buffer.Read(miterLimit)) {
+				delete stroke;
+				return NULL;
+			}
+			if (strokeParams > 3 && !buffer.Read(shorten)) {
 				delete stroke;
 				return NULL;
 			}
@@ -518,6 +539,8 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
 			uint8 lineCap = lineOptions >> 4;
 			stroke->line_cap((agg::line_cap_e)lineCap);
 			stroke->miter_limit(miterLimit);
+			if (strokeParams > 3)
+				stroke->shorten(shorten);
 			return stroke;
 		}
 		default: {
@@ -535,7 +558,8 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
 Shape*
 FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 									   Container<Style>* styles,
-									   Container<VectorPath>* paths)
+									   Container<VectorPath>* paths,
+									   uint8 strokeParams)
 {
 	// find out which style this shape uses
 	uint8 styleIndex;
@@ -614,8 +638,8 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 		if (!buffer.Read(transformerCount))
 			return NULL;
 		for (uint32 i = 0; i < transformerCount; i++) {
-			Transformer* transformer
-				= _ReadTransformer(buffer, shape->VertexSource(), shape);
+			Transformer* transformer = _ReadTransformer(
+				buffer, shape->VertexSource(), shape, strokeParams);
 			if (transformer && !shape->Transformers()->AddItem(transformer)) {
 				delete transformer;
 				return NULL;
@@ -632,7 +656,8 @@ status_t
 FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 							   Container<Style>* styles,
 							   Container<VectorPath>* paths,
-							   Container<Shape>* shapes)
+							   Container<Shape>* shapes,
+							   uint8 strokeParams)
 {
 	uint8 shapeCount;
 	if (!buffer.Read(shapeCount))
@@ -645,7 +670,7 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 		Shape* shape = NULL;
 		if (shapeType == SHAPE_TYPE_PATH_SOURCE) {
 			// path source shape
-			shape = _ReadPathSourceShape(buffer, styles, paths);
+			shape = _ReadPathSourceShape(buffer, styles, paths, strokeParams);
 			if (!shape)
 				return B_NO_MEMORY;
 		} else {

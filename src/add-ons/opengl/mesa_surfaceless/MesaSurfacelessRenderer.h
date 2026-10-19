@@ -42,7 +42,10 @@ public:
 
 private:
 	status_t					_Init();
+	status_t					_ChooseEglConfig();
+	status_t					_CreateContext();
 	bool						_TryCreateContext(int major, int minor);
+	void						_LogGlStrings();
 	void						_Cleanup();
 	void						_CreateFbo(int32 width, int32 height);
 	void						_DestroyFbo();
@@ -55,6 +58,12 @@ private:
 	GLuint						fFbo;
 	GLuint						fColorRb;
 	GLuint						fDepthRb;
+
+	bool						fIsGles;
+	int32						fContextMajor;
+	int32						fContextMinor;
+	bool						fDebug;
+	bool						fFirstFrameDumped;
 
 	int32						fWidth;
 	int32						fHeight;

@@ -69,8 +69,6 @@ private:
 	// Event processing
 			void				_ProcessKeyEvent(EvdevDevice& dev, struct input_event& ev);
 			void				_ProcessRelEvent(EvdevDevice& dev, struct input_event& ev);
-			void				_RotateDelta(float dx, float dy,
-									float& outDx, float& outDy) const;
 			void				_RotatePoint(float u, float v,
 									float& outU, float& outV) const;
 			void				_ProcessAbsEvent(EvdevDevice& dev, struct input_event& ev);

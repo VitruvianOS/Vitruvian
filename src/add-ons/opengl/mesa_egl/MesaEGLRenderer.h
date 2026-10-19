@@ -7,6 +7,8 @@
 
 #include <GLRenderer.h>
 
+#include <pthread.h>
+
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GL/gl.h>
@@ -39,13 +41,20 @@ public:
 
 private:
 	status_t					_Init();
+	status_t					_OpenDrmDevice();
+	bool						_ProbeGbmDevice();
+	status_t					_ChooseEglConfig();
+	status_t					_CreateContext();
+	bool						_CreateGbmSurface(int32 width, int32 height);
 	bool						_TryCreateContext(int major, int minor);
+	void						_LogGlStrings();
 	void						_Cleanup();
 	void						_RecreateSurface(int32 width, int32 height);
 
 private:
 	int							fDrmFd;
 	bool						fOwnsDrmFd;
+	char						fDevicePath[128];
 	struct gbm_device*			fGbmDevice;
 	struct gbm_surface*			fGbmSurface;
 
@@ -54,11 +63,20 @@ private:
 	EGLContext					fContext;
 	EGLConfig					fConfig;
 
+	uint32						fGbmFormat;
+	bool						fIsGles;
+	int32						fContextMajor;
+	int32						fContextMinor;
+	bool						fDebug;
+	bool						fFirstFrameDumped;
+
 	int32						fWidth;
 	int32						fHeight;
 	bool						fInitialized;
 
 	BBitmap*					fBitmap;
+	pthread_mutex_t				fBitmapLock;
+	pthread_mutex_t				fContextLock;
 };
 
 

@@ -1,6 +1,7 @@
 add_subdirectory(aboutsystem)
 add_subdirectory(activitymonitor)
 add_subdirectory(autoraise)
+add_subdirectory(camera)
 add_subdirectory(clock)
 add_subdirectory(cortex)
 add_subdirectory(deskbar)

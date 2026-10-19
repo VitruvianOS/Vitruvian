@@ -1,0 +1,19 @@
+/*
+ * Camera.rdef
+ */
+
+resource app_signature "application/x-vnd.VOS-CameraApp";
+
+resource app_version {
+	major  = 0,
+	middle = 1,
+	minor  = 0,
+
+	variety = B_APPV_BETA,
+	internal = 0,
+
+	short_info = "Camera",
+	long_info = "Camera for V\\OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;

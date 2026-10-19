@@ -13,6 +13,7 @@ ImageInclude("/system/servers" vos-polkit-agent)
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
+	Camera
 	Cortex
 	DeskCalc
 	DiskProbe

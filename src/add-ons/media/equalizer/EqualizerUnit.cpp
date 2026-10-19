@@ -252,3 +252,37 @@ EqualizerUnit::ProcessCycle(uint32 frameCount)
 		fEqualizer[i].ProcessBuffer(out, (int)frameCount);
 	}
 }
+
+
+#include <new>
+
+#include <MediaUnitAddOn.h>
+
+
+extern "C" int32
+media_unit_count()
+{
+	return 1;
+}
+
+
+extern "C" const char*
+media_unit_name(int32 index)
+{
+	return index == 0 ? "Equalizer" : NULL;
+}
+
+
+extern "C" BMediaUnit*
+media_unit_instantiate(int32 index)
+{
+	if (index != 0)
+		return NULL;
+
+	EqualizerUnit* unit = new(std::nothrow) EqualizerUnit();
+	if (unit == NULL || unit->InitCheck() != B_OK) {
+		delete unit;
+		return NULL;
+	}
+	return unit;
+}

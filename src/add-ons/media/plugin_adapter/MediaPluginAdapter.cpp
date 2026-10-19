@@ -9,10 +9,13 @@
 #include <math.h>
 #include <new>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <String.h>
 
 #include <media2/ParameterWeb.h>
+
+#include <MediaUnitAddOn.h>
 
 
 #ifdef VOS_HAS_LILV
@@ -505,4 +508,94 @@ BMediaPluginAdapter::ProcessCycle(uint32 frameCount)
 			memcpy(buf, fPortBuffers[port], frameCount * sizeof(float));
 		port++;
 	}
+}
+
+
+#ifdef VOS_HAS_LILV
+// Resolves an LV2 bundle directory to the URI of its first plugin.
+static bool
+_Lv2UriForBundle(const char* path, BString* outUri)
+{
+	BString bundle(path);
+	if (!bundle.EndsWith("/"))
+		bundle << "/";
+	BString bundleUri("file://");
+	bundleUri << bundle;
+
+	LilvWorld* world = lilv_world_new();
+	if (world == NULL)
+		return false;
+	LilvNode* node = lilv_new_uri(world, bundleUri.String());
+	lilv_world_load_bundle(world, node);
+	lilv_node_free(node);
+
+	bool found = false;
+	const LilvPlugins* plugins = lilv_world_get_all_plugins(world);
+	LILV_FOREACH(plugins, i, plugins) {
+		const LilvPlugin* plugin = lilv_plugins_get(plugins, i);
+		*outUri = lilv_node_as_uri(lilv_plugin_get_uri(plugin));
+		found = true;
+		break;
+	}
+	lilv_world_free(world);
+	return found;
+}
+#endif
+
+
+extern "C" int32
+media_unit_count()
+{
+	return 0;
+}
+
+
+extern "C" const char*
+media_unit_name(int32)
+{
+	return NULL;
+}
+
+
+extern "C" BMediaUnit*
+media_unit_instantiate(int32)
+{
+	return NULL;
+}
+
+
+// LADSPA libraries use descriptor 0; with lilv, a URI or bundle
+// directory selects an LV2 plugin.
+extern "C" BMediaUnit*
+media_plugin_load_file(const char* path)
+{
+	if (path == NULL || path[0] == '\0')
+		return NULL;
+
+	BMediaPluginAdapter* unit = new(std::nothrow) BMediaPluginAdapter();
+	if (unit == NULL || unit->InitCheck() != B_OK) {
+		delete unit;
+		return NULL;
+	}
+
+	status_t status = B_NOT_SUPPORTED;
+	struct stat st;
+	bool isDirectory = stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+#ifdef VOS_HAS_LILV
+	if (isDirectory) {
+		BString uri;
+		if (_Lv2UriForBundle(path, &uri))
+			status = unit->LoadLv2(uri.String());
+	} else if (strstr(path, "://") != NULL) {
+		status = unit->LoadLv2(path);
+	} else
+#endif
+	if (!isDirectory)
+		status = unit->LoadLadspa(path, 0);
+
+	if (status != B_OK) {
+		delete unit;
+		return NULL;
+	}
+	return unit;
 }

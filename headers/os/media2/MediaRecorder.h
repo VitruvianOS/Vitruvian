@@ -50,6 +50,10 @@ public:
 			const BMediaFormat&	Format() const;
 			status_t			SetFormat(const BMediaFormat& format);
 
+	// Enables the second (audio) input of a B_MEDIA_RAW_VIDEO recorder so
+	// one muxed file carries both streams.
+			status_t			SetAudioFormat(const BMediaFormat& format);
+
 	virtual	status_t			Start(bool force = false);
 	virtual	status_t			Stop(bool force = false);
 			bool				IsRunning() const;
@@ -89,6 +93,11 @@ public:
 									sample_format sampleFormat =
 										B_SAMPLE_FORMAT_DEFAULT,
 									float quality = -1.0f);
+		// Muxed video+audio output for B_MEDIA_RAW_VIDEO recorders: VP8 and
+		// Opus go to webm, H264 and AAC to mp4.
+		status_t			SetOutputFile(const char* path,
+									const BMediaFormat& encodedVideoFormat,
+									const BMediaFormat& encodedAudioFormat);
 		void				ClearOutputFile();
 
 		// True when an encoder for 'encoding' (media_codec_type)
@@ -96,6 +105,10 @@ public:
 		static	bool		IsEncodingAvailable(int32 encoding);
 
 			size_t				BufferSize() const;
+
+			// Valid for B_MEDIA_RAW_VIDEO recorders.
+			BMediaInput*		VideoInput() const;
+			BMediaInput*		AudioInput() const;
 
 private:
 			class Impl;

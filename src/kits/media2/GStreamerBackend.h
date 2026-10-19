@@ -44,6 +44,12 @@ public:
 									uint32 channelCount = 0,
 									const char* sampleFormatName = NULL);
 
+	// Raw-side appsrcs are named "vsrc" (video) and "asrc" (audio); NULL
+	// formats drop that leg. VP8/Opus go to webm, H264/AAC to mp4.
+	GstElement*					CreateAVEncodePipeline(const char* path,
+									const BMediaFormat* videoFormat,
+									const BMediaFormat* audioFormat);
+
 	static bool					IsEncoderAvailable(int32 encoding);
 	static int					ApplyEncoderQuality(GstElement* pipeline,
 									float quality);

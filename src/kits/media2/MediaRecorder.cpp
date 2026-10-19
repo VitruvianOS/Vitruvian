@@ -16,6 +16,7 @@
 #include <Path.h>
 #include <syscalls.h>
 
+#include <media2/MediaClient.h>
 #include <media2/MediaConnection.h>
 #include <media2/SimpleMediaNode.h>
 
@@ -40,6 +41,94 @@ protected:
 };
 
 
+typedef void (*_DeliverFunc)(void* cookie, void* buffer, size_t size,
+	const BMediaFormat& format);
+
+
+class _BridgeInput : public BMediaInput {
+public:
+	_BridgeInput(const char* name, media_type_mask accepted,
+			_DeliverFunc deliver, void* cookie)
+		:
+		BMediaConnection(B_MEDIA_INPUT, name),
+		BMediaInput(name),
+		fDeliver(deliver),
+		fCookie(cookie)
+	{
+		SetAcceptedTypes(accepted);
+	}
+	virtual ~_BridgeInput() {}
+
+protected:
+	virtual status_t AcceptFormat(BMediaFormat* format) override
+	{
+		if (format == NULL)
+			return B_BAD_VALUE;
+		if ((AcceptedTypes() & B_MEDIA_TYPE_BIT(format->Type())) == 0)
+			return B_BAD_VALUE;
+		return B_OK;
+	}
+
+	virtual void HandleBuffer(void* buffer, size_t size,
+		const BMediaFormat& format) override
+	{
+		if (fDeliver != NULL)
+			fDeliver(fCookie, buffer, size, format);
+	}
+
+private:
+	_DeliverFunc			fDeliver;
+	void*					fCookie;
+};
+
+
+// Video recorders own an in-process client with a video and an audio input.
+class _RecorderClient : public BMediaClient {
+public:
+	_RecorderClient(const char* name, _DeliverFunc videoDeliver,
+			void* videoCookie, _DeliverFunc audioDeliver, void* audioCookie)
+		:
+		BMediaClient(name != NULL ? name : "BMediaRecorder",
+			B_MEDIA_RECORDER),
+		fVideoInput(NULL),
+		fAudioInput(NULL)
+	{
+		fVideoInput = new(std::nothrow) _BridgeInput("video",
+			B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO), videoDeliver, videoCookie);
+		fAudioInput = new(std::nothrow) _BridgeInput("audio",
+			B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO), audioDeliver, audioCookie);
+		if (fVideoInput == NULL || fAudioInput == NULL)
+			return;
+		RegisterInput(fVideoInput);
+		RegisterInput(fAudioInput);
+	}
+
+	virtual ~_RecorderClient()
+	{
+		if (fVideoInput != NULL) {
+			UnregisterInput(fVideoInput);
+			delete fVideoInput;
+		}
+		if (fAudioInput != NULL) {
+			UnregisterInput(fAudioInput);
+			delete fAudioInput;
+		}
+	}
+
+	virtual	bool IsInProcessRouted() const { return true; }
+
+			_BridgeInput*	VideoInput() const { return fVideoInput; }
+			_BridgeInput*	AudioInput() const { return fAudioInput; }
+
+protected:
+	virtual	status_t _StartConnections(void* /*backend*/) { return B_OK; }
+
+private:
+			_BridgeInput*	fVideoInput;
+			_BridgeInput*	fAudioInput;
+};
+
+
 } // anonymous namespace
 
 
@@ -52,12 +141,17 @@ public:
 
 	const BMediaFormat& Format() const { return fFormat; }
 	status_t SetFormat(const BMediaFormat& format);
+	status_t SetAudioFormat(const BMediaFormat& format);
 
 	BMediaInput* Input() const { return fInput; }
+	BMediaInput* VideoInput() const
+		{ return fClient != NULL ? (BMediaInput*)fClient->VideoInput() : NULL; }
+	BMediaInput* AudioInput() const
+		{ return fClient != NULL ? (BMediaInput*)fClient->AudioInput() : NULL; }
 
 	status_t Start();
 	void     Stop();
-	bool     IsRecording() const { return fNode != NULL && fNode->IsStarted(); }
+	bool     IsRecording() const;
 
 	void SetCallbacks(BMediaRecorder::RecordBuffer recordFunc,
 		BMediaRecorder::Notifier notifyFunc, void* cookie);
@@ -68,15 +162,31 @@ public:
 		const BMediaFormat& encodedFormat, uint32 sampleRate,
 		uint32 channelCount, BMediaRecorder::sample_format sampleFormat,
 		float quality);
+	status_t SetOutputFile(const char* path,
+		const BMediaFormat& encodedVideoFormat,
+		const BMediaFormat& encodedAudioFormat);
 	void     ClearOutputFile();
 
 private:
+	static void _VideoThunk(void* cookie, void* buffer, size_t size,
+		const BMediaFormat& format);
+	static void _AudioThunk(void* cookie, void* buffer, size_t size,
+		const BMediaFormat& format);
+	void _DeliverVideo(void* buffer, size_t size, const BMediaFormat& format);
+	void _DeliverAudio(void* buffer, size_t size, const BMediaFormat& format);
+	void _PushAudio(void* buffer, size_t size, uint32 frameCount,
+		const BMediaFormat& format);
+	void _SetVideoCaps(const BMediaFormat& format);
+	void _SetAudioCaps(const BMediaFormat& format);
+
 	static void _ProcessHook(void* cookie, void* buffer, size_t size,
 		uint32 frameCount, const BMediaFormat& format);
 
 	BMediaRecorder*	fOwner;
 	BMediaFormat	fFormat;
+	BMediaFormat	fAudioFormat;
 	BSimpleMediaNode*		fNode;
+	_RecorderClient*		fClient;
 	_InputConnection*		fInput;
 	status_t				fInitErr;
 
@@ -87,6 +197,12 @@ private:
 	// Encode-to-file
 	GstElement*			fEncodePipeline;
 	GstElement*			fEncodeAppSrc;	// borrowed (owned by pipeline)
+	GstElement*			fEncodeVideoSrc;	// muxed A/V only, borrowed
+	GstElement*			fEncodeAudioSrc;
+	bool				fVideoCapsSet;
+	bool				fAudioCapsSet;
+	uint64				fVideoPts;	// ns
+	uint64				fAudioPts;	// ns
 	uint32				fFrameStride;
 	bool				fCapsWarned = false;
 	bool				fPushWarned = false;
@@ -105,7 +221,9 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	:
 	fOwner(owner),
 	fFormat(),
+	fAudioFormat(),
 	fNode(NULL),
+	fClient(NULL),
 	fInput(NULL),
 	fInitErr(B_NO_INIT),
 	fRecordFunc(NULL),
@@ -113,6 +231,12 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	fCookie(NULL),
 	fEncodePipeline(NULL),
 	fEncodeAppSrc(NULL),
+	fEncodeVideoSrc(NULL),
+	fEncodeAudioSrc(NULL),
+	fVideoCapsSet(false),
+	fAudioCapsSet(false),
+	fVideoPts(0),
+	fAudioPts(0),
 	fFrameStride(0),
 	fEncodeNextPts(0),
 	fEncodeSampleRate(0),
@@ -123,6 +247,21 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	fQualityTries(0)
 {
 	fFormat.SetToDefault();
+
+	if (type == B_MEDIA_RAW_VIDEO) {
+		fClient = new(std::nothrow) _RecorderClient(
+			name != NULL ? name : "BMediaRecorder",
+			&Impl::_VideoThunk, this, &Impl::_AudioThunk, this);
+		if (fClient == NULL || fClient->VideoInput() == NULL
+			|| fClient->AudioInput() == NULL
+			|| fClient->InitCheck() != B_OK) {
+			delete fClient;
+			fClient = NULL;
+			return;
+		}
+		fInitErr = B_OK;
+		return;
+	}
 
 	fNode = new(std::nothrow) BSimpleMediaNode(
 		name != NULL ? name : "BMediaRecorder",
@@ -158,30 +297,49 @@ BMediaRecorder::Impl::~Impl()
 		if (fInput != NULL)
 			fNode->UnregisterInput(fInput);
 	}
+	if (fClient != NULL)
+		fClient->Stop();
 	ClearOutputFile();
 	delete fInput;
 	delete fNode;
+	delete fClient;
 }
 
 
 status_t
 BMediaRecorder::Impl::SetFormat(const BMediaFormat& fmt)
 {
-	if (fNode == NULL)
+	if (fNode == NULL && fClient == NULL)
 		return B_NO_INIT;
-	if (fNode->IsStarted())
+	if (IsRecording())
 		return B_NOT_ALLOWED;
 	fFormat = fmt;
-	return fNode->SetFormat(fmt);
+	if (fNode != NULL)
+		return fNode->SetFormat(fmt);
+	fClient->VideoInput()->SetAcceptedFormat(fmt);
+	return B_OK;
+}
+
+
+status_t
+BMediaRecorder::Impl::SetAudioFormat(const BMediaFormat& fmt)
+{
+	if (fClient == NULL)
+		return B_NOT_SUPPORTED;
+	if (IsRecording())
+		return B_NOT_ALLOWED;
+	fAudioFormat = fmt;
+	fClient->AudioInput()->SetAcceptedFormat(fmt);
+	return B_OK;
 }
 
 
 status_t
 BMediaRecorder::Impl::Start()
 {
-	if (fNode == NULL)
+	if (fNode == NULL && fClient == NULL)
 		return B_NO_INIT;
-	status_t err = fNode->Start();
+	status_t err = fClient != NULL ? fClient->Start() : fNode->Start();
 	if (err != B_OK)
 		return err;
 	if (fNotifyFunc != NULL)
@@ -193,12 +351,21 @@ BMediaRecorder::Impl::Start()
 void
 BMediaRecorder::Impl::Stop()
 {
-	if (fNode == NULL)
+	if (fNode == NULL && fClient == NULL)
 		return;
-	if (fNode->IsStarted())
+	if (fClient != NULL) {
+		if (fClient->IsStarted())
+			fClient->Stop();
+	} else if (fNode->IsStarted())
 		fNode->Stop();
-	if (fEncodePipeline != NULL && fFrameStride > 0) {
-		gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAppSrc));
+	if (fEncodePipeline != NULL
+		&& (fFrameStride > 0 || fEncodeVideoSrc != NULL)) {
+		if (fEncodeVideoSrc != NULL)
+			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeVideoSrc));
+		if (fEncodeAudioSrc != NULL)
+			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAudioSrc));
+		if (fEncodeAppSrc != NULL)
+			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAppSrc));
 		GstBus* bus = gst_element_get_bus(fEncodePipeline);
 		if (bus != NULL) {
 			GstMessage* msg = gst_bus_timed_pop_filtered(bus, 5 * GST_SECOND,
@@ -234,7 +401,9 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 {
 	if (path == NULL)
 		return B_BAD_VALUE;
-	if (fNode != NULL && fNode->IsStarted())
+	if (fNode == NULL)
+		return B_NOT_SUPPORTED;
+	if (IsRecording())
 		return B_NOT_ALLOWED;
 
 	using namespace BPrivate::media;
@@ -288,6 +457,68 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 }
 
 
+status_t
+BMediaRecorder::Impl::SetOutputFile(const char* path,
+	const BMediaFormat& encodedVideoFormat,
+	const BMediaFormat& encodedAudioFormat)
+{
+	if (path == NULL || fClient == NULL)
+		return B_BAD_VALUE;
+	if (!fFormat.IsRawVideo())
+		return B_NOT_ALLOWED;
+	if (IsRecording())
+		return B_NOT_ALLOWED;
+
+	using namespace BPrivate::media;
+	GStreamerBackend* gst = GStreamerBackend::GetInstance();
+	if (gst == NULL)
+		return B_NO_INIT;
+
+	ClearOutputFile();
+
+	fEncodePipeline = gst->CreateAVEncodePipeline(path, &encodedVideoFormat,
+		&encodedAudioFormat);
+	if (fEncodePipeline == NULL)
+		return B_ERROR;
+
+	fEncodeVideoSrc = gst_bin_get_by_name(GST_BIN(fEncodePipeline), "vsrc");
+	fEncodeAudioSrc = gst_bin_get_by_name(GST_BIN(fEncodePipeline), "asrc");
+	if (fEncodeVideoSrc == NULL || fEncodeAudioSrc == NULL) {
+		if (fEncodeVideoSrc != NULL)
+			gst_object_unref(fEncodeVideoSrc);
+		if (fEncodeAudioSrc != NULL)
+			gst_object_unref(fEncodeAudioSrc);
+		fEncodeVideoSrc = NULL;
+		fEncodeAudioSrc = NULL;
+		ClearOutputFile();
+		return B_ERROR;
+	}
+	// Borrowed; the bin owns them.
+	gst_object_unref(fEncodeVideoSrc);
+	gst_object_unref(fEncodeAudioSrc);
+	fVideoCapsSet = false;
+	fAudioCapsSet = false;
+	fVideoPts = 0;
+	fAudioPts = 0;
+
+	if (gst_element_set_state(fEncodePipeline, GST_STATE_PLAYING)
+			== GST_STATE_CHANGE_FAILURE) {
+		ClearOutputFile();
+		return B_ERROR;
+	}
+	return B_OK;
+}
+
+
+bool
+BMediaRecorder::Impl::IsRecording() const
+{
+	if (fClient != NULL)
+		return fClient->IsStarted();
+	return fNode != NULL && fNode->IsStarted();
+}
+
+
 void
 BMediaRecorder::Impl::ClearOutputFile()
 {
@@ -297,6 +528,10 @@ BMediaRecorder::Impl::ClearOutputFile()
 	gst_object_unref(fEncodePipeline);
 	fEncodePipeline = NULL;
 	fEncodeAppSrc   = NULL;
+	fEncodeVideoSrc = NULL;
+	fEncodeAudioSrc = NULL;
+	fVideoCapsSet = false;
+	fAudioCapsSet = false;
 	fEncodeSampleRate = 0;
 	fEncodeChannels = 0;
 	fEncodeFormatName = NULL;
@@ -313,6 +548,167 @@ BMediaRecorder::Impl::SetCallbacks(BMediaRecorder::RecordBuffer recordFunc,
 	fRecordFunc = recordFunc;
 	fNotifyFunc = notifyFunc;
 	fCookie     = cookie;
+}
+
+
+void
+BMediaRecorder::Impl::_SetVideoCaps(const BMediaFormat& format)
+{
+	if (fEncodeVideoSrc == NULL || fVideoCapsSet || !format.IsRawVideo())
+		return;
+
+	const media_raw_video_format& raw = format.format.u.raw_video;
+	int numerator = 0;
+	int denominator = 0;
+	gst_util_double_to_fraction(raw.field_rate, &numerator, &denominator);
+	if (numerator <= 0 || denominator <= 0) {
+		numerator = 30;
+		denominator = 1;
+	}
+
+	GstCaps* caps = gst_caps_new_simple("video/x-raw",
+		"format", G_TYPE_STRING, "BGRx",
+		"width", G_TYPE_INT, (int)raw.width,
+		"height", G_TYPE_INT, (int)raw.height,
+		"framerate", GST_TYPE_FRACTION, numerator, denominator,
+		NULL);
+	g_object_set(fEncodeVideoSrc, "caps", caps, "format", GST_FORMAT_TIME,
+		"is-live", TRUE, NULL);
+	gst_caps_unref(caps);
+	fVideoCapsSet = true;
+}
+
+
+void
+BMediaRecorder::Impl::_SetAudioCaps(const BMediaFormat& format)
+{
+	if (fEncodeAudioSrc == NULL || fAudioCapsSet || !format.IsRawAudio())
+		return;
+
+	GstCaps* caps
+		= BPrivate::media::GStreamerBackend::RawAudioToGstCaps(format);
+	if (caps == NULL)
+		return;
+	g_object_set(fEncodeAudioSrc, "caps", caps, "format", GST_FORMAT_TIME,
+		"is-live", TRUE, NULL);
+	gst_caps_unref(caps);
+	fAudioCapsSet = true;
+}
+
+
+/* static */ void
+BMediaRecorder::Impl::_VideoThunk(void* cookie, void* buffer, size_t size,
+	const BMediaFormat& format)
+{
+	((Impl*)cookie)->_DeliverVideo(buffer, size, format);
+}
+
+
+/* static */ void
+BMediaRecorder::Impl::_AudioThunk(void* cookie, void* buffer, size_t size,
+	const BMediaFormat& format)
+{
+	((Impl*)cookie)->_DeliverAudio(buffer, size, format);
+}
+
+
+void
+BMediaRecorder::Impl::_DeliverVideo(void* buffer, size_t size,
+	const BMediaFormat& format)
+{
+	if (fEncodePipeline == NULL || fEncodeVideoSrc == NULL || buffer == NULL
+		|| size == 0) {
+		return;
+	}
+
+	if (!fVideoCapsSet)
+		_SetVideoCaps(fFormat.IsRawVideo() ? fFormat : format);
+	if (!fVideoCapsSet)
+		return;
+
+	GstBuffer* gstBuffer = gst_buffer_new_allocate(NULL, size, NULL);
+	if (gstBuffer == NULL)
+		return;
+	GstMapInfo map;
+	if (!gst_buffer_map(gstBuffer, &map, GST_MAP_WRITE)) {
+		gst_buffer_unref(gstBuffer);
+		return;
+	}
+	memcpy(map.data, buffer, size);
+	gst_buffer_unmap(gstBuffer, &map);
+
+	const float rate = format.IsRawVideo()
+		? format.format.u.raw_video.field_rate : 0.0f;
+	if (rate > 0.0f) {
+		const uint64 duration = (uint64)((double)GST_SECOND / (double)rate);
+		GST_BUFFER_PTS(gstBuffer) = fVideoPts;
+		GST_BUFFER_DURATION(gstBuffer) = duration;
+		fVideoPts += duration;
+	}
+
+	if (gst_app_src_push_buffer(GST_APP_SRC(fEncodeVideoSrc), gstBuffer)
+			!= GST_FLOW_OK) {
+		gst_buffer_unref(gstBuffer);
+	}
+}
+
+
+void
+BMediaRecorder::Impl::_DeliverAudio(void* buffer, size_t size,
+	const BMediaFormat& format)
+{
+	if (fEncodePipeline == NULL || fEncodeAudioSrc == NULL)
+		return;
+
+	const BMediaFormat& caps = fAudioFormat.IsRawAudio() ? fAudioFormat
+		: format;
+	if (!fAudioCapsSet)
+		_SetAudioCaps(caps);
+	_PushAudio(buffer, size, 0, caps);
+}
+
+
+void
+BMediaRecorder::Impl::_PushAudio(void* buffer, size_t size,
+	uint32 frameCount, const BMediaFormat& format)
+{
+	if (fEncodePipeline == NULL || fEncodeAudioSrc == NULL || buffer == NULL
+		|| !fAudioCapsSet || !format.IsRawAudio()) {
+		return;
+	}
+
+	const media_raw_audio_format& raw = format.format.u.raw_audio;
+	const uint32 stride
+		= (raw.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
+			* raw.channel_count;
+	if (stride == 0)
+		return;
+	if (frameCount == 0)
+		frameCount = size / stride;
+
+	GstBuffer* gstBuffer = gst_buffer_new_allocate(NULL, size, NULL);
+	if (gstBuffer == NULL)
+		return;
+	GstMapInfo map;
+	if (!gst_buffer_map(gstBuffer, &map, GST_MAP_WRITE)) {
+		gst_buffer_unref(gstBuffer);
+		return;
+	}
+	memcpy(map.data, buffer, size);
+	gst_buffer_unmap(gstBuffer, &map);
+
+	if (raw.frame_rate > 0.0f) {
+		const uint64 duration = (frameCount * (uint64)GST_SECOND)
+			/ (uint64)raw.frame_rate;
+		GST_BUFFER_PTS(gstBuffer) = fAudioPts;
+		GST_BUFFER_DURATION(gstBuffer) = duration;
+		fAudioPts += duration;
+	}
+
+	if (gst_app_src_push_buffer(GST_APP_SRC(fEncodeAudioSrc), gstBuffer)
+			!= GST_FLOW_OK) {
+		gst_buffer_unref(gstBuffer);
+	}
 }
 
 
@@ -430,10 +826,34 @@ BMediaRecorder::Format() const
 
 
 status_t  BMediaRecorder::SetFormat(const BMediaFormat& f)  { return fImpl ? fImpl->SetFormat(f) : B_NO_INIT; }
+status_t  BMediaRecorder::SetAudioFormat(const BMediaFormat& f) { return fImpl ? fImpl->SetAudioFormat(f) : B_NO_INIT; }
 status_t  BMediaRecorder::Start(bool /*force*/)             { return fImpl ? fImpl->Start() : B_NO_INIT; }
 status_t  BMediaRecorder::Stop(bool /*force*/)              { if (fImpl) fImpl->Stop(); return B_OK; }
 bool      BMediaRecorder::IsRunning() const                 { return fImpl && fImpl->IsRecording(); }
 size_t    BMediaRecorder::BufferSize() const                { return fImpl ? fImpl->BufferSize() : 0; }
+
+
+BMediaInput*
+BMediaRecorder::VideoInput() const
+{
+	return fImpl != NULL ? fImpl->VideoInput() : NULL;
+}
+
+
+BMediaInput*
+BMediaRecorder::AudioInput() const
+{
+	return fImpl != NULL ? fImpl->AudioInput() : NULL;
+}
+
+
+status_t
+BMediaRecorder::SetOutputFile(const char* path,
+	const BMediaFormat& videoFormat, const BMediaFormat& audioFormat)
+{
+	return fImpl
+		? fImpl->SetOutputFile(path, videoFormat, audioFormat) : B_NO_INIT;
+}
 
 
 void

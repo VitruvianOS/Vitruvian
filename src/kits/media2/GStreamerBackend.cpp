@@ -7,6 +7,7 @@
 
 #include <mutex>
 #include <stdlib.h>
+#include <String.h>
 #include <string.h>
 
 #include <gst/audio/audio.h>
@@ -761,6 +762,106 @@ GStreamerBackend::CreateEncodePipeline(const char* path,
 	if (boost)
 		_RestoreEncoderRanks();
 
+	return pipeline;
+}
+
+
+static bool
+_ElementAvailable(const char* name)
+{
+	GstElementFactory* factory = gst_element_factory_find(name);
+	if (factory == NULL)
+		return false;
+	gst_object_unref(factory);
+	return true;
+}
+
+
+static const char*
+_VideoEncoderChain(int32 encoding)
+{
+	if (encoding == B_CODEC_TYPE_H264) {
+		if (_ElementAvailable("x264enc"))
+			return "x264enc tune=zerolatency speed-preset=ultrafast";
+		if (_ElementAvailable("openh264enc"))
+			return "openh264enc";
+		return NULL;
+	}
+	return _ElementAvailable("vp8enc") ? "vp8enc deadline=1" : NULL;
+}
+
+
+static const char*
+_AudioEncoderChain(int32 encoding)
+{
+	if (encoding == B_CODEC_TYPE_AAC) {
+		static const char* const kCandidates[] = { "avenc_aac", "voaacenc",
+			"fdkaacenc", NULL };
+		for (int32 i = 0; kCandidates[i] != NULL; i++) {
+			if (_ElementAvailable(kCandidates[i]))
+				return kCandidates[i];
+		}
+		return NULL;
+	}
+	return _ElementAvailable("opusenc") ? "opusenc" : NULL;
+}
+
+
+GstElement*
+GStreamerBackend::CreateAVEncodePipeline(const char* path,
+	const BMediaFormat* videoFormat, const BMediaFormat* audioFormat)
+{
+	if (path == NULL || (videoFormat == NULL && audioFormat == NULL))
+		return NULL;
+
+	const char* videoChain = NULL;
+	const char* audioChain = NULL;
+	const char* muxer = NULL;
+
+	if (videoFormat != NULL) {
+		const int32 encoding = videoFormat->format.u.encoded_video.encoding;
+		videoChain = _VideoEncoderChain(encoding);
+		if (videoChain == NULL)
+			return NULL;
+		muxer = encoding == B_CODEC_TYPE_H264 ? "mp4mux" : "webmmux";
+	}
+
+	if (audioFormat != NULL) {
+		const int32 encoding = audioFormat->format.u.encoded_audio.encoding;
+		audioChain = _AudioEncoderChain(encoding);
+		if (audioChain == NULL)
+			return NULL;
+		if (muxer == NULL)
+			muxer = encoding == B_CODEC_TYPE_AAC ? "mp4mux" : "webmmux";
+	}
+
+	BString description;
+	if (videoChain != NULL) {
+		description << "appsrc name=vsrc is-live=true format=time block=true"
+			<< " ! queue ! videoconvert ! video/x-raw,format=I420"
+			<< " ! " << videoChain << " ! queue ! mux. ";
+	}
+	if (audioChain != NULL) {
+		description << "appsrc name=asrc is-live=true format=time block=true"
+			<< " ! queue ! audioconvert ! audioresample"
+			<< " ! " << audioChain << " ! queue ! mux. ";
+	}
+	description << muxer << " name=mux ! filesink name=sink";
+
+	GError* error = NULL;
+	GstElement* pipeline = gst_parse_launch(description.String(), &error);
+	if (error != NULL)
+		g_error_free(error);
+	if (pipeline == NULL)
+		return NULL;
+
+	GstElement* sink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
+	if (sink == NULL) {
+		gst_object_unref(pipeline);
+		return NULL;
+	}
+	g_object_set(sink, "location", path, NULL);
+	gst_object_unref(sink);
 	return pipeline;
 }
 

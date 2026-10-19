@@ -238,7 +238,7 @@ public:
 			status_t				RoundtripLocked(
 									bigtime_t timeoutUsecs = 2000000);
 
-		// SPA node params (W18): PropInfo descriptors and Props values.
+		// SPA node params: PropInfo descriptors and Props values.
 		// valueTypes use spa pod types (SPA_TYPE_Float, Bool, Int, Id, String).
 		struct NodePropInfo {
 			uint32			id;

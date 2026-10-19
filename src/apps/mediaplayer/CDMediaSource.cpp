@@ -85,8 +85,7 @@ CDMediaSource::_TryDevice(const char* device)
 {
 	fDevice = device;
 
-	// W12 will make CountTracks() a real demux enumeration. Until then the
-	// playbin path still opens a single raw-audio track per URI, so probe
+	// The playbin path opens a single raw-audio track per URI, so probe
 	// track 1 and then a bounded scan for any additional tracks that open.
 	int32 found = 0;
 	for (int32 track = 1; track <= 99; track++) {

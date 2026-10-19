@@ -171,7 +171,7 @@ BMediaPluginAdapter::LoadLadspa(const char* path, unsigned long index)
 	fPluginName = fDescriptor->Label != NULL ? fDescriptor->Label : "plugin";
 
 	// Create one mono port pair per audio in/out; control ports become
-	// SPA props published after Start (W18 only).
+	// SPA props published after Start.
 	int32 nIn = 0;
 	int32 nOut = 0;
 	for (unsigned long i = 0; i < fDescriptor->PortCount; i++) {

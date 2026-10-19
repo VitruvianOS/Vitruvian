@@ -62,7 +62,7 @@ public:
 			int32			AudioOutputCount() const;
 			int32			ParameterCount() const;
 
-			// SPA prop ids for control ports (W18 binding).
+			// SPA prop ids for control ports.
 	enum {
 		kPropPortBase = 0x1000000 + 1
 	};

@@ -49,7 +49,7 @@ public:
 
 			status_t		InitCheck() const;
 
-			// SPA prop ids for the published parameters (W18 binding).
+			// SPA prop ids for the published parameters.
 	enum {
 		kPropPreAmp	= 0x1000000 + 101,
 		kPropMute	= 0x1000000 + 102,

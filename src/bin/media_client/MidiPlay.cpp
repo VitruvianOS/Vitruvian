@@ -79,7 +79,7 @@ media_midi_play(const char* uri)
 		return 2;
 	}
 
-	// Synth node from W17. InitCheck fails when no soundfont is found.
+	// Synth node. InitCheck fails when no soundfont is found.
 	BSoundFontSynth* synth = new BSoundFontSynth("midi synth", 2);
 	if (synth == NULL) {
 		fprintf(stderr, "media_midi_play: out of memory\n");

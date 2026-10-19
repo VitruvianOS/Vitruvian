@@ -214,7 +214,7 @@ EqualizerUnit::_PublishAndBind()
 	PublishNodeParams(propIds, propNames, valueTypes, minValues, maxValues,
 		steps, valuePtrs, valueSizes, n);
 
-	// Every parameter round-trip goes through W18's binding only.
+	// Every parameter round-trip goes through the SPA binding only.
 	fControllable->BindNode(nodeId);
 }
 

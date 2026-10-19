@@ -18,7 +18,6 @@ target_link_libraries(plugin_adapter PRIVATE
 )
 
 # LV2 path compiles only when lilv headers and library are present.
-# Missing lilv-dev/lv2-dev is the W20 build-check MISSING case.
 find_path(LILV_HEADER lilv/lilv.h)
 find_library(LILV_LIBRARY NAMES lilv-0)
 if(LILV_HEADER AND LILV_LIBRARY)

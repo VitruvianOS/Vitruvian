@@ -14,9 +14,8 @@
 
 // Audio CD source for MediaPlayer. The tree has no CD driver and no TOC
 // API; the only playback surface today is GStreamer cdda:// through
-// BMediaFile (playbin accepts the URI). Track list comes from
-// BMediaFile::CountTracks() once W12 enumerates demux tracks; until then
-// we probe cdda:// devices and report what actually opens.
+// BMediaFile (playbin accepts the URI). Track discovery probes
+// cdda:// devices and reports what actually opens.
 class CDMediaSource {
 public:
 								CDMediaSource();

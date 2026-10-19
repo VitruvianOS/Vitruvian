@@ -71,6 +71,14 @@ public:
 			camera_location		Location() const { return fLocation; }
 			media_client_id		DeviceId() const { return fDeviceId; }
 
+	// The video output delivers RGB32 frames to in-process consumers
+	// connected through BMediaGraph.
+	virtual	bool				IsInProcessRouted() const;
+
+			// Requested capture mode; applied on the next Start().
+			status_t			SetMode(uint32 width, uint32 height,
+									float frameRate);
+
 			status_t			SetFrameTarget(const BMessenger& target);
 			media_raw_video_format VideoFormat() const;
 
@@ -100,6 +108,7 @@ private:
 									const media_raw_video_format& format);
 			uint32				fDiagFrames = 0;
 			bigtime_t			fDiagLast = 0;
+			void				_SeedOutputFormat();
 			void				_BuildParameterWeb();
 			void				_SaveControls();
 			void				_OnCaptureFrame(void* data, size_t size,

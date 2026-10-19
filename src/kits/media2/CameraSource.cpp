@@ -391,6 +391,7 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 		fLastFormat.color_space = B_RGB32;
 
 	SetFormat(BMediaFormat(fLastFormat));
+	_SeedOutputFormat();
 
 	// See which controls the device exposes; stored values still win.
 	_QueryDeviceControls();
@@ -399,6 +400,59 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 	fParameterWeb = NULL;
 	_BuildParameterWeb();
 	return B_OK;
+}
+
+
+bool
+BCameraSource::IsInProcessRouted() const
+{
+	return true;
+}
+
+
+status_t
+BCameraSource::SetMode(uint32 width, uint32 height, float frameRate)
+{
+	if (width == 0 || height == 0 || frameRate <= 0.0f)
+		return B_BAD_VALUE;
+	if (IsStarted())
+		return B_NOT_ALLOWED;
+
+	{
+		BAutolock _(fFrameLock);
+		fLastFormat.width = width;
+		fLastFormat.height = height;
+		fLastFormat.field_rate = frameRate;
+		fHaveFrame = false;
+	}
+	SetFormat(BMediaFormat(VideoFormat()));
+	_SeedOutputFormat();
+	return B_OK;
+}
+
+
+// In-process consumers always get tightly packed RGB32.
+void
+BCameraSource::_SeedOutputFormat()
+{
+	BMediaOutput* output = OutputAt(0);
+	if (output == NULL)
+		return;
+
+	const media_raw_video_format current = VideoFormat();
+	BMediaFormat format;
+	format.SetToDefault();
+	format.format.type = B_MEDIA_RAW_VIDEO;
+	media_raw_video_format& raw = format.format.u.raw_video;
+	raw.field_rate = current.field_rate;
+	raw.width = current.width;
+	raw.height = current.height;
+	raw.first_active = 0;
+	raw.last_active = current.height > 0 ? current.height - 1 : 0;
+	raw.color_space = B_RGB32;
+	raw.pixel_width_aspect = 1;
+	raw.pixel_height_aspect = 1;
+	output->SetFormat(format);
 }
 
 
@@ -754,6 +808,7 @@ BCameraSource::_OnParamChanged(void* data, uint32 id, const void* paramData)
 		self->fLastFormat = rv;
 	}
 	self->SetFormat(format);
+	self->_SeedOutputFormat();
 }
 
 
@@ -785,14 +840,40 @@ BCameraSource::_OnCaptureFrame(void* data, size_t size,
 	}
 
 	// Fan out to any media2 consumer bound to our video output.
+	std::vector<uint8> rgb;
+	const void* out = data;
+	size_t outSize = size;
+	media_raw_video_format outFormat = format;
 	for (int32 i = 0; i < CountOutputs(); i++) {
 		BMediaOutput* output = OutputAt(i);
 		if (output == NULL || !output->IsConnected())
 			continue;
-		BMediaConnection* binding = output->Binding();
-		BMediaInput* input = dynamic_cast<BMediaInput*>(binding);
-		if (input != NULL)
-			input->HandleBuffer(data, size, BMediaFormat(format));
+		BMediaInput* input = dynamic_cast<BMediaInput*>(output->Binding());
+		if (input == NULL)
+			continue;
+
+		if (rgb.empty() && format.color_space != B_RGB32) {
+			rgb.resize((size_t)format.width * format.height * 4);
+			const size_t pixels = (size_t)format.width * format.height;
+			bool converted = false;
+			if (format.color_space == B_YCbCr422 && size >= pixels * 2) {
+				converted = ConvertYUY2ToRGB32(
+					(const uint8*)data, format.width, format.height,
+					rgb.data(), format.width * 4);
+			} else if (format.color_space == B_YUV420
+					&& size >= pixels * 3 / 2) {
+				converted = ConvertI420ToRGB32(
+					(const uint8*)data, format.width, format.height,
+					rgb.data(), format.width * 4);
+			}
+			if (!converted)
+				return;
+			out = rgb.data();
+			outSize = rgb.size();
+			outFormat.color_space = B_RGB32;
+		}
+		input->HandleBuffer(const_cast<void*>(out), outSize,
+			BMediaFormat(outFormat));
 	}
 }
 

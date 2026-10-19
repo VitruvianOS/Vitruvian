@@ -572,6 +572,9 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 bigtime_t
 BMediaPlayer::Impl::Position() const
 {
+	// The last buffers can stop short of the container duration.
+	if (fEOS.load() && fDuration > 0)
+		return fDuration;
 	if (fTrack != NULL && fAudioRate > 0.0f)
 		return fClockBase + (bigtime_t)(fPlayedFrames * 1000000.0 / fAudioRate);
 	if (fTrack != NULL)

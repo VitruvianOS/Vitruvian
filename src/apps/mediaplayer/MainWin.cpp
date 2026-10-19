@@ -852,7 +852,8 @@ MainWin::MessageReceived(BMessage* message)
 		case MSG_CONTROLLER_DURATION:
 			if (fController != NULL)
 				fControllerView->SetAudioChannelCount(
-					fController->AudioChannels());
+					fController->AudioChannels() > 0
+						? fController->AudioChannels() : 2);
 			_UpdateTransport();
 			_PollPosition();
 			break;

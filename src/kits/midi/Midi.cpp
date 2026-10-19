@@ -291,10 +291,15 @@ void
 BMidi::SnoozeUntil(uint32 time) const
 {
 	// Returns immediately if the time has passed.
-	uint32 now = B_NOW;
-	if (time <= now)
-		return;
-	snooze_until((bigtime_t)time * 1000, B_SYSTEM_TIMEBASE);
+	// Short slices so Stop(), which waits for this thread, is not held up
+	// until the next event.
+	const bigtime_t until = (bigtime_t)time * 1000;
+	while (fIsRunning) {
+		const bigtime_t now = system_time();
+		if (now >= until)
+			return;
+		snooze(until - now < 20000 ? until - now : 20000);
+	}
 }
 
 

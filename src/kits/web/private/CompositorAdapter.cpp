@@ -23,6 +23,9 @@
 #include <wpe/wpe.h>
 
 #include <algorithm>
+
+static const unsigned int kActiveTickMs = 16;
+static const unsigned int kIdleTickMs = 200;
 #include <cstdlib>
 #include <cstring>
 
@@ -52,7 +55,9 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fHeight(h),
 	fFillColor(0xFFFFFFFF),
 	fFrameReady(false),
-	fCompletePending(false)
+	fClockRunning(false),
+	fLastActivity(0),
+	fClockSource(0)
 {
 	init_fdo_backend();
 
@@ -108,6 +113,9 @@ CompositorAdapter::ReleaseExportable()
 
 CompositorAdapter::~CompositorAdapter()
 {
+	// Destroyed on the GLib thread, so the clock cannot be mid-tick.
+	if (fClockSource != 0)
+		g_source_remove(fClockSource);
 	// Owned by the WebView once ReleaseExportable() handed it over.
 	if (fExportable && fOwnsExportable)
 		wpe_view_backend_exportable_fdo_destroy(fExportable);
@@ -209,19 +217,42 @@ CompositorAdapter::Resize(int newWidth, int newHeight)
 void
 CompositorAdapter::ScheduleFrameComplete()
 {
-	// Dispatching inside the export callback could drop the completion
-	// while a resize was in flight, and WebKit then waits forever for it.
-	// Queued after the bridge's other GLib work, so teardown flushes it.
-	if (fCompletePending.exchange(true))
+	// WebKit draws its next frame only after its frame callback completes,
+	// and it can ask for one on a commit that carries no new buffer (a
+	// full-screen switch, an unchanged scene). Completing only on buffer
+	// export then stalled the page for good, so complete on a clock like a
+	// display's vsync: 60 Hz while frames flow, a slow tick when idle.
+	fLastActivity.store(g_get_monotonic_time());
+	if (fClockRunning.exchange(true))
 		return;
 	ProcessManager::Instance().InvokeOnGLibThread([](void* data) -> gboolean {
 		auto* self = static_cast<CompositorAdapter*>(data);
-		self->fCompletePending.store(false);
-		if (self->fExportable != NULL)
-			wpe_view_backend_exportable_fdo_dispatch_frame_complete(
-				self->fExportable);
+		if (self->fClockSource != 0)
+			g_source_remove(self->fClockSource);
+		self->fClockSource = g_timeout_add(kActiveTickMs,
+			(GSourceFunc)&CompositorAdapter::_ClockTick, self);
 		return G_SOURCE_REMOVE;
 	}, this);
+}
+
+
+/* static */ int
+CompositorAdapter::_ClockTick(void* data)
+{
+	auto* self = static_cast<CompositorAdapter*>(data);
+	if (self->fExportable != NULL)
+		wpe_view_backend_exportable_fdo_dispatch_frame_complete(
+			self->fExportable);
+
+	if (!self->fClockRunning.load()
+		|| g_get_monotonic_time() - self->fLastActivity.load() < 500000)
+		return G_SOURCE_CONTINUE;
+
+	// Idle: keep a slow tick so a late request cannot stall the page.
+	self->fClockRunning.store(false);
+	self->fClockSource = g_timeout_add(kIdleTickMs,
+		(GSourceFunc)&CompositorAdapter::_ClockTick, self);
+	return G_SOURCE_REMOVE;
 }
 
 

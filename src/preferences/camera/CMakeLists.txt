@@ -1,4 +1,4 @@
-Application(Camera
+Application(Camera_prefs
 	SOURCES
 	Camera.cpp
 	CameraPreviewView.cpp
@@ -7,11 +7,12 @@ Application(Camera
 	RDEF Camera.rdef
 )
 
-target_include_directories(Camera PRIVATE
+target_include_directories(Camera_prefs PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_SOURCE_DIR}/src/kits/media2
 	${PIPEWIRE_INCLUDES}
 	${SPA_INCLUDES}
 )
-UsePrivateHeaders(Camera interface preferences shared)
+UsePrivateHeaders(Camera_prefs interface preferences shared)
+set_target_properties(Camera_prefs PROPERTIES OUTPUT_NAME Camera)
 DoCatalogs("x-vnd.vos-Camera" preferences/camera)

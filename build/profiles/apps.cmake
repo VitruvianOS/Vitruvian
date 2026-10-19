@@ -13,6 +13,7 @@ ImageInclude("/system/servers" vos-polkit-agent)
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
+	Cortex
 	DeskCalc
 	DiskProbe
 	DiskUsage
@@ -23,6 +24,7 @@ set(SYSTEM_APPS
 	LaunchBox
 	Magnify
 	MediaConverter
+	MediaPlayer
 	PackageManager
 	People
 	ResEdit

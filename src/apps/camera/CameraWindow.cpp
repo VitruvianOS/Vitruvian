@@ -316,6 +316,12 @@ CameraWindow::CameraWindow(BRect frame)
 	fBrightnessSlider->SetEnabled(false);
 	fContrastSlider->SetEnabled(false);
 	fSaturationSlider->SetEnabled(false);
+	// Follow the knob while dragging, not only on release.
+	fZoomSlider->SetModificationMessage(new BMessage(kMsgZoomChanged));
+	fBrightnessSlider->SetModificationMessage(new BMessage(kMsgBrightChanged));
+	fContrastSlider->SetModificationMessage(
+		new BMessage(kMsgContrastChanged));
+	fSaturationSlider->SetModificationMessage(new BMessage(kMsgSaturChanged));
 
 	fShutterButton = new BButton("shutter", "Capture",
 		new BMessage(kMsgShutter));

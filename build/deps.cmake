@@ -328,8 +328,7 @@ DeclareDependency(
 )
 
 # WPE WebKit2 dependencies (web kit / net+ browser)
-# wpebackend-fdo is the web-process renderer backend until the in-tree
-# wpe-backend-vos implements the WPE loader interface.
+# wpebackend-fdo is the web-process renderer backend.
 DeclareDependency(
 	WPE_WEBKIT
 	LIBRARIES  "wpe-webkit-2.0"

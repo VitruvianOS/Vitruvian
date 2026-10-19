@@ -24,8 +24,7 @@ set(WEB_CORE_PRIVATE_SOURCES
 set(WEB_PRIVATE_SOURCES "")
 
 if(PKG_CONFIG_FOUND)
-	# wpebackend-fdo provides the web-process renderer backend until the
-	# in-tree wpe-backend-vos implements the WPE loader interface.
+	# wpebackend-fdo provides the web-process renderer backend.
 	# Prefixes must not collide with the WPE_WEBKIT DeclareDependency in
 	# build/deps.cmake, which clobbers same-named variables at include time.
 	pkg_check_modules(VOS_WEBKIT2 wpe-webkit-2.0 QUIET)

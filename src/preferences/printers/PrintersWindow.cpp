@@ -288,7 +288,6 @@ PrintersWindow::_SetupLists()
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
 	fPrinterList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
-	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
 		200 * scale, 120 * scale, 400 * scale, B_TRUNCATE_END), kPrinterColumn);
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Location"),
 		140 * scale, 80 * scale, 260 * scale, B_TRUNCATE_END), kLocationColumn);

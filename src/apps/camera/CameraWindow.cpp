@@ -338,7 +338,7 @@ CameraWindow::CameraWindow(BRect frame)
 	controls->AddChild(fThumbButton);
 	controls->AddChild(fStatusLabel);
 
-	BView* root = new BView("root", B_FOLLOW_ALL, B_WILL_DRAW);
+	BView* root = new BView(Bounds(), "root", B_FOLLOW_ALL, B_WILL_DRAW);
 	root->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	root->AddChild(fView);
 	root->AddChild(controls);

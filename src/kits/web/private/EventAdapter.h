@@ -6,6 +6,7 @@
 #define VOS_EVENT_ADAPTER_H
 
 
+#include <atomic>
 #include <set>
 #include <stdint.h>
 #include <wpe/wpe.h>
@@ -18,6 +19,9 @@ class EventAdapter {
 public:
 						EventAdapter(struct wpe_view_backend* backend);
 						~EventAdapter();
+
+			// View size in pixels; pointer coordinates are clamped to it.
+			void		SetViewSize(int width, int height);
 
 			void		TranslateKeyDown(const BMessage* msg);
 			void		TranslateKeyUp(const BMessage* msg);
@@ -32,6 +36,7 @@ public:
 			void		ReleaseAllKeys();
 
 private:
+	static int32_t		_Clamp(float v, int size);
 	static uint32_t		_LegacyModsToWPE(uint32 legacyMods);
 	static uint32_t		_LegacyPointerModsToWPE(uint32 legacyMods);
 	static uint32_t		_LegacyButtonToWPE(int32 buttons);
@@ -44,6 +49,8 @@ private:
 	struct wpe_view_backend* fBackend;
 	uint32_t				fPressedButton;
 	std::set<uint32_t>		fHeldKeys;
+	std::atomic<int>		fViewWidth;
+	std::atomic<int>		fViewHeight;
 };
 
 

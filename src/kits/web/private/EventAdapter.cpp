@@ -48,7 +48,9 @@ dispatch_on_glib(struct wpe_view_backend* backend, const Event& event,
 EventAdapter::EventAdapter(struct wpe_view_backend* backend)
 	:
 	fBackend(backend),
-	fPressedButton(0)
+	fPressedButton(0),
+	fViewWidth(0),
+	fViewHeight(0)
 {
 	log_info("EventAdapter: created");
 }
@@ -134,6 +136,26 @@ EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes,
 	}
 
 	return 0;
+}
+
+
+int32_t
+EventAdapter::_Clamp(float v, int size)
+{
+	int32_t i = (int32_t)floorf(v);
+	if (i < 0)
+		return 0;
+	if (size > 0 && i > size - 1)
+		return size - 1;
+	return i;
+}
+
+
+void
+EventAdapter::SetViewSize(int width, int height)
+{
+	fViewWidth = width;
+	fViewHeight = height;
 }
 
 
@@ -269,8 +291,8 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
 	event.type = wpe_input_pointer_event_type_button;
-	event.x = (int32)where.x;
-	event.y = (int32)where.y;
+	event.x = _Clamp(where.x, fViewWidth);
+	event.y = _Clamp(where.y, fViewHeight);
 	event.button = _LegacyButtonToWPE(buttons);
 	event.state = 1;
 	fPressedButton = event.button;
@@ -295,8 +317,8 @@ EventAdapter::TranslateMouseUp(const BMessage* msg)
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
 	event.type = wpe_input_pointer_event_type_button;
-	event.x = (int32)where.x;
-	event.y = (int32)where.y;
+	event.x = _Clamp(where.x, fViewWidth);
+	event.y = _Clamp(where.y, fViewHeight);
 	// The release message carries the buttons still held: report the
 	// button that went down.
 	event.button = fPressedButton;
@@ -334,8 +356,8 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
 	event.type = wpe_input_pointer_event_type_motion;
-	event.x = (int32)where.x;
-	event.y = (int32)where.y;
+	event.x = _Clamp(where.x, fViewWidth);
+	event.y = _Clamp(where.y, fViewHeight);
 	event.button = 0;
 	event.state = (buttons != 0) ? 1 : 0;
 	event.modifiers = wpeMods;
@@ -371,8 +393,8 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 		struct wpe_input_axis_event event;
 		memset(&event, 0, sizeof(event));
 		event.type = wpe_input_axis_event_type_motion_smooth;
-		event.x = (int32)where.x;
-		event.y = (int32)where.y;
+		event.x = _Clamp(where.x, fViewWidth);
+		event.y = _Clamp(where.y, fViewHeight);
 		event.axis = axis;
 		event.value = (int32)lroundf(pixels);
 		if (event.value == 0)

@@ -49,6 +49,7 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fBackBitmap(nullptr),
 	fWidth(w),
 	fHeight(h),
+	fFillColor(0xFFFFFFFF),
 	fFrameReady(false)
 {
 	init_fdo_backend();
@@ -114,32 +115,82 @@ CompositorAdapter::~CompositorAdapter()
 }
 
 
+// Fills [x0, x1) of one row of 32-bit pixels.
+static void
+fill_pixels(uint8_t* row, int x0, int x1, uint32_t color)
+{
+	uint32_t* p = (uint32_t*)row;
+	for (int x = x0; x < x1; x++)
+		p[x] = color;
+}
+
+
+// Copies the overlap of old into bmp and fills the rest with color.
+static void
+copy_overlap(BBitmap* bmp, const BBitmap* old, int w, int h, uint32_t color)
+{
+	if (bmp == nullptr || bmp->Bits() == nullptr)
+		return;
+
+	int oldW = 0;
+	int oldH = 0;
+	if (old != nullptr && old->Bits() != nullptr) {
+		oldW = (int)old->Bounds().Width() + 1;
+		oldH = (int)old->Bounds().Height() + 1;
+	}
+	int copyW = std::min(oldW, w);
+	int copyH = std::min(oldH, h);
+
+	uint8_t* dst = (uint8_t*)bmp->Bits();
+	int dstStride = bmp->BytesPerRow();
+	const uint8_t* src = old != nullptr ? (const uint8_t*)old->Bits() : nullptr;
+	int srcStride = old != nullptr ? old->BytesPerRow() : 0;
+
+	for (int y = 0; y < h; y++) {
+		uint8_t* row = dst + y * dstStride;
+		if (y < copyH)
+			memcpy(row, src + y * srcStride, copyW * 4);
+		fill_pixels(row, y < copyH ? copyW : 0, w, color);
+	}
+}
+
+
 void
-CompositorAdapter::_AllocateBitmaps()
+CompositorAdapter::_AllocateBitmaps(const BBitmap* old)
 {
 	BRect bounds(0, 0, fWidth - 1, fHeight - 1);
 
-	delete frontBitmap;
-	delete fBackBitmap;
+	BBitmap* newFront = new BBitmap(bounds, 0, B_RGB32);
+	BBitmap* newBack = new BBitmap(bounds, 0, B_RGB32);
 
-	frontBitmap = new BBitmap(bounds, 0, B_RGB32);
-	fBackBitmap = new BBitmap(bounds, 0, B_RGB32);
-
-	if (frontBitmap->InitCheck() != B_OK)
+	if (newFront->InitCheck() != B_OK)
 		log_error("CompositorAdapter: front bitmap allocation failed");
-	if (fBackBitmap->InitCheck() != B_OK)
+	if (newBack->InitCheck() != B_OK)
 		log_error("CompositorAdapter: back bitmap allocation failed");
 
-	if (frontBitmap->Bits())
-		memset(frontBitmap->Bits(), 0xFF, frontBitmap->BitsLength());
-	if (fBackBitmap->Bits())
-		memset(fBackBitmap->Bits(), 0xFF, fBackBitmap->BitsLength());
+	copy_overlap(newFront, old, fWidth, fHeight, fFillColor);
+	copy_overlap(newBack, old, fWidth, fHeight, fFillColor);
+
+	delete frontBitmap;
+	delete fBackBitmap;
+	frontBitmap = newFront;
+	fBackBitmap = newBack;
+}
+
+
+void
+CompositorAdapter::SetFillColor(uint32_t bgra)
+{
+	std::lock_guard<std::mutex> lock(fBitmapMutex);
+	fFillColor = bgra;
 }
 
 
 void
 CompositorAdapter::Resize(int newWidth, int newHeight)
 {
+	if (newWidth < 1 || newHeight < 1)
+		return;
 	if (newWidth == fWidth && newHeight == fHeight)
 		return;
 
@@ -149,7 +200,7 @@ CompositorAdapter::Resize(int newWidth, int newHeight)
 	std::lock_guard<std::mutex> lock(fBitmapMutex);
 	fWidth = newWidth;
 	fHeight = newHeight;
-	_AllocateBitmaps();
+	_AllocateBitmaps(frontBitmap);
 	// Caller (WebKitBridge::Resize) dispatches set_size to WPE on the GLib thread.
 }
 
@@ -178,8 +229,13 @@ CompositorAdapter::_BlitSHMFrame(const uint8_t* data, int stride,
 		uint8_t* dst = (uint8_t*)fBackBitmap->Bits();
 		int dstStride = fBackBitmap->BytesPerRow();
 
-		for (int y = 0; y < copyH; y++)
-			memcpy(dst + y * dstStride, data + y * stride, copyW);
+		// A stale frame of another size must not leave old rows behind.
+		for (int y = 0; y < fHeight; y++) {
+			uint8_t* row = dst + y * dstStride;
+			if (y < copyH)
+				memcpy(row, data + y * stride, copyW);
+			fill_pixels(row, y < copyH ? copyW / 4 : 0, fWidth, fFillColor);
+		}
 
 		_SwapBuffersLocked();
 		fFrameReady.store(true);

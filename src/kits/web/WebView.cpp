@@ -21,6 +21,7 @@
 #include <Message.h>
 #include <Messenger.h>
 #include <Path.h>
+#include <Region.h>
 #include <PopUpMenu.h>
 #include <String.h>
 #include <TextControl.h>
@@ -28,6 +29,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
@@ -206,6 +208,8 @@ struct BWebView::WebViewImpl {
 	CompositorAdapter*	fCompositor;
 	EventAdapter*		fEventAdapter;
 	WebKitBridge*		fBridge;
+	int					fPixelWidth;
+	int					fPixelHeight;
 	ClipboardDragDrop*	fClipboard;
 	SessionAdapter*		fSession;
 	bool				fOwnsSession;
@@ -247,6 +251,8 @@ struct BWebView::WebViewImpl {
 		fCompositor(NULL),
 		fEventAdapter(NULL),
 		fBridge(NULL),
+		fPixelWidth(0),
+		fPixelHeight(0),
 		fClipboard(NULL),
 		fSession(NULL),
 		fOwnsSession(false),
@@ -303,10 +309,44 @@ struct BWebView::WebViewImpl {
 };
 
 
+#ifdef HAS_WPE
+// One definition of the view size in integer pixels.
+static void
+view_pixel_size(const BView* view, int* width, int* height)
+{
+	BRect bounds = view->Bounds();
+	*width = std::max(1, (int)bounds.Width() + 1);
+	*height = std::max(1, (int)bounds.Height() + 1);
+}
+
+
+// Pushes the current view size to WebKit and the pointer clamp; no-op
+// when unchanged.
+template<class Impl>
+static void
+sync_view_size(const BView* view, Impl* impl)
+{
+	if (impl->fBridge == NULL || !impl->fBridge->IsValid())
+		return;
+
+	int w, h;
+	view_pixel_size(view, &w, &h);
+	if (w == impl->fPixelWidth && h == impl->fPixelHeight)
+		return;
+
+	impl->fPixelWidth = w;
+	impl->fPixelHeight = h;
+	if (impl->fEventAdapter != NULL)
+		impl->fEventAdapter->SetViewSize(w, h);
+	impl->fBridge->Resize(w, h);
+}
+#endif
+
+
 BWebView::BWebView(BRect frame, const char* name)
 	:
 	BView(frame, name, B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP,
-		B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+		B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE),
 	fImpl(new WebViewImpl())
 {
 }
@@ -426,8 +466,10 @@ BWebView::AttachedToWindow()
 	// Start the GLib event loop if not already running.
 	ProcessManager::Instance().StartGLibLoop();
 
-	int w = (int)(Bounds().Width() + 1);
-	int h = (int)(Bounds().Height() + 1);
+	int w, h;
+	view_pixel_size(this, &w, &h);
+	fImpl->fPixelWidth = w;
+	fImpl->fPixelHeight = h;
 
 	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession);
 	if (!fImpl->fBridge->IsValid()) {
@@ -438,6 +480,12 @@ BWebView::AttachedToWindow()
 
 	fImpl->fCompositor = fImpl->fBridge->compositor.get();
 	fImpl->fEventAdapter = new EventAdapter(fImpl->fBridge->backend);
+	fImpl->fEventAdapter->SetViewSize(w, h);
+	{
+		rgb_color c = ViewColor();
+		fImpl->fCompositor->SetFillColor(0xFF000000 | (c.red << 16)
+			| (c.green << 8) | c.blue);
+	}
 	fImpl->fClipboard = new ClipboardDragDrop();
 	fImpl->fClipboard->Attach(fImpl->fBridge->webView);
 	// Frames arrive on the GLib thread: the notifier pipe coalesces
@@ -765,6 +813,9 @@ BWebView::AttachedToWindow()
 
 	fImpl->fSelfMessenger = BMessenger(this);
 
+	// The layout may have changed the size since construction.
+	sync_view_size(this, fImpl);
+
 	for (size_t i = 0; i < fImpl->fScriptMessageHandlers.size(); i++) {
 		std::string name = fImpl->fScriptMessageHandlers[i];
 		fImpl->fBridge->RegisterScriptMessageHandler(name,
@@ -842,8 +893,7 @@ BWebView::FrameResized(float width, float height)
 	BView::FrameResized(width, height);
 
 #ifdef HAS_WPE
-	if (fImpl->fBridge && fImpl->fBridge->IsValid())
-		fImpl->fBridge->Resize((int)width, (int)height);
+	sync_view_size(this, fImpl);
 #endif
 }
 
@@ -1287,8 +1337,20 @@ BWebView::Draw(BRect updateRect)
 	if (fImpl->fCompositor) {
 		BBitmap* front = fImpl->fCompositor->AcquireFront();
 		if (front && front->IsValid()) {
-			DrawBitmap(front, front->Bounds(),
-				Bounds(), B_FILTER_BITMAP_BILINEAR);
+			// 1:1 at the top-left: stretching would disagree with the
+			// pointer coordinates until WebKit's new-size frame arrives.
+			BRect src = front->Bounds();
+			BRect dst = src & Bounds();
+			if (dst.IsValid()) {
+				src.right = src.left + dst.Width();
+				src.bottom = src.top + dst.Height();
+				DrawBitmap(front, src, dst);
+			}
+			SetLowColor(ViewColor());
+			BRegion rest(Bounds());
+			if (dst.IsValid())
+				rest.Exclude(dst);
+			FillRegion(&rest, B_SOLID_LOW);
 		}
 		fImpl->fCompositor->ReleaseFront();
 		return;

@@ -9,6 +9,7 @@
 #include <glib.h>
 #include <wpe/webkit.h>
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -61,6 +62,7 @@ struct WebKitBridge {
 			double				LoadProgress() const;
 			bool				IsLoading() const;
 
+			// Coalesced: only the latest size reaches the GLib thread.
 			void				Resize(int width, int height);
 			void				HandleFocusChange(bool focused);
 			void				SetBlockedDomains(
@@ -176,6 +178,11 @@ private:
 			bool				fCachedIsLoading;
 			bool				fCachedCanGoBack;
 			bool				fCachedCanGoForward;
+
+			// Latest requested size (width << 32 | height) and whether a
+			// GLib task is already queued to apply it.
+			std::atomic<uint64_t>	fPendingSize;
+			std::atomic<bool>	fResizeScheduled;
 
 	mutable	std::mutex			fBlockedMutex;
 			std::vector<std::string> fBlockedDomains;

@@ -49,7 +49,9 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session)
 	fCachedProgress(0.0),
 	fCachedIsLoading(false),
 	fCachedCanGoBack(false),
-	fCachedCanGoForward(false)
+	fCachedCanGoForward(false),
+	fPendingSize(0),
+	fResizeScheduled(false)
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
@@ -909,16 +911,22 @@ WebKitBridge::RegisterScriptMessageHandler(const std::string& name,
 void
 WebKitBridge::Resize(int width, int height)
 {
-	struct ResizeArgs { CompositorAdapter* c; wpe_view_backend* b; int w, h; };
-	auto* ra = new ResizeArgs{compositor.get(), backend, width, height};
+	fPendingSize.store(((uint64_t)(uint32_t)width << 32) | (uint32_t)height);
+	if (fResizeScheduled.exchange(true))
+		return;
+
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
-		auto* a = static_cast<ResizeArgs*>(d);
-		a->c->Resize(a->w, a->h);
-		wpe_view_backend_dispatch_set_size(a->b,
-			(uint32_t)a->w, (uint32_t)a->h);
-		delete a;
+		auto* self = static_cast<WebKitBridge*>(d);
+		// Clear before reading so a size posted meanwhile queues a new task.
+		self->fResizeScheduled.store(false);
+		uint64_t size = self->fPendingSize.load();
+		int w = (int)(size >> 32);
+		int h = (int)(size & 0xffffffffu);
+		self->compositor->Resize(w, h);
+		wpe_view_backend_dispatch_set_size(self->backend,
+			(uint32_t)w, (uint32_t)h);
 		return G_SOURCE_REMOVE;
-	}, ra);
+	}, this);
 }
 
 

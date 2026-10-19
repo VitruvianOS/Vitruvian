@@ -20,7 +20,10 @@ struct CompositorAdapter {
 								CompositorAdapter(int width, int height);
 								~CompositorAdapter();
 
+			// Keeps the old frame's overlap; the rest takes the fill colour
+			// until the next frame arrives.
 			void				Resize(int newWidth, int newHeight);
+			void				SetFillColor(uint32_t bgra);
 
 			BBitmap*			AcquireFront();
 			void				ReleaseFront();
@@ -32,7 +35,7 @@ struct CompositorAdapter {
 			std::function<void()> onFrameReady;
 
 private:
-			void				_AllocateBitmaps();
+			void				_AllocateBitmaps(const BBitmap* old = nullptr);
 			void				_BlitSHMFrame(const uint8_t* data, int stride,
 									int srcW, int srcH);
 			void				_SwapBuffersLocked();
@@ -46,6 +49,7 @@ private:
 
 			int					fWidth;
 			int					fHeight;
+			uint32_t			fFillColor;
 
 			std::mutex				fBitmapMutex;
 			std::atomic<bool>		fFrameReady;

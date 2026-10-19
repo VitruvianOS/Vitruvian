@@ -239,7 +239,7 @@ ExtractFromSPAVideo(const spa_video_info_raw& spa, BMediaFormat* out)
 
 const spa_pod*
 BuildVideoEnumFormat(spa_pod_builder* builder,
-	const media_raw_video_format& preferred, bool fixed)
+	const media_raw_video_format& preferred, bool fixed, bool mjpg)
 {
 	if (builder == NULL)
 		return NULL;
@@ -277,13 +277,16 @@ BuildVideoEnumFormat(spa_pod_builder* builder,
 		SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
 	spa_pod_builder_add(builder,
 		SPA_FORMAT_mediaType,    SPA_POD_Id(SPA_MEDIA_TYPE_video),
-		SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+		SPA_FORMAT_mediaSubtype, SPA_POD_Id(mjpg
+			? SPA_MEDIA_SUBTYPE_mjpg : SPA_MEDIA_SUBTYPE_raw),
 		0);
 	// Choice macros for rectangle/fraction take pointers, not values.
-	spa_pod_builder_add(builder,
-		SPA_FORMAT_VIDEO_format,
-		SPA_POD_CHOICE_ENUM_Id(3, list[0], list[1], list[2]),
-		0);
+	if (!mjpg) {
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_format,
+			SPA_POD_CHOICE_ENUM_Id(3, list[0], list[1], list[2]),
+			0);
+	}
 	const spa_rectangle sizes[3] = {
 		SPA_RECTANGLE(width, height),
 		SPA_RECTANGLE(160, 120),

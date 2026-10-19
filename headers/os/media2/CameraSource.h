@@ -163,6 +163,8 @@ private:
 			void*				fCaptureStream;
 			void*				fCaptureLink;
 			void*				fParameterWeb;
+			// Private MJPEG decode state; NULL while a raw mode is negotiated.
+			void*				fMjpeg;
 };
 
 

@@ -24,6 +24,8 @@
 #include <spa/param/props.h>
 #include <spa/param/video/format-utils.h>
 
+#include <media2/MediaDecoder.h>
+
 #include "FormatConversion.h"
 #include "PipeWireBackend.h"
 
@@ -187,7 +189,8 @@ BCameraSource::BCameraSource(const char* name)
 	fLocation(B_CAMERA_LOCATION_UNKNOWN),
 	fCaptureStream(NULL),
 	fCaptureLink(NULL),
-	fParameterWeb(NULL)
+	fParameterWeb(NULL),
+	fMjpeg(NULL)
 {
 	memset(&fLastFormat, 0, sizeof(fLastFormat));
 	fLastFormat.color_space = B_YCbCr422;
@@ -208,6 +211,17 @@ BCameraSource::BCameraSource(const char* name)
 	}
 
 	_BuildParameterWeb();
+}
+
+
+namespace {
+
+struct MjpegState {
+	BMediaBufferDecoder		decoder;
+	std::vector<uint8>		frame;
+	media_raw_video_format	format;
+};
+
 }
 
 
@@ -612,7 +626,7 @@ BCameraSource::_StartConnections(void* backendPtr)
 
 	pw_stream* stream = backend->CreateAndConnectStream(
 		streamName.String(), PW_DIRECTION_INPUT, format,
-		&events, this, fNodeName.String(), false, false);
+		&events, this, fNodeName.String(), false, false, true);
 	if (stream == NULL)
 		return B_ERROR;
 
@@ -712,6 +726,8 @@ BCameraSource::_StopConnections()
 		fCaptureStream = NULL;
 		backend->DestroyStream(stream);
 	}
+	delete (MjpegState*)fMjpeg;
+	fMjpeg = NULL;
 }
 
 
@@ -736,6 +752,20 @@ BCameraSource::_OnProcess(void* userdata)
 	uint8* data = (uint8*)spaBuf->datas[0].data;
 	size_t size = spaBuf->datas[0].chunk != NULL
 		? spaBuf->datas[0].chunk->size : spaBuf->datas[0].maxsize;
+
+	if (self->fMjpeg != NULL) {
+		MjpegState* mjpeg = (MjpegState*)self->fMjpeg;
+		if (size > 0) {
+			size_t outSize = mjpeg->frame.size();
+			if (mjpeg->decoder.DecodeBuffer(data, size, mjpeg->frame.data(),
+					&outSize) == B_OK && outSize > 0) {
+				self->_OnCaptureFrame(mjpeg->frame.data(), outSize,
+					mjpeg->format);
+			}
+		}
+		pw_stream_queue_buffer(stream, pb);
+		return;
+	}
 
 	media_raw_video_format format = self->VideoFormat();
 	const uint32 stride = spaBuf->datas[0].chunk != NULL
@@ -791,6 +821,58 @@ BCameraSource::_OnParamChanged(void* data, uint32 id, const void* paramData)
 	BCameraSource* self = (BCameraSource*)data;
 	if (self == NULL || id != SPA_PARAM_Format || param == NULL)
 		return;
+
+	uint32 mediaType = 0, mediaSubtype = 0;
+	if (spa_format_parse(param, &mediaType, &mediaSubtype) < 0)
+		return;
+
+	if (mediaSubtype == SPA_MEDIA_SUBTYPE_mjpg) {
+		spa_video_info_mjpg mjpg;
+		memset(&mjpg, 0, sizeof(mjpg));
+		if (spa_format_video_mjpg_parse(param, &mjpg) < 0
+			|| mjpg.size.width == 0 || mjpg.size.height == 0) {
+			return;
+		}
+
+		BMediaFormat in;
+		in.format.type = B_MEDIA_ENCODED_VIDEO;
+		media_encoded_video_format& enc = in.format.u.encoded_video;
+		memset(&enc, 0, sizeof(enc));
+		enc.encoding = B_CODEC_TYPE_MJPEG;
+		enc.output.width = mjpg.size.width;
+		enc.output.height = mjpg.size.height;
+		enc.output.color_space = B_RGB32;
+		enc.output.field_rate = mjpg.framerate.denom != 0
+			? (float)mjpg.framerate.num / (float)mjpg.framerate.denom : 0.0f;
+
+		MjpegState* state = new(std::nothrow) MjpegState;
+		if (state == NULL)
+			return;
+		if (state->decoder.SetTo(in) != B_OK) {
+			fprintf(stderr, "Camera: MJPEG decoder unavailable\n");
+			delete state;
+			return;
+		}
+		state->format = enc.output;
+		state->format.pixel_width_aspect = 1;
+		state->format.pixel_height_aspect = 1;
+		state->format.first_active = 0;
+		state->format.last_active = enc.output.height - 1;
+		state->frame.resize((size_t)enc.output.width * enc.output.height * 4);
+
+		delete (MjpegState*)self->fMjpeg;
+		self->fMjpeg = state;
+		{
+			BAutolock _(self->fFrameLock);
+			self->fLastFormat = state->format;
+		}
+		self->SetFormat(BMediaFormat(state->format));
+		self->_SeedOutputFormat();
+		return;
+	}
+
+	delete (MjpegState*)self->fMjpeg;
+	self->fMjpeg = NULL;
 
 	spa_video_info_raw info;
 	memset(&info, 0, sizeof(info));

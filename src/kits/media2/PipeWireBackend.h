@@ -58,7 +58,8 @@ public:
 										void* userdata,
 										const char* targetNodeName = NULL,
 										bool captureSinkMonitor = false,
-										bool autoConnect = true);
+										bool autoConnect = true,
+										bool allowMjpeg = false);
 
 			void					DestroyStream(pw_stream* stream);
 

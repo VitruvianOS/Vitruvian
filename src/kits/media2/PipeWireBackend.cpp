@@ -861,7 +861,8 @@ pw_stream*
 PipeWireBackend::CreateAndConnectStream(const char* name,
 	pw_direction direction, const BMediaFormat& format,
 	const pw_stream_events* events, void* userdata,
-	const char* targetNodeName, bool captureSinkMonitor, bool autoConnect)
+	const char* targetNodeName, bool captureSinkMonitor, bool autoConnect,
+	bool allowMjpeg)
 {
 	if (fLoop == NULL || events == NULL)
 		return NULL;
@@ -914,7 +915,7 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	// above is only for building the pod; the stream is not yet in the graph.
 	uint8_t buf[2048];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-	const spa_pod* params[2];
+	const spa_pod* params[3];
 	uint32 paramCount = 1;
 	// Video offers YUY2/BGRx/I420 with size and rate ranges; most UVC
 	// webcams do not do BGRx only, so a single fixed format never links.
@@ -925,6 +926,12 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 		paramCount = 2;
 		if (params[1] == NULL)
 			params[0] = NULL;
+		// Compressed fallback after raw, so raw wins when the device has it.
+		if (allowMjpeg && direction == PW_DIRECTION_INPUT) {
+			params[2] = BuildVideoEnumFormat(&b, preferred, false, true);
+			if (params[2] != NULL)
+				paramCount = 3;
+		}
 	} else
 		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 	if (params[0] == NULL) {

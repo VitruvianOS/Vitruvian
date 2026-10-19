@@ -19,6 +19,7 @@ CameraView::CameraView(BRect frame, const char* name)
 	BView(frame, name, B_FOLLOW_ALL, B_WILL_DRAW | B_FRAME_EVENTS),
 	fLock("camera view"),
 	fFrame(NULL),
+	fAspect(4.0f / 3.0f),
 	fZoom(1.0f),
 	fMirrored(false),
 	fGrid(false),
@@ -43,6 +44,7 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 		return;
 
 	bool notify = false;
+	bool reshaped = false;
 	{
 		BAutolock _(fLock);
 		if (fFrame == NULL
@@ -56,6 +58,8 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 				fFrame = NULL;
 				return;
 			}
+			fAspect = (float)width / height;
+			reshaped = true;
 		}
 		const size_t frameSize = (size_t)fFrame->BytesPerRow() * height;
 		if (size >= frameSize)
@@ -63,8 +67,33 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 		notify = true;
 	}
 
+	if (reshaped && Window() != NULL)
+		Window()->PostMessage(kMsgCameraFrameReshaped, this);
 	if (notify && Window() != NULL)
 		Window()->PostMessage(kMsgCameraFrameShown, this);
+}
+
+
+bool
+CameraView::HasHeightForWidth()
+{
+	return true;
+}
+
+
+void
+CameraView::GetHeightForWidth(float width, float* min, float* max,
+	float* preferred)
+{
+	// Keep the frame's shape so the picture fills the view.
+	BAutolock _(fLock);
+	const float height = (width + 1) / fAspect - 1;
+	if (min != NULL)
+		*min = height;
+	if (max != NULL)
+		*max = height;
+	if (preferred != NULL)
+		*preferred = height;
 }
 
 
@@ -105,6 +134,10 @@ CameraView::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgCameraFrameShown:
 			Invalidate();
+			break;
+
+		case kMsgCameraFrameReshaped:
+			InvalidateLayout();
 			break;
 
 		case B_MOUSE_WHEEL_CHANGED:

@@ -328,7 +328,10 @@ CameraWindow::CameraWindow(BRect frame)
 	fView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
-		.Add(fView, 3.0f)
+		.AddGroup(B_VERTICAL, 0, 3.0f)
+			.Add(fView)
+			.AddGlue()
+		.End()
 		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1.0f)
 			.SetInsets(B_USE_WINDOW_SPACING)
 			.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
@@ -572,13 +575,6 @@ CameraWindow::MessageReceived(BMessage* message)
 			if (message->FindString("id", &id) == B_OK && !fRecording) {
 				fFilterId = id;
 				_SetFilter(id.String());
-				// Filters sit in submenus, so the field cannot pick up the
-				// label from a marked top-level item.
-				BMenuItem* source = NULL;
-				if (message->FindPointer("source", (void**)&source) == B_OK
-					&& source != NULL && fFilterField->MenuItem() != NULL) {
-					fFilterField->MenuItem()->SetLabel(source->Label());
-				}
 			}
 			_StoreSettings();
 			break;
@@ -730,6 +726,7 @@ CameraWindow::_SetFilter(const char* filterId)
 
 	delete fFilter;
 	fFilter = NULL;
+	BString label("None");
 
 	if (filterId != NULL && strcmp(filterId, "none") != 0) {
 		BObjectList<BFilterCatalog::Entry, true> entries;
@@ -738,6 +735,7 @@ CameraWindow::_SetFilter(const char* filterId)
 				BFilterCatalog::Entry* entry = entries.ItemAt(i);
 				if (entry->id == filterId) {
 					fFilter = BFilterCatalog::CreateVideoUnit(*entry);
+					label = entry->name;
 					break;
 				}
 			}
@@ -747,6 +745,13 @@ CameraWindow::_SetFilter(const char* filterId)
 	_RebuildChain();
 	if (wasStarted)
 		fSource->Start();
+
+	// Filters sit in submenus, so the field cannot take the label from a
+	// marked top-level item.
+	if (fFilter == NULL)
+		label = "None";
+	if (fFilterField->MenuItem() != NULL)
+		fFilterField->MenuItem()->SetLabel(label.String());
 
 	const bool balance = dynamic_cast<BVideoBalanceFilter*>(fFilter) != NULL;
 	fBrightnessSlider->SetEnabled(balance);

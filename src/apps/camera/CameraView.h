@@ -14,7 +14,8 @@
 enum {
 	// Posted to the window when the user taps the preview.
 	kMsgCameraTap			= 'TAPV',
-	kMsgCameraFrameShown	= 'FRAM'
+	kMsgCameraFrameShown	= 'FRAM',
+	kMsgCameraFrameReshaped	= 'FRSH'
 };
 
 
@@ -26,6 +27,10 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				MouseDown(BPoint point);
+
+	virtual	bool				HasHeightForWidth();
+	virtual	void				GetHeightForWidth(float width, float* min,
+									float* max, float* preferred);
 
 			// Called on the capture thread; copies the frame and redraws.
 			void				SetFrame(const uint8* bits, size_t size,
@@ -39,6 +44,7 @@ public:
 private:
 			BLocker				fLock;
 			BBitmap*			fFrame;
+			float				fAspect;
 			float				fZoom;
 			bool				fMirrored;
 			bool				fGrid;

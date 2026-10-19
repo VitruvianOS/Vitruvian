@@ -6,6 +6,7 @@
 #include "CortexWindow.h"
 
 #include <Alert.h>
+#include <Button.h>
 #include <Directory.h>
 #include <File.h>
 #include <FindDirectory.h>
@@ -29,6 +30,7 @@
 #include <media2/Controllable.h>
 #include <media2/MediaTheme.h>
 #include <media2/ParameterWeb.h>
+#include <media2/RoutingStore.h>
 
 #include "CortexGraphView.h"
 #include "CortexNodes.h"
@@ -124,9 +126,17 @@ CortexWindow::CortexWindow()
 	fModel = new(std::nothrow) CortexModel();
 	fView = new(std::nothrow) CortexGraphView(graphFrame);
 
+	BButton* restoreButton = new BButton("restore", "Restore routes",
+		new BMessage(kMsgRestoreRoutes));
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.SetInsets(0)
 		.Add(menuBar)
+		.AddGroup(B_HORIZONTAL, 8)
+			.SetInsets(8, 4, 8, 4)
+			.Add(restoreButton)
+			.AddGlue()
+		.End()
 		.Add(fView);
 
 	if (fView != NULL)
@@ -306,6 +316,10 @@ CortexWindow::MessageReceived(BMessage* message)
 			_OpenControlPanel(nodeIndex);
 			break;
 		}
+
+		case kMsgRestoreRoutes:
+			_RestoreRoutes();
+			break;
 
 		case kMsgRemoveLink:
 		{
@@ -761,6 +775,33 @@ CortexWindow::TryConnectPins(int32 outNodeIndex, int32 outPinIndex,
 		return;
 	}
 
+	status_t status = _ConnectPair(outPinNode, outPin, inPinNode, inPin);
+	if (status == B_OK) {
+		BMediaRoute route;
+		route.fromNode = outPinNode->name;
+		route.fromPort = outPin->name;
+		route.toNode = inPinNode->name;
+		route.toPort = inPin->name;
+		BRoutingStore* store = BRoutingStore::Instance();
+		if (store != NULL)
+			store->AddRoute(route);
+	}
+
+	if (status != B_OK)
+		_ReportStatus("connect", status);
+
+	_Rebuild();
+}
+
+
+status_t
+CortexWindow::_ConnectPair(CortexNode* outPinNode, CortexPin* outPin,
+	CortexNode* inPinNode, CortexPin* inPin)
+{
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return B_DEVICE_NOT_FOUND;
+
 	status_t status = B_BAD_VALUE;
 
 	if (outPinNode->ownClient != NULL && inPinNode->ownClient != NULL
@@ -808,10 +849,7 @@ CortexWindow::TryConnectPins(int32 outNodeIndex, int32 outPinIndex,
 		}
 	}
 
-	if (status != B_OK)
-		_ReportStatus("connect", status);
-
-	_Rebuild();
+	return status;
 }
 
 
@@ -860,9 +898,106 @@ CortexWindow::RemoveLink(int32 linkIndex)
 		}
 	}
 
+	if (status == B_OK && outNode != NULL && inNode != NULL
+		&& outPin != NULL && inPin != NULL) {
+		BMediaRoute route;
+		route.fromNode = outNode->name;
+		route.fromPort = outPin->name;
+		route.toNode = inNode->name;
+		route.toPort = inPin->name;
+		BRoutingStore* store = BRoutingStore::Instance();
+		if (store != NULL)
+			store->RemoveRoute(route);
+	}
+
 	_ReportStatus("remove link", status);
 
 	_Rebuild();
+}
+
+
+static CortexPin*
+_FindNamedPin(CortexModel* model, const BString& nodeName,
+	const BString& pinName, bool output, CortexNode** outNode,
+	int32* outNodeIndex, int32* outPinIndex)
+{
+	for (int32 i = 0; i < model->CountNodes(); i++) {
+		CortexNode* node = model->NodeAt(i);
+		if (node == NULL || node->name != nodeName)
+			continue;
+		for (int32 p = 0; p < node->pins.CountItems(); p++) {
+			CortexPin* pin = node->pins.ItemAt(p);
+			if (pin != NULL && pin->isOutput == output
+				&& pin->name == pinName) {
+				*outNode = node;
+				*outNodeIndex = i;
+				*outPinIndex = p;
+				return pin;
+			}
+		}
+	}
+	return NULL;
+}
+
+
+// Re-applies the saved links whose ends are present and not yet linked.
+void
+CortexWindow::_RestoreRoutes()
+{
+	BRoutingStore* store = BRoutingStore::Instance();
+	if (fModel == NULL || store == NULL)
+		return;
+
+	int32 restored = 0;
+	int32 skipped = 0;
+	for (int32 i = 0; i < store->CountRoutes(); i++) {
+		BMediaRoute route;
+		if (store->GetRoute(i, &route) != B_OK)
+			continue;
+
+		CortexNode* outNode = NULL;
+		CortexNode* inNode = NULL;
+		int32 outNodeIndex = -1;
+		int32 outPinIndex = -1;
+		int32 inNodeIndex = -1;
+		int32 inPinIndex = -1;
+		CortexPin* outPin = _FindNamedPin(fModel, route.fromNode,
+			route.fromPort, true, &outNode, &outNodeIndex, &outPinIndex);
+		CortexPin* inPin = _FindNamedPin(fModel, route.toNode, route.toPort,
+			false, &inNode, &inNodeIndex, &inPinIndex);
+		if (outPin == NULL || inPin == NULL) {
+			skipped++;
+			continue;
+		}
+
+		bool linked = false;
+		for (int32 l = 0; l < fModel->CountLinks(); l++) {
+			CortexLink* link = fModel->LinkAt(l);
+			if (link != NULL && link->outputNode == outNodeIndex
+				&& link->outputPin == outPinIndex
+				&& link->inputNode == inNodeIndex
+				&& link->inputPin == inPinIndex) {
+				linked = true;
+				break;
+			}
+		}
+		if (linked)
+			continue;
+
+		if (_ConnectPair(outNode, outPin, inNode, inPin) == B_OK)
+			restored++;
+		else
+			skipped++;
+	}
+
+	_Rebuild();
+
+	BString text;
+	text.SetToFormat("Restored %ld routes, %ld could not be applied.",
+		(long)restored, (long)skipped);
+	BAlert* alert = new(std::nothrow) BAlert("Cortex", text.String(), "OK");
+	if (alert != NULL)
+		alert->Go(NULL);
 }
 
 

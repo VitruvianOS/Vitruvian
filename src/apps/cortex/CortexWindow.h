@@ -18,6 +18,8 @@
 class BSlider;
 class CortexGraphView;
 class CortexModel;
+class CortexNode;
+class CortexPin;
 
 
 enum {
@@ -37,7 +39,8 @@ enum {
 	kMsgInfo			= 'CINF',
 	kMsgSendTestNote		= 'CNOT',
 	kMsgDisconnectOwn		= 'CDOI',
-	kMsgRemoveLink			= 'CRLK'
+	kMsgRemoveLink			= 'CRLK',
+	kMsgRestoreRoutes		= 'CRRT'
 };
 
 
@@ -90,6 +93,9 @@ private:
 			status_t	_ForeignPortById(uint32 nodeId, uint32 portId,
 					BMediaGraph::ForeignPort* outPort);
 			void		_DisconnectOwn(int32 nodeIndex, int32 pinIndex);
+			status_t	_ConnectPair(CortexNode* outNode, CortexPin* outPin,
+					CortexNode* inNode, CortexPin* inPin);
+			void		_RestoreRoutes();
 
 			CortexGraphView*	fView;
 			CortexModel*		fModel;

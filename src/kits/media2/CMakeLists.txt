@@ -17,6 +17,7 @@ AddOn(media2
 	MediaFormat.cpp
 	MediaFormats.cpp
 	MediaGraph.cpp
+	RoutingStore.cpp
 	MediaNode.cpp
 	MediaUnit.cpp
 	MidiFilterExt.cpp

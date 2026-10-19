@@ -179,7 +179,7 @@ EventAdapter::TranslateKeyDown(const BMessage* msg)
 	event.modifiers = wpeMods;
 	event.pressed = true;
 
-	wpe_view_backend_dispatch_keyboard_event(fBackend, &event);
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
 }
 
 
@@ -215,7 +215,7 @@ EventAdapter::TranslateKeyUp(const BMessage* msg)
 	event.modifiers = wpeMods;
 	event.pressed = false;
 
-	wpe_view_backend_dispatch_keyboard_event(fBackend, &event);
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
 }
 
 
@@ -243,7 +243,7 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 	fPressedButton = event.button;
 	event.modifiers = 0;
 
-	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
 
 
@@ -270,7 +270,7 @@ EventAdapter::TranslateMouseUp(const BMessage* msg)
 	fPressedButton = 0;
 	event.modifiers = 0;
 
-	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
 
 
@@ -291,7 +291,7 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 	event.state = 0;
 	event.modifiers = 0;
 
-	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
 
 
@@ -321,5 +321,10 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 		event.axis = axis;
 		event.value = deltas[axis] > 0 ? -1 : 1;
 
-	wpe_view_backend_dispatch_axis_event(fBackend, &event);
+		int32 steps = (int32)(deltas[axis] > 0 ? deltas[axis] : -deltas[axis]);
+		if (steps < 1)
+			steps = 1;
+		for (int32 i = 0; i < steps; i++)
+			dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
+	}
 }

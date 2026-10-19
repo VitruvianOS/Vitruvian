@@ -32,6 +32,7 @@ private:
 							int32 numBytes);
 
 	struct wpe_view_backend* fBackend;
+	uint32_t				fPressedButton;
 };
 
 

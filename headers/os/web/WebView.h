@@ -20,6 +20,8 @@ public:
 	virtual void				DetachedFromWindow();
 	virtual void				FrameResized(float width, float height);
 	virtual void				Draw(BRect updateRect);
+	virtual void				MessageReceived(BMessage* message);
+	virtual void				MakeFocus(bool focused = true);
 	virtual void				MouseDown(BPoint where);
 	virtual void				MouseUp(BPoint where);
 	virtual void				MouseMoved(BPoint where, uint32 transit,

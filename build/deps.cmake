@@ -321,13 +321,13 @@ DeclareDependency(
 )
 
 # WPE WebKit2 dependencies (web kit / net+ browser)
-# #113 replaces wpebackend-fdo with the in-tree wpe-backend-vos; only
-# the WebKit and libwpe development packages are required.
+# wpebackend-fdo is the web-process renderer backend until the in-tree
+# wpe-backend-vos implements the WPE loader interface.
 DeclareDependency(
 	WPE_WEBKIT
 	LIBRARIES  "wpe-webkit-2.0"
-	PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev"
-	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1"
+	PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev;libwpebackend-fdo-1.0-dev"
+	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
 )
 
 DeclareDependency(

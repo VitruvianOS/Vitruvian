@@ -572,6 +572,13 @@ CameraWindow::MessageReceived(BMessage* message)
 			if (message->FindString("id", &id) == B_OK && !fRecording) {
 				fFilterId = id;
 				_SetFilter(id.String());
+				// Filters sit in submenus, so the field cannot pick up the
+				// label from a marked top-level item.
+				BMenuItem* source = NULL;
+				if (message->FindPointer("source", (void**)&source) == B_OK
+					&& source != NULL && fFilterField->MenuItem() != NULL) {
+					fFilterField->MenuItem()->SetLabel(source->Label());
+				}
 			}
 			_StoreSettings();
 			break;

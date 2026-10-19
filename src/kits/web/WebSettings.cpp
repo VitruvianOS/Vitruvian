@@ -24,6 +24,7 @@ static const char* kKeyUserAgentSuffix	= "user_agent_suffix";
 static const char* kKeyBlockedDomains	= "blocked_domains";
 static const char* kKeyPrivateBrowsing	= "private_browsing";
 static const char* kKeyZoomDefault		= "zoom_default";
+static const char* kKeyAutoplay			= "autoplay_policy";
 static const char* kKeyRestoreSession	= "restore_session";
 
 
@@ -267,6 +268,26 @@ BWebSettings::SetZoomDefault(double zoom)
 	char buffer[32];
 	snprintf(buffer, sizeof(buffer), "%.2f", zoom);
 	_Set(kKeyZoomDefault, buffer);
+}
+
+
+int32
+BWebSettings::AutoplayPolicy() const
+{
+	std::string value = _Get(kKeyAutoplay);
+	if (value == "allow_without_sound")
+		return 1;
+	if (value == "never")
+		return 2;
+	return 0;
+}
+
+
+void
+BWebSettings::SetAutoplayPolicy(int32 policy)
+{
+	_Set(kKeyAutoplay, policy == 1 ? "allow_without_sound"
+		: policy == 2 ? "never" : "allow");
 }
 
 

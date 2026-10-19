@@ -44,6 +44,7 @@ private:
 			BTextControl*		fBlockedDomains;
 			BCheckBox*			fPrivateBrowsing;
 			BTextControl*		fZoomDefault;
+			BMenuField*			fAutoplay;
 			BCheckBox*			fRestoreSession;
 			BButton*			fClearDataButton;
 			BFilePanel*			fBrowsePanel;

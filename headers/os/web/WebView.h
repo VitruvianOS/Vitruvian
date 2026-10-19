@@ -11,6 +11,14 @@
 #include <String.h>
 
 
+// Whether media may start playing without a user gesture.
+enum web_autoplay_policy {
+	B_WEB_AUTOPLAY_ALLOW = 0,
+	B_WEB_AUTOPLAY_ALLOW_WITHOUT_SOUND,
+	B_WEB_AUTOPLAY_DENY
+};
+
+
 class BWebView : public BView {
 public:
 								BWebView(BRect frame, const char* name);
@@ -83,6 +91,10 @@ public:
 			void				SetUserAgentSuffix(const char* suffix);
 			void				SetZoomLevel(float zoom);
 			float				ZoomLevel() const;
+
+	// Fixed when the page view is created: a change reaches views
+	// created afterwards, not this one. Call before it is attached.
+			void				SetAutoplayPolicy(web_autoplay_policy policy);
 
 	// Downloads: directory and ask-where-to-save apply to the
 	// view's (shared per profile) session.

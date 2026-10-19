@@ -33,7 +33,8 @@ struct WebKitBridge {
 	struct	ScriptMessageBinding;
 
 								WebKitBridge(int width, int height,
-									SessionAdapter* session = nullptr);
+									SessionAdapter* session = nullptr,
+									int autoplayPolicy = 0);
 								~WebKitBridge();
 
 			bool				IsValid() const { return fValid; }
@@ -162,7 +163,8 @@ struct WebKitBridge {
 
 private:
 			void				_Init(int width, int height,
-								SessionAdapter* session);
+								SessionAdapter* session,
+								int autoplayPolicy);
 			void				_ConnectSignals();
 			void				_UpdateCachedNavState();
 

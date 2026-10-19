@@ -63,6 +63,10 @@ public:
 			double				ZoomDefault() const;
 			void				SetZoomDefault(double zoom);
 
+			// web_autoplay_policy value; unknown values read as allow.
+			int32				AutoplayPolicy() const;
+			void				SetAutoplayPolicy(int32 policy);
+
 			bool				RestoreSession() const;
 			void				SetRestoreSession(bool restore);
 

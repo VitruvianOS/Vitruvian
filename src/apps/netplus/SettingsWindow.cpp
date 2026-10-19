@@ -20,6 +20,7 @@
 #include <Path.h>
 #include <PopUpMenu.h>
 #include <String.h>
+#include <StringView.h>
 #include <TextControl.h>
 
 #include <web/WebView.h>
@@ -69,6 +70,7 @@ SettingsWindow::SettingsWindow(BRect frame)
 	fBlockedDomains(NULL),
 	fPrivateBrowsing(NULL),
 	fZoomDefault(NULL),
+	fAutoplay(NULL),
 	fRestoreSession(NULL),
 	fClearDataButton(NULL),
 	fBrowsePanel(NULL)
@@ -99,6 +101,15 @@ SettingsWindow::SettingsWindow(BRect frame)
 	fPrivateBrowsing = new BCheckBox(
 		"Private browsing (no cookies or history kept)", NULL);
 	fZoomDefault = new BTextControl("Default zoom (1.00 = 100%)", "", NULL);
+	BPopUpMenu* autoplay = new BPopUpMenu("autoplay");
+	const char* kAutoplay[] = { "Allow", "Allow without sound", "Never" };
+	for (const char* name : kAutoplay)
+		autoplay->AddItem(new BMenuItem(name, NULL));
+	fAutoplay = new BMenuField("Media autoplay", autoplay);
+	BStringView* autoplayNote = new BStringView("autoplay note",
+		"Autoplay changes apply to new windows only.");
+	autoplayNote->SetFont(be_plain_font);
+	autoplayNote->SetHighUIColor(B_PANEL_TEXT_COLOR, B_DARKEN_1_TINT);
 	fRestoreSession = new BCheckBox("Restore the last page on start", NULL);
 	fClearDataButton = new BButton("Clear browsing data",
 		new BMessage(kMsgClearData));
@@ -125,6 +136,8 @@ SettingsWindow::SettingsWindow(BRect frame)
 		.Add(fBlockedDomains)
 		.Add(fPrivateBrowsing)
 		.Add(fZoomDefault)
+		.Add(fAutoplay)
+		.Add(autoplayNote)
 		.Add(fRestoreSession)
 		.Add(fClearDataButton)
 		.AddStrut(B_USE_SMALL_SPACING)
@@ -184,6 +197,11 @@ SettingsWindow::_LoadFromSettings()
 	snprintf(zoom, sizeof(zoom), "%.2f", settings->ZoomDefault());
 	fZoomDefault->SetText(zoom);
 
+	BMenu* autoplayMenu = fAutoplay->Menu();
+	BMenuItem* autoplayItem = autoplayMenu->ItemAt(settings->AutoplayPolicy());
+	if (autoplayItem != NULL)
+		autoplayItem->SetMarked(true);
+
 	fRestoreSession->SetValue(settings->RestoreSession());
 }
 
@@ -219,6 +237,10 @@ SettingsWindow::_ApplyAndSave()
 	settings->SetBlockedDomains(fBlockedDomains->Text());
 	settings->SetPrivateBrowsing(fPrivateBrowsing->Value());
 	settings->SetRestoreSession(fRestoreSession->Value());
+
+	BMenuItem* autoplayMarked = fAutoplay->Menu()->FindMarked();
+	settings->SetAutoplayPolicy(autoplayMarked != NULL
+		? fAutoplay->Menu()->IndexOf(autoplayMarked) : 0);
 
 	double zoom = strtod(fZoomDefault->Text(), NULL);
 	if (zoom < 0.25)

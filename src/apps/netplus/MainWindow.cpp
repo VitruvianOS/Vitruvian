@@ -318,6 +318,8 @@ MainWindow::_ApplySettings()
 	fWebView->SetBlockedDomains(blocked != NULL ? blocked : "");
 
 	fWebView->SetZoomLevel((float)settings->ZoomDefault());
+	fWebView->SetAutoplayPolicy(
+		(web_autoplay_policy)settings->AutoplayPolicy());
 
 	const char* dir = settings->DownloadDir();
 	fWebView->SetDownloadDirectory(dir);

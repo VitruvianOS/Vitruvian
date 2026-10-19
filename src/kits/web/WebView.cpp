@@ -234,6 +234,7 @@ struct BWebView::WebViewImpl {
 	BFilePanel*			fPendingAskPanel;
 	BFilePanel*			fPendingSavePanel;
 	float				fZoom;
+	web_autoplay_policy	fAutoplay;
 	bool				fJsEnabled;
 	bool				fImagesEnabled;
 	std::string			fUserAgentSuffix;
@@ -264,6 +265,7 @@ struct BWebView::WebViewImpl {
 		fPendingAskPanel(NULL),
 		fPendingSavePanel(NULL),
 		fZoom(1.0),
+		fAutoplay(B_WEB_AUTOPLAY_ALLOW),
 		fJsEnabled(true),
 		fImagesEnabled(true)
 #endif
@@ -485,7 +487,8 @@ BWebView::AttachedToWindow()
 	fImpl->fPixelWidth = w;
 	fImpl->fPixelHeight = h;
 
-	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession);
+	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession,
+		(int)fImpl->fAutoplay);
 	if (!fImpl->fBridge->IsValid()) {
 		delete fImpl->fBridge;
 		fImpl->fBridge = NULL;
@@ -1812,6 +1815,13 @@ BWebView::SetZoomLevel(float zoom)
 
 
 void
+BWebView::SetAutoplayPolicy(web_autoplay_policy policy)
+{
+	fImpl->fAutoplay = policy;
+}
+
+
+void
 BWebView::SetDownloadDirectory(const char* path)
 {
 #ifdef HAS_WPE
@@ -2004,6 +2014,8 @@ void
 BWebView::SetUserAgentSuffix(const char*) {}
 void
 BWebView::SetZoomLevel(float) {}
+void
+BWebView::SetAutoplayPolicy(web_autoplay_policy) {}
 void
 BWebView::SetDownloadDirectory(const char*) {}
 void

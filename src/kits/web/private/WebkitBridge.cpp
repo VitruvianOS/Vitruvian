@@ -37,7 +37,8 @@ struct WebKitBridge::ScriptMessageBinding {
 //	#pragma mark - Constructor/Destructor
 
 
-WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session)
+WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
+	int autoplayPolicy)
 	:
 	backend(nullptr),
 	downloadHandler(nullptr),
@@ -55,13 +56,14 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session)
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
-		_Init(width, height, session);
+		_Init(width, height, session, autoplayPolicy);
 	});
 }
 
 
 void
-WebKitBridge::_Init(int width, int height, SessionAdapter* session)
+WebKitBridge::_Init(int width, int height, SessionAdapter* session,
+	int autoplayPolicy)
 {
 
 	// 1. Compositor + WPE backend (FDO SHM path).
@@ -110,9 +112,15 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 
 	// The default policy only lets muted media start on its own, and WebKit
 	// pauses un-muted video that leaves the viewport; a resize or full-screen
-	// reflow did that and playback then needed a click to resume.
+	// reflow did that and playback then needed a click to resume. The
+	// policy is fixed at creation, so the user's choice is applied here.
+	WebKitAutoplayPolicy autoplay = WEBKIT_AUTOPLAY_ALLOW;
+	if (autoplayPolicy == 1)
+		autoplay = WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND;
+	else if (autoplayPolicy == 2)
+		autoplay = WEBKIT_AUTOPLAY_DENY;
 	WebKitWebsitePolicies* policies = webkit_website_policies_new_with_policies(
-		"autoplay", WEBKIT_AUTOPLAY_ALLOW, nullptr);
+		"autoplay", autoplay, nullptr);
 
 	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
 		"backend",          wkBackend,

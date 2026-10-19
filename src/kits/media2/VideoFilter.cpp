@@ -37,6 +37,14 @@ protected:
 		return B_OK;
 	}
 
+	virtual	void				Connected(const BMediaFormat& format)
+	{
+		BMediaInput::Connected(format);
+		// Filters keep the frame layout; the output offers what came in.
+		if (fOwner->Output() != NULL)
+			fOwner->Output()->SetFormat(format);
+	}
+
 	virtual	void				HandleBuffer(void* buffer, size_t size,
 									const BMediaFormat& format)
 	{
@@ -434,6 +442,14 @@ protected:
 		return B_OK;
 	}
 
+	virtual	void				Connected(const BMediaFormat& format)
+	{
+		BMediaInput::Connected(format);
+		BAutolock _(fOwner->fLock);
+		for (int32 i = 0; i < fOwner->fOutputs->CountItems(); i++)
+			fOwner->fOutputs->ItemAt(i)->SetFormat(format);
+	}
+
 	virtual	void				HandleBuffer(void* buffer, size_t size,
 									const BMediaFormat& format)
 	{
@@ -538,6 +554,8 @@ BVideoSplitter::AddOutput()
 		delete output;
 		return NULL;
 	}
+	if (fInput->IsConnected())
+		output->SetFormat(fInput->Format());
 	fOutputs->AddItem(output);
 	return output;
 }

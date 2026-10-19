@@ -10,6 +10,7 @@
 #include <Point.h>
 #include <Rect.h>
 
+#include <algorithm>
 #include <string.h>
 
 
@@ -138,12 +139,11 @@ CameraView::Draw(BRect updateRect)
 	const float frameWidth = frameBounds.Width() + 1;
 	const float frameHeight = frameBounds.Height() + 1;
 
-	// Fit-cover with the zoom crop centered.
-	const float scale = bounds.Width() / frameWidth > bounds.Height()
-			/ frameHeight
-		? bounds.Width() / frameWidth : bounds.Height() / frameHeight;
-	const float scaledWidth = frameWidth * scale / fZoom;
-	const float scaledHeight = frameHeight * scale / fZoom;
+	// Fit the whole frame, then zoom in around the center.
+	const float scale = std::min(bounds.Width() / frameWidth,
+		bounds.Height() / frameHeight);
+	const float scaledWidth = frameWidth * scale * fZoom;
+	const float scaledHeight = frameHeight * scale * fZoom;
 	const BRect destination((bounds.Width() - scaledWidth) / 2,
 		(bounds.Height() - scaledHeight) / 2,
 		(bounds.Width() - scaledWidth) / 2 + scaledWidth,

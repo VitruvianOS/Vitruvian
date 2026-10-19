@@ -765,40 +765,6 @@ BWebView::AttachedToWindow()
 
 	fImpl->fSelfMessenger = BMessenger(this);
 
-	// Download lifecycle arrives on the GLib thread; hand it to the
-	// window thread as messages.
-	if (fImpl->fBridge->downloadHandler != NULL) {
-		fImpl->fBridge->downloadHandler->onDownloadStarted
-			= [self](const DownloadEntry& entry) {
-			BMessage msg(B_WEB_DOWNLOAD_STARTED);
-			_FillDownloadMessage(msg, entry,
-				B_WEB_DOWNLOAD_STATE_ACTIVE);
-			self.SendMessage(&msg);
-		};
-		fImpl->fBridge->downloadHandler->onDownloadProgress
-			= [self](const DownloadEntry& entry) {
-			BMessage msg(B_WEB_DOWNLOAD_PROGRESS);
-			_FillDownloadMessage(msg, entry,
-				B_WEB_DOWNLOAD_STATE_ACTIVE);
-			self.SendMessage(&msg);
-		};
-		fImpl->fBridge->downloadHandler->onDownloadFinished
-			= [self](const DownloadEntry& entry) {
-			BMessage msg(B_WEB_DOWNLOAD_FINISHED);
-			_FillDownloadMessage(msg, entry,
-				B_WEB_DOWNLOAD_STATE_FINISHED);
-			self.SendMessage(&msg);
-		};
-		fImpl->fBridge->downloadHandler->onDownloadFailed
-			= [self](const DownloadEntry& entry) {
-			BMessage msg(B_WEB_DOWNLOAD_FAILED);
-			_FillDownloadMessage(msg, entry,
-				entry.cancelled ? B_WEB_DOWNLOAD_STATE_CANCELLED
-					: B_WEB_DOWNLOAD_STATE_FAILED);
-			self.SendMessage(&msg);
-		};
-	}
-
 	for (size_t i = 0; i < fImpl->fScriptMessageHandlers.size(); i++) {
 		std::string name = fImpl->fScriptMessageHandlers[i];
 		fImpl->fBridge->RegisterScriptMessageHandler(name,

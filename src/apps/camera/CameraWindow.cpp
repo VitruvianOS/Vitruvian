@@ -336,9 +336,11 @@ CameraWindow::CameraWindow(BRect frame)
 	fView->SetExplicitMinSize(BSize(320, 240));
 	fView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 
+	BGroupLayout* controls = NULL;
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
 		.Add(fView, 3.0f)
 		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1.0f)
+			.GetLayout(&controls)
 			.SetInsets(B_USE_WINDOW_SPACING)
 			.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
 				.AddMenuField(fCameraField, 0, 0)
@@ -358,6 +360,9 @@ CameraWindow::CameraWindow(BRect frame)
 			.End()
 			.AddGlue()
 		.End();
+	// Extra width goes to the picture; the controls keep their size.
+	controls->SetExplicitMaxSize(
+		BSize(controls->PreferredSize().width, B_SIZE_UNLIMITED));
 
 	_BuildGraph();
 	_RefreshFilterMenu();
@@ -742,11 +747,18 @@ CameraWindow::_FitToPicture()
 	// size the window to the picture, down to what the controls need.
 	float viewHeight;
 	fView->GetHeightForWidth(fView->Bounds().Width(), NULL, NULL, &viewHeight);
-	float minWidth, maxWidth, minHeight, maxHeight;
-	GetSizeLimits(&minWidth, &maxWidth, &minHeight, &maxHeight);
-	const float target = std::max(minHeight, viewHeight);
-	if (fabs(target - Bounds().Height()) >= 1)
-		ResizeTo(Bounds().Width(), target);
+	// A picture shorter than the controls widens the window until its
+	// height matches them, so no band is left above or below it.
+	const float minHeight = GetLayout()->MinSize().height;
+	float width = Bounds().Width();
+	if (viewHeight < minHeight) {
+		const float aspect = (fView->Bounds().Width() + 1) / (viewHeight + 1);
+		width += (minHeight + 1) * aspect - 1 - fView->Bounds().Width();
+	}
+	const float height = std::max(minHeight, viewHeight);
+	if (fabs(width - Bounds().Width()) >= 1
+		|| fabs(height - Bounds().Height()) >= 1)
+		ResizeTo(width, height);
 }
 
 

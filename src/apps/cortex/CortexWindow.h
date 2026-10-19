@@ -18,8 +18,11 @@
 class BSlider;
 class CortexGraphView;
 class CortexModel;
+class CortexMonitorWindow;
 class CortexNode;
 class CortexPin;
+struct CortexEndpoint;
+struct CortexMonitorEntry;
 
 
 enum {
@@ -40,7 +43,11 @@ enum {
 	kMsgSendTestNote		= 'CNOT',
 	kMsgDisconnectOwn		= 'CDOI',
 	kMsgRemoveLink			= 'CRLK',
-	kMsgRestoreRoutes		= 'CRRT'
+	kMsgRestoreRoutes		= 'CRRT',
+	kMsgInsertFilter		= 'CIFL',
+	kMsgRemoveFilter		= 'CRFL',
+	kMsgMonitorPin			= 'CMPN',
+	kMsgMonitorClosed		= 'CMCL'
 };
 
 
@@ -79,6 +86,7 @@ public:
 			void		TryConnectPins(int32 outNode, int32 outPin,
 					int32 inNode, int32 inPin);
 			void		RemoveLink(int32 linkIndex);
+			bool		LinkHasFilter(int32 linkIndex) const;
 
 private:
 			void		_GraphReady();
@@ -96,6 +104,18 @@ private:
 			status_t	_ConnectPair(CortexNode* outNode, CortexPin* outPin,
 					CortexNode* inNode, CortexPin* inPin);
 			void		_RestoreRoutes();
+			bool		_EndpointFor(CortexNode* node, CortexPin* pin,
+					CortexEndpoint* outEndpoint);
+			status_t	_Join(const CortexEndpoint& output,
+					const CortexEndpoint& input);
+			status_t	_Split(const CortexEndpoint& output,
+					const CortexEndpoint& input);
+			void		_InsertFilter(int32 linkIndex, const char* id);
+			void		_RemoveFilter(int32 linkIndex);
+			void		_OpenMonitor(int32 nodeIndex, int32 pinIndex);
+			void		_CloseMonitor(CortexMonitorEntry* entry);
+			void		_DropMonitorsOn(BMediaClient* client);
+			void		_TearDownMonitor(CortexMonitorEntry* entry);
 
 			CortexGraphView*	fView;
 			CortexModel*		fModel;
@@ -104,6 +124,7 @@ private:
 			bool			fGraphReady;
 			bool			fRebuildPending;
 			BObjectList<uint32, true>	fMeteredIds;
+			BObjectList<CortexMonitorEntry, true>	fMonitors;
 };
 
 

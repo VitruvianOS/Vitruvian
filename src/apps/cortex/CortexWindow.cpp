@@ -27,13 +27,56 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <media2/AudioFilter.h>
 #include <media2/Controllable.h>
+#include <media2/FilterCatalog.h>
 #include <media2/MediaTheme.h>
 #include <media2/ParameterWeb.h>
 #include <media2/RoutingStore.h>
+#include <media2/VideoFilter.h>
 
 #include "CortexGraphView.h"
+#include "CortexMonitor.h"
 #include "CortexNodes.h"
+
+
+struct CortexEndpoint {
+	BMediaOutput*				output;
+	BMediaInput*				input;
+	BMediaGraph::ForeignPort	port;
+
+	CortexEndpoint() : output(NULL), input(NULL) {}
+};
+
+
+// One open monitor: the sink, and the splitter that shares the source
+// with its existing link when there is one.
+struct CortexMonitorEntry {
+	CortexMonitorWindow*		window;
+	CortexVideoSink*			sink;
+	BVideoSplitter*				splitter;
+	BMediaOutput*				source;
+	BMediaInput*				target;
+	BMediaOutput*				targetTap;
+	BMediaOutput*				sinkTap;
+	CortexEndpoint				foreignSource;
+	bool						isForeign;
+
+	CortexMonitorEntry()
+		:
+		window(NULL), sink(NULL), splitter(NULL), source(NULL),
+		target(NULL), targetTap(NULL), sinkTap(NULL), isForeign(false)
+	{
+	}
+};
+
+
+static bool
+_IsFilterUnit(BMediaClient* client)
+{
+	return dynamic_cast<BVideoFilterUnit*>(client) != NULL
+		|| dynamic_cast<BAudioFilterUnit*>(client) != NULL;
+}
 
 
 static status_t
@@ -108,7 +151,8 @@ CortexWindow::CortexWindow()
 	fForeignLinks(true),
 	fGraphReady(false),
 	fRebuildPending(false),
-	fMeteredIds(true)
+	fMeteredIds(true),
+	fMonitors(true)
 {
 	BRect bounds = Bounds();
 
@@ -163,6 +207,9 @@ CortexWindow::~CortexWindow()
 		for (int32 i = 0; i < fMeteredIds.CountItems(); i++)
 			graph->StopMeteringDevice((media_client_id)*fMeteredIds.ItemAt(i));
 	}
+
+	while (fMonitors.CountItems() > 0)
+		_CloseMonitor(fMonitors.ItemAt(0));
 
 	for (int32 i = 0; i < fOwnClients.CountItems(); i++) {
 		BMediaClient* client = fOwnClients.ItemAt(i);
@@ -320,6 +367,48 @@ CortexWindow::MessageReceived(BMessage* message)
 		case kMsgRestoreRoutes:
 			_RestoreRoutes();
 			break;
+
+		case kMsgInsertFilter:
+		{
+			int32 linkIndex = -1;
+			const char* id = NULL;
+			message->FindInt32("link", &linkIndex);
+			if (message->FindString("id", &id) == B_OK)
+				_InsertFilter(linkIndex, id);
+			break;
+		}
+
+		case kMsgRemoveFilter:
+		{
+			int32 linkIndex = -1;
+			message->FindInt32("link", &linkIndex);
+			_RemoveFilter(linkIndex);
+			break;
+		}
+
+		case kMsgMonitorPin:
+		{
+			int32 nodeIndex = -1;
+			int32 pinIndex = -1;
+			message->FindInt32("node", &nodeIndex);
+			message->FindInt32("pin", &pinIndex);
+			_OpenMonitor(nodeIndex, pinIndex);
+			break;
+		}
+
+		case kMsgMonitorClosed:
+		{
+			void* window = NULL;
+			message->FindPointer("window", &window);
+			for (int32 i = 0; i < fMonitors.CountItems(); i++) {
+				if (fMonitors.ItemAt(i)->window == window) {
+					_CloseMonitor(fMonitors.ItemAt(i));
+					break;
+				}
+			}
+			_Rebuild();
+			break;
+		}
 
 		case kMsgRemoveLink:
 		{
@@ -697,6 +786,25 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 			item->SetTarget(this);
 			menu->AddItem(item);
 		}
+	}
+
+	bool separated = false;
+	for (int32 p = 0; p < node->pins.CountItems(); p++) {
+		CortexPin* pin = node->pins.ItemAt(p);
+		if (pin == NULL || !pin->isOutput || pin->kind != kCortexPinVideo)
+			continue;
+		if (!separated) {
+			menu->AddSeparatorItem();
+			separated = true;
+		}
+		BMessage* monitorMessage = new BMessage(kMsgMonitorPin);
+		monitorMessage->AddInt32("node", nodeIndex);
+		monitorMessage->AddInt32("pin", p);
+		BMenuItem* monitorItem = new BMenuItem(
+			BString().SetToFormat("Monitor %s",
+				pin->name.String()).String(), monitorMessage);
+		monitorItem->SetTarget(this);
+		menu->AddItem(monitorItem);
 	}
 
 	menu->AddSeparatorItem();
@@ -1181,4 +1289,391 @@ CortexWindow::_ReportStatus(const char* action, status_t status)
 	BAlert* alert = new(std::nothrow) BAlert("Cortex", text.String(), "OK");
 	if (alert != NULL)
 		alert->Go();
+}
+
+
+bool
+CortexWindow::_EndpointFor(CortexNode* node, CortexPin* pin,
+	CortexEndpoint* outEndpoint)
+{
+	if (node == NULL || pin == NULL)
+		return false;
+	if (pin->output != NULL || pin->input != NULL) {
+		outEndpoint->output = pin->output;
+		outEndpoint->input = pin->input;
+		return true;
+	}
+	return pin->foreignPortId != 0
+		&& _ForeignPortById(pin->foreignNodeId, pin->foreignPortId,
+			&outEndpoint->port) == B_OK;
+}
+
+
+status_t
+CortexWindow::_Join(const CortexEndpoint& output, const CortexEndpoint& input)
+{
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	if (output.output != NULL && input.input != NULL)
+		return graph->Connect(output.output, input.input);
+	if (output.output != NULL)
+		return graph->Connect(output.output, &input.port);
+	if (input.input != NULL)
+		return graph->Connect(&output.port, input.input);
+	return graph->Connect(&output.port, &input.port);
+}
+
+
+status_t
+CortexWindow::_Split(const CortexEndpoint& output, const CortexEndpoint& input)
+{
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	if (output.output != NULL && input.input != NULL)
+		return graph->Disconnect(output.output, input.input);
+	if (output.output != NULL)
+		return graph->Disconnect(output.output, &input.port);
+	if (input.input != NULL)
+		return graph->Disconnect(&output.port, input.input);
+	return graph->Disconnect(&output.port, &input.port);
+}
+
+
+bool
+CortexWindow::LinkHasFilter(int32 linkIndex) const
+{
+	CortexLink* link = fModel != NULL ? fModel->LinkAt(linkIndex) : NULL;
+	if (link == NULL)
+		return false;
+	CortexNode* outNode = fModel->NodeAt(link->outputNode);
+	CortexNode* inNode = fModel->NodeAt(link->inputNode);
+	return (outNode != NULL && _IsFilterUnit(outNode->ownClient))
+		|| (inNode != NULL && _IsFilterUnit(inNode->ownClient));
+}
+
+
+static void
+_SetRoute(CortexNode* outNode, CortexPin* outPin, CortexNode* inNode,
+	CortexPin* inPin, bool add)
+{
+	BRoutingStore* store = BRoutingStore::Instance();
+	if (store == NULL)
+		return;
+	BMediaRoute route;
+	route.fromNode = outNode->name;
+	route.fromPort = outPin->name;
+	route.toNode = inNode->name;
+	route.toPort = inPin->name;
+	if (add)
+		store->AddRoute(route);
+	else
+		store->RemoveRoute(route);
+}
+
+
+// A -> B becomes A -> filter -> B. The unit is an in-process client
+// owned by the window, so the model lists it like any own node.
+void
+CortexWindow::_InsertFilter(int32 linkIndex, const char* id)
+{
+	CortexLink* link = fModel != NULL ? fModel->LinkAt(linkIndex) : NULL;
+	if (link == NULL || link->outputPin < 0 || link->inputPin < 0)
+		return;
+
+	const char* kind = link->kind == kCortexPinVideo ? "video"
+		: link->kind == kCortexPinAudio ? "audio" : NULL;
+	if (kind == NULL)
+		return;
+
+	BObjectList<BFilterCatalog::Entry, true> entries;
+	BFilterCatalog::ListEntries(&entries, kind);
+	BFilterCatalog::Entry* chosen = NULL;
+	for (int32 i = 0; i < entries.CountItems(); i++) {
+		if (entries.ItemAt(i)->id == id) {
+			chosen = entries.ItemAt(i);
+			break;
+		}
+	}
+	if (chosen == NULL) {
+		_ReportStatus("insert filter", B_ENTRY_NOT_FOUND);
+		return;
+	}
+
+	CortexNode* outNode = fModel->NodeAt(link->outputNode);
+	CortexNode* inNode = fModel->NodeAt(link->inputNode);
+	CortexPin* outPin = outNode != NULL
+		? outNode->pins.ItemAt(link->outputPin) : NULL;
+	CortexPin* inPin = inNode != NULL
+		? inNode->pins.ItemAt(link->inputPin) : NULL;
+	CortexEndpoint from;
+	CortexEndpoint to;
+	if (!_EndpointFor(outNode, outPin, &from)
+		|| !_EndpointFor(inNode, inPin, &to)) {
+		_ReportStatus("insert filter", B_ENTRY_NOT_FOUND);
+		return;
+	}
+
+	BMediaClient* unit = link->kind == kCortexPinVideo
+		? (BMediaClient*)BFilterCatalog::CreateVideoUnit(*chosen)
+		: (BMediaClient*)BFilterCatalog::CreateAudioUnit(*chosen);
+	if (unit == NULL || unit->InitCheck() != B_OK
+		|| unit->InputAt(0) == NULL || unit->OutputAt(0) == NULL) {
+		delete unit;
+		_ReportStatus("insert filter", B_NO_INIT);
+		return;
+	}
+
+	CortexEndpoint filterIn;
+	CortexEndpoint filterOut;
+	filterIn.input = unit->InputAt(0);
+	filterOut.output = unit->OutputAt(0);
+
+	status_t status = _Split(from, to);
+	if (status == B_OK) {
+		status = _Join(from, filterIn);
+		if (status == B_OK) {
+			status = _Join(filterOut, to);
+			if (status != B_OK)
+				_Split(from, filterIn);
+		}
+		if (status != B_OK)
+			_Join(from, to);
+	}
+
+	if (status != B_OK) {
+		delete unit;
+		_ReportStatus("insert filter", status);
+		_Rebuild();
+		return;
+	}
+
+	fOwnClients.AddItem(unit);
+	_SetRoute(outNode, outPin, inNode, inPin, false);
+	_Rebuild();
+}
+
+
+// Reverses _InsertFilter: the filter's upstream and downstream ends are
+// joined again and the unit goes away.
+void
+CortexWindow::_RemoveFilter(int32 linkIndex)
+{
+	CortexLink* link = fModel != NULL ? fModel->LinkAt(linkIndex) : NULL;
+	if (link == NULL)
+		return;
+
+	int32 filterIndex = link->outputNode;
+	CortexNode* filterNode = fModel->NodeAt(filterIndex);
+	if (filterNode == NULL || !_IsFilterUnit(filterNode->ownClient)) {
+		filterIndex = link->inputNode;
+		filterNode = fModel->NodeAt(filterIndex);
+	}
+	if (filterNode == NULL || !_IsFilterUnit(filterNode->ownClient))
+		return;
+
+	CortexLink* upstream = NULL;
+	CortexLink* downstream = NULL;
+	for (int32 i = 0; i < fModel->CountLinks(); i++) {
+		CortexLink* candidate = fModel->LinkAt(i);
+		if (candidate->inputNode == filterIndex && upstream == NULL)
+			upstream = candidate;
+		if (candidate->outputNode == filterIndex && downstream == NULL)
+			downstream = candidate;
+	}
+
+	CortexEndpoint from;
+	CortexEndpoint filterIn;
+	CortexEndpoint filterOut;
+	CortexEndpoint to;
+	CortexNode* fromNode = NULL;
+	CortexNode* toNode = NULL;
+	CortexPin* fromPin = NULL;
+	CortexPin* toPin = NULL;
+	bool haveFrom = false;
+	bool haveTo = false;
+	if (upstream != NULL && upstream->outputPin >= 0
+		&& upstream->inputPin >= 0) {
+		fromNode = fModel->NodeAt(upstream->outputNode);
+		fromPin = fromNode != NULL
+			? fromNode->pins.ItemAt(upstream->outputPin) : NULL;
+		haveFrom = _EndpointFor(fromNode, fromPin, &from)
+			&& _EndpointFor(filterNode,
+				filterNode->pins.ItemAt(upstream->inputPin), &filterIn);
+	}
+	if (downstream != NULL && downstream->outputPin >= 0
+		&& downstream->inputPin >= 0) {
+		toNode = fModel->NodeAt(downstream->inputNode);
+		toPin = toNode != NULL
+			? toNode->pins.ItemAt(downstream->inputPin) : NULL;
+		haveTo = _EndpointFor(toNode, toPin, &to)
+			&& _EndpointFor(filterNode,
+				filterNode->pins.ItemAt(downstream->outputPin), &filterOut);
+	}
+
+	BMediaClient* unit = filterNode->ownClient;
+	_DropMonitorsOn(unit);
+
+	if (haveFrom)
+		_Split(from, filterIn);
+	if (haveTo)
+		_Split(filterOut, to);
+
+	status_t status = B_OK;
+	if (haveFrom && haveTo)
+		status = _Join(from, to);
+
+	unit->Stop();
+	fOwnClients.RemoveItem(unit);
+
+	if (haveFrom && haveTo)
+		_SetRoute(fromNode, fromPin, toNode, toPin, true);
+	_ReportStatus("remove filter", status);
+	_Rebuild();
+}
+
+
+// Taps a video output without taking its link: a linked output is
+// spliced through a splitter, an unlinked one feeds the sink directly.
+void
+CortexWindow::_OpenMonitor(int32 nodeIndex, int32 pinIndex)
+{
+	CortexNode* node = fModel != NULL ? fModel->NodeAt(nodeIndex) : NULL;
+	CortexPin* pin = node != NULL ? node->pins.ItemAt(pinIndex) : NULL;
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (pin == NULL || !pin->isOutput || graph == NULL)
+		return;
+
+	CortexMonitorEntry* entry = new(std::nothrow) CortexMonitorEntry();
+	if (entry == NULL)
+		return;
+
+	BString title;
+	title.SetToFormat("%s: %s", node->name.String(), pin->name.String());
+	entry->window = new(std::nothrow) CortexMonitorWindow(title.String(),
+		BMessenger(this));
+	if (entry->window == NULL) {
+		delete entry;
+		return;
+	}
+	entry->sink = new(std::nothrow) CortexVideoSink(entry->window->View());
+
+	status_t status = B_NO_MEMORY;
+	if (entry->sink != NULL && entry->sink->Input() != NULL) {
+		BMediaInput* sinkInput = entry->sink->Input();
+		if (pin->output == NULL) {
+			entry->isForeign = true;
+			status = _EndpointFor(node, pin, &entry->foreignSource)
+				? graph->Connect(&entry->foreignSource.port, sinkInput)
+				: B_ENTRY_NOT_FOUND;
+		} else if (!pin->output->IsConnected()) {
+			entry->source = pin->output;
+			status = graph->Connect(pin->output, sinkInput);
+		} else {
+			entry->source = pin->output;
+			entry->target = dynamic_cast<BMediaInput*>(
+				pin->output->Binding());
+			BVideoSplitter* splitter = new(std::nothrow) BVideoSplitter();
+			if (entry->target == NULL)
+				status = B_NOT_SUPPORTED;
+			else if (splitter != NULL) {
+				status = B_NO_INIT;
+				entry->targetTap = splitter->AddOutput();
+				entry->sinkTap = splitter->AddOutput();
+				if (entry->targetTap != NULL && entry->sinkTap != NULL
+					&& graph->Disconnect(entry->source, entry->target)
+						== B_OK) {
+					entry->splitter = splitter;
+					splitter = NULL;
+					status = graph->Connect(entry->source,
+						entry->splitter->Input());
+					if (status == B_OK) {
+						status = graph->Connect(entry->targetTap,
+							entry->target);
+					}
+					if (status == B_OK) {
+						status = graph->Connect(entry->sinkTap, sinkInput);
+					}
+				}
+			}
+			delete splitter;
+		}
+	}
+
+	if (status != B_OK) {
+		if (entry->splitter != NULL) {
+			_TearDownMonitor(entry);
+			delete entry->splitter;
+		}
+		delete entry->sink;
+		entry->window->Lock();
+		entry->window->Quit();
+		delete entry;
+		_ReportStatus("monitor", status);
+		_Rebuild();
+		return;
+	}
+
+	fOwnClients.AddItem(entry->sink);
+	if (entry->splitter != NULL)
+		fOwnClients.AddItem(entry->splitter);
+	fMonitors.AddItem(entry);
+	entry->window->Show();
+	_Rebuild();
+}
+
+
+// Unlinks the tap and puts the spliced link back; does not free anything.
+void
+CortexWindow::_TearDownMonitor(CortexMonitorEntry* entry)
+{
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL || entry->sink == NULL)
+		return;
+
+	BMediaInput* sinkInput = entry->sink->Input();
+	if (entry->splitter != NULL) {
+		graph->Disconnect(entry->sinkTap, sinkInput);
+		graph->Disconnect(entry->targetTap, entry->target);
+		graph->Disconnect(entry->source, entry->splitter->Input());
+		graph->Connect(entry->source, entry->target);
+	} else if (entry->isForeign)
+		graph->Disconnect(&entry->foreignSource.port, sinkInput);
+	else if (entry->source != NULL)
+		graph->Disconnect(entry->source, sinkInput);
+}
+
+
+void
+CortexWindow::_CloseMonitor(CortexMonitorEntry* entry)
+{
+	_TearDownMonitor(entry);
+
+	CortexMonitorWindow* window = entry->window;
+	if (entry->splitter != NULL) {
+		entry->splitter->Stop();
+		fOwnClients.RemoveItem(entry->splitter);
+	}
+	fOwnClients.RemoveItem(entry->sink);
+
+	if (window->Lock())
+		window->Quit();
+
+	fMonitors.RemoveItem(entry);
+}
+
+
+// Monitors whose tap touches a client that is about to go away.
+void
+CortexWindow::_DropMonitorsOn(BMediaClient* client)
+{
+	for (int32 i = fMonitors.CountItems() - 1; i >= 0; i--) {
+		CortexMonitorEntry* entry = fMonitors.ItemAt(i);
+		if ((entry->source != NULL && entry->source->Client() == client)
+			|| (entry->target != NULL && entry->target->Client() == client))
+			_CloseMonitor(entry);
+	}
 }

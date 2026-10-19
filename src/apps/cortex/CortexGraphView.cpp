@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <media2/FilterCatalog.h>
+
 #include "CortexWindow.h"
 
 
@@ -479,6 +481,40 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 				kind = pin->kind;
 			_AddLink(outIndex, outPin, inIndex, inPin,
 				kCortexLinkActive, kind, link->id);
+		}
+	}
+
+	// In-process links never reach the registry; the kit lists them with
+	// the connection objects, which the own pins carry.
+	BObjectList<BMediaGraph::Link, true> processLinks;
+	if (graph->GetLinks(&processLinks) == B_OK) {
+		for (int32 i = 0; i < processLinks.CountItems(); i++) {
+			BMediaGraph::Link* link = processLinks.ItemAt(i);
+			if (link == NULL || !link->inProcess)
+				continue;
+			int32 outIndex = -1;
+			int32 outPin = -1;
+			int32 inIndex = -1;
+			int32 inPin = -1;
+			for (int32 n = 0; n < fNodes.CountItems(); n++) {
+				CortexNode* node = fNodes.ItemAt(n);
+				for (int32 p = 0; node != NULL
+						&& p < node->pins.CountItems(); p++) {
+					CortexPin* pin = node->pins.ItemAt(p);
+					if (pin->output != NULL && pin->output == link->output) {
+						outIndex = n;
+						outPin = p;
+					}
+					if (pin->input != NULL && pin->input == link->input) {
+						inIndex = n;
+						inPin = p;
+					}
+				}
+			}
+			if (outIndex < 0 || inIndex < 0)
+				continue;
+			_AddLink(outIndex, outPin, inIndex, inPin, kCortexLinkActive,
+				fNodes.ItemAt(outIndex)->pins.ItemAt(outPin)->kind);
 		}
 	}
 
@@ -1163,6 +1199,51 @@ CortexGraphView::_ShowLinkMenu(int32 linkIndex, BPoint where)
 	BMenuItem* removeItem = new BMenuItem("Remove link", removeMessage);
 	removeItem->SetTarget(window);
 	menu->AddItem(removeItem);
+
+	const char* filterKind = NULL;
+	CortexLink* link = fModel != NULL ? fModel->LinkAt(linkIndex) : NULL;
+	if (link != NULL && link->kind == kCortexPinVideo)
+		filterKind = "video";
+	else if (link != NULL && link->kind == kCortexPinAudio)
+		filterKind = "audio";
+
+	if (filterKind != NULL) {
+		menu->AddSeparatorItem();
+
+		BObjectList<BFilterCatalog::Entry, true> entries;
+		BFilterCatalog::ListEntries(&entries, filterKind);
+		BMenu* insertMenu = new BMenu("Insert filter");
+		for (int32 i = 0; i < entries.CountItems(); i++) {
+			BFilterCatalog::Entry* entry = entries.ItemAt(i);
+			BMessage* insertMessage = new BMessage(kMsgInsertFilter);
+			insertMessage->AddInt32("link", linkIndex);
+			insertMessage->AddString("id", entry->id);
+			BMenuItem* item = new BMenuItem(entry->name.String(),
+				insertMessage);
+			item->SetTarget(window);
+			insertMenu->AddItem(item);
+		}
+		if (insertMenu->CountItems() == 0)
+			insertMenu->SetEnabled(false);
+		menu->AddItem(insertMenu);
+
+		BMessage* filterMessage = new BMessage(kMsgRemoveFilter);
+		filterMessage->AddInt32("link", linkIndex);
+		BMenuItem* filterItem = new BMenuItem("Remove filter", filterMessage);
+		filterItem->SetTarget(window);
+		filterItem->SetEnabled(window->LinkHasFilter(linkIndex));
+		menu->AddItem(filterItem);
+	}
+
+	if (link != NULL && link->kind == kCortexPinVideo) {
+		BMessage* monitorMessage = new BMessage(kMsgMonitorPin);
+		monitorMessage->AddInt32("node", link->outputNode);
+		monitorMessage->AddInt32("pin", link->outputPin);
+		BMenuItem* monitorItem = new BMenuItem("Monitor video",
+			monitorMessage);
+		monitorItem->SetTarget(window);
+		menu->AddItem(monitorItem);
+	}
 
 	menu->Go(ConvertToScreen(where));
 	delete menu;

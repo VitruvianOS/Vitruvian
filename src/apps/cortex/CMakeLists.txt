@@ -5,6 +5,7 @@ Application(
 	CortexApp.cpp
 	CortexDump.cpp
 	CortexGraphView.cpp
+	CortexMonitor.cpp
 	CortexNodes.cpp
 	CortexWindow.cpp
 	LIBS be shared localestub media2

@@ -161,6 +161,7 @@ private:
 	bool				fVideoPaceNominal;
 	bigtime_t			fVideoNominalInterval;
 	std::mutex			fLock;	// guards tracks, pull buffer, pacing state
+	std::mutex			fAudioLock;	// held with fLock by seeks; the audio callback only
 	std::atomic<BMediaPlayer::player_state>	fState;
 	std::atomic<bool>	fEOS;
 	uint32				fFrameStride;
@@ -289,6 +290,7 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	// blocked on fLock re-checks them once it wins the lock.
 	_StopVideoRunner();
 	std::lock_guard<std::mutex> _(fLock);
+	std::lock_guard<std::mutex> audio(fAudioLock);
 
 	// Tear down any existing playback.
 	if (fNode != NULL)
@@ -320,6 +322,7 @@ status_t
 BMediaPlayer::Impl::SetTo(const BUrl& url)
 {
 	std::lock_guard<std::mutex> _(fLock);
+	std::lock_guard<std::mutex> audio(fAudioLock);
 
 	if (fNode != NULL)
 		fNode->Stop();
@@ -436,6 +439,7 @@ BMediaPlayer::Impl::Play()
 		return B_OK;
 	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load()) {
 		std::lock_guard<std::mutex> _(fLock);
+		std::lock_guard<std::mutex> audio(fAudioLock);
 		bigtime_t t = 0;
 		if (fTrack != NULL)
 			fTrack->SeekToTime(&t);
@@ -486,6 +490,7 @@ BMediaPlayer::Impl::Stop()
 	// so it cannot deliver a frame from after the seek.
 	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	std::lock_guard<std::mutex> _(fLock);
+	std::lock_guard<std::mutex> audio(fAudioLock);
 	bigtime_t t = 0;
 	if (fTrack != NULL)
 		fTrack->SeekToTime(&t);
@@ -503,6 +508,7 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 	bool resume = false;
 	{
 		std::lock_guard<std::mutex> _(fLock);
+		std::lock_guard<std::mutex> audio(fAudioLock);
 		if (fTrack == NULL && fVideoTrack == NULL)
 			return B_NO_INIT;
 		// A seek after end of stream resumes from the new point; the
@@ -809,8 +815,9 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 	}
 
 	// A seek is mid-flight on the caller thread; silence for one buffer
-	// beats replaying pre-seek audio.
-	std::unique_lock<std::mutex> lock(fLock, std::try_to_lock);
+	// beats replaying pre-seek audio. Not fLock: the video pump holds it
+	// while it waits for a frame, and only drained audio lets one arrive.
+	std::unique_lock<std::mutex> lock(fAudioLock, std::try_to_lock);
 	if (!lock.owns_lock()) {
 		memset(buffer, 0, size);
 		return;

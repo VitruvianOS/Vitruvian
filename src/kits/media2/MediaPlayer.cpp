@@ -311,6 +311,8 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	// Tear down any existing playback.
 	if (fNode != NULL)
 		fNode->Stop();
+	// Play() returns early while the state still says playing.
+	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	delete fFile;
 	fFile  = NULL;
 	fTrack = NULL;
@@ -343,6 +345,8 @@ BMediaPlayer::Impl::SetTo(const BUrl& url)
 
 	if (fNode != NULL)
 		fNode->Stop();
+	// Play() returns early while the state still says playing.
+	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	delete fFile;
 	fFile  = NULL;
 	fTrack = NULL;

@@ -7,6 +7,9 @@
 #define _MEDIA2_VIDEO_FILTER_H
 
 
+#include <Locker.h>
+#include <ObjectList.h>
+
 #include <media2/MediaClient.h>
 
 
@@ -132,6 +135,31 @@ class BVideoFlipFilter : public BVideoFilterUnit {
 public:
 								// horizontal mirrors; used for front cameras
 								BVideoFlipFilter(bool horizontal = true);
+};
+
+
+// Pass-through with one input and N outputs; every frame goes to all of
+// them (preview + recorder sharing one camera feed).
+class BVideoSplitter : public BMediaClient {
+public:
+								BVideoSplitter();
+	virtual						~BVideoSplitter();
+
+	virtual	bool				IsInProcessRouted() const;
+
+			BMediaInput*		Input() const;
+			BMediaOutput*		AddOutput();
+			int32				CountOutputs() const;
+			BMediaOutput*		OutputAt(int32 index) const;
+			status_t			RemoveOutput(BMediaOutput* output);
+
+private:
+	class _Input;
+	class _Output;
+
+			_Input*				fInput;
+			BObjectList<BMediaOutput, false>* fOutputs;
+			mutable BLocker			fLock;
 };
 
 

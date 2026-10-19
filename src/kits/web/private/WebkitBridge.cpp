@@ -71,6 +71,10 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		return;
 	}
 	backend = compositor->Backend();
+	// WebKit asks this handler before entering full screen and refuses if
+	// none is set; the embedder answers later with did_enter/did_exit.
+	wpe_view_backend_set_fullscreen_handler(backend, _OnBackendFullscreen,
+		this);
 
 	notifier = std::make_unique<FrameNotifier>();
 	compositor->onFrameReady = [this]() { notifier->Notify(); };
@@ -581,23 +585,29 @@ WebKitBridge::_OnWebProcessTerminated(WebKitWebView* view,
 }
 
 
-gboolean
-WebKitBridge::_OnEnterFullscreen(WebKitWebView*, gpointer data)
+/* static */ bool
+WebKitBridge::_OnBackendFullscreen(void* data, bool enable)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
-	if (self->onFullscreenChanged)
-		self->onFullscreenChanged(true);
-	return TRUE;
+	if (self->onFullscreenChanged == nullptr)
+		return false;
+	self->onFullscreenChanged(enable);
+	return true;
 }
 
 
 gboolean
-WebKitBridge::_OnLeaveFullscreen(WebKitWebView*, gpointer data)
+WebKitBridge::_OnEnterFullscreen(WebKitWebView*, gpointer)
 {
-	auto* self = static_cast<WebKitBridge*>(data);
-	if (self->onFullscreenChanged)
-		self->onFullscreenChanged(false);
-	return TRUE;
+	// TRUE would veto the switch; the backend handler drives it.
+	return FALSE;
+}
+
+
+gboolean
+WebKitBridge::_OnLeaveFullscreen(WebKitWebView*, gpointer)
+{
+	return FALSE;
 }
 
 

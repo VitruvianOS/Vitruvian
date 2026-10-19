@@ -216,6 +216,7 @@ private:
 	static gboolean	_OnWebProcessCrashed(WebKitWebView*, gpointer);
 	static void		_OnWebProcessTerminated(WebKitWebView*,
 						WebKitWebProcessTerminationReason, gpointer);
+	static bool		_OnBackendFullscreen(void* data, bool enable);
 	static gboolean	_OnEnterFullscreen(WebKitWebView*, gpointer);
 	static gboolean	_OnLeaveFullscreen(WebKitWebView*, gpointer);
 	static gboolean	_OnRunFileChooser(WebKitWebView*,

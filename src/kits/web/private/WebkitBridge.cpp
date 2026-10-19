@@ -108,12 +108,20 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		session ? session->NetworkSession()
 				: webkit_network_session_get_default();
 
+	// The default policy only lets muted media start on its own, and WebKit
+	// pauses un-muted video that leaves the viewport; a resize or full-screen
+	// reflow did that and playback then needed a click to resume.
+	WebKitWebsitePolicies* policies = webkit_website_policies_new_with_policies(
+		"autoplay", WEBKIT_AUTOPLAY_ALLOW, nullptr);
+
 	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
-		"backend",         wkBackend,
-		"web-context",     context,
-		"network-session", networkSession,
-		"settings",        settings,
+		"backend",          wkBackend,
+		"web-context",      context,
+		"network-session",  networkSession,
+		"settings",         settings,
+		"website-policies", policies,
 		nullptr));
+	g_object_unref(policies);
 	// wkBackend is now owned by the WebView (transfer-full via "backend" prop).
 
 	if (!webView) {

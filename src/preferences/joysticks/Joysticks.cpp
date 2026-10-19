@@ -10,7 +10,7 @@
 #include <Application.h>
 
 
-static const char* kSignature = "application/x-vnd.Haiku-Joystick";
+static const char* kSignature = "application/x-vnd.Haiku-Joysticks";
 
 
 class Application : public BApplication {

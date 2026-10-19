@@ -1,18 +1,18 @@
-Application(Joystick
+Application(Joysticks
 	SOURCES
-	Joystick.cpp
+	Joysticks.cpp
 	JoystickWindow.cpp
 	TestPanel.cpp
 	CalibrationSettings.cpp
 	RumbleTester.cpp
 	LIBS be game localestub
-	RDEF Joystick.rdef
+	RDEF Joysticks.rdef
 )
 
 # LinuxEvdevShim.h convention for the rumble helper; never linux/input.h.
-target_include_directories(Joystick PRIVATE
+target_include_directories(Joysticks PRIVATE
 	${CMAKE_SOURCE_DIR}/src/add-ons/input_server/devices
 	${EVDEV_INCLUDES}
 )
 
-DoCatalogs("x-vnd.Haiku-Joystick" preferences/joystick)
+DoCatalogs("x-vnd.Haiku-Joysticks" preferences/joysticks)

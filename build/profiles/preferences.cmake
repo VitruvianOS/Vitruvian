@@ -8,7 +8,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Deskbar_prefs
 	FileTypes
 	Input
-	Joystick
+	Joysticks
 	Keymap
 	Locale
 	Media
@@ -34,7 +34,7 @@ set(SYSTEM_PREFERENCES
 	Deskbar
 	FileTypes
 	Input
-	Joystick
+	Joysticks
 	Keymap
 	Locale
 	Media

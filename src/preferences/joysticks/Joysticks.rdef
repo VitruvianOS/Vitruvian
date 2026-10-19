@@ -2,13 +2,13 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Version resources for the Joystick preferences app; the vector icon
+ * Version resources for the Joysticks preferences app; the vector icon
  * is the one from the Haiku Joysticks preflet.
  */
 
-resource app_signature "application/x-vnd.Haiku-Joystick";
+resource app_signature "application/x-vnd.Haiku-Joysticks";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Joystick:System name:Joystick";
+resource app_name_catalog_entry "x-vnd.Haiku-Joysticks:System name:Joysticks";
 
 resource app_version {
 	major  = 1,
@@ -18,8 +18,8 @@ resource app_version {
 	variety = B_APPV_FINAL,
 	internal = 0,
 
-	short_info = "Joystick",
-	long_info  = "Joystick preferences - Copyright 2026, Dario Casalinuovo"
+	short_info = "Joysticks",
+	long_info  = "Joysticks preferences - Copyright 2026, Dario Casalinuovo"
 };
 
 resource app_flags B_SINGLE_LAUNCH;

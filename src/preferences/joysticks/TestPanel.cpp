@@ -24,7 +24,7 @@
 
 
 #undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "Joystick"
+#define B_TRANSLATION_CONTEXT "Joysticks"
 
 
 static const uint32 kMsgRumbleTest = 'rmbT';

@@ -24,7 +24,7 @@
 
 
 #undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "Joystick"
+#define B_TRANSLATION_CONTEXT "Joysticks"
 
 
 static const uint32 kMsgPoll = 'jPol';
@@ -70,7 +70,7 @@ _DeviceLabel(const char* name, const char* path)
 
 JoystickWindow::JoystickWindow()
 	:
-	BWindow(BRect(100, 100, 740, 560), B_TRANSLATE("Joystick"),
+	BWindow(BRect(100, 100, 740, 560), B_TRANSLATE("Joysticks"),
 		B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fDeviceList(NULL),

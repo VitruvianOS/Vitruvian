@@ -27,6 +27,8 @@ done
 
 # --- remove the /etc/profile.d hook --------------------------------------
 rm -f /etc/profile.d/vitruvian.sh || true
+# A reinstall of gstreamer1.0-plugins-good brings the pulse sink back.
+rm -f /etc/dpkg/dpkg.cfg.d/vos-no-pulse || true
 
 # --- remove tar-extracted trees ------------------------------------------
 # mime_db.tar was extracted into /system/data/mime_db/

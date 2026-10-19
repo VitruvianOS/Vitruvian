@@ -210,6 +210,13 @@ done
 chown -h vos_login:vos_login /system/login/.config/systemd/user/* \
 	2>/dev/null || true
 
+# Audio is PipeWire only. gstreamer1.0-plugins-good ships the pulse
+# sink, which WebKit picks by name over pipewiresink; keep it out.
+install -d -m 0755 /etc/dpkg/dpkg.cfg.d
+printf 'path-exclude=/usr/lib/*/gstreamer-1.0/libgstpulseaudio.so\n' \
+	> /etc/dpkg/dpkg.cfg.d/vos-no-pulse
+rm -f /usr/lib/*/gstreamer-1.0/libgstpulseaudio.so
+
 # First install only — upgrades preserve the admin's autologin choice.
 if [ "${1:-}" = "configure" ] && [ -z "${2:-}" ]; then
     touch /var/lib/vos/greeter-enabled

@@ -37,6 +37,7 @@ public:
 
 	virtual	bool				QuitRequested();
 	virtual	void				MessageReceived(BMessage* message);
+	virtual	void				FrameResized(float width, float height);
 
 			void				HandleFrame(const uint8* bits, size_t size,
 									uint32 width, uint32 height);
@@ -48,6 +49,7 @@ private:
 			status_t			_OpenCamera(int32 index);
 			void				_SetMode(int32 mode);
 			void				_SetFilter(const char* filterId);
+			void				_FitToPicture();
 			void				_RefreshCameraMenu();
 			void				_RefreshResolutionMenu();
 			void				_RefreshFilterMenu();

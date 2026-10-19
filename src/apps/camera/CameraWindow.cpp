@@ -33,6 +33,9 @@
 #include <media2/PlaySound.h>
 #include <media2/VideoFilter.h>
 
+#include <algorithm>
+#include <math.h>
+
 #include "AudioCapture.h"
 #include "CameraApp.h"
 #include "CameraView.h"
@@ -328,10 +331,7 @@ CameraWindow::CameraWindow(BRect frame)
 	fView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
-		.AddGroup(B_VERTICAL, 0, 3.0f)
-			.Add(fView)
-			.AddGlue()
-		.End()
+		.Add(fView, 3.0f)
 		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1.0f)
 			.SetInsets(B_USE_WINDOW_SPACING)
 			.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
@@ -345,12 +345,12 @@ CameraWindow::CameraWindow(BRect frame)
 			.Add(fBrightnessSlider)
 			.Add(fContrastSlider)
 			.Add(fSaturationSlider)
-			.AddGlue()
 			.Add(fStatusLabel)
 			.AddGroup(B_HORIZONTAL)
 				.Add(fShutterButton, 3.0f)
 				.Add(fThumbButton, 2.0f)
 			.End()
+			.AddGlue()
 		.End();
 
 	_BuildGraph();
@@ -569,6 +569,11 @@ CameraWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgCameraFrameReshaped:
+			fView->InvalidateLayout();
+			_FitToPicture();
+			break;
+
 		case kMsgFilterChanged:
 		{
 			BString id;
@@ -713,6 +718,29 @@ CameraWindow::_SetMode(int32 mode)
 			break;
 	}
 	_StoreSettings();
+}
+
+
+void
+CameraWindow::FrameResized(float width, float height)
+{
+	BWindow::FrameResized(width, height);
+	_FitToPicture();
+}
+
+
+void
+CameraWindow::_FitToPicture()
+{
+	// The layout centers the preview in whatever height the window has, so
+	// size the window to the picture, down to what the controls need.
+	float viewHeight;
+	fView->GetHeightForWidth(fView->Bounds().Width(), NULL, NULL, &viewHeight);
+	float minWidth, maxWidth, minHeight, maxHeight;
+	GetSizeLimits(&minWidth, &maxWidth, &minHeight, &maxHeight);
+	const float target = std::max(minHeight, viewHeight);
+	if (fabs(target - Bounds().Height()) >= 1)
+		ResizeTo(Bounds().Width(), target);
 }
 
 

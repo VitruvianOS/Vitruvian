@@ -68,7 +68,7 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 	}
 
 	if (reshaped && Window() != NULL)
-		Window()->PostMessage(kMsgCameraFrameReshaped, this);
+		Window()->PostMessage(kMsgCameraFrameReshaped);
 	if (notify && Window() != NULL)
 		Window()->PostMessage(kMsgCameraFrameShown, this);
 }
@@ -134,10 +134,6 @@ CameraView::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgCameraFrameShown:
 			Invalidate();
-			break;
-
-		case kMsgCameraFrameReshaped:
-			InvalidateLayout();
 			break;
 
 		case B_MOUSE_WHEEL_CHANGED:

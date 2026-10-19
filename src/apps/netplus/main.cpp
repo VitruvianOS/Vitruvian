@@ -235,7 +235,6 @@ NetPlusApp::RefsReceived(BMessage* message)
 	if (fReady)
 		OpenWindow(fPwa.startUrl.c_str(), false, &fPwa);
 }
-}
 
 
 void

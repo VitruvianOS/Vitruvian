@@ -35,10 +35,16 @@ run_qemu() {
         [ -d "$_shared_folder" ] || die "shared folder not found: $_shared_folder"
         _extra_drives="$_extra_drives -drive file=fat:rw:$_shared_folder,format=raw,if=virtio"
     fi
-    if [ -n "$_target_disk" ]; then
-        _resolve_disk "$_target_disk"
+    # One path per line, in the order given.
+    _nl='
+'
+    _old_ifs="$IFS"; IFS="$_nl"
+    for _td in $_target_disk; do
+        IFS="$_old_ifs"
+        _resolve_disk "$_td"
         _extra_drives="$_extra_drives -drive file=$_resolved_disk,format=raw,if=virtio,cache=writethrough"
-    fi
+    done
+    IFS="$_old_ifs"
     if [ -n "$_usb_disk" ]; then
         if [ -d "$_usb_disk" ]; then
             _usb_file="fat:rw:$_usb_disk"

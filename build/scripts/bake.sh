@@ -45,7 +45,7 @@ Boot options:
                           (QEMU vvfat FAT disk; rw but fragile under heavy writes).
                           This is a data share, NOT an install target.
   --target-disk=PATH     Attach an existing disk image as an install target
-                          (make one with `bake create disk`). This is what the
+                          (make one with `bake create disk`); repeat for more. This is what the
                           Installer sees as a destination volume.
   --usb-disk=PATH        Attach PATH as a removable USB stick. A directory is
                           exposed via vvfat; a file or block device is a raw disk.
@@ -160,7 +160,8 @@ cmd_build() {
                 _usb_disk="${arg#*=}"
                 ;;
             --target-disk=*)
-                _target_disk="${arg#*=}"
+                _target_disk="${_target_disk:+$_target_disk
+}${arg#*=}"
                 ;;
             --help|-h)
                 usage
@@ -351,7 +352,8 @@ cmd_boot() {
                 _usb_disk="${arg#*=}"
                 ;;
             --target-disk=*)
-                _target_disk="${arg#*=}"
+                _target_disk="${_target_disk:+$_target_disk
+}${arg#*=}"
                 ;;
             --help|-h)
                 usage

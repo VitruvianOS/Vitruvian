@@ -19,6 +19,7 @@
 #include <Menu.h>
 #include <MenuItem.h>
 #include <Message.h>
+#include <MessageRunner.h>
 #include <Messenger.h>
 #include <Path.h>
 #include <Region.h>
@@ -45,6 +46,8 @@
 
 // Used from the stub MessageReceived too, so keep it outside HAS_WPE.
 static const uint32 kMsgFrameReady = 'wfrm';
+static const uint32 kMsgResizeSettled = 'wrsz';
+static const bigtime_t kResizeSettleDelay = 150000;
 
 #ifdef HAS_WPE
 #include "clipboard_dragdrop.h"
@@ -210,6 +213,7 @@ struct BWebView::WebViewImpl {
 	WebKitBridge*		fBridge;
 	int					fPixelWidth;
 	int					fPixelHeight;
+	int32				fResizeGeneration;
 	ClipboardDragDrop*	fClipboard;
 	SessionAdapter*		fSession;
 	bool				fOwnsSession;
@@ -254,6 +258,7 @@ struct BWebView::WebViewImpl {
 		fBridge(NULL),
 		fPixelWidth(0),
 		fPixelHeight(0),
+		fResizeGeneration(0),
 		fClipboard(NULL),
 		fSession(NULL),
 		fOwnsSession(false),
@@ -910,7 +915,12 @@ BWebView::FrameResized(float width, float height)
 	BView::FrameResized(width, height);
 
 #ifdef HAS_WPE
-	sync_view_size(this, fImpl);
+	// Every size WebKit sees can make a page re-pick its video resolution
+	// and rebuild the pipeline, so pass on only the size a drag settles
+	// at; until then Draw shows the last frame.
+	BMessage settled(kMsgResizeSettled);
+	settled.AddInt32("generation", ++fImpl->fResizeGeneration);
+	BMessageRunner::StartSending(BMessenger(this), &settled, kResizeSettleDelay, 1);
 #endif
 }
 
@@ -919,6 +929,17 @@ void
 BWebView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case kMsgResizeSettled:
+		{
+#ifdef HAS_WPE
+			int32 generation;
+			if (message->FindInt32("generation", &generation) == B_OK
+				&& generation == fImpl->fResizeGeneration)
+				sync_view_size(this, fImpl);
+#endif
+			break;
+		}
+
 		case kMsgFrameReady:
 			// Drain the coalescing pipe before redrawing so the
 			// next burst posts a fresh message.
@@ -1990,7 +2011,9 @@ BWebView::NotifyFullScreen(bool entered)
 	if (fImpl->fBridge == NULL)
 		return;
 
-	// The size must reach WebKit before the transition is reported.
+	// The size must reach WebKit before the transition is reported; a
+	// pending settle timer would only repeat it.
+	fImpl->fResizeGeneration++;
 	sync_view_size(this, fImpl);
 	if (entered)
 		fImpl->fBridge->NotifyDidEnterFullscreen();

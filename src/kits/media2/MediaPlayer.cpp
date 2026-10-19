@@ -125,6 +125,8 @@ private:
 	void _StartVideoRunner();
 	void _StopVideoRunner();
 	void _ResetVideoPacing();
+	void _ResetClock(bigtime_t base)
+		{ fClockBase = base; fPlayedFrames = 0; }
 
 	void _SetState(BMediaPlayer::player_state s);
 	void _PostNotification(uint32 what);
@@ -166,6 +168,11 @@ private:
 	std::atomic<bool>	fEOS;
 	uint32				fFrameStride;
 	bigtime_t			fDuration;
+	// Played-audio clock: the seek point plus frames handed to the server.
+	// The pipeline position runs ahead with unsynced sinks.
+	std::atomic<bigtime_t>	fClockBase;
+	std::atomic<int64>	fPlayedFrames;
+	float				fAudioRate;
 	BMessenger			fTarget;
 	bool				fHasTarget;
 };
@@ -206,6 +213,9 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fEOS(false),
 	fFrameStride(0),
 	fDuration(0),
+	fClockBase(0),
+	fPlayedFrames(0),
+	fAudioRate(0.0f),
 	fHasTarget(false)
 {
 	fFormat.SetToDefault();
@@ -302,6 +312,7 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	fEOS   = false;
 	fDuration = 0;
 	fFrameStride = 0;
+	_ResetClock(0);
 	fVideoStride = 0;
 	fVideoBufferSize = 0;
 	delete[] fVideoBuffer;
@@ -333,6 +344,7 @@ BMediaPlayer::Impl::SetTo(const BUrl& url)
 	fEOS   = false;
 	fDuration = 0;
 	fFrameStride = 0;
+	_ResetClock(0);
 	fVideoStride = 0;
 	fVideoBufferSize = 0;
 	delete[] fVideoBuffer;
@@ -396,6 +408,7 @@ BMediaPlayer::Impl::_FinishSetTo()
 		const media_raw_audio_format& raw = audioFmt.format.u.raw_audio;
 		fFrameStride = (raw.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
 			* raw.channel_count;
+		fAudioRate = raw.frame_rate;
 		fDuration = fTrack->Duration();
 		err = SetFormat(audioFmt);
 	} else {
@@ -446,6 +459,7 @@ BMediaPlayer::Impl::Play()
 		if (fVideoTrack != NULL)
 			fVideoTrack->SeekToTime(&t);
 		_ResetVideoPacing();
+		_ResetClock(0);
 		fEOS = false;
 	}
 	fHasData = true;
@@ -497,6 +511,7 @@ BMediaPlayer::Impl::Stop()
 	if (fVideoTrack != NULL)
 		fVideoTrack->SeekToTime(&t);
 	_ResetVideoPacing();
+	_ResetClock(0);
 	fEOS = false;
 	return B_OK;
 }
@@ -519,7 +534,9 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 		status_t err = B_OK;
 		if (fTrack != NULL)
 			err = fTrack->SeekToTime(&t, flags);
-		if (err == B_OK && fVideoTrack != NULL) {
+		// Both tracks share one pipeline; a second flushing seek only
+		// restarts the first.
+		if (err == B_OK && fVideoTrack != NULL && fTrack == NULL) {
 			bigtime_t videoT = position;
 			err = fVideoTrack->SeekToTime(&videoT, flags);
 		}
@@ -527,6 +544,7 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 			return err;
 		// The pending frame, if any, is from before the seek.
 		_ResetVideoPacing();
+		_ResetClock(fTrack != NULL ? t : position);
 		fEOS = false;
 	}
 	if (resume) {
@@ -548,6 +566,8 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 bigtime_t
 BMediaPlayer::Impl::Position() const
 {
+	if (fTrack != NULL && fAudioRate > 0.0f)
+		return fClockBase + (bigtime_t)(fPlayedFrames * 1000000.0 / fAudioRate);
 	if (fTrack != NULL)
 		return fTrack->CurrentTime();
 	if (fVideoTrack != NULL)
@@ -687,7 +707,7 @@ BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 				clockNow = system_time();
 				allowDrop = false;
 			} else if (haveAudio) {
-				clockNow = fTrack->CurrentTime();
+				clockNow = Position();
 			} else {
 				// Timestamps are file-relative: map them onto
 				// the system clock at the first pull after
@@ -826,6 +846,8 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 	int64 wantFrames = size / fFrameStride;
 	int64 gotFrames  = wantFrames;
 	status_t err = fTrack->ReadFrames(buffer, &gotFrames);
+	if ((err == B_OK || err == B_LAST_BUFFER_ERROR) && gotFrames > 0)
+		fPlayedFrames += gotFrames;
 
 	if (err == B_LAST_BUFFER_ERROR) {
 		fEOS = true;

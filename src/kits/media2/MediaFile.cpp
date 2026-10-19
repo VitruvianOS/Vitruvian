@@ -1213,17 +1213,25 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 		}
 	}
 
+	GstAppSink* sink = GST_APP_SINK(fImpl->fAppSink);
+	// A seek through a sibling track on the shared pipeline clears the
+	// sink's EOS without touching this track's flag.
+	if (fImpl->fEOS && !gst_app_sink_is_eos(sink))
+		fImpl->fEOS = false;
 	if (fImpl->fEOS)
 		return B_LAST_BUFFER_ERROR;
 
-	GstAppSink* sink = GST_APP_SINK(fImpl->fAppSink);
-	GstSample* sample = gst_app_sink_pull_sample(sink);
+	// Video is pulled from window threads: wait briefly, never forever. A
+	// frame that is not decoded yet is picked up on the next tick.
+	GstSample* sample = fImpl->fKind == kTrackVideo
+		? gst_app_sink_try_pull_sample(sink, 20 * GST_MSECOND)
+		: gst_app_sink_pull_sample(sink);
 	if (sample == NULL) {
 		if (gst_app_sink_is_eos(sink)) {
 			fImpl->fEOS = true;
 			return B_LAST_BUFFER_ERROR;
 		}
-		return B_ERROR;
+		return fImpl->fKind == kTrackVideo ? B_WOULD_BLOCK : B_ERROR;
 	}
 
 	GstBuffer* gb = gst_sample_get_buffer(sample);

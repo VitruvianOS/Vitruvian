@@ -28,6 +28,7 @@ if(PKG_CONFIG_FOUND)
 			private/CompositorAdapter.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
+			private/DownloadSanitizer.cpp
 			private/EventAdapter.cpp
 			private/FocusAndCursor.cpp
 			private/FrameNotifier.cpp

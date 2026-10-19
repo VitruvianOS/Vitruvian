@@ -168,14 +168,6 @@ public:
 		static const char* const kPeakMeterNodeName;
 
 		enum {
-			kMsgDevicesChanged      = 'PWDC',
-			kMsgStreamsChanged      = 'PWSC',
-			kMsgDefaultChanged      = 'PWDF',
-			kMsgDeviceVolumeChanged = 'PWVC',
-
-			kMsgDevicePortChanged   = 'PWPC',
-			kMsgDeviceProfileChanged= 'PWPF',
-
 			kMsgMidiNodesChanged    = 'PWMC'
 		};
 
@@ -189,7 +181,8 @@ public:
 		};
 		std::vector<MidiNodeInfo>	MidiNodes();
 
-		void					AddWatcher(const BMessenger& target);
+		void					AddWatcher(const BMessenger& target,
+									int32 notificationMask);
 		void					RemoveWatcher(const BMessenger& target);
 
 		void					_Broadcast(uint32 what, uint32 deviceId = 0);

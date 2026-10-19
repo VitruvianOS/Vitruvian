@@ -465,7 +465,7 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 	}
 
 	if (streamChanged)
-		_Broadcast(kMsgStreamsChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 
 	if (midiChanged)
 		_Broadcast(kMsgMidiNodesChanged, id);
@@ -2374,7 +2374,7 @@ PipeWireBackend::SetDeviceVolume(uint32 deviceId,
 				return B_ERROR;
 			}
 
-			_Broadcast(kMsgDeviceVolumeChanged, deviceId);
+			_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
 			return B_OK;
 		}
 	}
@@ -2522,7 +2522,7 @@ PipeWireBackend::SetDeviceMute(uint32 deviceId, bool mute)
 				return B_ERROR;
 			}
 
-			_Broadcast(kMsgDeviceVolumeChanged, deviceId);
+			_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
 			return B_OK;
 		}
 	}

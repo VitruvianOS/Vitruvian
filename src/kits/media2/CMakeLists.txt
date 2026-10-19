@@ -43,7 +43,7 @@ AddOn(media2
 	LIBS be root shared
 )
 
-UsePrivateHeaders(media2 app support storage shared)
+UsePrivateHeaders(media2 media2 app support storage shared)
 
 # PipeWire / SPA / GStreamer / fluidsynth headers and libraries
 target_include_directories(media2 PRIVATE

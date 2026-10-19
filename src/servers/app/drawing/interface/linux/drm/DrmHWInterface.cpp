@@ -668,8 +668,8 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		// _BlendCursor reads fRenderBuffer as its source, and window
 		// draw threads paint into that buffer under the parallel (read)
 		// lock, so blending after the unlock raced
-		// Painter::FillRectNoClipping on the same bytes (the #303
-		// buffer-lifetime class, render side). The write lock excludes
+		// Painter::FillRectNoClipping on the same bytes (a
+		// buffer-lifetime race, render side). The write lock excludes
 		// those readers; the lock order write -> overlays is safe
 		// because no path takes fFloatingOverlaysLock and then the
 		// mode lock.

@@ -75,7 +75,7 @@ SHIMEOF
 /* Minimal freestanding stdint.h for BL301 scp_task. Debian's
  * gcc-arm-none-eabi ships none and newlib is unavailable in the build
  * image; types come from GCC builtin macros so they match the target.
- * Written by fip.sh compat (fleet, 2026-10-18). */
+ * Written by the fip.sh compatibility path. */
 #ifndef VOS_SCP_STDINT_H
 #define VOS_SCP_STDINT_H
 typedef __INT8_TYPE__ int8_t;

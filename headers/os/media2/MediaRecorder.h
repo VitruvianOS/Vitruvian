@@ -91,7 +91,7 @@ public:
 									float quality = -1.0f);
 		void				ClearOutputFile();
 
-		// True when a GStreamer encoder for 'encoding' (media_codec_type)
+		// True when an encoder for 'encoding' (media_codec_type)
 		// is present; menus can grey out the rest.
 		static	bool		IsEncodingAvailable(int32 encoding);
 

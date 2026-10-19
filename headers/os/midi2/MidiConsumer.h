@@ -130,7 +130,7 @@ private:
 };
 
 // Internal BMidiInput that forwards media2 RT hooks onto the consumer's
-// own delivery thread. Never runs user hooks on the PipeWire data thread.
+// own delivery thread. Never runs user hooks on the data thread.
 class BMidiInputBridge;
 
 #endif // _MIDI_CONSUMER_H

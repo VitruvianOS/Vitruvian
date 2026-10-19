@@ -12,7 +12,6 @@ AddOn(equalizer SHARED
 UsePrivateHeaders(equalizer media2 shared)
 target_include_directories(equalizer PRIVATE
 	${PIPEWIRE_INCLUDES}
-	${SPA_INCLUDES}
 )
 target_link_libraries(equalizer PRIVATE
 	${PIPEWIRE_LIBRARIES}

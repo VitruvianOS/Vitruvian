@@ -14,9 +14,24 @@
 #include <pipewire/filter.h>
 #include <pipewire/loop.h>
 #include <spa/param/audio/format.h>
+#include <spa/param/props.h>
+#include <spa/utils/type.h>
 #include <spa/pod/builder.h>
 
 #include "PipeWireBackend.h"
+
+
+// The public property constants are the SPA values.
+static_assert((int)B_MEDIA_PROP_CUSTOM_BASE == (int)SPA_PROP_START_CUSTOM,
+	"custom property base");
+static_assert((int)B_MEDIA_PROP_BOOL == (int)SPA_TYPE_Bool
+	&& (int)B_MEDIA_PROP_ID == (int)SPA_TYPE_Id
+	&& (int)B_MEDIA_PROP_INT32 == (int)SPA_TYPE_Int
+	&& (int)B_MEDIA_PROP_INT64 == (int)SPA_TYPE_Long
+	&& (int)B_MEDIA_PROP_FLOAT == (int)SPA_TYPE_Float
+	&& (int)B_MEDIA_PROP_DOUBLE == (int)SPA_TYPE_Double
+	&& (int)B_MEDIA_PROP_STRING == (int)SPA_TYPE_String,
+	"property value types");
 
 
 // PipeWire 1.2.0 and later declare this; it is only a property key, and an

@@ -25,8 +25,8 @@ class BMidiChannelFilter;
 // routing is several filters with different masks, each linked to its sink.
 //
 // Channel filter masks and remaps are app-thread state. The filter input's
-// event virtuals run on the PipeWire data thread and only read the mask as an
-// atomic; they never lock or allocate (handoff 12.L L7).
+// event virtuals run on the data thread and only read the mask as an
+// atomic; they never lock or allocate.
 class BMidiChannelFilter : public BMidiUnit {
 public:
 								BMidiChannelFilter(const char* name,
@@ -76,7 +76,7 @@ private:
 
 
 // Bounded SysEx dump collector. Subclasses BMidiInput; SystemExclusive is
-// filled on the PipeWire data thread into a preallocated buffer. Dump() is
+// filled on the data thread into a preallocated buffer. Dump() is
 // app-thread only and returns what has been collected since the last Reset().
 class BMidiSysExCollector : public BMidiInput {
 public:

@@ -83,7 +83,7 @@ private:
 	bool fIsRegistered;
 	bool fIsAlive;
 
-	// media2 realisation: one PipeWire node (BMidiUnit) per endpoint.
+	// media2 realisation: one graph node (BMidiUnit) per endpoint.
 	BMidiUnit* fUnit;
 
 	uint32 _reserved[4];

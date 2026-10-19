@@ -552,7 +552,9 @@ BCameraSource::_StartConnections(void* backendPtr)
 	static pw_stream_events events;
 	events = kCameraStreamEvents;
 	events.process = &BCameraSource::_OnProcess;
-	events.param_changed = &BCameraSource::_OnParamChanged;
+	events.param_changed = [](void* data, uint32 id, const spa_pod* param) {
+		BCameraSource::_OnParamChanged(data, id, param);
+	};
 
 	pw_stream* stream = backend->CreateAndConnectStream(
 		streamName.String(), PW_DIRECTION_INPUT, format,
@@ -729,8 +731,9 @@ BCameraSource::_DiagFrame(const uint8* data, size_t size, uint32 stride,
 
 
 void
-BCameraSource::_OnParamChanged(void* data, uint32 id, const struct spa_pod* param)
+BCameraSource::_OnParamChanged(void* data, uint32 id, const void* paramData)
 {
+	const spa_pod* param = (const spa_pod*)paramData;
 	BCameraSource* self = (BCameraSource*)data;
 	if (self == NULL || id != SPA_PARAM_Format || param == NULL)
 		return;
@@ -883,16 +886,6 @@ BCameraSource::_SaveControls()
 	}
 	settings.SetDevice(info, &controls);
 	settings.Save();
-}
-
-
-uint32
-BCameraSource::_SpaPropId(int32 id) const
-{
-	uint32 prop = _CameraSpaProp(id);
-	if (prop == 0)
-		prop = _CameraSpaPropAlt(id);
-	return prop;
 }
 
 

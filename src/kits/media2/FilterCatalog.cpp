@@ -17,6 +17,8 @@
 #include <media2/AudioFilter.h>
 #include <media2/VideoFilter.h>
 
+#include <FilterCatalogPrivate.h>
+
 
 namespace {
 
@@ -224,11 +226,11 @@ BFilterCatalog::CreateAudioUnit(const Entry& entry)
 }
 
 
-/* static */ status_t
-BFilterCatalog::RegisterCustomFilter(const char* id, const char* name,
-	const char* kind, const char* gstDescription)
+status_t
+BPrivate::media::RegisterCustomFilter(const char* id, const char* name,
+	const char* kind, const char* description)
 {
-	if (id == NULL || kind == NULL || gstDescription == NULL)
+	if (id == NULL || kind == NULL || description == NULL)
 		return B_BAD_VALUE;
 	if (strcmp(kind, "video") != 0 && strcmp(kind, "audio") != 0)
 		return B_BAD_VALUE;
@@ -238,7 +240,7 @@ BFilterCatalog::RegisterCustomFilter(const char* id, const char* name,
 	custom.id = id;
 	custom.name = name != NULL ? name : id;
 	custom.kind = kind;
-	custom.description = gstDescription;
+	custom.description = description;
 	sCustomFilters.push_back(custom);
 	return B_OK;
 }

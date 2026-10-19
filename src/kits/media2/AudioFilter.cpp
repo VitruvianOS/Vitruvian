@@ -72,7 +72,7 @@ protected:
 
 
 BAudioFilterUnit::BAudioFilterUnit(const char* name,
-	const char* gstDescription)
+	const char* description)
 	:
 	BMediaClient(name != NULL ? name : "AudioFilter",
 		(media_client_kinds)(B_MEDIA_FILTER | B_MEDIA_CONTROLLABLE)),
@@ -99,7 +99,7 @@ BAudioFilterUnit::BAudioFilterUnit(const char* name,
 	}
 
 	fCore = new(std::nothrow) BPrivate::media::FilterUnitCore(
-		name != NULL ? name : "AudioFilter", gstDescription,
+		name != NULL ? name : "AudioFilter", description,
 		B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO), &BAudioFilterUnit::_ForwardThunk,
 		this);
 }

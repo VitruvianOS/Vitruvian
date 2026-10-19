@@ -13,7 +13,7 @@
 class BAudioFilterUnit : public BMediaClient {
 public:
 								BAudioFilterUnit(const char* name,
-									const char* gstDescription);
+									const char* description);
 	virtual						~BAudioFilterUnit();
 
 			status_t			InitCheck() const;

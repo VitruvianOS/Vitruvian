@@ -17,7 +17,7 @@ struct media_encode_info {
 };
 
 
-// Encoder wrapper over a GStreamer encoder element. The raw input format
+// Encoder wrapper over a codec backend. The raw input format
 // comes from the output format's embedded raw parameters (or SetFormat).
 // Each encoded chunk leaves through the WriteChunk() hook, so a subclass
 // can pipe it into a BMediaFile track or collect it in a buffer.

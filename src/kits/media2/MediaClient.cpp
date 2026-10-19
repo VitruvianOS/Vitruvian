@@ -16,6 +16,8 @@
 #include <pipewire/loop.h>
 #include <pipewire/stream.h>
 
+#include <MediaClientPrivate.h>
+
 #include "PipeWireBackend.h"
 
 
@@ -353,9 +355,9 @@ BMediaClient::_StreamFault(BMediaConnection*)
 
 
 const pw_stream_events*
-BMediaClient::_GetStreamEvents()
+ClientAccess::StreamEvents()
 {
-	return &Impl::kStreamEvents;
+	return &BMediaClient::Impl::kStreamEvents;
 }
 
 

@@ -89,7 +89,7 @@ public:
 
 	// media2 realisation: the process singleton owning one BSoundFontSynth.
 	// Unlike upstream's process-private BSoundPlayer, ours is a real
-	// PipeWire node: it appears in the mixer, routes anywhere, and can be
+	// graph node: it appears in the mixer, routes anywhere, and can be
 	// played by any MIDI source in the session.
 			BSoundFontSynth*	SoundFont() const;
 

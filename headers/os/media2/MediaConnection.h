@@ -68,8 +68,8 @@ private:
 			size_t					fBufferSize;
 			bool					fConnected;
 
-			// Set by the PipeWire loop thread when the stream died unexpectedly, and consumed later on the
-			// same thread by the deferred fault handler, so the callback itself never allocates or locks.
+			// Set by the realtime thread when the stream died unexpectedly, and consumed later on the
+			// same thread by the deferred fault handler, so the callback never allocates or locks.
 			std::atomic<bool>		fStreamFault;
 
 			void*					fStream;

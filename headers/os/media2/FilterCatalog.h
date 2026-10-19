@@ -23,7 +23,7 @@ public:
 		BString		name;
 		BString		kind;		// "video" or "audio"
 		BString		group;		// "Built-in", "frei0r", "LADSPA", "LV2", "Custom"
-		BString		factory;	// GStreamer factory for plugin entries
+		BString		factory;	// backend factory for plugin entries
 	};
 
 	// kindFilter: "video", "audio" or NULL for both.
@@ -32,11 +32,6 @@ public:
 
 	static	BVideoFilterUnit*	CreateVideoUnit(const Entry& entry);
 	static	BAudioFilterUnit*	CreateAudioUnit(const Entry& entry);
-
-	// Add-on hook: user filters described by a GStreamer element chain.
-	static	status_t			RegisterCustomFilter(const char* id,
-									const char* name, const char* kind,
-									const char* gstDescription);
 };
 
 

@@ -102,7 +102,7 @@ public:
 			status_t				AddOutput(BParameter* output);
 
 			// Set by BControllable when it owns this web; GetValue/SetValue
-			// then route through the controllable (PipeWire when bound).
+			// then route through the controllable (the graph node when bound).
 			void					SetControllable(BControllable* controllable);
 			BControllable*			Controllable() const;
 

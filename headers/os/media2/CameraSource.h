@@ -107,10 +107,8 @@ private:
 
 	static	void				_OnProcess(void* userdata);
 	static	void				_OnParamChanged(void* data, uint32 id,
-									const struct spa_pod* param);
+									const void* param);
 
-			// SPA_PROP id for a control; 0 when the device does not expose it.
-			uint32				_SpaPropId(int32 id) const;
 			void				_QueryDeviceControls();
 			void				_ApplyControlsToDevice();
 			void				_AdoptDeviceValues();

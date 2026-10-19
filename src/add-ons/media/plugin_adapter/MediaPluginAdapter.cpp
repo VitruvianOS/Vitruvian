@@ -14,7 +14,6 @@
 
 #include <media2/ParameterWeb.h>
 
-#include <spa/utils/type.h>
 
 #ifdef VOS_HAS_LILV
 #include <lilv/lilv.h>
@@ -403,7 +402,7 @@ BMediaPluginAdapter::_PublishAndBind()
 		const char* pname = fDescriptor->PortNames != NULL
 			? fDescriptor->PortNames[i] : "param";
 		propNames.push_back(BString(pname));
-		valueTypes.push_back((uint32)SPA_TYPE_Float);
+		valueTypes.push_back((uint32)B_MEDIA_PROP_FLOAT);
 		float lo = 0.0f;
 		float hi = 1.0f;
 		if (fDescriptor->PortRangeHints != NULL) {

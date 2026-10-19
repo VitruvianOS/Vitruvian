@@ -14,7 +14,7 @@ class BVideoFilterUnit : public BMediaClient {
 public:
 								// NULL description = CPU-only unit
 								BVideoFilterUnit(const char* name,
-									const char* gstDescription);
+									const char* description);
 	virtual						~BVideoFilterUnit();
 
 			status_t			InitCheck() const;

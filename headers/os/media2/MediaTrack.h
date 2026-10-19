@@ -68,7 +68,7 @@ public:
 
 
 			// Media Kit 1.0 shape: frameCount is a frame/sample count and
-			// flags carries media_frame_flags. The GStreamer writer path
+			// flags carries media_frame_flags. The writer
 			// ignores flags; it is accepted for source compatibility.
 			status_t			WriteFrames(const void* data, int64 frameCount,
 									int32 flags = 0);

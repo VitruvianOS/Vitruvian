@@ -11,7 +11,7 @@
 #include <SupportDefs.h>
 
 
-// Direction of an endpoint port, from the PipeWire media.class and port
+// Direction of an endpoint port, from the media class and port
 // direction. SOURCE produces MIDI (a keyboard); SINK consumes it (a synth).
 enum midi_endpoint_direction {
 	B_MIDI_ENDPOINT_UNKNOWN	= 0,

@@ -21,7 +21,7 @@ class BParameterWeb;
 class BView;
 
 namespace BPrivate { namespace media {
-class PipeWireBackend;
+class ControllablePrivate;
 } }
 
 
@@ -38,7 +38,7 @@ public:
 			BParameterWeb*			Web() const;
 			status_t				SetParameterWeb(BParameterWeb* web);
 
-	// Bind this controllable to a PipeWire node's SPA_PARAM_PropInfo/Props.
+	// Bind this controllable to a graph node's properties.
 	// Works on any node, including devices and foreign nodes we did not create.
 			status_t				BindNode(uint32 nodeId);
 			status_t				UnbindNode();
@@ -65,8 +65,8 @@ private:
 			change_hook				fChangeHook;
 			void*					fChangeHookCookie;
 
-			// Bound-node state. fLock is inner to PipeWireBackend's lock
-			// (backend lock is always outer when both are taken).
+			// Bound-node state. fLock is inner to the media server
+			// lock (that lock is always outer when both are taken).
 			BLocker					fLock;
 			uint32					fNodeId;
 
@@ -75,7 +75,7 @@ private:
 			ValueEntry*				_FindValue(int32 id) const;
 			void					_ApplyProps(const void* pod);
 
-	friend class BPrivate::media::PipeWireBackend;
+	friend class BPrivate::media::ControllablePrivate;
 };
 
 

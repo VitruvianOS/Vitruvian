@@ -18,6 +18,13 @@
 class BControllable;
 
 
+namespace BPrivate {
+namespace media {
+struct ClientAccess;
+}
+}
+
+
 class BMediaClient {
 public:
 									BMediaClient(const char* name,
@@ -28,8 +35,8 @@ public:
 			const char*				Name() const;
 			media_client_kinds		Kinds() const;
 
-	// True for GStreamer-backed clients that route buffers in-process through
-	// BMediaGraph instead of the PipeWire realtime backend.
+	// True for clients that route buffers in-process through BMediaGraph
+	// instead of the realtime graph.
 	virtual	bool					IsInProcessRouted() const;
 
 			media_type_mask			MediaTypes() const;
@@ -78,16 +85,15 @@ protected:
 	virtual	status_t				_StartConnections(void* backend);
 	virtual	void					_StopConnections();
 
-	// Called when a connection's pw_stream dies while the client is still started (server restart,
+	// Called when a connection's stream dies while the client is still started (server restart,
 	// device reset across a suspend). The default is a no-op; BMediaNode reconnects the stream.
 	virtual	void					_StreamFault(BMediaConnection* connection);
-
-	static const struct pw_stream_events*	_GetStreamEvents();
 
 private:
 			struct Impl;
 			Impl*					fImpl;
 
+	friend struct BPrivate::media::ClientAccess;
 	friend class BMediaNode;
 	friend class BMidiUnit;
 	friend class BSimpleMediaNode;

@@ -14,7 +14,7 @@
 
 
 // Persists the default camera and per-device preferences in Camera_settings.
-// The settings file wins over PipeWire metadata; metadata is a mirror.
+// The settings file wins over the media server's metadata, which is a mirror.
 class BCameraSettings {
 public:
 								BCameraSettings();

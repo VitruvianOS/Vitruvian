@@ -47,7 +47,7 @@ public:
 										outEndpoints);
 
 	// Local connection registry for connect-by-name. The objects must be
-	// started before Connect() can resolve their PipeWire node/port ids.
+	// started before Connect() can resolve their node/port ids.
 			status_t		RegisterLocal(const char* name,
 									BMidiInput* input);
 			status_t		RegisterLocal(const char* name,

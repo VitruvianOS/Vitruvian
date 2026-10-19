@@ -49,12 +49,12 @@ public:
 
 			status_t		InitCheck() const;
 
-			// SPA prop ids for the published parameters.
+			// Property ids for the published parameters.
 	enum {
-		kPropPreAmp	= 0x1000000 + 101,
-		kPropMute	= 0x1000000 + 102,
-		kPropByPass	= 0x1000000 + 103,
-		kPropBands	= 0x1000000 + 300
+		kPropPreAmp	= B_MEDIA_PROP_CUSTOM_BASE + 101,
+		kPropMute	= B_MEDIA_PROP_CUSTOM_BASE + 102,
+		kPropByPass	= B_MEDIA_PROP_CUSTOM_BASE + 103,
+		kPropBands	= B_MEDIA_PROP_CUSTOM_BASE + 300
 	};
 
 protected:

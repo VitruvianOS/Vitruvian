@@ -11,7 +11,6 @@ AddOn(plugin_adapter SHARED
 UsePrivateHeaders(plugin_adapter media2 shared)
 target_include_directories(plugin_adapter PRIVATE
 	${PIPEWIRE_INCLUDES}
-	${SPA_INCLUDES}
 )
 target_link_libraries(plugin_adapter PRIVATE
 	${PIPEWIRE_LIBRARIES}

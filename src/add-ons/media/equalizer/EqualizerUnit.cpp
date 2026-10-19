@@ -13,7 +13,6 @@
 
 #include <media2/ParameterWeb.h>
 
-#include <spa/utils/type.h>
 
 
 static const char* const kBandNames[EQ_BANDS] = {
@@ -167,7 +166,7 @@ EqualizerUnit::_PublishAndBind()
 	int32 n = 0;
 	propIds[n] = kPropPreAmp;
 	propNames[n] = "PreAmp";
-	valueTypes[n] = (uint32)SPA_TYPE_Float;
+	valueTypes[n] = (uint32)B_MEDIA_PROP_FLOAT;
 	minValues[n] = -8.0f;
 	maxValues[n] = 8.0f;
 	steps[n] = 0.1f;
@@ -178,7 +177,7 @@ EqualizerUnit::_PublishAndBind()
 
 	propIds[n] = kPropMute;
 	propNames[n] = "Mute";
-	valueTypes[n] = (uint32)SPA_TYPE_Bool;
+	valueTypes[n] = (uint32)B_MEDIA_PROP_BOOL;
 	minValues[n] = 0.0f;
 	maxValues[n] = 1.0f;
 	steps[n] = 1.0f;
@@ -189,7 +188,7 @@ EqualizerUnit::_PublishAndBind()
 
 	propIds[n] = kPropByPass;
 	propNames[n] = "ByPass";
-	valueTypes[n] = (uint32)SPA_TYPE_Bool;
+	valueTypes[n] = (uint32)B_MEDIA_PROP_BOOL;
 	minValues[n] = 0.0f;
 	maxValues[n] = 1.0f;
 	steps[n] = 1.0f;
@@ -201,7 +200,7 @@ EqualizerUnit::_PublishAndBind()
 	for (int b = 0; b < EQ_BANDS; b++) {
 		propIds[n] = kPropBands + b;
 		propNames[n] = kBandNames[b];
-		valueTypes[n] = (uint32)SPA_TYPE_Float;
+		valueTypes[n] = (uint32)B_MEDIA_PROP_FLOAT;
 		minValues[n] = -16.0f;
 		maxValues[n] = 16.0f;
 		steps[n] = 0.1f;

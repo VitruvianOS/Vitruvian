@@ -62,9 +62,9 @@ public:
 			int32			AudioOutputCount() const;
 			int32			ParameterCount() const;
 
-			// SPA prop ids for control ports.
+			// Property ids for control ports.
 	enum {
-		kPropPortBase = 0x1000000 + 1
+		kPropPortBase = B_MEDIA_PROP_CUSTOM_BASE + 1
 	};
 
 protected:

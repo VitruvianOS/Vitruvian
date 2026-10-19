@@ -41,6 +41,7 @@
 #include <media2/MediaGraph.h>
 
 #include "FormatConversion.h"
+#include <ControllablePrivate.h>
 #include <MediaGraphPrivate.h>
 
 namespace BPrivate { namespace media {
@@ -3018,7 +3019,7 @@ PipeWireBackend::_OnNodeParamWatch(NodeParamWatch* watch, uint32 id,
 	}
 	for (size_t i = 0; i < targets.size(); i++) {
 		if (targets[i] != NULL)
-			targets[i]->_ApplyProps(param);
+			ControllablePrivate::ApplyProps(targets[i], param);
 	}
 }
 

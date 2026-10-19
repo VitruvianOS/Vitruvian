@@ -10,6 +10,23 @@
 #include <media2/MediaClient.h>
 
 
+// Ids of published unit properties; custom ones start at the base.
+enum {
+	B_MEDIA_PROP_CUSTOM_BASE	= 0x1000000
+};
+
+// Value types accepted by PublishNodeParams().
+enum media_prop_type {
+	B_MEDIA_PROP_BOOL	= 2,
+	B_MEDIA_PROP_ID		= 3,
+	B_MEDIA_PROP_INT32	= 4,
+	B_MEDIA_PROP_INT64	= 5,
+	B_MEDIA_PROP_FLOAT	= 6,
+	B_MEDIA_PROP_DOUBLE	= 7,
+	B_MEDIA_PROP_STRING	= 8
+};
+
+
 class BMediaUnit : public BMediaClient {
 public:
 									BMediaUnit(const char* name,
@@ -42,12 +59,12 @@ protected:
 public:
 			void*					_GetFilter() const;
 
-			// PipeWire node id of this unit's filter (0 if not started).
+			// Graph node id of this unit (0 if not started).
 			uint32					NodeId() const;
 
-			// Publish SPA PropInfo/Props on this unit's filter node so
-			// foreign clients and BControllable::BindNode can see them.
-			// Prop ids should use SPA_PROP_START_CUSTOM or higher.
+			// Publish properties on this unit's node so foreign clients and
+			// BControllable::BindNode can see them. Ids start at
+			// B_MEDIA_PROP_CUSTOM_BASE; valueTypes are media_prop_type.
 			status_t				PublishNodeParams(
 										const uint32* propIds,
 										const char* const* names,

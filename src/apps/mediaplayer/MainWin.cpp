@@ -33,6 +33,7 @@
 #include "InfoWin.h"
 #include "LocationStringView.h"
 #include "MediaMessages.h"
+#include "PeakView.h"
 #include "PlaybackState.h"
 #include "Playlist.h"
 #include "PlaylistItem.h"
@@ -127,6 +128,8 @@ MainWin::_SetupWindow()
 		BRect(0, 200, 360, 300), fController, fPlaylist);
 	fControllerView->SetVolume(fController->Volume());
 	fControllerView->SetDisabledString(B_TRANSLATE("Drop files to play"));
+	if (PeakView* peaks = fControllerView->GetPeakView())
+		peaks->SetPeakNotificationWhat(BMediaPlayer::B_PLAYER_PEAKS);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.SetInsets(0)
@@ -840,8 +843,16 @@ MainWin::MessageReceived(BMessage* message)
 			_PollPosition();
 			break;
 
+		case BMediaPlayer::B_PLAYER_PEAKS:
+			if (PeakView* peaks = fControllerView->GetPeakView())
+				peaks->MessageReceived(message);
+			break;
+
 		case MSG_CONTROLLER_STATE:
 		case MSG_CONTROLLER_DURATION:
+			if (fController != NULL)
+				fControllerView->SetAudioChannelCount(
+					fController->AudioChannels());
 			_UpdateTransport();
 			_PollPosition();
 			break;

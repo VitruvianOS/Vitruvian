@@ -125,6 +125,8 @@ private:
 	void _StartVideoRunner();
 	void _StopVideoRunner();
 	void _ResetVideoPacing();
+	void _PostPeaks(const float* samples, int64 frames,
+		const media_raw_audio_format& format);
 	void _ResetClock(bigtime_t base)
 		{ fClockBase = base; fPlayedFrames = 0; }
 
@@ -173,6 +175,8 @@ private:
 	std::atomic<bigtime_t>	fClockBase;
 	std::atomic<int64>	fPlayedFrames;
 	float				fAudioRate;
+	bigtime_t			fLastPeakPost;
+	float				fPeaks[8];
 	BMessenger			fTarget;
 	bool				fHasTarget;
 };
@@ -216,8 +220,10 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fClockBase(0),
 	fPlayedFrames(0),
 	fAudioRate(0.0f),
+	fLastPeakPost(0),
 	fHasTarget(false)
 {
+	memset(fPeaks, 0, sizeof(fPeaks));
 	fFormat.SetToDefault();
 
 	fNode = new(std::nothrow) BSimpleMediaNode("BMediaPlayer",
@@ -882,6 +888,43 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 				samples[i] *= fVolume;
 		}
 	}
+
+	_PostPeaks((const float*)buffer, gotFrames, format);
+}
+
+
+// Per-channel peaks for level meters, about 25 times a second.
+void
+BMediaPlayer::Impl::_PostPeaks(const float* samples, int64 frames,
+	const media_raw_audio_format& format)
+{
+	if (!fHasTarget || frames <= 0
+		|| (format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
+			!= media_raw_audio_format::B_AUDIO_FLOAT)
+		return;
+
+	const uint32 channels = format.channel_count < 8 ? format.channel_count : 8;
+	for (int64 f = 0; f < frames; f++) {
+		for (uint32 c = 0; c < channels; c++) {
+			float v = samples[f * format.channel_count + c];
+			if (v < 0)
+				v = -v;
+			if (v > fPeaks[c])
+				fPeaks[c] = v;
+		}
+	}
+
+	const bigtime_t now = system_time();
+	if (now - fLastPeakPost < 40000)
+		return;
+	fLastPeakPost = now;
+
+	BMessage msg(BMediaPlayer::B_PLAYER_PEAKS);
+	for (uint32 c = 0; c < channels; c++) {
+		msg.AddFloat("max", fPeaks[c]);
+		fPeaks[c] = 0;
+	}
+	fTarget.SendMessage(&msg);
 }
 
 

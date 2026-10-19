@@ -33,7 +33,8 @@ public:
 		B_PLAYER_DURATION_CHANGED  = 'pldc',
 		B_PLAYER_ERROR             = 'pler',
 		B_PLAYER_END_OF_STREAM     = 'pleo',
-		B_PLAYER_VIDEO_FRAME       = 'plvf'
+		B_PLAYER_VIDEO_FRAME       = 'plvf',
+		B_PLAYER_PEAKS             = 'plpk'
 	};
 
 	enum sound_player_notification {

@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 #ifndef _MEDIA2_CAMERA_SETTINGS_H

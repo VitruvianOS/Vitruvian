@@ -27,7 +27,7 @@ class BMidiOutput;
 // are visible only after RegisterLocal().
 //
 // App thread only. Every method that can block on a graph round-trip must not
-// be called from a ProcessCallback/ProcessCycle (handoff 12.L L6).
+// be called from a ProcessCallback/ProcessCycle.
 class BMidiRosterExt {
 public:
 	static	BMidiRosterExt*	Instance();

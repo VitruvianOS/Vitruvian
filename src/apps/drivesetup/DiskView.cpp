@@ -28,6 +28,7 @@
 #include "icons.h"
 #include "EncryptionUtils.h"
 #include "MainWindow.h"
+#include "Support.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -357,9 +358,18 @@ public:
 		if (name.Length() == 0) {
 			if (partition->CountChildren() > 0)
 				name << partition->Type();
-			else
-				name.SetToFormat(B_TRANSLATE("Partition %" B_PRIdDEV),
-					partition->ID());
+			else {
+				BPath path;
+				if (partition->GetPath(&path) == B_OK)
+					name = path.Leaf();
+				else {
+					name.SetToFormat(B_TRANSLATE("Partition %" B_PRIdDEV),
+						partition->ID());
+				}
+				char sizeString[64];
+				name << " (" << string_for_size(partition->Size(), sizeString,
+					sizeof(sizeString)) << ")";
+			}
 		}
 		partition_id id = partition->ID();
 		PartitionView* view = new PartitionView(name.String(), scale, offset,

@@ -1,5 +1,5 @@
-// Live media only. Grants the installer action to whichever user is logged
-// into the live session -- no username or subject.active/local check, because
+// Live media only. Grants the installer and DriveSetup actions to whichever
+// user is logged into the live session -- no username or subject.active/local check, because
 // VOS runs its desktop via janus (not a logind graphical session) and the live
 // operator may be vos-live, vos_login, or any configured default user.
 //
@@ -9,7 +9,8 @@
 //      auth_admin in org.vitruvian.installer.policy.
 //   2. The helper also refuses --full-install unless /etc/vos/live exists.
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.vitruvian.installer.write-target") {
+    if (action.id == "org.vitruvian.installer.write-target"
+        || action.id == "org.vitruvian.drivesetup.modify-partitions") {
         return polkit.Result.YES;
     }
 });

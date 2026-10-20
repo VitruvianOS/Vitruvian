@@ -14,6 +14,8 @@
 #include "Support.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <strings.h>
 
 #include <Catalog.h>
 #include <Locale.h>
@@ -27,6 +29,70 @@
 
 static const int32 kMaxSliderLimit = 0x7fffff80;
 	// this is the maximum value that BSlider seem to work with fine
+
+
+namespace {
+
+struct TypeName {
+	const char*	key;
+	const char*	label;
+};
+
+const TypeName kShortNames[] = {
+	{ "linux", B_TRANSLATE_MARK("Linux filesystem") },
+	{ "esp", B_TRANSLATE_MARK("EFI System Partition") },
+	{ "linux_swap", B_TRANSLATE_MARK("Linux swap") },
+	{ "bios_boot", B_TRANSLATE_MARK("BIOS boot") }
+};
+
+const TypeName kRawTypes[] = {
+	{ "0x83", B_TRANSLATE_MARK("Linux filesystem") },
+	{ "0x82", B_TRANSLATE_MARK("Linux swap") },
+	{ "0xef", B_TRANSLATE_MARK("EFI System Partition") },
+	{ "0x07", B_TRANSLATE_MARK("NTFS/exFAT") },
+	{ "0x0b", B_TRANSLATE_MARK("FAT32") },
+	{ "0x0c", B_TRANSLATE_MARK("FAT32 (LBA)") },
+	{ "0x05", B_TRANSLATE_MARK("Extended partition") },
+	{ "0x0f", B_TRANSLATE_MARK("Extended partition (LBA)") },
+	{ "0x8e", B_TRANSLATE_MARK("Linux LVM") },
+	{ "0xfd", B_TRANSLATE_MARK("Linux RAID") },
+	{ "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+		B_TRANSLATE_MARK("EFI System Partition") },
+	{ "0fc63daf-8483-4772-8e79-3d69d8477de4",
+		B_TRANSLATE_MARK("Linux filesystem") },
+	{ "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f", B_TRANSLATE_MARK("Linux swap") },
+	{ "21686148-6449-6e6f-744e-656564454649", B_TRANSLATE_MARK("BIOS boot") },
+	{ "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7",
+		B_TRANSLATE_MARK("Microsoft basic data") },
+	{ "e6d6d379-f507-44c2-a23c-238f2a3df928", B_TRANSLATE_MARK("Linux LVM") },
+	{ "933ac7e1-2eb4-4f13-b844-0e14e2aef915", B_TRANSLATE_MARK("Linux /home") }
+};
+
+}	// namespace
+
+
+BString
+partition_type_label(const char* name)
+{
+	for (size_t i = 0; i < sizeof(kShortNames) / sizeof(kShortNames[0]); i++) {
+		if (name != NULL && strcmp(name, kShortNames[i].key) == 0)
+			return B_TRANSLATE_NOCOLLECT(kShortNames[i].label);
+	}
+	return name != NULL ? name : "";
+}
+
+
+BString
+partition_type_display_name(const char* type)
+{
+	if (type == NULL)
+		return "";
+	for (size_t i = 0; i < sizeof(kRawTypes) / sizeof(kRawTypes[0]); i++) {
+		if (strcasecmp(type, kRawTypes[i].key) == 0)
+			return B_TRANSLATE_NOCOLLECT(kRawTypes[i].label);
+	}
+	return "";
+}
 
 
 void

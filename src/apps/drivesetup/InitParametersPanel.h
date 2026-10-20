@@ -21,6 +21,16 @@ public:
 	virtual						~InitParametersPanel();
 
 			status_t			Go(BString& name, BString& parameters);
+
+protected:
+	virtual bool				NeedsEditor() const;
+	virtual status_t			ParametersReceived(BString& parameters,
+									BMessage& storage);
+	virtual	void				AddControls(BLayoutBuilder::Group<>& builder,
+									BView* editorView);
+
+private:
+			BTextControl*		fNameTextControl;
 };
 
 

@@ -88,15 +88,17 @@ CreateParametersPanel::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case MSG_SIZE_SLIDER:
 			_UpdateSizeTextControl();
+			fOkButton->SetEnabled(true);
 			break;
 
 		case MSG_SIZE_TEXTCONTROL:
 		{
 			off_t size = strtoll(fSizeTextControl->Text(), NULL, 10) * kMegaByte;
-			if (size >= 0 && size <= fSizeSlider->MaxPartitionSize())
+			if (size > 0 && size <= fSizeSlider->MaxPartitionSize()) {
 				fSizeSlider->SetSize(size);
-			else
-				_UpdateSizeTextControl();
+				fOkButton->SetEnabled(true);
+			} else
+				fOkButton->SetEnabled(false);
 			break;
 		}
 
@@ -114,20 +116,27 @@ CreateParametersPanel::NeedsEditor() const
 
 
 status_t
-CreateParametersPanel::ParametersReceived(const BString& parameters,
+CreateParametersPanel::ParametersReceived(BString& parameters,
 	BMessage& storage)
 {
 	off_t offset = fSizeSlider->Offset();
 	off_t size = fSizeSlider->Size();
 
+	// Clicking Create leaves the box focused, so a typed size is unapplied.
+	off_t typed = strtoll(fSizeTextControl->Text(), NULL, 10) * kMegaByte;
+	if (typed > 0 && typed <= fSizeSlider->MaxPartitionSize())
+		size = typed;
+
 	off_t alignedOffset = _AlignOffset(offset);
-	if (alignedOffset > offset) {
-		off_t delta = alignedOffset - offset;
-		size -= delta;
-		if (size < 0)
-			size = 0;
+	if (alignedOffset > offset)
 		offset = alignedOffset;
-	}
+
+	// keep the requested size; only clamp to the end of the free range
+	off_t end = fSizeSlider->Offset() + fSizeSlider->MaxPartitionSize();
+	if (offset + size > end)
+		size = end - offset;
+	if (size < 0)
+		size = 0;
 
 	// Return the value back as bytes.
 	status_t status = storage.SetInt64("size", size);
@@ -173,14 +182,14 @@ CreateParametersPanel::_CreateCreateControls(BPartition* parent, off_t offset,
 	fSizeSlider->SetPosition(1.0);
 	fSizeSlider->SetModificationMessage(new BMessage(MSG_SIZE_SLIDER));
 
-	fSizeTextControl = new BTextControl("Size Control", "", "", NULL);
+	fSizeTextControl = new BTextControl("Size Control",
+		B_TRANSLATE("Size (MiB):"), "", new BMessage(MSG_SIZE_TEXTCONTROL));
+	fSizeTextControl->SetTarget(this);
 	for(int32 i = 0; i < 256; i++)
 		fSizeTextControl->TextView()->DisallowChar(i);
 	for(int32 i = '0'; i <= '9'; i++)
 		fSizeTextControl->TextView()->AllowChar(i);
 	_UpdateSizeTextControl();
-	fSizeTextControl->SetModificationMessage(
-		new BMessage(MSG_SIZE_TEXTCONTROL));
 
 	fAlign1MiBRadio = new BRadioButton("align1MiB",
 		B_TRANSLATE("1 MiB boundary"), NULL);

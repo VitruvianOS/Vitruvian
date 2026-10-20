@@ -130,7 +130,7 @@ ChangeParametersPanel::CreateChangeControls(BPartition* partition,
 			== B_OK) {
 			BMessage* message = new BMessage(MSG_PARTITION_TYPE);
 			message->AddString("type", supportedType);
-			BMenuItem* item = new BMenuItem(supportedType, message);
+			BMenuItem* item = new BMenuItem(partition_type_label(supportedType), message);
 			fTypePopUpMenu->AddItem(item);
 
 			if (type != NULL) {
@@ -170,7 +170,7 @@ ChangeParametersPanel::ValidWithoutEditor() const
 
 
 status_t
-ChangeParametersPanel::ParametersReceived(const BString& parameters,
+ChangeParametersPanel::ParametersReceived(BString& parameters,
 	BMessage& storage)
 {
 	// get name

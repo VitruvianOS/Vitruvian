@@ -228,7 +228,7 @@ AbstractParametersPanel::ValidWithoutEditor() const
 }
 
 status_t
-AbstractParametersPanel::ParametersReceived(const BString& parameters,
+AbstractParametersPanel::ParametersReceived(BString& parameters,
 	BMessage& storage)
 {
 	return B_OK;

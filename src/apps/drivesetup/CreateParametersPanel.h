@@ -41,7 +41,7 @@ public:
 
 protected:
 	virtual bool				NeedsEditor() const;
-	virtual status_t			ParametersReceived(const BString& parameters,
+	virtual status_t			ParametersReceived(BString& parameters,
 									BMessage& storage);
 	virtual	void				AddControls(BLayoutBuilder::Group<>& builder,
 									BView* editorView);

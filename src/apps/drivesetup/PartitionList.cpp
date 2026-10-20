@@ -306,12 +306,9 @@ PartitionListRow::PartitionListRow(BPartition* partition)
 		SetField(new BStringField(kUnavailableString), kFilesystemColumn);
 		SetField(new BStringField(kUnavailableString), kVolumeNameColumn);
 	} else {
-		if (!partitionType.IsEmpty()) {
-			partitionType.SetToFormat(B_TRANSLATE("Unknown (%s)"),
-				partitionType.String());
-			SetField(new BStringField(partitionType), kFilesystemColumn);
-		} else
-			SetField(new BStringField(kUnavailableString), kFilesystemColumn);
+		SetField(new BStringField(partitionType.IsEmpty()
+			? kUnavailableString : B_TRANSLATE("Unformatted")),
+			kFilesystemColumn);
 
 		SetField(new BStringField(kUnavailableString), kVolumeNameColumn);
 	}
@@ -379,6 +376,11 @@ PartitionListRow::PartitionListRow(BPartition* partition)
 
 	if (partitionType.IsEmpty())
 		partitionType = partition->ContentType();
+	else {
+		BString friendly = partition_type_display_name(partitionType.String());
+		if (!friendly.IsEmpty())
+			partitionType = friendly;
+	}
 	SetField(new BStringField(partitionType), kPartitionTypeColumn);
 }
 

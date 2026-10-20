@@ -67,7 +67,7 @@ private:
 ResizeMoveWindow::ResizeMoveWindow(BWindow* window, const char* title,
 	off_t currentSizeMiB, off_t minSizeMiB, off_t maxSizeMiB, bool canResize,
 	off_t currentStartMiB, off_t minStartMiB, off_t maxStartMiB,
-	bool canMove, off_t usedMiB)
+	bool canMove, off_t usedMiB, const char* note)
 	:
 	BWindow(BRect(300.0, 200.0, 620.0, 340.0), title, B_MODAL_WINDOW_LOOK,
 		B_MODAL_SUBSET_WINDOW_FEEL,
@@ -128,6 +128,9 @@ ResizeMoveWindow::ResizeMoveWindow(BWindow* window, const char* title,
 		label.ReplaceFirst("%sizeMiB%", sizeStr);
 		builder.Add(new BStringView("size disabled", label.String()));
 	}
+
+	if (note != NULL && note[0] != '\0')
+		builder.Add(new BStringView("note", note));
 
 	if (fCanMove) {
 		fStartSlider = new BSlider("start slider",

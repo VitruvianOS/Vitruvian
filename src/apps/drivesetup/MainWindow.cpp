@@ -1366,6 +1366,10 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			message->AddString("disk system", diskSystem.PrettyName());
 
 			BString label = diskSystem.PrettyName();
+			bool recommended = !diskSystem.IsFileSystem()
+				&& label == "GUID Partition Table";
+			if (recommended)
+				label << B_TRANSLATE(" (recommended)");
 			label << B_UTF8_ELLIPSIS;
 			BMenuItem* item = new BMenuItem(label.String(), message);
 
@@ -1376,7 +1380,10 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			if (disk->ID() == selectedPartition
 				&& !diskSystem.IsFileSystem()) {
 				// Disk is selected, and DiskSystem is a partition map
-				fDiskInitMenu->AddItem(item);
+				if (recommended)
+					fDiskInitMenu->AddItem(item, 0);
+				else
+					fDiskInitMenu->AddItem(item);
 			} else if (diskSystem.IsFileSystem()) {
 				// Otherwise a filesystem
 				fFormatMenu->AddItem(item);
@@ -2349,11 +2356,7 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 		return;
 	}
 
-	if (partition->IsMounted()) {
-		_DisplayPartitionError(B_TRANSLATE("Unmount the partition before "
-			"resizing or moving it."));
-		return;
-	}
+	bool mounted = partition->IsMounted();
 
 	const char* filesystem = partition->ContentType();
 	PartitionCapabilities caps;
@@ -2365,7 +2368,7 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 	}
 
 	bool canResize = caps.grow != "none" || caps.shrink != "none";
-	bool canMoveType = caps.move != "none";
+	bool canMoveType = caps.move != "none" && !mounted;
 	if (!canResize && !canMoveType) {
 		_DisplayPartitionError(B_TRANSLATE("This filesystem does not "
 			"support resizing or moving."));
@@ -2393,6 +2396,22 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 			canResize = false;
 			minSizeMiB = maxSizeMiB = currentSizeMiB;
 			usedMiB = -1;
+		}
+	}
+
+	BString note;
+	if (canResize && mounted) {
+		BString fs(filesystem);
+		if (fs == "xfs") {
+			note = B_TRANSLATE("XFS cannot be shrunk");
+			minSizeMiB = currentSizeMiB;
+		} else if (fs != "btrfs") {
+			note = B_TRANSLATE("Shrinking requires unmounting");
+			minSizeMiB = currentSizeMiB;
+		}
+		if (minSizeMiB >= maxSizeMiB) {
+			canResize = false;
+			maxSizeMiB = currentSizeMiB;
 		}
 	}
 
@@ -2436,7 +2455,7 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 	ResizeMoveWindow* panel = new ResizeMoveWindow(this,
 		B_TRANSLATE("Resize/move partition"), currentSizeMiB, minSizeMiB,
 		maxSizeMiB, canResize, currentStartMiB, minStartMiB, maxStartMiB,
-		canMove, usedMiB);
+		canMove, usedMiB, note.String());
 
 	off_t newSizeMiB = currentSizeMiB;
 	off_t newStartMiB = currentStartMiB;

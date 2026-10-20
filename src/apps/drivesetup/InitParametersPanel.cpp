@@ -16,6 +16,8 @@
 
 #include <Button.h>
 #include <Catalog.h>
+#include <Partition.h>
+#include <TextControl.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -25,8 +27,15 @@
 InitParametersPanel::InitParametersPanel(BWindow* window,
 	const BString& diskSystem, BPartition* partition)
 	:
-	AbstractParametersPanel(window)
+	AbstractParametersPanel(window),
+	fNameTextControl(NULL)
 {
+	// The raw name: ContentName() invents one for unnamed volumes.
+	const char* contentName = partition != NULL ? partition->RawContentName()
+		: NULL;
+	fNameTextControl = new BTextControl("Name Control", B_TRANSLATE("Name:"),
+		contentName != NULL ? contentName : "", NULL);
+
 	Init(B_INITIALIZE_PARAMETER_EDITOR, diskSystem, partition);
 
 	fOkButton->SetLabel(B_TRANSLATE("Format"));
@@ -53,4 +62,34 @@ InitParametersPanel::Go(BString& name, BString& parameters)
 	}
 
 	return status;
+}
+
+
+bool
+InitParametersPanel::NeedsEditor() const
+{
+	return false;
+}
+
+
+status_t
+InitParametersPanel::ParametersReceived(BString& parameters, BMessage& storage)
+{
+	BString name(fNameTextControl->Text());
+	name.ReplaceAll("\\", "\\\\");
+	name.ReplaceAll("\"", "\\\"");
+	parameters = "name \"";
+	parameters << name << "\"";
+
+	return B_OK;
+}
+
+
+void
+InitParametersPanel::AddControls(BLayoutBuilder::Group<>& builder,
+	BView* editorView)
+{
+	builder.Add(fNameTextControl);
+
+	AbstractParametersPanel::AddControls(builder, editorView);
 }

@@ -24,7 +24,8 @@ public:
 									off_t maxSizeMiB, bool canResize,
 									off_t currentStartMiB, off_t minStartMiB,
 									off_t maxStartMiB, bool canMove,
-									off_t usedMiB = -1);
+									off_t usedMiB = -1,
+									const char* note = NULL);
 	virtual						~ResizeMoveWindow();
 
 	virtual	bool				QuitRequested();

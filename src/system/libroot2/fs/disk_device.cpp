@@ -62,13 +62,13 @@ static DiskSystemInfo gDiskSystems[] = {
 	{ 4, "ext2", "ext2", "EXT2 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 5, "ext3", "ext3", "EXT3 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	// resize2fs grows and shrinks ext4; others have no shrink tool.
-	{ 6, "ext4", "ext4", "EXT4 File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING, true, false },
+	{ 6, "ext4", "ext4", "EXT4 File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
 	{ 7, "ntfs", "ntfs", "NTFS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 8, "fat", "fat", "FAT File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 9, "exfat", "exfat", "exFAT File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	// xfs_growfs only grows; no direction bit, so leave the flag unset.
-	{ 10, "xfs", "xfs", "XFS File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 11, "btrfs", "btrfs", "Btrfs File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// Online grow for ext4/xfs/btrfs; the helper refuses mounted shrinks.
+	{ 10, "xfs", "xfs", "XFS File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
+	{ 11, "btrfs", "btrfs", "Btrfs File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
 	// f2fs.resize grows only.
 	{ 12, "f2fs", "f2fs", "F2FS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 13, "linux-swap", "swap", "Linux Swap", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },

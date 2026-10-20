@@ -8,6 +8,7 @@
 #include <Entry.h>
 #include <Message.h>
 #include <Roster.h>
+#include <Url.h>
 
 
 // #pragma mark - URLAction
@@ -28,13 +29,8 @@ URLAction::~URLAction()
 void
 URLAction::Clicked(HyperTextView* view, BPoint where, BMessage* message)
 {
-	// be lazy and let /bin/open open the URL
-	entry_ref ref;
-	if (get_ref_for_path("/bin/open", &ref))
-		return;
-
-	const char* args[] = { fURL.String(), NULL };
-	be_roster->Launch(&ref, 1, args);
+	// The scheme's preferred application (the browser for http/https).
+	BUrl(fURL.String(), true).OpenWithPreferredApplication();
 }
 
 

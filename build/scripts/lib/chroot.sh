@@ -276,10 +276,26 @@ VOSEOF
     sudo chroot "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
-    chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
+    if [ "${VOS_NATIVE_UNPACK:-0}" = 1 ]; then
+        # Unpack with the host dpkg (no emulation); configure stays in-chroot.
+        # Any refusal falls back to the emulated apt transaction.
+        _native_ok=0
+        if native_pkg_unpack "$_chroot_dir" \
+           && chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
+dpkg --configure -a && \
+echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
+exit"; then
+            _native_ok=1
+        else
+            log_warn "native unpack path failed — falling back to emulated apt install"
+        fi
+    fi
+    if [ "${_native_ok:-0}" = 0 ]; then
+        chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
 exit"
+    fi
 
     ls "$_chroot_dir/lib/modules" | head -n1 > "$_basedir/imagekernelversion.conf"
 

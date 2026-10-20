@@ -495,15 +495,15 @@ create_iso() {
     _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
-apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
+apt-get install -y --download-only --no-install-recommends dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
         || die "iso package download failed"
     chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get remove -y vos nexus-dkms || true
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
-apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
-apt-get install -y --reinstall $_iso_debs
+apt-get install -y --no-install-recommends dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
+apt-get install -y --no-install-recommends --reinstall $_iso_debs
 # Purge the build-only -dev packages, and what earlier vos versions pulled in
 # (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
 for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
@@ -920,6 +920,7 @@ create_raspberry() {
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
     _kern_pkgs="$(printf '%s\n' $_board_pkgs | grep -E '^linux-(image|headers)-' | tr '\n' ' ')"
+    _board_dev_pkgs="$(get_dev_packages "$_board_arch")"
 
     mkdir -p "$_basedir/output"
 
@@ -1043,21 +1044,48 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
-apt-get install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
+apt-get install -y --download-only --no-install-recommends $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "raspberry chroot bash-c failed"
+    if [ "${VOS_NATIVE_UNPACK:-0}" = 1 ]; then
+        # Unpack with the host dpkg (no emulation); configure stays in-chroot.
+        # A bulk unpack cannot express apt-planned removals for Conflicts
+        # (initramfs-tools vs dracut on testing), so any failure falls back
+        # to the emulated apt install, which absorbs the partial unpack.
+        _native_ok=0
+        sudo mkdir -p "$_mnt/etc/initramfs-tools/conf.d"
+        echo RESUME=none | sudo tee "$_mnt/etc/initramfs-tools/conf.d/resume" >/dev/null
+        if native_pkg_unpack "$_mnt" \
+           && chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+dpkg --configure -a
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
+apt-get clean
+# Purge the build-only -dev packages (see create_iso); dkms keeps what it needs.
+for _p in $_board_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge"; then
+            _native_ok=1
+        else
+            log_warn "native unpack path failed — falling back to emulated apt install"
+        fi
+    fi
+    if [ "${_native_ok:-0}" = 0 ]; then
     chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 # nexus-dkms refuses to unpack until the kernel headers are installed.
-apt-get install -y $_kern_pkgs
-apt-get install -y $_board_pkgs
+apt-get install -y --no-install-recommends $_kern_pkgs
+apt-get install -y --no-install-recommends $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
-    apt-get install -y --reinstall /localdeb/*.deb
+    apt-get install -y --no-install-recommends --reinstall /localdeb/*.deb
 fi
 rm -rf /localdeb
 # apt's package caches would otherwise ship in the image.
-apt-get clean" || die "raspberry chroot bash-c failed"
+apt-get clean
+# Purge the build-only -dev packages (see create_iso); dkms keeps what it needs.
+for _p in $_board_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge" || die "raspberry chroot bash-c failed"
+    fi
 
     # Prove the firmware landed; the board cannot boot without it.
     for _fw in start4.elf fixup4.dat; do
@@ -1172,6 +1200,7 @@ create_uboot_board() {
     _uboot_off=$(board_config "$_board" uboot_offset_sectors)
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
+    _board_dev_pkgs="$(get_dev_packages "$_board_arch")"
 
     _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
@@ -1343,19 +1372,43 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
-apt-get install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
+apt-get install -y --download-only --no-install-recommends $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "uboot chroot bash-c failed"
+    if [ "${VOS_NATIVE_UNPACK:-0}" = 1 ]; then
+        # Same native unpack and fallback as create_raspberry.
+        _native_ok=0
+        sudo mkdir -p "$_mnt/etc/initramfs-tools/conf.d"
+        echo RESUME=none | sudo tee "$_mnt/etc/initramfs-tools/conf.d/resume" >/dev/null
+        if native_pkg_unpack "$_mnt" \
+           && chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+dpkg --configure -a
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
+apt-get clean
+# Purge the build-only -dev packages (see create_iso); dkms keeps what it needs.
+for _p in $_board_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge"; then
+            _native_ok=1
+        else
+            log_warn "native unpack path failed — falling back to emulated apt install"
+        fi
+    fi
+    if [ "${_native_ok:-0}" = 0 ]; then
     chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
-apt-get install -y $_board_pkgs u-boot-menu
+apt-get install -y --no-install-recommends $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
-    apt-get install -y --reinstall /localdeb/*.deb
+    apt-get install -y --no-install-recommends --reinstall /localdeb/*.deb
 fi
 rm -rf /localdeb
 # apt's package caches would otherwise ship in the image.
-apt-get clean" || die "uboot chroot bash-c failed"
+apt-get clean
+# Purge the build-only -dev packages (see create_iso); dkms keeps what it needs.
+for _p in $_board_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge" || die "uboot chroot bash-c failed"
+    fi
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"

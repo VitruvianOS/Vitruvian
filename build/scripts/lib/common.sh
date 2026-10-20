@@ -67,6 +67,59 @@ arch_to_efi_target() {
     esac
 }
 
+# native_pkg_unpack <chroot-dir>: split the package phase so unpack stops
+# running under qemu. apt inside the chroot has already
+# downloaded the full dependency closure into var/cache/apt/archives (and any
+# project debs sit in <chroot>/localdeb); this unpacks them with the HOST's
+# native dpkg. dpkg --root runs maintainer scripts chrooted into the target,
+# so preinst/postinst stay genuinely-guest code (binfmt picks them up) -- the
+# win is the decompression/extraction bulk, which needs no target execution.
+#
+# The chroot must already have /proc /dev /sys mounted: preinsts run at
+# unpack time. Version-skew guard: host and chroot dpkg must share a
+# major.minor (same Debian suite); a mismatch is refused loudly rather than
+# writing a dpkg db the guest cannot read.
+native_pkg_unpack() {
+    _npu_root="${1:?native_pkg_unpack: chroot dir required}"
+    [ -d "$_npu_root/var/lib/dpkg" ] \
+        || { log_error "native unpack: no dpkg db at $_npu_root/var/lib/dpkg"; return 1; }
+
+    _npu_host="$(dpkg-query -W -f='${Version}' dpkg 2>/dev/null || echo none)"
+    _npu_guest="$(dpkg-query --admindir="$_npu_root/var/lib/dpkg" -W -f='${Version}' dpkg 2>/dev/null || echo none)"
+    _npu_hm="$(printf '%s' "$_npu_host"   | sed 's/-.*//; s/[.][^.]*$//')"
+    _npu_gm="$(printf '%s' "$_npu_guest" | sed 's/-.*//; s/[.][^.]*$//')"
+    if [ "$_npu_host" = none ] || [ "$_npu_guest" = none ] || [ "$_npu_hm" != "$_npu_gm" ]; then
+        log_error "native unpack refused: host dpkg $_npu_host vs chroot dpkg $_npu_guest (major.minor must match)"
+        return 1
+    fi
+
+    _npu_debs=""
+    for _npu_d in "$_npu_root"/var/cache/apt/archives/*.deb; do
+        [ -f "$_npu_d" ] && _npu_debs="$_npu_debs $_npu_d"
+    done
+    # Project debs last: nexus-dkms' preinst interlock needs the kernel
+    # headers' files present, which unpacking the archives has created.
+    for _npu_d in "$_npu_root"/localdeb/*.deb; do
+        [ -f "$_npu_d" ] && _npu_debs="$_npu_debs $_npu_d"
+    done
+    if [ -z "$_npu_debs" ]; then
+        log_error "native unpack: no debs under $_npu_root/var/cache/apt/archives or localdeb"
+        return 1
+    fi
+
+    log_step "Native unpack: $(echo $_npu_debs | wc -w) debs via host dpkg $_npu_host (no qemu)"
+    # --force-depends: dpkg enforces Pre-Depends at UNPACK time as
+    # *configured* state, which a single bulk unpack pass can never provide
+    # (systemd pre-depends libsystemd-shared "unpacked but never configured",
+    # python3-minimal pre-depends python3.13-minimal, etc.). The preinsts that
+    # run during unpack need the dependency's FILES, which the glob order
+    # (archives before localdebs, alphabetical within) does provide. The
+    # in-chroot `dpkg --configure -a` that follows configures everything in
+    # proper dependency order — that step is where configured-state matters.
+    # shellcheck disable=SC2086  # word-splitting the deb list is intended
+    sudo dpkg --root="$_npu_root" --unpack --force-depends $_npu_debs
+}
+
 # Debian leaves the sbin dirs off a normal user's PATH, but sfdisk, mke2fs
 # and mkfs.vfat live there.
 case ":$PATH:" in

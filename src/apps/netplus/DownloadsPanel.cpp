@@ -230,6 +230,28 @@ DownloadsPanelView::_BuildRow(const DownloadRecord& item)
 void
 DownloadsPanelView::SetContent(const DownloadsModel& model)
 {
+	// Same rows, same actions: only touch the status texts, and only
+	// when they changed, so progress ticks do not flash.
+	bool sameLayout = model.Count() == fModel.Count()
+		&& model.Count() == fRows->CountChildren();
+	for (int32 i = 0; sameLayout && i < model.Count(); i++) {
+		const DownloadRecord& a = model.ItemAt(i);
+		const DownloadRecord& b = fModel.ItemAt(i);
+		sameLayout = a.id == b.id && a.state == b.state
+			&& a.filename == b.filename && a.url == b.url;
+	}
+	if (sameLayout) {
+		for (int32 i = 0; i < model.Count(); i++) {
+			BStringView* status = dynamic_cast<BStringView*>(
+				fRows->ChildAt(i)->FindView("status"));
+			BString text = _StatusText(model.ItemAt(i));
+			if (status != NULL && text != status->Text())
+				status->SetText(text.String());
+		}
+		fModel = model;
+		return;
+	}
+
 	fModel = model;
 
 	for (int32 i = fRows->CountChildren() - 1; i >= 0; i--) {
@@ -370,7 +392,9 @@ DownloadsPanel::MessageReceived(BMessage* message)
 
 			fView->SetContent(model);
 			BSize size = fView->PreferredSize();
-			ResizeTo(size.width, size.height);
+			if (size.width != Bounds().Width() + 1
+				|| size.height != Bounds().Height() + 1)
+				ResizeTo(size.width, size.height);
 			break;
 		}
 

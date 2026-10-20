@@ -3,7 +3,6 @@ Application(
 
 	SOURCES
 	main.cpp
-	DownloadsWindow.cpp
 	MainWindow.cpp
 	SettingsWindow.cpp
 	DeskbarEntry.cpp

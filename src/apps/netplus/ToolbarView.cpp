@@ -204,6 +204,18 @@ ToolbarView::SetCanGoForward(bool can)
 }
 
 
+bool
+ToolbarView::DownloadsAnchor(BPoint* anchor) const
+{
+	BButton* button = fToolBar->FindButton(MSG_DOWNLOADS);
+	if (button == NULL || button->Window() == NULL || IsHidden())
+		return false;
+	*anchor = button->Bounds().LeftBottom() + BPoint(0, 1);
+	button->ConvertToScreen(anchor);
+	return true;
+}
+
+
 void
 ToolbarView::SetDownloadsActive(int32 count)
 {

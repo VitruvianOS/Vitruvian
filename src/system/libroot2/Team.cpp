@@ -418,6 +418,11 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 		// Park until the creator's resume_thread().
 		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, NULL);
 		if (id < 0) {
+			if (statusPipe[1] >= 0) {
+				signal(SIGPIPE, SIG_IGN);
+				status_t status = id;
+				write(statusPipe[1], &status, sizeof(status));
+			}
 			fprintf(stderr, "load_image child: nexus park failed (%d)\n",
 				(int)id);
 			_exit(127);
@@ -460,7 +465,13 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 	// resume_thread() that lands before the child opens /dev/nexus is kept.
 	thread_id id = nexus_io(nexus, NEXUS_THREAD_REGISTER, (void*)(intptr_t)pid);
 	if (id < 0) {
+		// The child may be parked for a resume that never comes.
 		printf("Fork failed\n");
+		kill(pid, SIGKILL);
+		pthread_mutex_lock(&gLoadedPidsLock);
+		if (gLoadedPids.size() < kMaxTrackedPids)
+			gLoadedPids.insert(pid);
+		pthread_mutex_unlock(&gLoadedPidsLock);
 		CloseExecStatusPipe(statusPipe[0], -1);
 		return B_BAD_THREAD_ID;
 	}

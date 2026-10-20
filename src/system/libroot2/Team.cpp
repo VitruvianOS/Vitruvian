@@ -8,6 +8,7 @@
 #include "Team.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
@@ -493,6 +494,148 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 }
 
 
+static pthread_once_t gBootTimeOnce = PTHREAD_ONCE_INIT;
+static double gBootTime = 0;
+
+
+static void
+_InitBootTime()
+{
+	// btime in /proc/stat is fixed at boot; one read beats re-reading
+	// /proc/uptime for every team.
+	FILE* stat = fopen("/proc/stat", "r");
+	if (stat == NULL)
+		return;
+
+	char line[256];
+	while (fgets(line, sizeof(line), stat) != NULL) {
+		if (strncmp(line, "btime ", 6) == 0) {
+			gBootTime = strtod(line + 6, NULL);
+			break;
+		}
+	}
+
+	fclose(stat);
+}
+
+
+static void
+_CountImagesAndAreas(int fd, team_info* info)
+{
+	int images = 0;
+	int areas = 0;
+	char lastPath[PATH_MAX] = {0};
+	size_t lastPathLength = 0;
+	char buffer[16384];
+	size_t fill = 0;
+
+	while (true) {
+		ssize_t length = read(fd, buffer + fill, sizeof(buffer) - fill);
+		if (length < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+		if (length == 0)
+			break;
+
+		fill += (size_t)length;
+
+		// One bulk read and a byte scan beats fgets per line: the counts
+		// need no field parsing, just line and pathname tallies.
+		size_t start = 0;
+		while (true) {
+			char* nl = (char*)memchr(buffer + start, '\n', fill - start);
+			if (nl == NULL)
+				break;
+
+			areas++;
+			char* path = (char*)memchr(buffer + start, '/',
+				nl - (buffer + start));
+			if (path != NULL) {
+				size_t pathLength = nl - path;
+				if (pathLength >= PATH_MAX)
+					pathLength = PATH_MAX - 1;
+				if (pathLength != lastPathLength
+					|| memcmp(path, lastPath, pathLength) != 0) {
+					images++;
+					memcpy(lastPath, path, pathLength);
+					lastPath[pathLength] = '\0';
+					lastPathLength = pathLength;
+				}
+			}
+
+			start = nl - buffer + 1;
+		}
+
+		if (start == fill) {
+			fill = 0;
+		} else {
+			fill -= start;
+			memmove(buffer, buffer + start, fill);
+		}
+	}
+
+	info->image_count = images;
+	info->area_count = areas;
+}
+
+
+// /proc dirents are read ahead in batches. The enumeration cookie can only
+// carry the dir fd, so the pending batch lives here; when another fd needs
+// the slot, a batch with unhandled entries is seeked back into place first,
+// so no entry is lost or skipped.
+static const int32 kTeamDirentBatch = 32;
+
+struct team_dirent_cache {
+	int				fd;
+	int32			count;
+	int32			index;
+	struct dirent	entries[kTeamDirentBatch];
+};
+
+static __thread team_dirent_cache gTeamDirentCache = { -1, 0, 0 };
+
+
+static bool
+_FillTeamDirentCache(int fd)
+{
+	if (gTeamDirentCache.fd == fd) {
+		if (gTeamDirentCache.index < gTeamDirentCache.count)
+			return true;
+	} else if (gTeamDirentCache.fd >= 0
+		&& gTeamDirentCache.index < gTeamDirentCache.count) {
+		_kern_seek(gTeamDirentCache.fd,
+			gTeamDirentCache.entries[gTeamDirentCache.index].d_off,
+			SEEK_SET);
+	}
+
+	ssize_t count = _kern_read_dir(fd, gTeamDirentCache.entries,
+		sizeof(gTeamDirentCache.entries), kTeamDirentBatch);
+	if (count <= 0) {
+		gTeamDirentCache.fd = -1;
+		gTeamDirentCache.count = 0;
+		gTeamDirentCache.index = 0;
+		return false;
+	}
+
+	gTeamDirentCache.fd = fd;
+	gTeamDirentCache.count = (int32)count;
+	gTeamDirentCache.index = 0;
+	return true;
+}
+
+
+static struct dirent*
+_NextTeamDirent(int fd)
+{
+	if (!_FillTeamDirentCache(fd))
+		return NULL;
+
+	return &gTeamDirentCache.entries[gTeamDirentCache.index++];
+}
+
+
 extern "C" {
 
 
@@ -700,27 +843,10 @@ _get_team_info(team_id id, team_info* info, size_t size)
 
 	char mapsPath[B_PATH_NAME_LENGTH];
 	snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", id);
-	FILE* maps = fopen(mapsPath, "r");
-	if (maps != NULL) {
-		int images = 0;
-		int areas = 0;
-		char lastPath[PATH_MAX] = {0};
-		while (fgets(buffer, sizeof(buffer), maps)) {
-			areas++;
-			char* p = strchr(buffer, '/');
-			if (p != NULL) {
-				char* nl = strchr(p, '\n');
-				if (nl != NULL)
-					*nl = '\0';
-				if (lastPath[0] == '\0' || strcmp(p, lastPath) != 0) {
-					images++;
-					strlcpy(lastPath, p, sizeof(lastPath));
-				}
-			}
-		}
-		fclose(maps);
-		info->image_count = images;
-		info->area_count = areas;
+	int mapsFd = open(mapsPath, O_RDONLY | O_CLOEXEC);
+	if (mapsFd >= 0) {
+		_CountImagesAndAreas(mapsFd, info);
+		close(mapsFd);
 	}
 
 	info->debugger_nub_thread = -1;
@@ -760,21 +886,12 @@ _get_team_info(team_id id, team_info* info, size_t size)
 					if (ticks <= 0)
 						ticks = 100;
 
-					double uptime = 0.0;
-					FILE* uptimeFile = fopen("/proc/uptime", "r");
-					if (uptimeFile != NULL) {
-						if (fscanf(uptimeFile, "%lf", &uptime) != 1)
-							uptime = 0.0;
-						fclose(uptimeFile);
-					}
-
-					struct timespec now;
-					if (clock_gettime(CLOCK_REALTIME, &now) == 0
-						&& uptime > 0.0) {
-						double bootTime = now.tv_sec - uptime;
-						double startSeconds = (double)starttime / (double)ticks;
-						info->start_time
-							= (bigtime_t)((bootTime + startSeconds) * 1e6);
+					pthread_once(&gBootTimeOnce, _InitBootTime);
+					if (gBootTime > 0.0) {
+						double startSeconds
+							= (double)starttime / (double)ticks;
+						info->start_time = (bigtime_t)
+							((gBootTime + startSeconds) * 1e6);
 					}
 				}
 			}
@@ -805,20 +922,15 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 	} else
 		fd = *cookie - 1;
 
-	union {
-		struct dirent entry;
-		char buffer[sizeof(struct dirent) + NAME_MAX + 1];
-	} dirent;
-
 	while (true) {
-		ssize_t count = _kern_read_dir(fd, &dirent.entry, sizeof(dirent), 1);
-		if (count <= 0) {
+		struct dirent* entry = _NextTeamDirent(fd);
+		if (entry == NULL) {
 			_kern_close(fd);
 			*cookie = 0;
 			return B_BAD_VALUE;
 		}
 
-		pid_t pid = (pid_t)atoi(dirent.entry.d_name);
+		pid_t pid = (pid_t)atoi(entry->d_name);
 		if (pid <= 0)
 			continue;
 

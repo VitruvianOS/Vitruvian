@@ -56,19 +56,13 @@ static const uint32 kMsgRecordTick = 'TICK';
 static const uint32 kMsgCaptureNow = 'CAPN';
 static const uint32 kMsgBurstStep = 'BURS';
 
-// Capture sizes offered in the menu; the device may settle on another one.
-static const struct {
-	uint32	width;
-	uint32	height;
-	float	rate;
-} kResolutions[] = {
+// Offered when the device can't list its modes.
+static const camera_mode kFallbackModes[] = {
+	{ 320, 240, 30.0f },
 	{ 640, 480, 30.0f },
 	{ 1280, 720, 30.0f },
-	{ 1920, 1080, 30.0f },
-	{ 320, 240, 30.0f }
+	{ 1920, 1080, 30.0f }
 };
-static const int32 kResolutionCount
-	= sizeof(kResolutions) / sizeof(kResolutions[0]);
 
 // A device that ignores the requested size is followed at most this often.
 static const int32 kMaxReopens = 2;
@@ -507,11 +501,11 @@ CameraWindow::MessageReceived(BMessage* message)
 		{
 			int32 index = -1;
 			message->FindInt32("index", &index);
-			if (index < 0 || index >= kResolutionCount || fRecording)
+			if (index < 0 || index >= (int32)fModes.size() || fRecording)
 				break;
-			fWidth = kResolutions[index].width;
-			fHeight = kResolutions[index].height;
-			fFrameRate = kResolutions[index].rate;
+			fWidth = fModes[index].width;
+			fHeight = fModes[index].height;
+			fFrameRate = fModes[index].frameRate;
 			fReopens = 0;
 			_OpenCamera(fCameraIndex);
 			_StoreSettings();
@@ -765,6 +759,8 @@ CameraWindow::_OpenCamera(int32 index)
 		return status;
 	}
 	fCameraStableId = fSource->StableId();
+	_LoadModes();
+	_RefreshResolutionMenu();
 	fSource->SetMode(fWidth, fHeight, fFrameRate);
 	fSource->SetFrameTarget(BMessenger(this));
 	fRecorder->SetFormat(_RawVideoFormat(fWidth, fHeight, fFrameRate));
@@ -853,23 +849,57 @@ CameraWindow::_RefreshCameraMenu()
 
 
 void
+CameraWindow::_LoadModes()
+{
+	fModes.clear();
+	if (fSource == NULL || fSource->GetModes(&fModes) != B_OK
+		|| fModes.empty()) {
+		fModes.assign(kFallbackModes, kFallbackModes
+			+ sizeof(kFallbackModes) / sizeof(kFallbackModes[0]));
+	}
+
+	// Keep the chosen size if the device has it, else take the closest.
+	const int64 wanted = (int64)fWidth * fHeight;
+	size_t best = 0;
+	int64 bestDelta = -1;
+	for (size_t i = 0; i < fModes.size(); i++) {
+		if (fModes[i].width == fWidth && fModes[i].height == fHeight) {
+			fFrameRate = fModes[i].frameRate;
+			return;
+		}
+		int64 delta = (int64)fModes[i].width * fModes[i].height - wanted;
+		if (delta < 0)
+			delta = -delta;
+		if (bestDelta < 0 || delta < bestDelta) {
+			bestDelta = delta;
+			best = i;
+		}
+	}
+	fWidth = fModes[best].width;
+	fHeight = fModes[best].height;
+	fFrameRate = fModes[best].frameRate;
+}
+
+
+void
 CameraWindow::_RefreshResolutionMenu()
 {
 	while (fResolutionMenu->CountItems() > 0)
 		delete fResolutionMenu->RemoveItem(0);
 
+	if (fModes.empty())
+		_LoadModes();
+
 	int32 marked = 0;
-	for (int32 i = 0; i < kResolutionCount; i++) {
+	for (size_t i = 0; i < fModes.size(); i++) {
 		char label[64];
-		snprintf(label, sizeof(label), "%ux%u @ %.0f", kResolutions[i].width,
-			kResolutions[i].height, kResolutions[i].rate);
+		snprintf(label, sizeof(label), "%ux%u @ %.0f", fModes[i].width,
+			fModes[i].height, fModes[i].frameRate);
 		BMessage* message = new BMessage(kMsgResChanged);
-		message->AddInt32("index", i);
+		message->AddInt32("index", (int32)i);
 		fResolutionMenu->AddItem(new BMenuItem(label, message));
-		if (kResolutions[i].width == fWidth
-			&& kResolutions[i].height == fHeight) {
-			marked = i;
-		}
+		if (fModes[i].width == fWidth && fModes[i].height == fHeight)
+			marked = (int32)i;
 	}
 	fResolutionMenu->SetTargetForItems(this);
 	fResolutionMenu->ItemAt(marked)->SetMarked(true);

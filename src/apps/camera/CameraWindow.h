@@ -50,6 +50,7 @@ private:
 			void				_FitToPicture();
 			void				_RefreshCameraMenu();
 			void				_RefreshResolutionMenu();
+			void				_LoadModes();
 			void				_RefreshFilterMenu();
 			void				_RefreshMicMenu();
 			void				_ShutterPressed();
@@ -109,6 +110,7 @@ private:
 			uint32				fWidth;
 			uint32				fHeight;
 			float				fFrameRate;
+			std::vector<camera_mode>	fModes;
 			bool				fGrid;
 			bool				fMirrorEnabled;
 			BPath				fLastPath;

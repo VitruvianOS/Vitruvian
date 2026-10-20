@@ -130,7 +130,12 @@ PanelMenuView::PreferredSize()
 	if (width < 240)
 		width = 240;
 
-	float height = kBorder * 2 + rows * _RowHeight();
+	float height = kBorder * 2;
+	for (int32 i = 0; i < rows; i++) {
+		height += model.RowAt(model.CurrentPage(), i).type
+				== kPanelMenuRowSeparator
+			? _RowHeight() / 3 : _RowHeight();
+	}
 	if (model.CanGoBack())
 		height += _HeaderHeight();
 

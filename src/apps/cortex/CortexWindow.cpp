@@ -1079,12 +1079,23 @@ CortexWindow::RemoveLink(int32 linkIndex)
 	CortexPin* inPin = link->inputPin >= 0 && inNode != NULL
 		? inNode->pins.ItemAt(link->inputPin) : NULL;
 
-	// In-process links have a proper teardown path; everything else is
-	// destroyed by its registry id, whoever created it.
+	// Links with an own end go through the kit, which owns their proxy;
+	// everything else is destroyed by its registry id, whoever created it.
 	status_t status = B_ENTRY_NOT_FOUND;
+	BMediaGraph::ForeignPort port;
 	if (outPin != NULL && outPin->output != NULL
 		&& inPin != NULL && inPin->input != NULL)
 		status = graph->Disconnect(outPin->output, inPin->input);
+	else if (outPin != NULL && outPin->output != NULL && inPin != NULL
+		&& inPin->foreignPortId != 0
+		&& _ForeignPortById(inPin->foreignNodeId, inPin->foreignPortId,
+			&port) == B_OK)
+		status = graph->Disconnect(outPin->output, &port);
+	else if (inPin != NULL && inPin->input != NULL && outPin != NULL
+		&& outPin->foreignPortId != 0
+		&& _ForeignPortById(outPin->foreignNodeId, outPin->foreignPortId,
+			&port) == B_OK)
+		status = graph->Disconnect(&port, inPin->input);
 
 	if (status != B_OK && link->linkId != 0)
 		status = graph->DestroyLink(link->linkId);

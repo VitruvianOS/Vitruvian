@@ -4,6 +4,7 @@
  */
 
 
+#include "DownloadsWindow.h"
 #include "DeskbarEntry.h"
 #include "DownloadsPanel.h"
 #include "MainWindow.h"
@@ -32,9 +33,7 @@
 #include <MenuBar.h>
 #include <MenuItem.h>
 #include <Messenger.h>
-#include <Notification.h>
 #include <Path.h>
-#include <Roster.h>
 #include <Rect.h>
 #include <Screen.h>
 #include <String.h>
@@ -474,6 +473,9 @@ MainWindow::_SetFullScreen(bool enter)
 bool
 MainWindow::QuitRequested()
 {
+	// The downloads window may hold our view for cancel; clear it
+	// before the view dies with the window.
+	DownloadsWindow::DetachWebView(fWebView);
 
 	BWebSettings* settings = NetPlusApp::Settings();
 	if (settings->RestoreSession() && fWebView != NULL
@@ -503,7 +505,7 @@ MainWindow::FrameMoved(BPoint where)
 	const BPoint delta = where - fLastOrigin;
 	fLastOrigin = where;
 	// Messengers, not the pointers: a closing panel may already be gone.
-	BMessenger* panels[] = { &fAppMenuWindow, &fDownloadsPanelWindow };
+	BMessenger* panels[] = { &fAppMenuWindow, &fDownloadsWindow };
 	for (BMessenger* panel : panels) {
 		BLooper* looper = NULL;
 		if (panel->LockTargetWithTimeout(0) == B_OK
@@ -599,7 +601,7 @@ MainWindow::_ShowDownloads(BPoint anchor)
 	}
 
 	fDownloadsPanel = new DownloadsPanel(fDownloadsModel, BMessenger(this));
-	fDownloadsPanelWindow = BMessenger(fDownloadsPanel);
+	fDownloadsWindow = BMessenger(fDownloadsPanel);
 	fDownloadsPanel->Go(anchor);
 }
 
@@ -654,14 +656,6 @@ MainWindow::_HandleDownloadMessage(BMessage* message)
 				? kDownloadStateCancelled : kDownloadStateFailed);
 			break;
 		}
-	}
-
-	if (message->what == B_WEB_DOWNLOAD_FINISHED && name[0] != '\0') {
-		BNotification notification(B_INFORMATION_NOTIFICATION);
-		notification.SetGroup("NetPlus");
-		notification.SetTitle("Download finished");
-		notification.SetContent(name);
-		notification.Send();
 	}
 
 	_RefreshDownloadUI();
@@ -748,15 +742,8 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case MSG_SHOW_DOWNLOADS:
-		{
-			BPoint anchor;
-			if (fToolbar == nullptr || !fToolbar->DownloadsAnchor(&anchor)) {
-				// No toolbar (fullscreen, app chrome): top-right corner.
-				anchor = Frame().RightTop() + BPoint(-420, 1);
-			}
-			_ShowDownloads(anchor);
+			DownloadsWindow::ShowWindow(fWebView);
 			break;
-		}
 
 		case MSG_SHOW_SETTINGS:
 			SettingsWindow::ShowWindow(Frame());
@@ -889,19 +876,20 @@ MainWindow::MessageReceived(BMessage* message)
 			if (index < 0)
 				break;
 
-			// Open the folder with the file selected, not the file.
-			BEntry entry(fDownloadsModel.ItemAt(index).destination.c_str());
-			BEntry parent;
-			entry_ref parentRef;
-			node_ref node;
-			if (entry.GetNodeRef(&node) != B_OK
-				|| entry.GetParent(&parent) != B_OK
-				|| parent.GetRef(&parentRef) != B_OK)
+			// Reveal the folder that holds the file; Tracker opens
+			// a window at a directory ref.
+			BPath path(fDownloadsModel.ItemAt(index).destination.c_str());
+			BPath parent;
+			if (path.GetParent(&parent) != B_OK)
+				break;
+			BEntry dir(parent.Path());
+			entry_ref ref;
+			if (dir.GetRef(&ref) != B_OK)
 				break;
 			BMessage show(B_REFS_RECEIVED);
-			show.AddRef("refs", &parentRef);
-			show.AddData("nodeRefToSelect", B_RAW_TYPE, &node, sizeof(node));
-			be_roster->Launch("application/x-vnd.Be-TRAK", &show);
+			show.AddRef("refs", &ref);
+			BMessenger tracker("application/x-vnd.Be-TRAK");
+			tracker.SendMessage(&show);
 			break;
 		}
 
@@ -1046,6 +1034,7 @@ MainWindow::MessageReceived(BMessage* message)
 		case B_WEB_DOWNLOAD_PROGRESS:
 		case B_WEB_DOWNLOAD_FINISHED:
 		case B_WEB_DOWNLOAD_FAILED:
+			DownloadsWindow::HandleDownloadMessage(message, fWebView);
 			_HandleDownloadMessage(message);
 			break;
 

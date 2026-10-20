@@ -6,6 +6,7 @@
 
 #include "DeskbarEntry.h"
 #include "InstalledAppStore.h"
+#include "DownloadsWindow.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
@@ -202,17 +203,8 @@ NetPlusApp::MessageReceived(BMessage* message)
 		case B_WEB_DOWNLOAD_PROGRESS:
 		case B_WEB_DOWNLOAD_FINISHED:
 		case B_WEB_DOWNLOAD_FAILED:
-		{
-			// Not tied to a view: the first browser window records it.
-			for (int32 i = 0; i < CountWindows(); i++) {
-				MainWindow* window = dynamic_cast<MainWindow*>(WindowAt(i));
-				if (window != NULL) {
-					BMessenger(window).SendMessage(message);
-					break;
-				}
-			}
+			DownloadsWindow::HandleDownloadMessage(message, NULL);
 			break;
-		}
 
 		default:
 			BApplication::MessageReceived(message);

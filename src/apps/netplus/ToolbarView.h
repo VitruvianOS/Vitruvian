@@ -42,7 +42,6 @@ public:
 			void				SetSearchEngine(int32 engine);
 
 			void				FocusURL();
-			bool				DownloadsAnchor(BPoint* anchor) const;
 
 private:
 			BToolBar*			fToolBar;

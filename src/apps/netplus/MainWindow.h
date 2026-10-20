@@ -86,7 +86,7 @@ private:
 			DownloadsPanel*		fDownloadsPanel;
 			BPoint				fLastOrigin;
 			BMessenger			fAppMenuWindow;
-			BMessenger			fDownloadsPanelWindow;
+			BMessenger			fDownloadsWindow;
 			DownloadsModel		fDownloadsModel;
 			HistoryStore		fHistory;
 			int32				fSearchEngine;

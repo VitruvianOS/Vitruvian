@@ -902,8 +902,7 @@ BCameraSource::_OnCaptureFrame(void* data, size_t size,
 		BMediaOutput* output = OutputAt(i);
 		if (output == NULL || !output->IsConnected())
 			continue;
-		BMediaInput* input = dynamic_cast<BMediaInput*>(output->Binding());
-		if (input == NULL)
+		if (dynamic_cast<BMediaInput*>(output->Binding()) == NULL)
 			continue;
 
 		if (rgb.empty() && format.color_space != B_RGB32) {
@@ -926,7 +925,7 @@ BCameraSource::_OnCaptureFrame(void* data, size_t size,
 			outSize = rgb.size();
 			outFormat.color_space = B_RGB32;
 		}
-		input->HandleBuffer(const_cast<void*>(out), outSize,
+		output->_SendBuffer(const_cast<void*>(out), outSize,
 			BMediaFormat(outFormat));
 	}
 }

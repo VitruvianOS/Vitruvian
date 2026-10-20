@@ -440,14 +440,22 @@ BMediaOutput::FormatProposal(BMediaFormat* format)
 status_t
 BMediaOutput::SendBuffer(void* buffer, size_t size)
 {
+	return _SendBuffer(buffer, size, Format());
+}
+
+
+status_t
+BMediaOutput::_SendBuffer(void* buffer, size_t size,
+	const BMediaFormat& format)
+{
 	// In-process clients push straight to the bound input; PipeWire clients
 	// move data on the realtime thread instead.
 	BMediaInput* input = dynamic_cast<BMediaInput*>(Binding());
 	if (input != NULL && input->fDetachedUnit != NULL)
 		return input->fDetachedUnit->_DetachedDeliver(input, buffer, size,
-			Format());
+			format);
 	if (input != NULL) {
-		input->HandleBuffer(buffer, size, Format());
+		input->HandleBuffer(buffer, size, format);
 		return B_OK;
 	}
 	return B_NOT_SUPPORTED;

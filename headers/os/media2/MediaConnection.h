@@ -143,11 +143,16 @@ protected:
 	virtual	size_t					FillBuffer(void* buffer, size_t maxSize);
 
 private:
+			// In-process delivery with an explicit format.
+			status_t				_SendBuffer(void* buffer, size_t size,
+										const BMediaFormat& format);
+
 			bool					fEnabled;
 			uint64					fFramesSent;
 
 	friend class BMediaClient;
 	friend class BMediaUnit;
+	friend class BCameraSource;
 	friend class BMediaGraph;
 };
 

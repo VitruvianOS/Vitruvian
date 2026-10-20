@@ -487,6 +487,11 @@ BWebView::AttachedToWindow()
 	// Start the GLib event loop if not already running.
 	ProcessManager::Instance().StartGLibLoop();
 
+	// No session chosen: use the shared default profile, so cookies,
+	// storage and downloads persist instead of landing in WebKit's own.
+	if (fImpl->fSession == NULL)
+		SetSession(NULL, false);
+
 	int w, h;
 	view_pixel_size(this, &w, &h);
 	fImpl->fPixelWidth = w;

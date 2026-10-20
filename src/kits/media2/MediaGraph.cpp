@@ -1996,11 +1996,9 @@ BMediaGraph::GetLinks(BObjectList<Link, true>* outLinks)
 				continue;
 			link->inProcess = false;
 			link->outputNodeId = info.outputNodeId;
-			link->outputPortId = info.output != NULL
-				? info.output->_GetPortId() : 0;
+			link->outputPortId = 0;
 			link->inputNodeId = info.inputNodeId;
-			link->inputPortId = info.input != NULL
-				? info.input->_GetPortId() : 0;
+			link->inputPortId = 0;
 			link->output = info.output;
 			link->input = info.input;
 			if (!outLinks->AddItem(link))
@@ -2020,14 +2018,14 @@ BMediaGraph::GetLinks(BObjectList<Link, true>* outLinks)
 			link->input = info.input;
 			if (info.output != NULL) {
 				link->outputNodeId = info.outputNodeId;
-				link->outputPortId = info.output->_GetPortId();
+				link->outputPortId = 0;
 				link->inputNodeId = info.foreignNodeId;
 				link->inputPortId = info.foreignPortId;
 			} else if (info.input != NULL) {
 				link->outputNodeId = info.foreignNodeId;
 				link->outputPortId = info.foreignPortId;
 				link->inputNodeId = info.inputNodeId;
-				link->inputPortId = info.input->_GetPortId();
+				link->inputPortId = 0;
 			} else {
 				link->outputNodeId = info.foreignNodeId;
 				link->outputPortId = info.foreignPortId;
@@ -2037,6 +2035,18 @@ BMediaGraph::GetLinks(BObjectList<Link, true>* outLinks)
 			if (!outLinks->AddItem(link))
 				delete link;
 		}
+	}
+
+	// Resolving an own port id is a roundtrip, and the loop thread takes
+	// both link locks: never wait on it while holding one.
+	for (int32 i = 0; i < outLinks->CountItems(); i++) {
+		Link* link = outLinks->ItemAt(i);
+		if (link->inProcess)
+			continue;
+		if (link->output != NULL && link->outputPortId == 0)
+			link->outputPortId = link->output->_GetPortId();
+		if (link->input != NULL && link->inputPortId == 0)
+			link->inputPortId = link->input->_GetPortId();
 	}
 
 	{

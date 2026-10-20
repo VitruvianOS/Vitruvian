@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2026, Vitruvian Project.
  * Distributed under the terms of the MIT License.
  */

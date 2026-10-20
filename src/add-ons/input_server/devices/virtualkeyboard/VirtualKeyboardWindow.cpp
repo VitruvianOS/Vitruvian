@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2014 Freeman Lou <freemanlou2430@yahoo.com>
  * All rights reserved. Distributed under the terms of the MIT license.
  */

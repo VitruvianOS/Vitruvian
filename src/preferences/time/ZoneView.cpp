@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2004-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *

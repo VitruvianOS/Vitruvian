@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2001-2008, Ingo Weinhold, bonefish@users.sf.net.
  * Distributed under the terms of the MIT License.
  */

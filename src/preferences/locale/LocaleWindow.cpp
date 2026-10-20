@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2005-2010, Axel Dörfler, axeld@pinc-software.de.
  * Copyright 2009-2010, Adrien Destugues <pulkomandy@gmail.com>.
  * All rights reserved. Distributed under the terms of the MIT License.

@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2004-2013, Axel Dörfler, axeld@pinc-software.de.
  * Copyright 2013, Paweł Dziepak, pdziepak@quarnos.org.
  * Distributed under the terms of the MIT License.

@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2004-2019, Haiku, Inc. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project, All rights Reserved.
  * Distributed under the terms of the MIT License.

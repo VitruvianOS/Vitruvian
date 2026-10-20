@@ -1,4 +1,5 @@
 /*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2006-2010 Stephan Aßmus <superstippi@gmx.de>
  * All rights reserved. Distributed under the terms of the MIT License.
  */

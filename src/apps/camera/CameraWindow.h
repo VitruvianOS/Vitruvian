@@ -24,7 +24,7 @@ class BMenuField;
 class BPopUpMenu;
 class BSlider;
 class BStringView;
-class BVideoFilterUnit;
+class BMediaFilter;
 class BVideoSplitter;
 class CameraPreviewTap;
 class CameraView;
@@ -86,7 +86,7 @@ private:
 
 			BCameraSource*		fSource;
 			BVideoSplitter*		fSplitter;
-			BVideoFilterUnit*	fFilter;
+			BMediaFilter*	fFilter;
 			BMediaRecorder*		fRecorder;
 			AudioCapture*		fAudio;
 			CameraPreviewTap*	fTap;

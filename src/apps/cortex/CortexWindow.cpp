@@ -30,13 +30,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <media2/AudioFilter.h>
 #include <media2/Controllable.h>
 #include <media2/FilterCatalog.h>
+#include <media2/MediaFilter.h>
 #include <media2/MediaTheme.h>
 #include <media2/ParameterWeb.h>
 #include <media2/RoutingStore.h>
-#include <media2/VideoFilter.h>
 
 #include <MediaUnitAddOn.h>
 
@@ -106,8 +105,7 @@ struct CortexMonitorEntry {
 static bool
 _IsFilterUnit(BMediaClient* client)
 {
-	return dynamic_cast<BVideoFilterUnit*>(client) != NULL
-		|| dynamic_cast<BAudioFilterUnit*>(client) != NULL;
+	return dynamic_cast<BMediaFilter*>(client) != NULL;
 }
 
 

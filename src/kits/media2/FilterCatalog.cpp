@@ -14,10 +14,7 @@
 #include <Locker.h>
 #include <ObjectList.h>
 
-#include <media2/AudioFilter.h>
-#include <media2/VideoFilter.h>
-
-#include <FilterCatalogPrivate.h>
+#include <media2/MediaFilter.h>
 
 
 namespace {
@@ -158,13 +155,13 @@ BFilterCatalog::ListEntries(BObjectList<Entry, true>* outEntries,
 }
 
 
-/* static */ BVideoFilterUnit*
+/* static */ BMediaFilter*
 BFilterCatalog::CreateVideoUnit(const Entry& entry)
 {
 	if (entry.kind != "video")
 		return NULL;
 
-	BVideoFilterUnit* unit = NULL;
+	BMediaFilter* unit = NULL;
 	if (entry.id == "balance")
 		unit = new(std::nothrow) BVideoBalanceFilter();
 	else if (entry.id == "grayscale")
@@ -188,8 +185,8 @@ BFilterCatalog::CreateVideoUnit(const Entry& entry)
 	else if (entry.id == "mirror")
 		unit = new(std::nothrow) BVideoFlipFilter(true);
 	else if (entry.factory.Length() > 0)
-		unit = new(std::nothrow) BVideoFilterUnit(entry.name.String(),
-			entry.factory.String());
+		unit = new(std::nothrow) BMediaFilter(entry.name.String(),
+			entry.factory.String(), B_MEDIA_RAW_VIDEO);
 
 	if (unit != NULL && unit->InitCheck() != B_OK) {
 		delete unit;
@@ -199,13 +196,13 @@ BFilterCatalog::CreateVideoUnit(const Entry& entry)
 }
 
 
-/* static */ BAudioFilterUnit*
+/* static */ BMediaFilter*
 BFilterCatalog::CreateAudioUnit(const Entry& entry)
 {
 	if (entry.kind != "audio")
 		return NULL;
 
-	BAudioFilterUnit* unit = NULL;
+	BMediaFilter* unit = NULL;
 	if (entry.id == "equalizer")
 		unit = new(std::nothrow) BEqualizerFilter();
 	else if (entry.id == "gain")
@@ -215,8 +212,8 @@ BFilterCatalog::CreateAudioUnit(const Entry& entry)
 	else if (entry.id == "reverb")
 		unit = new(std::nothrow) BReverbFilter();
 	else if (entry.factory.Length() > 0)
-		unit = new(std::nothrow) BAudioFilterUnit(entry.name.String(),
-			entry.factory.String());
+		unit = new(std::nothrow) BMediaFilter(entry.name.String(),
+			entry.factory.String(), B_MEDIA_RAW_AUDIO);
 
 	if (unit != NULL && unit->InitCheck() != B_OK) {
 		delete unit;

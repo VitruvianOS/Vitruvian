@@ -1,9 +1,9 @@
 /*
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
-#include <media2/AudioFilter.h>
+#include <media2/MediaFilter.h>
 
 #include <new>
 #include <stdio.h>
@@ -12,15 +12,15 @@
 #include "FilterUnitCore.h"
 
 
-class BAudioFilterUnit::_Input : public BMediaInput {
+class BMediaFilter::_Input : public BMediaInput {
 public:
-								_Input(BAudioFilterUnit* owner)
+								_Input(BMediaFilter* owner)
 									:
 									BMediaConnection(B_MEDIA_INPUT, "in"),
 									BMediaInput("in"),
 									fOwner(owner)
 	{
-		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		SetAcceptedTypes(B_MEDIA_TYPE_BIT(owner->fType));
 	}
 
 	virtual						~_Input() {}
@@ -28,9 +28,17 @@ public:
 protected:
 	virtual	status_t			AcceptFormat(BMediaFormat* format)
 	{
-		if (format == NULL || !format->IsRawAudio())
+		if (format == NULL || format->Type() != fOwner->fType)
 			return B_BAD_VALUE;
 		return B_OK;
+	}
+
+	virtual	void				Connected(const BMediaFormat& format)
+	{
+		BMediaInput::Connected(format);
+		// Video keeps the frame layout; the output offers what came in.
+		if (fOwner->fType == B_MEDIA_RAW_VIDEO && fOwner->Output() != NULL)
+			fOwner->Output()->SetFormat(format);
 	}
 
 	virtual	void				HandleBuffer(void* buffer, size_t size,
@@ -40,18 +48,19 @@ protected:
 	}
 
 private:
-			BAudioFilterUnit*	fOwner;
+			BMediaFilter*	fOwner;
 };
 
 
-class BAudioFilterUnit::_Output : public BMediaOutput {
+class BMediaFilter::_Output : public BMediaOutput {
 public:
-								_Output()
+								_Output(media_type type)
 									:
 									BMediaConnection(B_MEDIA_OUTPUT, "out"),
-									BMediaOutput("out")
+									BMediaOutput("out"),
+									fType(type)
 	{
-		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		SetAcceptedTypes(B_MEDIA_TYPE_BIT(type));
 	}
 
 	virtual						~_Output() {}
@@ -59,7 +68,7 @@ public:
 protected:
 	virtual	status_t			PrepareToConnect(BMediaFormat* format)
 	{
-		if (format == NULL || !format->IsRawAudio())
+		if (format == NULL || format->Type() != fType)
 			return B_BAD_VALUE;
 		return B_OK;
 	}
@@ -68,20 +77,24 @@ protected:
 	{
 		return B_OK;
 	}
+
+private:
+			media_type			fType;
 };
 
 
-BAudioFilterUnit::BAudioFilterUnit(const char* name,
-	const char* description)
+BMediaFilter::BMediaFilter(const char* name, const char* description,
+	media_type type)
 	:
-	BMediaClient(name != NULL ? name : "AudioFilter",
+	BMediaClient(name != NULL ? name : "MediaFilter",
 		(media_client_kinds)(B_MEDIA_FILTER | B_MEDIA_CONTROLLABLE)),
+	fType(type),
 	fCore(NULL),
 	fInput(NULL),
 	fOutput(NULL)
 {
 	fInput = new(std::nothrow) _Input(this);
-	fOutput = new(std::nothrow) _Output();
+	fOutput = new(std::nothrow) _Output(type);
 	if (fInput == NULL || fOutput == NULL) {
 		delete fInput;
 		delete fOutput;
@@ -99,13 +112,12 @@ BAudioFilterUnit::BAudioFilterUnit(const char* name,
 	}
 
 	fCore = new(std::nothrow) BPrivate::media::FilterUnitCore(
-		name != NULL ? name : "AudioFilter", description,
-		B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO), &BAudioFilterUnit::_ForwardThunk,
-		this);
+		name != NULL ? name : "MediaFilter", description,
+		B_MEDIA_TYPE_BIT(type), &BMediaFilter::_ForwardThunk, this);
 }
 
 
-BAudioFilterUnit::~BAudioFilterUnit()
+BMediaFilter::~BMediaFilter()
 {
 	if (fInput != NULL) {
 		UnregisterInput(fInput);
@@ -123,7 +135,7 @@ BAudioFilterUnit::~BAudioFilterUnit()
 
 
 status_t
-BAudioFilterUnit::InitCheck() const
+BMediaFilter::InitCheck() const
 {
 	if (fCore == NULL)
 		return B_NO_MEMORY;
@@ -131,29 +143,36 @@ BAudioFilterUnit::InitCheck() const
 }
 
 
+media_type
+BMediaFilter::Type() const
+{
+	return fType;
+}
+
+
 BMediaInput*
-BAudioFilterUnit::Input() const
+BMediaFilter::Input() const
 {
 	return fInput;
 }
 
 
 BMediaOutput*
-BAudioFilterUnit::Output() const
+BMediaFilter::Output() const
 {
 	return fOutput;
 }
 
 
 bool
-BAudioFilterUnit::IsInProcessRouted() const
+BMediaFilter::IsInProcessRouted() const
 {
 	return true;
 }
 
 
 int32
-BAudioFilterUnit::CountParameters() const
+BMediaFilter::CountParameters() const
 {
 	if (fCore == NULL)
 		return 0;
@@ -162,7 +181,7 @@ BAudioFilterUnit::CountParameters() const
 
 
 status_t
-BAudioFilterUnit::GetParameterInfo(int32 index, BString* outName,
+BMediaFilter::GetParameterInfo(int32 index, BString* outName,
 	float* outMin, float* outMax, float* outValue)
 {
 	if (fCore == NULL)
@@ -173,7 +192,7 @@ BAudioFilterUnit::GetParameterInfo(int32 index, BString* outName,
 
 
 status_t
-BAudioFilterUnit::SetParameterValue(int32 index, float value)
+BMediaFilter::SetParameterValue(int32 index, float value)
 {
 	if (fCore == NULL)
 		return B_NO_INIT;
@@ -183,7 +202,7 @@ BAudioFilterUnit::SetParameterValue(int32 index, float value)
 
 
 float
-BAudioFilterUnit::ParameterValue(int32 index) const
+BMediaFilter::ParameterValue(int32 index) const
 {
 	if (fCore == NULL)
 		return 0.0f;
@@ -192,64 +211,40 @@ BAudioFilterUnit::ParameterValue(int32 index) const
 
 
 void
-BAudioFilterUnit::_HandleBuffer(void* buffer, size_t size,
-	const BMediaFormat& format)
-{
-	if (fCore == NULL)
-		return;
-	((BPrivate::media::FilterUnitCore*)fCore)->ProcessBuffer(buffer, size,
-		format, NULL, NULL);
-}
-
-
-/* static */ void
-BAudioFilterUnit::_ForwardThunk(void* cookie, void* buffer, size_t size,
+BMediaFilter::ProcessBuffer(void* /*buffer*/, size_t /*size*/,
 	const BMediaFormat& /*format*/)
-{
-	BAudioFilterUnit* self = (BAudioFilterUnit*)cookie;
-	if (self->fOutput != NULL)
-		self->fOutput->SendBuffer(buffer, size);
-}
-
-
-BEqualizerFilter::BEqualizerFilter()
-	:
-	BAudioFilterUnit("Equalizer", "equalizer-10bands")
-{
-}
-
-
-BGainFilter::BGainFilter()
-	:
-	BAudioFilterUnit("Gain", "volume")
 {
 }
 
 
 void
-BGainFilter::SetGain(float linear)
+BMediaFilter::_HandleBuffer(void* buffer, size_t size,
+	const BMediaFormat& format)
 {
-	for (int32 i = 0; i < CountParameters(); i++) {
-		BString name;
-		if (GetParameterInfo(i, &name, NULL, NULL, NULL) != B_OK)
-			continue;
-		if (name == "volume") {
-			SetParameterValue(i, linear);
-			break;
-		}
-	}
+	if (fCore == NULL)
+		return;
+	fLastFormat = format;
+	((BPrivate::media::FilterUnitCore*)fCore)->ProcessBuffer(buffer, size,
+		format, &BMediaFilter::_CpuThunk, this);
 }
 
 
-BCompressorFilter::BCompressorFilter()
-	:
-	BAudioFilterUnit("Compressor", "audiodynamic")
+/* static */ void
+BMediaFilter::_ForwardThunk(void* cookie, void* buffer, size_t size,
+	const BMediaFormat& format)
 {
+	BMediaFilter* self = (BMediaFilter*)cookie;
+	if (self->fOutput == NULL)
+		return;
+	if (self->fType == B_MEDIA_RAW_VIDEO)
+		self->fOutput->SetFormat(format);
+	self->fOutput->SendBuffer(buffer, size);
 }
 
 
-BReverbFilter::BReverbFilter()
-	:
-	BAudioFilterUnit("Reverb", "freeverb")
+/* static */ void
+BMediaFilter::_CpuThunk(void* buffer, size_t size, void* cookie)
 {
+	BMediaFilter* self = (BMediaFilter*)cookie;
+	self->ProcessBuffer(buffer, size, self->fLastFormat);
 }

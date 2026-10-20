@@ -1,11 +1,15 @@
 /*
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
-#ifndef _MEDIA2_VIDEO_FILTER_H
-#define _MEDIA2_VIDEO_FILTER_H
+#ifndef _MEDIA2_MEDIA_FILTER_H
+#define _MEDIA2_MEDIA_FILTER_H
 
+
+// Filters are BMediaClients because they run as an in-process GStreamer
+// chain, routed buffer-to-buffer by BMediaGraph::_ConnectInProcess: not a
+// pw_filter (BMediaUnit) nor a per-connection pw_stream (BMediaNode).
 
 #include <Locker.h>
 #include <ObjectList.h>
@@ -13,14 +17,18 @@
 #include <media2/MediaClient.h>
 
 
-class BVideoFilterUnit : public BMediaClient {
+class BMediaFilter : public BMediaClient {
 public:
-								// NULL description = CPU-only unit
-								BVideoFilterUnit(const char* name,
-									const char* description);
-	virtual						~BVideoFilterUnit();
+								// type: B_MEDIA_RAW_AUDIO or
+								// B_MEDIA_RAW_VIDEO; NULL description =
+								// CPU-only filter
+								BMediaFilter(const char* name,
+									const char* description,
+									media_type type);
+	virtual						~BMediaFilter();
 
 			status_t			InitCheck() const;
+			media_type			Type() const;
 
 			BMediaInput*		Input() const;
 			BMediaOutput*		Output() const;
@@ -35,8 +43,8 @@ public:
 			float				ParameterValue(int32 index) const;
 
 protected:
-	// CPU units override this; data is a private writable copy.
-	virtual	void				ProcessFrame(void* buffer, size_t size,
+	// CPU filters override this; data is a private writable copy.
+	virtual	void				ProcessBuffer(void* buffer, size_t size,
 									const BMediaFormat& format);
 
 private:
@@ -50,6 +58,7 @@ private:
 	static	void				_CpuThunk(void* buffer, size_t size,
 									void* cookie);
 
+			media_type			fType;
 			void*				fCore;			// FilterUnitCore*
 			_Input*				fInput;
 			_Output*			fOutput;
@@ -57,7 +66,33 @@ private:
 };
 
 
-class BVideoBalanceFilter : public BVideoFilterUnit {
+class BEqualizerFilter : public BMediaFilter {
+public:
+								BEqualizerFilter();
+};
+
+
+class BGainFilter : public BMediaFilter {
+public:
+								BGainFilter();
+
+			void				SetGain(float linear);
+};
+
+
+class BCompressorFilter : public BMediaFilter {
+public:
+								BCompressorFilter();
+};
+
+
+class BReverbFilter : public BMediaFilter {
+public:
+								BReverbFilter();
+};
+
+
+class BVideoBalanceFilter : public BMediaFilter {
 public:
 								BVideoBalanceFilter();
 
@@ -67,57 +102,57 @@ public:
 };
 
 
-class BGrayscaleFilter : public BVideoFilterUnit {
+class BGrayscaleFilter : public BMediaFilter {
 public:
 								BGrayscaleFilter();
 };
 
 
-class BSepiaFilter : public BVideoFilterUnit {
+class BSepiaFilter : public BMediaFilter {
 public:
 								BSepiaFilter();
 };
 
 
-class BInvertFilter : public BVideoFilterUnit {
+class BInvertFilter : public BMediaFilter {
 public:
 								BInvertFilter();
 
 protected:
-	virtual	void				ProcessFrame(void* buffer, size_t size,
+	virtual	void				ProcessBuffer(void* buffer, size_t size,
 									const BMediaFormat& format);
 };
 
 
-class BWarmFilter : public BVideoFilterUnit {
+class BWarmFilter : public BMediaFilter {
 public:
 								BWarmFilter();
 };
 
 
-class BCoolFilter : public BVideoFilterUnit {
+class BCoolFilter : public BMediaFilter {
 public:
 								BCoolFilter();
 };
 
 
-class BVintageFilter : public BVideoFilterUnit {
+class BVintageFilter : public BMediaFilter {
 public:
 								BVintageFilter();
 };
 
 
-class BVignetteFilter : public BVideoFilterUnit {
+class BVignetteFilter : public BMediaFilter {
 public:
 								BVignetteFilter();
 
 protected:
-	virtual	void				ProcessFrame(void* buffer, size_t size,
+	virtual	void				ProcessBuffer(void* buffer, size_t size,
 									const BMediaFormat& format);
 };
 
 
-class BBlurFilter : public BVideoFilterUnit {
+class BBlurFilter : public BMediaFilter {
 public:
 								BBlurFilter();
 
@@ -125,13 +160,13 @@ public:
 };
 
 
-class BSharpenFilter : public BVideoFilterUnit {
+class BSharpenFilter : public BMediaFilter {
 public:
 								BSharpenFilter();
 };
 
 
-class BVideoFlipFilter : public BVideoFilterUnit {
+class BVideoFlipFilter : public BMediaFilter {
 public:
 								// horizontal mirrors; used for front cameras
 								BVideoFlipFilter(bool horizontal = true);
@@ -163,4 +198,4 @@ private:
 };
 
 
-#endif // _MEDIA2_VIDEO_FILTER_H
+#endif // _MEDIA2_MEDIA_FILTER_H

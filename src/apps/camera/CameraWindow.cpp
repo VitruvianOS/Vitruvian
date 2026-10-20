@@ -31,7 +31,7 @@
 #include <media2/MediaGraph.h>
 #include <media2/MediaRecorder.h>
 #include <media2/PlaySound.h>
-#include <media2/VideoFilter.h>
+#include <media2/MediaFilter.h>
 
 #include <algorithm>
 #include <math.h>

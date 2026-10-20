@@ -45,6 +45,8 @@ ImageInclude("/system/apps" ${SYSTEM_APPS})
 # Installed but not in the Deskbar menu: started by the system, not users.
 set(SYSTEM_APPS_UNLISTED
 	FirstBootPrompt
+	# TryNow popup: launched by /system/boot/first_login/10-expand-volume.
+	ExpandVolume
 )
 ImageInclude("/system/apps" ${SYSTEM_APPS_UNLISTED})
 

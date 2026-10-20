@@ -1,0 +1,18 @@
+resource app_signature "application/x-vnd.Vitruvian-ExpandVolume";
+
+resource app_name_catalog_entry
+	"application/x-vnd.Vitruvian-ExpandVolume:System name:ExpandVolume";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_BETA,
+	internal = 0,
+
+	short_info = "ExpandVolume",
+	long_info  = "ExpandVolume ©2026 the Vitruvian project"
+};
+
+resource app_flags B_SINGLE_LAUNCH;

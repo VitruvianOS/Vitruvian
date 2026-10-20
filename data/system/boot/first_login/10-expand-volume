@@ -1,0 +1,24 @@
+#!/bin/sh
+# TryNow ("Try It Now") sessions land on the desktop as the live user;
+# offer the volume-expansion popup once that session is usable. janus_session
+# runs /system/boot/first_login/* as the new user after the Deskbar is up,
+# then writes ~/config/settings/first_login.
+#
+# Only the live user gets this: an installed system's first boot has no
+# unclaimed disk tail by construction (the installer sized the partition),
+# and popping an empty dialog there would just be noise. The app itself
+# degrades to an explanatory pane when there is nothing to claim.
+[ "${USER:-}" = "vos-live" ] || exit 0
+
+APP="/system/apps/ExpandVolume"
+[ -x "$APP" ] || exit 0
+
+# Do not nag again once the user has been through the popup (the live
+# home persists when the image runs from a stick with persistence).
+MARKER="$HOME/config/settings/expandvolume-done"
+[ -e "$MARKER" ] && exit 0
+
+# Background: the first_login chain is sequential and must not block on
+# the popup (or on the user's pkexec prompt inside it).
+"$APP" >/dev/null 2>&1 &
+exit 0

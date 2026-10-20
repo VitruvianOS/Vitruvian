@@ -11,4 +11,4 @@ resource app_version {
 	long_info = "Power preferences - Copyright 2026, Dario Casalinuovo"
 };
 
-resource app_signature "application/x-vnd.Haiku-Power";
+resource app_signature "application/x-vnd.vos-Power";

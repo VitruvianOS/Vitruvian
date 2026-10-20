@@ -8,7 +8,7 @@
 #include <SupportDefs.h>
 
 
-#define kPackageManagerSignature "application/x-vnd.Vitruvian-PackageManager"
+#define kPackageManagerSignature "application/x-vnd.vos-PackageManager"
 
 
 // Mirrors the bound vos-apt-helper itself enforces per verb group.

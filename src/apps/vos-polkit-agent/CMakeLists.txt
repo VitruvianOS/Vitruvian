@@ -17,4 +17,4 @@ target_include_directories(vos-polkit-agent PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/../vos-polkit-grant-helper
 )
 UsePrivateHeaders(vos-polkit-agent app shared)
-DoCatalogs("application/x-vnd.Vitruvian-polkit-agent" apps/vos-polkit-agent)
+DoCatalogs("application/x-vnd.vos-polkit-agent" apps/vos-polkit-agent)

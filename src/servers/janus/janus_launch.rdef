@@ -2,7 +2,7 @@
  * janus_launch.rdef
  */
 
-resource app_signature "application/x-vnd.vitruvian-janus-launch";
+resource app_signature "application/x-vnd.vos-janus-launch";
 
 resource app_flags B_BACKGROUND_APP;
 

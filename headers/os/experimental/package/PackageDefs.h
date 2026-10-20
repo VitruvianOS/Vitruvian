@@ -10,7 +10,7 @@
 
 
 // Package kit signature for messages/logging.
-#define V_PACKAGE_KIT_SIGNATURE "application/x-vnd.Vitruvian-PackageKit"
+#define V_PACKAGE_KIT_SIGNATURE "application/x-vnd.vos-PackageKit"
 
 
 enum v_package_state {

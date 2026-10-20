@@ -25,7 +25,7 @@
 
 
 static const char* kAppSignature
-	= "application/x-vnd.Vitruvian-ExpandVolume";
+	= "application/x-vnd.vos-ExpandVolume";
 
 static const char* kDoneMarkerName = "expandvolume-done";
 

@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.Vitruvian-NetPlus";
+resource app_signature "application/x-vnd.vos-NetPlus";
 
 resource app_flags B_SINGLE_LAUNCH;
 

@@ -56,7 +56,7 @@
 #define B_TRANSLATION_CONTEXT "PolkitAuthDialog"
 
 
-static const char* kAppSignature = "application/x-vnd.Vitruvian-polkit-agent";
+static const char* kAppSignature = "application/x-vnd.vos-polkit-agent";
 
 static const char* kAgentObjectPath = "/org/vos/PolkitAgent";
 static const char* kAgentInterface  = "org.freedesktop.PolicyKit1.AuthenticationAgent";

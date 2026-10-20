@@ -17,4 +17,4 @@ target_include_directories(ExpandVolume PRIVATE
 
 # DoCatalogs last: with no catalogs shipped yet it return()s, and a
 # macro-level return() ends this whole file.
-DoCatalogs("application/x-vnd.Vitruvian-ExpandVolume" apps/diskexpander)
+DoCatalogs("application/x-vnd.vos-ExpandVolume" apps/diskexpander)

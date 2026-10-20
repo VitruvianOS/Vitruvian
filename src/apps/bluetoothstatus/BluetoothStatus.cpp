@@ -40,7 +40,7 @@ class BluetoothStatus : public BApplication {
 };
 
 
-const char* kSignature = "application/x-vnd.Haiku-BluetoothStatus";
+const char* kSignature = "application/x-vnd.vos-BluetoothStatus";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 const char* kDeskbarItemName = "BluetoothStatus";
 

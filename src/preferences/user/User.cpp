@@ -12,7 +12,7 @@ class UserApp : public BApplication {
 public:
 	UserApp()
 		:
-		BApplication("application/x-vnd.Vitruvian-User")
+		BApplication("application/x-vnd.vos-User")
 	{
 	}
 

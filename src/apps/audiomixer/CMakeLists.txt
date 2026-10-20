@@ -12,4 +12,4 @@ target_include_directories(AudioMixer PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 )
 UsePrivateHeaders(AudioMixer interface shared preferences)
-DoCatalogs("x-vnd.Haiku-AudioMixer" apps/audiomixer)
+DoCatalogs("x-vnd.vos-AudioMixer" apps/audiomixer)

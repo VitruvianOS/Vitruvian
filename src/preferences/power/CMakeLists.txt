@@ -15,4 +15,4 @@ target_include_directories(Power PRIVATE
 	${CMAKE_SOURCE_DIR}/src/apps/powerstatus
 	${CMAKE_SOURCE_DIR}/headers/private/device
 )
-DoCatalogs("x-vnd.Haiku-Power" preferences/power)
+DoCatalogs("x-vnd.vos-Power" preferences/power)

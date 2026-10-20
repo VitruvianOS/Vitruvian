@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.Vitruvian-polkit-agent";
+resource app_signature "application/x-vnd.vos-polkit-agent";
 
 resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
 

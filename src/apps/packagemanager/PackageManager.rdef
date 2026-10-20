@@ -1,8 +1,8 @@
 
-resource app_signature "application/x-vnd.Vitruvian-PackageManager";
+resource app_signature "application/x-vnd.vos-PackageManager";
 
 resource app_name_catalog_entry
-	"x-vnd.Vitruvian-PackageManager:System name:PackageManager";
+	"x-vnd.vos-PackageManager:System name:PackageManager";
 
 resource app_version {
 	major  = 0,

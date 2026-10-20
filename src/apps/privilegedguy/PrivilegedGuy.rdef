@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Vitruvian-PrivilegedGuy";
+resource app_signature "application/x-vnd.vos-PrivilegedGuy";
 
-resource app_name_catalog_entry "x-vnd.Vitruvian-PrivilegedGuy:System name:PrivilegedGuy";
+resource app_name_catalog_entry "x-vnd.vos-PrivilegedGuy:System name:PrivilegedGuy";
 
 resource app_version {
 	major  = 0,

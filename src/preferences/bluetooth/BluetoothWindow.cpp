@@ -71,7 +71,7 @@ static const uint32 kMsgFilesChosen = 'btFc';
 // kSignature in BluetoothStatus.cpp, which lives in a different binary and
 // isn't link-visible from here).
 static const char* kBluetoothStatusSignature
-	= "application/x-vnd.Haiku-BluetoothStatus";
+	= "application/x-vnd.vos-BluetoothStatus";
 
 // The BView name BluetoothStatusView archives itself under (see its
 // constructor) -- BDeskbar's item-lookup API works by that name.

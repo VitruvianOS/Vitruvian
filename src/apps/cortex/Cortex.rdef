@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 
-resource app_signature "application/x-vnd.VOS-Cortex";
+resource app_signature "application/x-vnd.vos-Cortex";
 
 resource app_version {
 	major      = 1,

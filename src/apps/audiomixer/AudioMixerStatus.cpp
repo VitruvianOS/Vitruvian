@@ -6,7 +6,7 @@
 #include "AudioMixerStatus.h"
 
 
-const char* kSignature        = "application/x-vnd.Haiku-AudioMixer";
+const char* kSignature        = "application/x-vnd.vos-AudioMixer";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 const char* kDeskbarItemName  = "AudioMixer";
 

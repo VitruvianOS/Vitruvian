@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Vitruvian-User";
+resource app_signature "application/x-vnd.vos-User";
 
-resource app_name_catalog_entry "x-vnd.Vitruvian-User:System name:User";
+resource app_name_catalog_entry "x-vnd.vos-User:System name:User";
 
 resource app_version {
 	major     = 1,

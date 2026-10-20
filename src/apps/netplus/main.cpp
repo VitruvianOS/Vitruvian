@@ -72,7 +72,7 @@ _LookupInstalled(const char* entryName, InstalledApp* into)
 
 NetPlusApp::NetPlusApp()
 	:
-	BApplication("application/x-vnd.Vitruvian-NetPlus"),
+	BApplication("application/x-vnd.vos-NetPlus"),
 	fSettings(new BWebSettings()),
 	fBookmarks(new BWebBookmarks()),
 	fWindowCount(0)

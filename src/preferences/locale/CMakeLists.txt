@@ -9,4 +9,4 @@ Application(Locale
 )
 UsePrivateHeaders(Locale locale)
 
-DoCatalogs("x-vnd.Vitruvian-Locale" preferences/locale)
+DoCatalogs("x-vnd.vos-Locale" preferences/locale)

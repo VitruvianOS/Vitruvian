@@ -9,7 +9,7 @@
 #include "PowerWindow.h"
 
 
-static const char* kAppSignature = "application/x-vnd.Haiku-Power";
+static const char* kAppSignature = "application/x-vnd.vos-Power";
 
 
 int

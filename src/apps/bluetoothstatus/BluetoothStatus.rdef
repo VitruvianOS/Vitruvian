@@ -3,9 +3,9 @@
  * Distributed under the terms of the MIT License.
  */
 
-resource app_signature "application/x-vnd.Haiku-BluetoothStatus";
+resource app_signature "application/x-vnd.vos-BluetoothStatus";
 
-resource app_name_catalog_entry "x-vnd.Haiku-BluetoothStatus:System name:BluetoothStatus";
+resource app_name_catalog_entry "x-vnd.vos-BluetoothStatus:System name:BluetoothStatus";
 
 resource app_version {
 	major  = 1,

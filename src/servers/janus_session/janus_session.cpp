@@ -66,10 +66,10 @@ static const KnownServer kFanOutServers[] = {
 	// re-attach the cursor channel it inherited from app_server at login.
 	{ "input_server",        "application/x-vnd.Be-input_server",       false, false },
 	{ "notification_server", "application/x-vnd.Haiku-notification_server", false, true },
-	{ "vos-polkit-agent",    "application/x-vnd.Vitruvian-polkit-agent", false, false },
+	{ "vos-polkit-agent",    "application/x-vnd.vos-polkit-agent", false, false },
 	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false, true  },
 	{ "Tracker",             "application/x-vnd.Be-TRAK",               false, false },
-	{ "vitruvian-login",     "application/x-vnd.Vitruvian-login",       false, false },
+	{ "vitruvian-login",     "application/x-vnd.vos-login",       false, false },
 	{ "FirstBootPrompt",     "application/x-vnd.Haiku-FirstBootPrompt", false, false },
 	{ NULL, NULL, false, false }
 };

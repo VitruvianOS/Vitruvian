@@ -1003,7 +1003,7 @@ InstallerWindow::_FinishSetup()
 			B_INFO_ALERT);
 		alert->SetShortcut(0, B_ESCAPE);
 		if (alert->Go() == 1)
-			be_roster->Launch("application/x-vnd.Vitruvian-ExpandVolume");
+			be_roster->Launch("application/x-vnd.vos-ExpandVolume");
 	}
 
 	BString text;

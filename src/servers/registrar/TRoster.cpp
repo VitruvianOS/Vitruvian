@@ -1441,7 +1441,7 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 		vitalSystemApps.Add(info->team);
 
 	// janus session manager — must outlive all apps to control seat teardown
-	info = fRegisteredApps.InfoFor("application/x-vnd.vitruvian-janus");
+	info = fRegisteredApps.InfoFor("application/x-vnd.vos-janus");
 	if (info != NULL)
 		vitalSystemApps.Add(info->team);
 

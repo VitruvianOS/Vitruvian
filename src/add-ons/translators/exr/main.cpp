@@ -16,7 +16,7 @@
 int
 main(int /*argc*/, char **/*argv*/)
 {
-	BApplication app("application/x-vnd.Haiku-EXRTranslator");
+	BApplication app("application/x-vnd.vos-EXRTranslator");
 
 	status_t result;
 	result = LaunchTranslatorWindow(new EXRTranslator, 

@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.Vitruvian-janus";
+resource app_signature "application/x-vnd.vos-janus";
 
 resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
 

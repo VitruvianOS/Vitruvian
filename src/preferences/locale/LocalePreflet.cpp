@@ -22,7 +22,7 @@
 
 
 const char* kAppName = B_TRANSLATE_SYSTEM_NAME("Locale");
-const char* kSignature = "application/x-vnd.Vitruvian-Locale";
+const char* kSignature = "application/x-vnd.vos-Locale";
 
 
 class LocalePreflet : public BApplication {

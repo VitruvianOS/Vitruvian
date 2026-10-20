@@ -1,7 +1,7 @@
-resource app_signature "application/x-vnd.Vitruvian-ExpandVolume";
+resource app_signature "application/x-vnd.vos-ExpandVolume";
 
 resource app_name_catalog_entry
-	"application/x-vnd.Vitruvian-ExpandVolume:System name:ExpandVolume";
+	"application/x-vnd.vos-ExpandVolume:System name:ExpandVolume";
 
 resource app_version {
 	major  = 1,

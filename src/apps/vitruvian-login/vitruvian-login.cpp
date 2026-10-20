@@ -23,7 +23,7 @@
 #include <LaunchDaemonDefs.h>
 
 
-static const char* kAppSignature = "application/x-vnd.Vitruvian-login";
+static const char* kAppSignature = "application/x-vnd.vos-login";
 static const uint32 kMsgLogin  = 'lgin';
 static const uint32 kMsgCancel = 'cncl';
 

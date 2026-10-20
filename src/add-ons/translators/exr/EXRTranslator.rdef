@@ -2,7 +2,7 @@
  * EXRTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-EXRTranslator";
+resource app_signature "application/x-vnd.vos-EXRTranslator";
 
 resource app_version {
 	major  = 0,

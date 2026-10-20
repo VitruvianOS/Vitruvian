@@ -16,4 +16,4 @@ Application(PackageManager
 	RDEF PackageManager.rdef
 )
 UsePrivateHeaders(PackageManager app interface shared storage tracker)
-DoCatalogs("application/x-vnd.Vitruvian-PackageManager" apps/packagemanager)
+DoCatalogs("application/x-vnd.vos-PackageManager" apps/packagemanager)

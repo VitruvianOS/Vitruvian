@@ -18,7 +18,7 @@ main(int, char**)
 
 PrivilegedGuyApp::PrivilegedGuyApp()
 	:
-	BApplication("application/x-vnd.Vitruvian-PrivilegedGuy")
+	BApplication("application/x-vnd.vos-PrivilegedGuy")
 {
 }
 

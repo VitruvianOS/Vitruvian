@@ -57,7 +57,7 @@ _WriteWavHeader(BFile& file, uint32 sampleRate, uint32 dataBytes)
 
 CameraApp::CameraApp()
 	:
-	BApplication("application/x-vnd.VOS-CameraApp")
+	BApplication("application/x-vnd.vos-CameraApp")
 {
 	fSettings.MakeEmpty();
 

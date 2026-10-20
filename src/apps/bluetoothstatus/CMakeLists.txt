@@ -13,7 +13,7 @@ target_include_directories(BluetoothStatus PRIVATE
 	${CMAKE_SOURCE_DIR}/headers/private/bluetooth
 )
 UsePrivateHeaders(BluetoothStatus interface shared)
-DoCatalogs("x-vnd.Haiku-BluetoothStatus" apps/bluetoothstatus)
+DoCatalogs("x-vnd.vos-BluetoothStatus" apps/bluetoothstatus)
 
 # Off by default and only settable from the cmake command line; a debug
 # menu that opens the pairing dialog shells with sample content must

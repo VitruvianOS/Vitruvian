@@ -12,7 +12,7 @@
 #include "CortexWindow.h"
 
 
-const char kCortexSignature[] = "application/x-vnd.VOS-Cortex";
+const char kCortexSignature[] = "application/x-vnd.vos-Cortex";
 
 
 CortexApp::CortexApp()

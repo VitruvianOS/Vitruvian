@@ -2,7 +2,7 @@
  * Camera.rdef
  */
 
-resource app_signature "application/x-vnd.VOS-CameraApp";
+resource app_signature "application/x-vnd.vos-CameraApp";
 
 resource app_version {
 	major  = 0,

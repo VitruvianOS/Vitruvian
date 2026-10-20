@@ -6,4 +6,4 @@ Application(PrivilegedGuy
 	RDEF PrivilegedGuy.rdef
 )
 UsePrivateHeaders(PrivilegedGuy app interface shared)
-DoCatalogs("application/x-vnd.Vitruvian-PrivilegedGuy" apps/privilegedguy)
+DoCatalogs("application/x-vnd.vos-PrivilegedGuy" apps/privilegedguy)

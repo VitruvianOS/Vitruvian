@@ -19,9 +19,21 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+// wpe_unicode_to_key_code (libwpe) maps a codepoint to an XKB keysym
+// in both lanes.
 #include <wpe/wpe.h>
 #ifdef HAS_WPE_PLATFORM
 #include <wpe/wpe-platform.h>
+#else
+#include <wpe/wpe.h>
+// The legacy libwpe headers spell the same modifier bits differently
+// from the WPEPlatform names used below; the values match.
+#define WPE_MODIFIER_KEYBOARD_CONTROL	wpe_input_keyboard_modifier_control
+#define WPE_MODIFIER_KEYBOARD_SHIFT		wpe_input_keyboard_modifier_shift
+#define WPE_MODIFIER_KEYBOARD_ALT		wpe_input_keyboard_modifier_alt
+#define WPE_MODIFIER_POINTER_BUTTON1	wpe_input_pointer_modifier_button1
+#define WPE_MODIFIER_POINTER_BUTTON2	wpe_input_pointer_modifier_button2
+#define WPE_MODIFIER_POINTER_BUTTON3	wpe_input_pointer_modifier_button3
 #endif
 
 

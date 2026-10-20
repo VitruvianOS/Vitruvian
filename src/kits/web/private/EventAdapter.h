@@ -51,7 +51,10 @@ private:
 	static uint32_t		_LegacyKeyToXKB(int32 rawKey, const char* bytes,
 							int32 numBytes, uint32 modifiers);
 
-			void		_DispatchKey(uint32_t keyCode, uint32_t hardwareCode,
+			void		_DispatchKey(uint32_t keyCode,
+#ifdef HAS_WPE_PLATFORM
+							uint32_t hardwareCode,
+#endif
 							uint32_t modifiers, bool pressed);
 
 #ifdef HAS_WPE_PLATFORM

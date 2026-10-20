@@ -42,6 +42,9 @@ public:
 			void				SetGridVisible(bool visible);
 
 private:
+			// Where the frame is drawn, before mirroring; fLock held.
+			BRect				_Destination() const;
+
 			BLocker				fLock;
 			BBitmap*			fFrame;
 			float				fAspect;

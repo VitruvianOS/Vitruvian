@@ -168,15 +168,9 @@ CameraView::Draw(BRect updateRect)
 	const float frameWidth = frameBounds.Width() + 1;
 	const float frameHeight = frameBounds.Height() + 1;
 
-	// Fit the whole frame, then zoom in around the center.
-	const float scale = std::min(bounds.Width() / frameWidth,
-		bounds.Height() / frameHeight);
-	const float scaledWidth = frameWidth * scale * fZoom;
-	const float scaledHeight = frameHeight * scale * fZoom;
-	const BRect destination((bounds.Width() - scaledWidth) / 2,
-		(bounds.Height() - scaledHeight) / 2,
-		(bounds.Width() - scaledWidth) / 2 + scaledWidth,
-		(bounds.Height() - scaledHeight) / 2 + scaledHeight);
+	const BRect destination = _Destination();
+	const float scaledWidth = destination.Width();
+	const float scaledHeight = destination.Height();
 
 	PushState();
 	if (fMirrored) {
@@ -200,13 +194,44 @@ CameraView::Draw(BRect updateRect)
 
 	if (fHasTap) {
 		SetHighColor(255, 255, 0);
-		const float x = destination.left
+		float x = destination.left
 			+ (fTapPoint.x / frameWidth) * scaledWidth;
 		const float y = destination.top
 			+ (fTapPoint.y / frameHeight) * scaledHeight;
+		if (fMirrored)
+			x = bounds.Width() - x;
 		StrokeRect(BRect(x - 2, y - 2, x + 2, y + 2));
 		StrokeRect(BRect(x - 20, y - 20, x + 20, y + 20));
 	}
+}
+
+
+BRect
+CameraView::_Destination() const
+{
+	const BRect bounds = Bounds();
+	const float frameWidth = fFrame->Bounds().Width() + 1;
+	const float frameHeight = fFrame->Bounds().Height() + 1;
+
+	// Fit the whole frame, then zoom keeping the tap point (or the center)
+	// in place, without uncovering the fitted area.
+	const float scale = std::min(bounds.Width() / frameWidth,
+		bounds.Height() / frameHeight);
+	const float fitWidth = frameWidth * scale;
+	const float fitHeight = frameHeight * scale;
+	const float fitLeft = (bounds.Width() - fitWidth) / 2;
+	const float fitTop = (bounds.Height() - fitHeight) / 2;
+	const float width = fitWidth * fZoom;
+	const float height = fitHeight * fZoom;
+
+	const BPoint center = fHasTap ? fTapPoint
+		: BPoint(frameWidth / 2, frameHeight / 2);
+	float left = fitLeft + center.x * scale - center.x * scale * fZoom;
+	float top = fitTop + center.y * scale - center.y * scale * fZoom;
+	left = std::max(std::min(left, fitLeft), fitLeft + fitWidth - width);
+	top = std::max(std::min(top, fitTop), fitTop + fitHeight - height);
+
+	return BRect(left, top, left + width, top + height);
 }
 
 
@@ -222,20 +247,13 @@ CameraView::MouseDown(BPoint point)
 		if (fFrame == NULL)
 			return;
 
-		const float zoomFactor = fZoom;
-		const BRect bounds = Bounds();
 		const float frameWidth = fFrame->Bounds().Width() + 1;
 		const float frameHeight = fFrame->Bounds().Height() + 1;
-		const float scale = bounds.Width() / frameWidth
-				> bounds.Height() / frameHeight
-			? bounds.Width() / frameWidth : bounds.Height() / frameHeight;
-		const float scaledWidth = frameWidth * scale / zoomFactor;
-		const float scaledHeight = frameHeight * scale / zoomFactor;
-		const float left = (bounds.Width() - scaledWidth) / 2;
-		const float top = (bounds.Height() - scaledHeight) / 2;
-
-		framePoint = BPoint((point.x - left) / scaledWidth * frameWidth,
-			(point.y - top) / scaledHeight * frameHeight);
+		if (fMirrored)
+			point.x = Bounds().Width() - point.x;
+		const BRect shown = _Destination();
+		framePoint = BPoint((point.x - shown.left) / shown.Width() * frameWidth,
+			(point.y - shown.top) / shown.Height() * frameHeight);
 		inside = framePoint.x >= 0 && framePoint.y >= 0
 			&& framePoint.x < frameWidth && framePoint.y < frameHeight;
 		if (inside) {

@@ -552,7 +552,9 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 		char payload[16];
 		snprintf(payload, sizeof(payload), "%d", i);
 		const char* label = SearchEngineAt(i).name;
-		model.AddActionRow(root, label, MSG_SET_ENGINE, NULL, payload);
+		// These pick the URL bar's search engine; mark the current one.
+		model.AddActionRow(root, label, MSG_SET_ENGINE,
+			i == fSearchEngine ? "\xe2\x9c\x93" : NULL, payload);
 	}
 	model.AddSeparatorRow(root);
 

@@ -99,6 +99,8 @@ struct WebKitBridge {
 			// left full-screen, on the GLib thread.
 			void				NotifyDidEnterFullscreen();
 			void				NotifyDidExitFullscreen();
+			// WebKit answers through onFullscreenChanged(false).
+			void				RequestExitFullscreen();
 
 			// Resolves true when the user allowed notifications for this
 			// permission request; runs on the GLib thread.

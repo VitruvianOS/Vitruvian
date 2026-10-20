@@ -21,8 +21,10 @@
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 
@@ -82,7 +84,20 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	compositor->onFrameReady = [this]() { notifier->Notify(); };
 
 	// 2. WebKit context + URI schemes.
+	// Audio is PipeWire only, through openal: pipewiresink deadlocks
+	// when two players share its connection. The web process inherits
+	// the environment; the sandbox needs the socket.
+	setenv("GST_PLUGIN_FEATURE_RANK",
+		"openalsink:MAX,pipewiresink:NONE,alsasink:NONE,pulsesink:NONE", 0);
+	setenv("ALSOFT_DRIVERS", "pipewire", 0);
+	// A paused off-screen video never resumed after a scroll or resize.
+	setenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1", 0);
 	context = webkit_web_context_new();
+	if (const char* runtimeDir = g_getenv("XDG_RUNTIME_DIR")) {
+		std::string socket = std::string(runtimeDir) + "/pipewire-0";
+		webkit_web_context_add_path_to_sandbox(context, socket.c_str(),
+			FALSE);
+	}
 
 	schemeAdapter = std::make_unique<UrlSchemeAdapter>();
 	schemeAdapter->RegisterSchemes(context);
@@ -1158,6 +1173,17 @@ WebKitBridge::NotifyDidExitFullscreen()
 {
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		wpe_view_backend_dispatch_did_exit_fullscreen(
+			static_cast<wpe_view_backend*>(d));
+		return G_SOURCE_REMOVE;
+	}, backend);
+}
+
+
+void
+WebKitBridge::RequestExitFullscreen()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		wpe_view_backend_dispatch_request_exit_fullscreen(
 			static_cast<wpe_view_backend*>(d));
 		return G_SOURCE_REMOVE;
 	}, backend);

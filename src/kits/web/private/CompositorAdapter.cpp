@@ -24,7 +24,9 @@
 
 #include <algorithm>
 
-static const unsigned int kActiveTickMs = 16;
+// 30 Hz leaves llvmpipe CPU for video decoding.
+// TODO: 60 Hz on GPU renderers; choose at runtime.
+static const unsigned int kActiveTickMs = 33;
 static const unsigned int kIdleTickMs = 200;
 #include <cstdlib>
 #include <cstring>

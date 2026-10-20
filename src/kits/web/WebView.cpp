@@ -1518,12 +1518,10 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 
 #ifdef HAS_WPE
 	// Escape leaves full-screen video even while the page keeps
-	// focus: the embedder owns the window.
+	// focus; WebKit leaves first, then tells us.
 	if (fImpl->fFullScreen.load() && bytes != NULL && numBytes > 0
 		&& bytes[0] == B_ESCAPE) {
-		fImpl->fFullScreen.store(false);
-		if (!send_fullscreen(fTarget, false))
-			NotifyFullScreen(false);
+		fImpl->fBridge->RequestExitFullscreen();
 		return;
 	}
 

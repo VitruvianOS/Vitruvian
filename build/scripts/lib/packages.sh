@@ -17,13 +17,14 @@ get_base_packages() {
         amd64)
             printf '%s' \
                 "apt-utils dialog linux-image-$(get_kernel_flavour) systemd-sysv systemd-timesyncd" \
-                " polkitd pkexec sudo dbus-user-session" \
+                " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
@@ -38,13 +39,14 @@ get_base_packages() {
         arm64)
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
-                " polkitd pkexec sudo dbus-user-session" \
+                " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
@@ -55,12 +57,13 @@ get_base_packages() {
         arm32)
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv systemd-timesyncd" \
-                " polkitd pkexec sudo dbus-user-session" \
+                " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
@@ -71,12 +74,13 @@ get_base_packages() {
         riscv64)
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv systemd-timesyncd" \
-                " polkitd pkexec sudo dbus-user-session" \
+                " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \

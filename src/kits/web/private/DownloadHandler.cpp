@@ -21,7 +21,8 @@ DownloadHandler::DownloadHandler()
 	fAskLocation(false)
 {
 	const char* home = getenv("HOME");
-	fDownloadDir = home ? std::string(home) + "/Downloads" : "/tmp";
+	fDefaultDownloadDir = home ? std::string(home) + "/Downloads" : "/tmp";
+	fDownloadDir = fDefaultDownloadDir;
 	log_info("DownloadHandler: download dir = %s", fDownloadDir.c_str());
 }
 
@@ -243,8 +244,11 @@ DownloadHandler::_OnDecideDestination(WebKitDownload* dl,
 		}
 	}
 
-	if (dest.empty())
+	if (dest.empty()) {
+		std::error_code error;
+		std::filesystem::create_directories(self->fDownloadDir, error);
 		dest = SafeDownloadDestination(self->fDownloadDir, suggested);
+	}
 
 	webkit_download_set_destination(dl, dest.c_str());
 

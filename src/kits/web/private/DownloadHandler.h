@@ -42,7 +42,8 @@ public:
 	static	DownloadHandler* ForSession(WebKitNetworkSession* session);
 
 			void		SetDownloadDir(const std::string& dir)
-							{ fDownloadDir = dir; }
+							{ fDownloadDir = dir.empty()
+								? fDefaultDownloadDir : dir; }
 	const std::string&	DownloadDir() const { return fDownloadDir; }
 
 			// When true each download asks the user where to save
@@ -99,6 +100,7 @@ private:
 			const void*					fAskOwner;
 			uint64_t					fNextId;
 			std::string					fDownloadDir;
+			std::string					fDefaultDownloadDir;
 			bool						fAskLocation;
 };
 

@@ -6,6 +6,7 @@
 #include "CortexWindow.h"
 
 #include <Alert.h>
+#include <Application.h>
 #include <Button.h>
 #include <Directory.h>
 #include <Entry.h>
@@ -507,6 +508,7 @@ bool
 CortexWindow::QuitRequested()
 {
 	_SaveSettings();
+	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }
 

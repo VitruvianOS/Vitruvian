@@ -10,6 +10,7 @@
 #include <String.h>
 
 
+class BMediaClient;
 class BMediaFilter;
 
 template<class T, bool O> class BObjectList;
@@ -21,7 +22,7 @@ public:
 		BString		id;
 		BString		name;
 		BString		kind;		// "video" or "audio"
-		BString		group;		// "Built-in", "frei0r", "LADSPA", "LV2", "Custom"
+		BString		group;		// "Built-in", "Native", "frei0r", "LADSPA", "LV2", "Custom"
 		BString		factory;	// backend factory for plugin entries
 	};
 
@@ -30,7 +31,9 @@ public:
 									const char* kindFilter);
 
 	static	BMediaFilter*		CreateVideoUnit(const Entry& entry);
-	static	BMediaFilter*		CreateAudioUnit(const Entry& entry);
+	// Audio units are BMediaFilters (detached-only GStreamer chains) or
+	// native units that also run as graph nodes.
+	static	BMediaClient*		CreateAudioUnit(const Entry& entry);
 };
 
 

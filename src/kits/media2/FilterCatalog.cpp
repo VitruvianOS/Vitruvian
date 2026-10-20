@@ -15,6 +15,7 @@
 #include <ObjectList.h>
 
 #include <media2/MediaFilter.h>
+#include <media2/NativeAudioUnits.h>
 
 
 namespace {
@@ -136,6 +137,11 @@ BFilterCatalog::ListEntries(BObjectList<Entry, true>* outEntries,
 		_AddEntry(outEntries, "compressor", "Compressor", "audio", "Built-in",
 			NULL);
 		_AddEntry(outEntries, "reverb", "Reverb", "audio", "Built-in", NULL);
+		_AddEntry(outEntries, "native-gain", "Gain", "audio", "Native", NULL);
+		_AddEntry(outEntries, "native-compressor", "Compressor", "audio",
+			"Native", NULL);
+		_AddEntry(outEntries, "native-reverb", "Reverb", "audio", "Native",
+			NULL);
 	}
 
 	_ScanRegistry(outEntries, kindFilter);
@@ -196,11 +202,26 @@ BFilterCatalog::CreateVideoUnit(const Entry& entry)
 }
 
 
-/* static */ BMediaFilter*
+/* static */ BMediaClient*
 BFilterCatalog::CreateAudioUnit(const Entry& entry)
 {
 	if (entry.kind != "audio")
 		return NULL;
+
+	BNativeAudioUnit* native = NULL;
+	if (entry.id == "native-gain")
+		native = new(std::nothrow) BGainUnit();
+	else if (entry.id == "native-compressor")
+		native = new(std::nothrow) BCompressorUnit();
+	else if (entry.id == "native-reverb")
+		native = new(std::nothrow) BReverbUnit();
+	if (native != NULL) {
+		if (native->InitCheck() != B_OK) {
+			delete native;
+			return NULL;
+		}
+		return native;
+	}
 
 	BMediaFilter* unit = NULL;
 	if (entry.id == "equalizer")

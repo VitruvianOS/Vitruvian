@@ -382,13 +382,35 @@ DeclareDependency(
 )
 
 # WPE WebKit2 dependencies (web kit / net+ browser)
-# wpebackend-fdo is the web-process renderer backend.
-DeclareDependency(
-	WPE_WEBKIT
-	LIBRARIES  "wpe-webkit-2.0"
-	PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev;libwpebackend-fdo-1.0-dev"
-	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
-)
+# The kit's native WPEPlatform backend (WPE >= 2.54, the testing lane)
+# renders straight into app_server and links neither wpebackend-fdo nor
+# libwayland-server. The FDO fallback (older WPE, the trixie lane) still
+# needs both; list only the runtimes of the lane this configure picks.
+find_package(PkgConfig QUIET)
+set(VOS_WEB_FDO_FALLBACK FALSE)
+if(PKG_CONFIG_FOUND)
+	pkg_check_modules(_VOS_WPE_PLATFORM QUIET wpe-platform-2.0)
+	pkg_check_modules(_VOS_WPE_FDO QUIET wpebackend-fdo-1.0)
+	if(NOT _VOS_WPE_PLATFORM_FOUND AND _VOS_WPE_FDO_FOUND)
+		set(VOS_WEB_FDO_FALLBACK TRUE)
+	endif()
+endif()
+
+if(VOS_WEB_FDO_FALLBACK)
+	DeclareDependency(
+		WPE_WEBKIT
+		LIBRARIES  "wpe-webkit-2.0"
+		PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev;libwpebackend-fdo-1.0-dev"
+		RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
+	)
+else()
+	DeclareDependency(
+		WPE_WEBKIT
+		LIBRARIES  "wpe-webkit-2.0"
+		PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev"
+		RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1"
+	)
+endif()
 
 # IMAP4/POP3/SMTP and MIME for the WebMail app.
 DeclareDependency(
@@ -428,12 +450,22 @@ DeclareDependency(
 	RUNTIMES   "libgles2"
 )
 
-DeclareDependency(
-	WAYLAND_SERVER
-	LIBRARIES  "wayland-server"
-	PACKAGES   "libwayland-dev"
-	RUNTIMES   "libwayland-server0"
-)
+# In-process Wayland display: only the FDO fallback backend uses it.
+# Optional there, absent from the WPEPlatform lane entirely.
+if(VOS_WEB_FDO_FALLBACK)
+	DeclareDependency(
+		WAYLAND_SERVER
+		LIBRARIES  "wayland-server"
+		PACKAGES   "libwayland-dev"
+		RUNTIMES   "libwayland-server0"
+	)
+else()
+	DeclareDependency(
+		WAYLAND_SERVER
+		LIBRARIES  "wayland-server"
+		PACKAGES   "libwayland-dev"
+	)
+endif()
 
 # Dependencies for Debug builds
 

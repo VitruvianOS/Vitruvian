@@ -8,6 +8,9 @@
 
 #include <glib.h>
 #include <wpe/webkit.h>
+#ifdef HAS_WPE_PLATFORM
+#include <wpe/wpe-platform.h>
+#endif
 
 #include <web/WebExtensions.h>
 
@@ -22,6 +25,7 @@
 struct CompositorAdapter;
 struct FrameNotifier;
 struct DownloadEntry;
+struct VosPlatformHost;
 class DownloadHandler;
 class FocusAndCursorAdapter;
 class NotificationsBridge;
@@ -130,7 +134,15 @@ struct WebKitBridge {
 			void				SetNotificationPermissionHandler(
 									std::function<bool(const std::string&)> fn);
 
+#ifdef HAS_WPE_PLATFORM
+	// The WPEView WebKit created from our display; input goes
+	// through it. NULL until the WebView exists.
+	WPEView*			wpeView;
+	WPEDisplay*			fDisplay;
+	VosPlatformHost*	fPlatformHost;
+#else
 	struct	wpe_view_backend*	backend;
+#endif
 
 			std::unique_ptr<CompositorAdapter>		compositor;
 			std::unique_ptr<FrameNotifier>			notifier;
@@ -167,6 +179,9 @@ struct WebKitBridge {
 			std::function<void(const std::string&)>	onNavigationStarting;
 			// Cursor shape id (B_CURSOR_ID_*) for the current hit target.
 			std::function<void(int32)>				onCursorChanged;
+			// Cursor shape name from the page ("text", "pointer", ...);
+			// WPEPlatform only, the hit-test path covers the FDO build.
+			std::function<void(const std::string&)>	onCursorNameChanged;
 			// Context menu request with hit URIs; runs on the GLib
 			// thread, the receiver posts to its window thread.
 			std::function<void(const std::string& linkUri,

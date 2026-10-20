@@ -680,7 +680,11 @@ BWebView::AttachedToWindow()
 	}
 
 	fImpl->fCompositor = fImpl->fBridge->compositor.get();
+#ifdef HAS_WPE_PLATFORM
+	fImpl->fEventAdapter = new EventAdapter(fImpl->fBridge->wpeView);
+#else
 	fImpl->fEventAdapter = new EventAdapter(fImpl->fBridge->backend);
+#endif
 	fImpl->fEventAdapter->SetViewSize(w, h);
 	{
 		rgb_color c = fImpl->fBackColor;
@@ -778,6 +782,42 @@ BWebView::AttachedToWindow()
 		msg.AddInt32("cursor", cursorId);
 		fImpl->fSelfMessenger.SendMessage(&msg);
 	};
+
+#ifdef HAS_WPE_PLATFORM
+	// WPEPlatform names the shape the page asked for; the hit-test
+	// path only tells link/editable/scrollbar apart.
+	fImpl->fBridge->onCursorNameChanged = [this](const std::string& name) {
+		int32 cursorId = B_CURSOR_ID_SYSTEM_DEFAULT;
+		if (name == "text" || name == "ibeam")
+			cursorId = B_CURSOR_ID_I_BEAM;
+		else if (name == "pointer" || name == "hand" || name == "link")
+			cursorId = B_CURSOR_ID_FOLLOW_LINK;
+		else if (name == "grab")
+			cursorId = B_CURSOR_ID_GRAB;
+		else if (name == "grabbing")
+			cursorId = B_CURSOR_ID_GRABBING;
+		else if (name == "move")
+			cursorId = B_CURSOR_ID_MOVE;
+		else if (name == "crosshair")
+			cursorId = B_CURSOR_ID_CROSS_HAIR;
+		else if (name == "wait" || name == "busy" || name == "progress")
+			cursorId = B_CURSOR_ID_PROGRESS;
+		else if (name == "not-allowed" || name == "no-drop")
+			cursorId = B_CURSOR_ID_NOT_ALLOWED;
+		else if (name == "col-resize" || name == "ew-resize"
+			|| name == "horizontal")
+			cursorId = B_CURSOR_ID_RESIZE_EAST_WEST;
+		else if (name == "row-resize" || name == "ns-resize"
+			|| name == "vertical")
+			cursorId = B_CURSOR_ID_RESIZE_NORTH_SOUTH;
+		if (cursorId == fImpl->fCursorId.load())
+			return;
+		fImpl->fCursorId.store(cursorId);
+		BMessage msg(kMsgCursorChanged);
+		msg.AddInt32("cursor", cursorId);
+		fImpl->fSelfMessenger.SendMessage(&msg);
+	};
+#endif
 
 	fImpl->fBridge->onContextMenu = [this](const std::string& link,
 		const std::string& image, int32 /*x*/, int32 /*y*/) {
@@ -1632,8 +1672,12 @@ BWebView::MouseDown(BPoint where)
 		int32 buttons = 0;
 		if (Window() != NULL && Window()->CurrentMessage() != NULL)
 			Window()->CurrentMessage()->FindInt32("buttons", &buttons);
-		// This WebKit never emits "context-menu": the secondary button
-		// shows our menu for what is under the pointer.
+#ifndef HAS_WPE_PLATFORM
+		// The FDO input path never makes WebKit emit "context-menu":
+		// the secondary button shows our menu for what is under the
+		// pointer. WPEPlatform delivers the click with a press count
+		// and WebKit raises the signal itself, so the right button
+		// must reach the page there.
 		if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
 			BMessage menu(kMsgShowContextMenu);
 			menu.AddString(B_WEB_URL_FIELD, hoverLink.c_str());
@@ -1641,6 +1685,7 @@ BWebView::MouseDown(BPoint where)
 			fImpl->fSelfMessenger.SendMessage(&menu);
 			return;
 		}
+#endif
 
 		if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
 			&& !hoverLink.empty() && fTarget.IsValid()) {

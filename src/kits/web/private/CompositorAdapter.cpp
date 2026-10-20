@@ -6,12 +6,15 @@
 
 #include "compositor_adapter.h"
 #include "logging.h"
+#ifndef HAS_WPE_PLATFORM
 #include "process_manager.h"
+#endif
 
 #include <Bitmap.h>
 #include <GraphicsDefs.h>
 #include <Rect.h>
 
+#ifndef HAS_WPE_PLATFORM
 // WPEBackend-FDO creates its own internal wl_display in-process — no external
 // Wayland compositor is required. The wl_shm_buffer below is a pure in-process
 // object; we use it only to access the raw pixel pointer and then copy into a
@@ -21,6 +24,7 @@
 #include <wpe/fdo.h>
 #include <wpe/unstable/fdo-shm.h>
 #include <wpe/wpe.h>
+#endif
 
 #include <algorithm>
 
@@ -33,6 +37,7 @@ static const unsigned int kFallbackMs = 50;
 #include <cstring>
 
 
+#ifndef HAS_WPE_PLATFORM
 // The web process loads its renderer backend through libwpe; without an
 // explicit loader init libwpe looks for libWPEBackend-default.so and aborts.
 static void
@@ -45,25 +50,32 @@ init_fdo_backend()
 	wpe_loader_init("libWPEBackend-fdo-1.0.so.1");
 	wpe_fdo_initialize_shm();
 }
+#endif
 
 
 CompositorAdapter::CompositorAdapter(int w, int h)
 	:
+#ifndef HAS_WPE_PLATFORM
 	fExportable(nullptr),
 	fOwnsExportable(true),
 	fBackend(nullptr),
+#endif
 	frontBitmap(nullptr),
 	fBackBitmap(nullptr),
 	fWidth(w),
 	fHeight(h),
 	fFillColor(0xFFFFFFFF),
-	fFrameReady(false),
+	fFrameReady(false)
+#ifndef HAS_WPE_PLATFORM
+	,
 	fClockRunning(false),
 	fLastActivity(0),
 	fClockSource(0),
 	fOutstanding(false),
 	fFallbackSource(0)
+#endif
 {
+#ifndef HAS_WPE_PLATFORM
 	init_fdo_backend();
 
 	// fdo keeps this pointer for the exportable's lifetime: it must not
@@ -85,7 +97,7 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 				int32_t srcW = (int32_t)wl_shm_buffer_get_width(shmBuf);
 				int32_t srcH = (int32_t)wl_shm_buffer_get_height(shmBuf);
 				int32_t stride = wl_shm_buffer_get_stride(shmBuf);
-				self->_BlitSHMFrame(pixels, stride, srcW, srcH);
+				self->PresentSHMFrame(pixels, stride, srcW, srcH);
 				wl_shm_buffer_end_access(shmBuf);
 			}
 			wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(
@@ -103,13 +115,19 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 
 	// FDO creates and owns the backend; do not call wpe_view_backend_initialize.
 	fBackend = wpe_view_backend_exportable_fdo_get_view_backend(fExportable);
+#endif
 
 	_AllocateBitmaps();
 
+#ifndef HAS_WPE_PLATFORM
 	log_info("CompositorAdapter: created %dx%d (FDO/SHM)", w, h);
+#else
+	log_info("CompositorAdapter: created %dx%d (WPEPlatform/SHM)", w, h);
+#endif
 }
 
 
+#ifndef HAS_WPE_PLATFORM
 struct wpe_view_backend_exportable_fdo*
 CompositorAdapter::ReleaseExportable()
 {
@@ -117,10 +135,12 @@ CompositorAdapter::ReleaseExportable()
 	fOwnsExportable = false;
 	return fExportable;
 }
+#endif
 
 
 CompositorAdapter::~CompositorAdapter()
 {
+#ifndef HAS_WPE_PLATFORM
 	// Destroyed on the GLib thread, so the clock cannot be mid-tick.
 	if (fClockSource != 0)
 		g_source_remove(fClockSource);
@@ -129,6 +149,7 @@ CompositorAdapter::~CompositorAdapter()
 	// Owned by the WebView once ReleaseExportable() handed it over.
 	if (fExportable && fOwnsExportable)
 		wpe_view_backend_exportable_fdo_destroy(fExportable);
+#endif
 	delete frontBitmap;
 	delete fBackBitmap;
 }
@@ -224,6 +245,7 @@ CompositorAdapter::Resize(int newWidth, int newHeight)
 }
 
 
+#ifndef HAS_WPE_PLATFORM
 void
 CompositorAdapter::ScheduleFrameComplete()
 {
@@ -265,20 +287,27 @@ CompositorAdapter::_ClockTick(void* data)
 		(GSourceFunc)&CompositorAdapter::_ClockTick, self);
 	return G_SOURCE_REMOVE;
 }
+#endif
 
 
 void
 CompositorAdapter::NotifyPresented()
 {
+#ifdef HAS_WPE_PLATFORM
+	// Frames complete inside WPEPlatform; nothing is held back.
+	return;
+#else
 	if (!fOutstanding.load())
 		return;
 	ProcessManager::Instance().InvokeOnGLibThread([](void* data) -> gboolean {
 		static_cast<CompositorAdapter*>(data)->_CompleteExported();
 		return G_SOURCE_REMOVE;
 	}, this);
+#endif
 }
 
 
+#ifndef HAS_WPE_PLATFORM
 // GLib thread. Exactly one frame_complete per exported buffer.
 void
 CompositorAdapter::_CompleteExported()
@@ -315,6 +344,7 @@ CompositorAdapter::_FallbackTick(void* data)
 	self->_CompleteExported();
 	return G_SOURCE_REMOVE;
 }
+#endif
 
 
 void
@@ -326,7 +356,7 @@ CompositorAdapter::_SwapBuffersLocked()
 
 
 void
-CompositorAdapter::_BlitSHMFrame(const uint8_t* data, int stride,
+CompositorAdapter::PresentSHMFrame(const uint8_t* data, int stride,
 	int srcW, int srcH)
 {
 	std::function<void()> cb;

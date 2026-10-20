@@ -112,6 +112,14 @@ enum {
 uint32_t
 web_special_key_to_keysym(int32 rawKey);
 
+// Reverse of the input server's evdev-to-legacy table (LinuxKeycodeMap.h):
+// the hybrid keycode space (rawKey <= 0x7f legacy, >= 0x80 raw evdev) to
+// the evdev code. Returns 0 when the key has no evdev equivalent. The
+// WPEPlatform keyboard event carries the hardware keycode (evdev + 8)
+// WebKit uses for the DOM "code" property.
+int32
+web_legacy_key_to_evdev(int32 rawKey);
+
 // Decodes the first UTF-8 codepoint in bytes; returns 0 on error or
 // empty input.
 uint32_t

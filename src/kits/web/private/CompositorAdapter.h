@@ -7,8 +7,10 @@
 
 
 #include <Bitmap.h>
+#ifndef HAS_WPE_PLATFORM
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -23,32 +25,42 @@ struct CompositorAdapter {
 			// Keeps the old frame's overlap; the rest takes the fill colour
 			// until the next frame arrives.
 			void				Resize(int newWidth, int newHeight);
+#ifndef HAS_WPE_PLATFORM
 			// Runs the frame clock that completes WebKit's frame callbacks.
 			void				ScheduleFrameComplete();
+#endif
 			void				SetFillColor(uint32_t bgra);
+
+			// Copies a rendered SHM frame into the back bitmap and swaps.
+			// The WPEPlatform view calls this from render_buffer; the FDO
+			// export callback goes through it too.
+			void				PresentSHMFrame(const uint8_t* data,
+									int stride, int srcW, int srcH);
 
 			BBitmap*			AcquireFront();
 			void				ReleaseFront();
 			// Window thread: the exported frame was drawn.
 			void				NotifyPresented();
 
+#ifndef HAS_WPE_PLATFORM
 	struct	wpe_view_backend*	Backend() const { return fBackend; }
 	// Hands the fdo exportable to WebKit, which destroys it with the view.
 	struct	wpe_view_backend_exportable_fdo*	ReleaseExportable();
+#endif
 
 			std::function<void()> onFrameReady;
 
 private:
 			void				_AllocateBitmaps(const BBitmap* old = nullptr);
-			void				_BlitSHMFrame(const uint8_t* data, int stride,
-									int srcW, int srcH);
 			void				_SwapBuffersLocked();
+
+#ifndef HAS_WPE_PLATFORM
 			void				_CompleteExported();
 			void				_ArmFallback();
-
 			struct wpe_view_backend_exportable_fdo* fExportable;
 			bool				fOwnsExportable;
 	struct	wpe_view_backend*	fBackend;
+#endif
 
 			BBitmap*			frontBitmap;
 			BBitmap*			fBackBitmap;
@@ -59,6 +71,7 @@ private:
 
 			std::mutex				fBitmapMutex;
 			std::atomic<bool>		fFrameReady;
+#ifndef HAS_WPE_PLATFORM
 			std::atomic<bool>		fClockRunning;
 			std::atomic<int64_t>	fLastActivity;
 			unsigned int			fClockSource;
@@ -67,6 +80,7 @@ private:
 
 	static	int					_ClockTick(void* data);
 	static	int					_FallbackTick(void* data);
+#endif
 };
 
 

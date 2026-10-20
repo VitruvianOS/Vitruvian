@@ -16,6 +16,9 @@
 #include "process_manager.h"
 #include "session_adapter.h"
 #include "url_scheme_adapter.h"
+#ifdef HAS_WPE_PLATFORM
+#include "vos_platform.h"
+#endif
 
 #include <Cursor.h>
 #include <DataIO.h>
@@ -25,8 +28,10 @@
 #include <UrlRequest.h>
 #include <HttpResult.h>
 #include <wpe/webkit.h>
+#ifndef HAS_WPE_PLATFORM
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -51,7 +56,13 @@ struct WebKitBridge::ScriptMessageBinding {
 WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 	int autoplayPolicy)
 	:
+#ifdef HAS_WPE_PLATFORM
+	wpeView(nullptr),
+	fDisplay(nullptr),
+	fPlatformHost(nullptr),
+#else
 	backend(nullptr),
+#endif
 	downloadHandler(nullptr),
 	webView(nullptr),
 	context(nullptr),
@@ -81,8 +92,11 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	int autoplayPolicy)
 {
 
-	// 1. Compositor + WPE backend (FDO SHM path).
+	// 1. Compositor. The FDO build creates the wpe_view_backend through
+	// its exportable here; the platform build only sets up the bitmaps
+	// and lets the WPEView push frames into them.
 	compositor = std::make_unique<CompositorAdapter>(width, height);
+#ifndef HAS_WPE_PLATFORM
 	if (!compositor->Backend()) {
 		log_error("WebKitBridge: compositor failed to create FDO backend");
 		return;
@@ -92,6 +106,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	// none is set; the embedder answers later with did_enter/did_exit.
 	wpe_view_backend_set_fullscreen_handler(backend, _OnBackendFullscreen,
 		this);
+#endif
 
 	notifier = std::make_unique<FrameNotifier>();
 	compositor->onFrameReady = [this]() { notifier->Notify(); };
@@ -140,12 +155,52 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		"AppleWebKit/605.1.15 (KHTML, like Gecko) "
 		"Version/17.4 Safari/605.1.15 NetPlus/0.5");
 
+#ifdef HAS_WPE_PLATFORM
+	// 4. The platform display and its host block. The toplevel and the
+	// view WebKit creates from the display borrow the block for their
+	// callbacks; every one of those runs on this same GLib thread.
+	fPlatformHost = new VosPlatformHost;
+	fPlatformHost->compositor = compositor.get();
+	fPlatformHost->onFullscreenRequest = [this](bool enable) {
+		if (onFullscreenChanged == nullptr)
+			return;
+		onFullscreenChanged(enable);
+	};
+	fPlatformHost->onResizeRequest = [this](int, int) {
+		// The host window is not page-resizable: settle the page at
+		// the size it already has.
+		if (wpeView == nullptr)
+			return;
+		WPEToplevel* toplevel = wpe_view_get_toplevel(wpeView);
+		if (toplevel != nullptr) {
+			int w = 0;
+			int h = 0;
+			wpe_toplevel_get_size(toplevel, &w, &h);
+			wpe_toplevel_resized(toplevel, w, h);
+		}
+	};
+	fPlatformHost->onCursorName = [this](const char* name) {
+		if (onCursorNameChanged)
+			onCursorNameChanged(std::string(name));
+	};
+
+	fDisplay = vos_display_new(fPlatformHost);
+	GError* displayError = nullptr;
+	if (!wpe_display_connect(fDisplay, &displayError)) {
+		log_error("WebKitBridge: display connect failed: %s",
+			displayError != nullptr ? displayError->message : "unknown");
+		if (displayError != nullptr)
+			g_error_free(displayError);
+		return;
+	}
+#else
 	// 4. WebKitWebViewBackend wrapping our FDO wpe_view_backend.
 	// WebKit owns the exportable from here and destroys it after it is done
 	// with the backend; destroying it ourselves first crashed on quit.
 	WebKitWebViewBackend* wkBackend = webkit_web_view_backend_new(backend,
 		(GDestroyNotify)wpe_view_backend_exportable_fdo_destroy,
 		compositor->ReleaseExportable());
+#endif
 
 	// 5. Create the WebView, wiring in context, session, settings, backend.
 	WebKitNetworkSession* networkSession =
@@ -164,6 +219,15 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	WebKitWebsitePolicies* policies = webkit_website_policies_new_with_policies(
 		"autoplay", autoplay, nullptr);
 
+#ifdef HAS_WPE_PLATFORM
+	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+		"display",          fDisplay,
+		"web-context",      context,
+		"network-session",  networkSession,
+		"settings",         settings,
+		"website-policies", policies,
+		nullptr));
+#else
 	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
 		"backend",          wkBackend,
 		"web-context",      context,
@@ -171,15 +235,37 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		"settings",         settings,
 		"website-policies", policies,
 		nullptr));
+#endif
 	g_object_unref(policies);
+#ifndef HAS_WPE_PLATFORM
 	// wkBackend is now owned by the WebView (transfer-full via "backend" prop).
+#endif
 
 	if (!webView) {
 		log_error("WebKitBridge: failed to create WebKitWebView");
+#ifdef HAS_WPE_PLATFORM
+#else
 		// wkBackend ownership was supposed to transfer; if construction failed
 		// it may still be live. WebKit destroys it on cleanup either way.
+#endif
 		return;
 	}
+
+#ifdef HAS_WPE_PLATFORM
+	// WebKit created the view and its toplevel from the display.
+	wpeView = webkit_web_view_get_wpe_view(webView);
+	if (wpeView == nullptr) {
+		log_error("WebKitBridge: WebView has no WPEView");
+		return;
+	}
+	// The toplevel still carries the settings default size: report the
+	// real window size and map so frames start flowing.
+	WPEToplevel* toplevel = wpe_view_get_toplevel(wpeView);
+	if (toplevel != nullptr)
+		wpe_toplevel_resized(toplevel, width, height);
+	wpe_view_resized(wpeView, width, height);
+	wpe_view_map(wpeView);
+#endif
 
 	// 6. Downloads: one handler per session, this bridge listens.
 	downloadHandler = DownloadHandler::ForSession(networkSession);
@@ -202,7 +288,11 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 
 	// 7. Focus adapter.
 	focusAdapter = std::make_unique<FocusAndCursorAdapter>();
+#ifdef HAS_WPE_PLATFORM
+	focusAdapter->SetView(wpeView);
+#else
 	focusAdapter->SetBackend(backend);
+#endif
 
 	// 8. Web notifications.
 	notifications = std::make_unique<NotificationsBridge>();
@@ -221,7 +311,9 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 			G_CALLBACK(_OnGMMessage), this);
 	}
 
-	// 10. Initial size dispatch.
+#ifndef HAS_WPE_PLATFORM
+	// 9. Initial size dispatch. The platform path pushed it above while
+	// mapping the view.
 	struct SizeArgs { wpe_view_backend* b; uint32_t w, h; };
 	auto* sa = new SizeArgs{backend, (uint32_t)width, (uint32_t)height};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
@@ -230,6 +322,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, sa);
+#endif
 
 	// 11. Connect GObject signals.
 	_ConnectSignals();
@@ -267,6 +360,15 @@ WebKitBridge::~WebKitBridge()
 		fPageFilters.clear();
 		if (webView)
 			g_object_unref(webView);
+#ifdef HAS_WPE_PLATFORM
+		// wpeView belonged to the WebView; the display and the host
+		// block are ours. The platform objects borrow the block, so
+		// it dies last.
+		wpeView = nullptr;
+		if (fDisplay)
+			g_object_unref(fDisplay);
+		delete fPlatformHost;
+#endif
 		if (context)
 			g_object_unref(context);
 		if (settings)
@@ -1427,11 +1529,22 @@ WebKitBridge::Resize(int width, int height)
 		int w = (int)(size >> 32);
 		int h = (int)(size & 0xffffffffu);
 		self->compositor->Resize(w, h);
+#ifdef HAS_WPE_PLATFORM
+		// The host window owns the size: report it to the toplevel and
+		// the view so WebKit re-lays out at the new geometry.
+		if (self->wpeView != nullptr) {
+			wpe_view_resized(self->wpeView, w, h);
+			WPEToplevel* toplevel = wpe_view_get_toplevel(self->wpeView);
+			if (toplevel != nullptr)
+				wpe_toplevel_resized(toplevel, w, h);
+		}
+#else
 		wpe_view_backend_dispatch_set_size(self->backend,
 			(uint32_t)w, (uint32_t)h);
 		// A completion lost across the size change would stall WebKit;
 		// an extra one with no frame pending is ignored.
 		self->compositor->ScheduleFrameComplete();
+#endif
 		return G_SOURCE_REMOVE;
 	}, this);
 }
@@ -1623,33 +1736,84 @@ WebKitBridge::DownloadURI(const std::string& uri,
 void
 WebKitBridge::NotifyDidEnterFullscreen()
 {
+#ifdef HAS_WPE_PLATFORM
+	// The window is full screen now: tell WebKit through the toplevel
+	// state, which completes its enter-fullscreen transition.
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* self = static_cast<WebKitBridge*>(d);
+		if (self->wpeView == nullptr)
+			return G_SOURCE_REMOVE;
+		WPEToplevel* toplevel = wpe_view_get_toplevel(self->wpeView);
+		if (toplevel != nullptr) {
+			wpe_toplevel_state_changed(toplevel,
+				static_cast<WPEToplevelState>(
+					wpe_toplevel_get_state(toplevel)
+					| WPE_TOPLEVEL_STATE_FULLSCREEN));
+		}
+		return G_SOURCE_REMOVE;
+	}, this);
+#else
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		wpe_view_backend_dispatch_did_enter_fullscreen(
 			static_cast<wpe_view_backend*>(d));
 		return G_SOURCE_REMOVE;
 	}, backend);
+#endif
 }
 
 
 void
 WebKitBridge::NotifyDidExitFullscreen()
 {
+#ifdef HAS_WPE_PLATFORM
+	// Drop the full screen flag: WebKit asks the page to leave full
+	// screen when the toplevel leaves while it is in it.
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* self = static_cast<WebKitBridge*>(d);
+		if (self->wpeView == nullptr)
+			return G_SOURCE_REMOVE;
+		WPEToplevel* toplevel = wpe_view_get_toplevel(self->wpeView);
+		if (toplevel != nullptr) {
+			wpe_toplevel_state_changed(toplevel,
+				static_cast<WPEToplevelState>(
+					wpe_toplevel_get_state(toplevel)
+					& ~WPE_TOPLEVEL_STATE_FULLSCREEN));
+		}
+		return G_SOURCE_REMOVE;
+	}, this);
+#else
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		wpe_view_backend_dispatch_did_exit_fullscreen(
 			static_cast<wpe_view_backend*>(d));
 		return G_SOURCE_REMOVE;
 	}, backend);
+#endif
 }
 
 
 void
 WebKitBridge::RequestExitFullscreen()
 {
+#ifdef HAS_WPE_PLATFORM
+	// Escape: ask the toplevel to leave full screen. That runs the
+	// set_fullscreen vfunc, the window drops out, and the state change
+	// above tells WebKit.
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* self = static_cast<WebKitBridge*>(d);
+		if (self->wpeView == nullptr)
+			return G_SOURCE_REMOVE;
+		WPEToplevel* toplevel = wpe_view_get_toplevel(self->wpeView);
+		if (toplevel != nullptr)
+			wpe_toplevel_unfullscreen(toplevel);
+		return G_SOURCE_REMOVE;
+	}, this);
+#else
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		wpe_view_backend_dispatch_request_exit_fullscreen(
 			static_cast<wpe_view_backend*>(d));
 		return G_SOURCE_REMOVE;
 	}, backend);
+#endif
 }
 
 

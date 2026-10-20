@@ -9,7 +9,11 @@
 #include <atomic>
 #include <set>
 #include <stdint.h>
+#ifndef HAS_WPE_PLATFORM
 #include <wpe/wpe.h>
+#else
+#include <wpe/wpe-platform.h>
+#endif
 
 
 class BMessage;
@@ -17,7 +21,11 @@ class BMessage;
 
 class EventAdapter {
 public:
+#ifdef HAS_WPE_PLATFORM
+						EventAdapter(WPEView* view);
+#else
 						EventAdapter(struct wpe_view_backend* backend);
+#endif
 						~EventAdapter();
 
 			// View size in pixels; pointer coordinates are clamped to it.
@@ -43,12 +51,20 @@ private:
 	static uint32_t		_LegacyKeyToXKB(int32 rawKey, const char* bytes,
 							int32 numBytes, uint32 modifiers);
 
-			void		_DispatchKey(uint32_t keyCode, uint32_t modifiers,
-							bool pressed);
+			void		_DispatchKey(uint32_t keyCode, uint32_t hardwareCode,
+							uint32_t modifiers, bool pressed);
 
+#ifdef HAS_WPE_PLATFORM
+	WPEView*			fView;
+	// The keysym and hardware keycode of every key still down; the
+	// release may not map (layout switch while held) and must free
+	// the same pair the press registered.
+	std::set<uint64_t>	fHeldKeys;
+#else
 	struct wpe_view_backend* fBackend;
-	uint32_t				fPressedButton;
 	std::set<uint32_t>		fHeldKeys;
+#endif
+	uint32_t				fPressedButton;
 	std::atomic<int>		fViewWidth;
 	std::atomic<int>		fViewHeight;
 };

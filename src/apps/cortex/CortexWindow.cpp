@@ -372,11 +372,11 @@ CortexWindow::MessageReceived(BMessage* message)
 						BMediaClient* client = fOwnClients.ItemAt(i);
 						if (client == NULL || client->Id() != (media_client_id)id)
 							continue;
-						CortexMidiOutputUnit* unit
-							= dynamic_cast<CortexMidiOutputUnit*>(client);
-						if (unit != NULL)
+						BMidiUnit* unit = dynamic_cast<BMidiUnit*>(client);
+						if (unit != NULL) {
 							_ReportStatus("send test note",
-								unit->SendTestNote());
+								SendCortexTestNote(unit));
+						}
 					}
 					break;
 				}
@@ -831,8 +831,7 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 	if (node->kind == kCortexNodeOwn && node->ownClient != NULL) {
 		menu->AddSeparatorItem();
 
-		bool isMidi = dynamic_cast<CortexMidiOutputUnit*>(node->ownClient)
-			!= NULL;
+		bool isMidi = dynamic_cast<BMidiUnit*>(node->ownClient) != NULL;
 		if (isMidi) {
 			BMessage* noteMessage = new BMessage(kMsgSendTestNote);
 			noteMessage->AddUInt32("device_id", (uint32)node->id);

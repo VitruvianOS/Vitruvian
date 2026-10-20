@@ -106,7 +106,7 @@ CortexToneOutput::FormatProposal(BMediaFormat* format)
 
 CortexToneUnit::CortexToneUnit(const char* name)
 	:
-	BMediaUnit(name, B_MEDIA_PLAYER),
+	BSimpleMediaUnit(name, B_MEDIA_PLAYER),
 	fOutput(NULL),
 	fControllable(NULL),
 	fGain(0.2f),
@@ -118,6 +118,7 @@ CortexToneUnit::CortexToneUnit(const char* name)
 
 	fControllable = new(std::nothrow) CortexToneControllable(this);
 	SetControllable(fControllable);
+	SetCycleHook(&CortexToneUnit::_Cycle, this);
 }
 
 
@@ -145,63 +146,66 @@ CortexToneUnit::SetGain(float gain)
 }
 
 
-void
-CortexToneUnit::ProcessCycle(uint32 frameCount)
+/* static */ void
+CortexToneUnit::_Cycle(void* cookie, BSimpleMediaUnit* unit,
+	uint32 /*frameCount*/)
 {
-	if (fOutput == NULL || !fOutput->HasBinding()) {
-		BMediaUnit::ProcessCycle(frameCount);
+	CortexToneUnit* self = (CortexToneUnit*)cookie;
+	if (self->fOutput == NULL)
 		return;
-	}
 
 	size_t size = 0;
-	void* buffer = BufferFor(fOutput, &size);
-	if (buffer == NULL || size < sizeof(float)) {
-		BMediaUnit::ProcessCycle(frameCount);
+	void* buffer = unit->BufferFor(self->fOutput, &size);
+	if (buffer == NULL || size < sizeof(float))
+		return;
+
+	// Unlinked, the unit stays silent.
+	if (!self->fOutput->HasBinding()) {
+		memset(buffer, 0, size);
 		return;
 	}
 
 	float* samples = (float*)buffer;
 	const size_t count = size / sizeof(float);
-	const float gain = fGain;
+	const float gain = self->fGain;
 	for (size_t i = 0; i < count; i++) {
-		samples[i] = gain * _Sine(fPhase);
-		fPhase += 440.0f / 48000.0f;
-		if (fPhase >= 1.0f)
-			fPhase -= 1.0f;
+		samples[i] = gain * _Sine(self->fPhase);
+		self->fPhase += 440.0f / 48000.0f;
+		if (self->fPhase >= 1.0f)
+			self->fPhase -= 1.0f;
 	}
 }
 
 
-CortexMidiOutputUnit::CortexMidiOutputUnit(const char* name)
-	:
-	BMidiUnit(name, B_MEDIA_PLAYER),
-	fOutput(NULL)
+BMidiUnit*
+CreateCortexMidiOut(const char* name)
 {
-	fOutput = new(std::nothrow) BMidiOutput("midi out");
-	if (fOutput != NULL) {
+	BMidiUnit* unit = new(std::nothrow) BMidiUnit(name, B_MEDIA_PLAYER);
+	if (unit == NULL)
+		return NULL;
+
+	BMidiOutput* output = new(std::nothrow) BMidiOutput("midi out");
+	if (output != NULL) {
 		BMediaFormat format;
 		format.format.type = B_MEDIA_MIDI;
-		fOutput->SetAcceptedFormat(format);
-		RegisterOutput(fOutput);
+		output->SetAcceptedFormat(format);
+		unit->RegisterOutput(output);
 	}
-}
-
-
-CortexMidiOutputUnit::~CortexMidiOutputUnit()
-{
+	return unit;
 }
 
 
 status_t
-CortexMidiOutputUnit::SendTestNote()
+SendCortexTestNote(BMidiUnit* unit)
 {
-	if (fOutput == NULL)
+	BMidiOutput* output = unit != NULL ? unit->MidiOutputAt(0) : NULL;
+	if (output == NULL)
 		return B_NO_INIT;
 
-	status_t status = fOutput->SendNoteOn(0, 60, 100, 0);
+	status_t status = output->SendNoteOn(0, 60, 100, 0);
 	if (status != B_OK)
 		return status;
-	return fOutput->SendNoteOff(0, 60, 100, 500000);
+	return output->SendNoteOff(0, 60, 100, 500000);
 }
 
 
@@ -209,8 +213,7 @@ BMediaClient**
 CreateCortexDemoClients(int32* outCount)
 {
 	CortexToneUnit* tone = new(std::nothrow) CortexToneUnit("Cortex Tone");
-	CortexMidiOutputUnit* midi
-		= new(std::nothrow) CortexMidiOutputUnit("Cortex MIDI Out");
+	BMidiUnit* midi = CreateCortexMidiOut("Cortex MIDI Out");
 
 	BMediaClient* candidates[2] = { tone, midi };
 	BMediaClient* valid[2];

@@ -87,7 +87,8 @@ BMediaConnection::BMediaConnection(media_connection_kinds kinds, const char* nam
 	fConnected(false),
 	fStreamFault(false),
 	fStream(NULL),
-	fFilterPort(NULL)
+	fFilterPort(NULL),
+	fDetachedUnit(NULL)
 {
 }
 
@@ -405,6 +406,9 @@ BMediaOutput::SendBuffer(void* buffer, size_t size)
 	// In-process clients push straight to the bound input; PipeWire clients
 	// move data on the realtime thread instead.
 	BMediaInput* input = dynamic_cast<BMediaInput*>(Binding());
+	if (input != NULL && input->fDetachedUnit != NULL)
+		return input->fDetachedUnit->_DetachedDeliver(input, buffer, size,
+			Format());
 	if (input != NULL) {
 		input->HandleBuffer(buffer, size, Format());
 		return B_OK;

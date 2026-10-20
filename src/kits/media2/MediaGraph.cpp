@@ -9,6 +9,7 @@
 #include <media2/CameraSource.h>
 #include <media2/MediaClient.h>
 #include <media2/MediaConnection.h>
+#include <media2/MediaUnit.h>
 
 #include <algorithm>
 #include <ctype.h>
@@ -137,6 +138,17 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 	if (outClient != NULL && inClient != NULL
 		&& outClient->IsInProcessRouted() && inClient->IsInProcessRouted()) {
 		return _ConnectInProcess(output, input);
+	}
+
+	// A unit joins an in-process peer by running detached; once detached it
+	// cannot take graph peers, and detached-only units never can.
+	if (outClient != NULL && inClient != NULL) {
+		bool detached = false;
+		status_t result = _ResolveDetached(outClient, inClient, &detached);
+		if (result != B_OK)
+			return result;
+		if (detached)
+			return _ConnectInProcess(output, input);
 	}
 
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
@@ -323,6 +335,37 @@ BMediaGraph::Disconnect(BMediaOutput* output, BMediaInput* input)
 
 
 status_t
+BMediaGraph::_ResolveDetached(BMediaClient* outClient, BMediaClient* inClient,
+	bool* detached)
+{
+	BMediaClient* clients[2] = { outClient, inClient };
+	BMediaUnit* units[2] = {
+		dynamic_cast<BMediaUnit*>(outClient),
+		dynamic_cast<BMediaUnit*>(inClient)
+	};
+
+	for (int i = 0; i < 2; i++) {
+		BMediaUnit* unit = units[i];
+		if (unit == NULL)
+			continue;
+		BMediaClient* peer = clients[1 - i];
+
+		if (peer->IsInProcessRouted()) {
+			status_t status = unit->_EnterDetached();
+			if (status != B_OK)
+				return status;
+			*detached = true;
+		} else if (unit->IsDetachedOnly()) {
+			return B_NOT_SUPPORTED;
+		} else if (unit->IsDetached()) {
+			return B_NOT_ALLOWED;
+		}
+	}
+	return B_OK;
+}
+
+
+status_t
 BMediaGraph::_ConnectInProcess(BMediaOutput* output, BMediaInput* input)
 {
 	if (output->IsConnected() || input->IsConnected())
@@ -355,6 +398,12 @@ BMediaGraph::_ConnectInProcess(BMediaOutput* output, BMediaInput* input)
 
 	output->fBinding = input;
 	input->fBinding = output;
+	BMediaUnit* outUnit = dynamic_cast<BMediaUnit*>(output->Client());
+	BMediaUnit* inUnit = dynamic_cast<BMediaUnit*>(input->Client());
+	if (outUnit != NULL && outUnit->IsDetached())
+		outUnit->_DetachedLink(output, true);
+	if (inUnit != NULL && inUnit->IsDetached())
+		inUnit->_DetachedLink(input, true);
 	output->Connected(format);
 	input->Connected(format);
 	return B_OK;
@@ -381,6 +430,12 @@ BMediaGraph::_DisconnectInProcess(BMediaOutput* output, BMediaInput* input)
 
 	output->fBinding = NULL;
 	input->fBinding = NULL;
+	BMediaUnit* outUnit = dynamic_cast<BMediaUnit*>(output->Client());
+	BMediaUnit* inUnit = dynamic_cast<BMediaUnit*>(input->Client());
+	if (outUnit != NULL && output->fDetachedUnit == outUnit)
+		outUnit->_DetachedLink(output, false);
+	if (inUnit != NULL && input->fDetachedUnit == inUnit)
+		inUnit->_DetachedLink(input, false);
 	output->Disconnected();
 	input->Disconnected();
 	return B_OK;

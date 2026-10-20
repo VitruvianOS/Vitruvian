@@ -50,7 +50,24 @@ public:
 	virtual	status_t				Start() override;
 	virtual	status_t				Stop() override;
 
+	// A unit runs detached (no pw_filter, driven by the in-process sender)
+	// when it is connected only to in-process peers; otherwise it is a
+	// graph node. The mode cannot change while the unit is started or linked.
+	virtual	bool					IsInProcessRouted() const override;
+			bool					IsDetached() const;
+			bool					IsDetachedOnly() const;
+
 protected:
+	// Detached-only units (GStreamer chains) refuse graph peers with
+	// B_NOT_SUPPORTED; call from the constructor.
+			void					SetDetachedOnly(bool detachedOnly);
+
+	// Detached fan-in: the cycle runs when this input delivers; the other
+	// inputs are latched. Defaults to the first non-MIDI input.
+			void					SetDrivingInput(BMediaInput* input);
+
+	// In graph mode ProcessCycle runs on the realtime thread and must not
+	// block. In detached mode it runs on the sender's thread.
 	virtual	void					ProcessCycle(uint32 frameCount);
 
 			void*					BufferFor(BMediaConnection* connection,
@@ -82,8 +99,21 @@ private:
 			void					_TeardownFilter();
 			void					_Restart();
 
+			status_t				_EnterDetached();
+			void					_DetachedLink(BMediaConnection* connection,
+										bool attach);
+			status_t				_DetachedDeliver(BMediaInput* input,
+										void* buffer, size_t size,
+										const BMediaFormat& format);
+			void*					_DetachedBufferFor(
+										BMediaConnection* connection,
+										size_t* outSize);
+
 			struct Impl;
 			Impl*					fImpl;
+
+	friend class BMediaGraph;
+	friend class BMediaOutput;
 };
 
 

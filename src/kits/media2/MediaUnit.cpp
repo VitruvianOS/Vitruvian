@@ -11,6 +11,10 @@
 
 #include <atomic>
 
+#include <Autolock.h>
+#include <Locker.h>
+#include <OS.h>
+
 #include <pipewire/filter.h>
 #include <pipewire/loop.h>
 #include <spa/param/audio/format.h>
@@ -58,6 +62,40 @@ struct BMediaUnit::Impl {
 	std::atomic<bool>		faultPending;
 	pw_loop*				faultLoop;
 	spa_source*				faultEvent;
+
+	// Detached mode. detachLock serializes senders and guards the buffers.
+	struct DetachedBuffer {
+		BMediaConnection*		connection;
+		std::vector<uint8>		storage;
+		void*					data;
+		size_t					size;
+	};
+
+	BLocker					detachLock;
+	bool					detachedOnly;
+	bool					detachedMode;
+	int32					detachedLinks;
+	BMediaInput*			drivingInput;
+	std::vector<DetachedBuffer> detachedBuffers;
+
+	Impl()
+		:
+		detachLock("detached unit"),
+		detachedOnly(false),
+		detachedMode(false),
+		detachedLinks(0),
+		drivingInput(NULL)
+	{
+	}
+
+	DetachedBuffer*			_Detached(BMediaConnection* connection)
+	{
+		for (size_t i = 0; i < detachedBuffers.size(); i++) {
+			if (detachedBuffers[i].connection == connection)
+				return &detachedBuffers[i];
+		}
+		return NULL;
+	}
 
 	static const pw_filter_events kFilterEvents;
 	static void _OnProcess(void* data, struct spa_io_position* position);
@@ -220,6 +258,10 @@ BMediaUnit::Start()
 		return B_NO_INIT;
 	if (fImpl->filter != NULL)
 		return B_OK;
+
+	// Detached: no pw_filter, the in-process sender drives the cycle.
+	if (IsDetached())
+		return IsStarted() ? B_OK : BMediaClient::Start();
 
 	status_t result = _BuildFilter();
 	if (result != B_OK)
@@ -407,8 +449,18 @@ error:
 status_t
 BMediaUnit::Stop()
 {
-	if (fImpl == NULL || fImpl->filter == NULL)
+	if (fImpl == NULL)
 		return B_OK;
+
+	if (fImpl->filter == NULL) {
+		if (!IsDetached() || !IsStarted())
+			return B_OK;
+		status_t result = BMediaClient::Stop();
+		BAutolock _(fImpl->detachLock);
+		if (fImpl->detachedLinks == 0 && !fImpl->detachedOnly)
+			fImpl->detachedMode = false;
+		return result;
+	}
 
 	if (fImpl->faultEvent != NULL) {
 		PipeWireBackend* backend = PipeWireBackend::GetInstance();
@@ -517,6 +569,9 @@ BMediaUnit::ProcessCycle(uint32 frameCount)
 void*
 BMediaUnit::BufferFor(BMediaConnection* connection, size_t* outSize)
 {
+	if (connection != NULL && connection->fDetachedUnit == this)
+		return _DetachedBufferFor(connection, outSize);
+
 	if (connection == NULL || connection->_GetFilterPort() == NULL)
 		return NULL;
 
@@ -693,4 +748,195 @@ BMediaUnit::PublishNodeParams(const uint32* propIds,
 	}
 
 	return backend->PublishFilterParams(fImpl->filter, infos, vals);
+}
+
+
+// #pragma mark - detached mode
+
+
+bool
+BMediaUnit::IsInProcessRouted() const
+{
+	return IsDetached();
+}
+
+
+bool
+BMediaUnit::IsDetached() const
+{
+	return fImpl != NULL && (fImpl->detachedOnly || fImpl->detachedMode);
+}
+
+
+bool
+BMediaUnit::IsDetachedOnly() const
+{
+	return fImpl != NULL && fImpl->detachedOnly;
+}
+
+
+void
+BMediaUnit::SetDetachedOnly(bool detachedOnly)
+{
+	if (fImpl != NULL)
+		fImpl->detachedOnly = detachedOnly;
+}
+
+
+void
+BMediaUnit::SetDrivingInput(BMediaInput* input)
+{
+	if (fImpl == NULL)
+		return;
+	BAutolock _(fImpl->detachLock);
+	fImpl->drivingInput = input;
+}
+
+
+status_t
+BMediaUnit::_EnterDetached()
+{
+	if (fImpl == NULL)
+		return B_NO_INIT;
+	BAutolock _(fImpl->detachLock);
+	if (fImpl->detachedOnly || fImpl->detachedMode)
+		return B_OK;
+	// A graph node (or a unit with a pw_filter) cannot change mode.
+	if (fImpl->filter != NULL || IsStarted())
+		return B_NOT_ALLOWED;
+	fImpl->detachedMode = true;
+	return B_OK;
+}
+
+
+void
+BMediaUnit::_DetachedLink(BMediaConnection* connection, bool attach)
+{
+	if (fImpl == NULL || connection == NULL)
+		return;
+	BAutolock _(fImpl->detachLock);
+	if (attach) {
+		connection->fDetachedUnit = this;
+		fImpl->detachedLinks++;
+		if (fImpl->_Detached(connection) == NULL) {
+			Impl::DetachedBuffer fresh;
+			fresh.connection = connection;
+			fresh.data = NULL;
+			fresh.size = 0;
+			fImpl->detachedBuffers.push_back(fresh);
+		}
+		return;
+	}
+
+	connection->fDetachedUnit = NULL;
+	for (size_t i = 0; i < fImpl->detachedBuffers.size(); i++) {
+		if (fImpl->detachedBuffers[i].connection == connection) {
+			fImpl->detachedBuffers.erase(fImpl->detachedBuffers.begin() + i);
+			break;
+		}
+	}
+	if (fImpl->detachedLinks > 0)
+		fImpl->detachedLinks--;
+	if (fImpl->detachedLinks == 0 && !fImpl->detachedOnly && !IsStarted())
+		fImpl->detachedMode = false;
+}
+
+
+status_t
+BMediaUnit::_DetachedDeliver(BMediaInput* input, void* buffer, size_t size,
+	const BMediaFormat& format)
+{
+	if (fImpl == NULL || input == NULL)
+		return B_BAD_VALUE;
+
+	// MIDI is handed over as it arrives, ahead of any cycle.
+	if ((input->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) != 0) {
+		input->HandleBuffer(buffer, size, format);
+		return B_OK;
+	}
+
+	BAutolock _(fImpl->detachLock);
+	if (!IsStarted())
+		return B_OK;
+
+	if (fImpl->drivingInput == NULL) {
+		for (int32 i = 0; i < CountInputs(); i++) {
+			BMediaInput* candidate = InputAt(i);
+			if (candidate != NULL && (candidate->AcceptedTypes()
+					& B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) == 0) {
+				fImpl->drivingInput = candidate;
+				break;
+			}
+		}
+	}
+
+	Impl::DetachedBuffer* slot = fImpl->_Detached(input);
+	if (slot == NULL)
+		return B_ERROR;
+
+	if (input != fImpl->drivingInput) {
+		// Latch a copy: the sender's buffer is gone after it returns.
+		slot->storage.assign((const uint8*)buffer, (const uint8*)buffer + size);
+		slot->data = slot->storage.data();
+		slot->size = size;
+		return B_OK;
+	}
+
+	slot->data = buffer;
+	slot->size = size;
+
+	if (format.IsRawAudio()) {
+		fImpl->quantum = (uint32)(size / sizeof(float));
+		if (format.format.u.raw_audio.frame_rate > 0)
+			fImpl->sampleRate = (uint32)format.format.u.raw_audio.frame_rate;
+	} else {
+		fImpl->quantum = (uint32)size;
+	}
+	fImpl->cycleStartTime = system_time();
+
+	// Output buffers are sized to the cycle by _DetachedBufferFor().
+	for (size_t i = 0; i < fImpl->detachedBuffers.size(); i++) {
+		Impl::DetachedBuffer& out = fImpl->detachedBuffers[i];
+		if (dynamic_cast<BMediaOutput*>(out.connection) != NULL) {
+			out.storage.resize(size);
+			out.data = out.storage.data();
+			out.size = size;
+		}
+	}
+
+	ProcessCycle(fImpl->quantum);
+
+	status_t result = B_OK;
+	for (int32 i = 0; i < CountOutputs(); i++) {
+		BMediaOutput* output = OutputAt(i);
+		if (output == NULL || output->fDetachedUnit != this
+				|| !output->HasBinding()
+				|| (output->AcceptedTypes()
+					& B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) != 0)
+			continue;
+		Impl::DetachedBuffer* out = fImpl->_Detached(output);
+		if (out == NULL || out->data == NULL)
+			continue;
+		status_t sent = output->SendBuffer(out->data, out->size);
+		if (sent != B_OK)
+			result = sent;
+	}
+	return result;
+}
+
+
+void*
+BMediaUnit::_DetachedBufferFor(BMediaConnection* connection, size_t* outSize)
+{
+	// Called from ProcessCycle() on the sender's thread, lock already held.
+	BAutolock _(fImpl->detachLock);
+	Impl::DetachedBuffer* slot = fImpl->_Detached(connection);
+	if (slot == NULL || slot->data == NULL) {
+		if (outSize != NULL)
+			*outSize = 0;
+		return NULL;
+	}
+	if (outSize != NULL)
+		*outSize = slot->size;
+	return slot->data;
 }

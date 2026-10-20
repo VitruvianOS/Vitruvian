@@ -14,6 +14,7 @@
 #include <String.h>
 
 
+class BMediaClient;
 class BMediaConnection;
 class BMediaInput;
 class BMediaOutput;
@@ -219,6 +220,8 @@ private:
 									BMediaGraph(const BMediaGraph&) = delete;
 			BMediaGraph&			operator=(const BMediaGraph&) = delete;
 
+	static	status_t				_ResolveDetached(BMediaClient* outClient,
+										BMediaClient* inClient, bool* detached);
 	static	status_t				_ConnectInProcess(BMediaOutput* output,
 										BMediaInput* input);
 	static	status_t				_DisconnectInProcess(BMediaOutput* output,

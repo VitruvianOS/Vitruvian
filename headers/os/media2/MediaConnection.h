@@ -21,6 +21,7 @@ class BLocker;
 class BMallocIO;
 class BMediaGraph;
 class BMediaUnit;
+class BMediaOutput;
 
 class BMediaConnection {
 public:
@@ -77,6 +78,9 @@ private:
 			void*					fStream;
 			void*					fFilterPort;
 
+			// Set while the owning unit runs detached (no pw_filter).
+			BMediaUnit*				fDetachedUnit;
+
 			void*					_GetStream() const { return fStream; }
 			void*					_GetFilterPort() const { return fFilterPort; }
 			uint32					_GetNodeId() const;
@@ -92,6 +96,7 @@ private:
 	friend class BMidiUnit;
 	friend class BSimpleMediaNode;
 	friend class BMediaGraph;
+	friend class BMediaOutput;
 };
 
 

@@ -109,9 +109,12 @@ web_url_for_user_input(const std::string& input,
 	std::string templateToUse = searchTemplate.empty()
 		? kWebSearchDuckDuckGo : searchTemplate;
 
+	// Sites default to https; local hosts and addresses stay on http.
 	if (looksLikeHost(text)) {
-		std::string url = "http://" + text;
-		return url;
+		const std::string host = text.substr(0, text.find_first_of(":/"));
+		const bool local = host == "localhost"
+			|| host.find_first_not_of("0123456789.") == std::string::npos;
+		return (local ? "http://" : "https://") + text;
 	}
 
 	// Search. Substitute %s with the encoded query; a template without

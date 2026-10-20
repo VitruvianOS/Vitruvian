@@ -13,8 +13,7 @@
 #include <View.h>
 #include <Window.h>
 
-#include <media2/MediaClient.h>
-#include <media2/MediaConnection.h>
+#include <media2/MediaFormat.h>
 
 
 class CortexMonitorView : public BView {
@@ -28,30 +27,15 @@ public:
 			void				SetFrame(const uint8* bits, size_t size,
 									uint32 width, uint32 height);
 
+			// BMediaRecorder buffer hook; cookie is the view.
+	static	void				FrameHook(void* cookie, bigtime_t timestamp,
+									void* data, size_t size,
+									const BMediaFormat& format);
+
 private:
 			BLocker				fLock;
 			BBitmap*			fFrame;
 			bool				fUpdatePending;
-};
-
-
-// In-process end of a tap: a video input whose frames go to a view.
-class CortexVideoSink : public BMediaClient {
-public:
-								CortexVideoSink(CortexMonitorView* view);
-	virtual						~CortexVideoSink();
-
-	virtual	bool				IsInProcessRouted() const;
-
-			BMediaInput*		Input() const;
-
-protected:
-	virtual	status_t			_StartConnections(void* backend);
-
-private:
-	class _Input;
-
-			_Input*				fInput;
 };
 
 

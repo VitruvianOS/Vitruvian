@@ -33,6 +33,7 @@
 #include <media2/Controllable.h>
 #include <media2/FilterCatalog.h>
 #include <media2/MediaFilter.h>
+#include <media2/MediaRecorder.h>
 #include <media2/MediaTheme.h>
 #include <media2/ParameterWeb.h>
 #include <media2/RoutingStore.h>
@@ -80,11 +81,11 @@ struct CortexEndpoint {
 };
 
 
-// One open monitor: the sink, and the splitter that shares the source
+// One open monitor: the sink recorder, and the splitter that shares the source
 // with its existing link when there is one.
 struct CortexMonitorEntry {
 	CortexMonitorWindow*		window;
-	CortexVideoSink*			sink;
+	BMediaRecorder*				sink;
 	BVideoSplitter*				splitter;
 	BMediaOutput*				source;
 	BMediaInput*				target;
@@ -1628,11 +1629,16 @@ CortexWindow::_OpenMonitor(int32 nodeIndex, int32 pinIndex)
 		delete entry;
 		return;
 	}
-	entry->sink = new(std::nothrow) CortexVideoSink(entry->window->View());
+	entry->sink = new(std::nothrow) BMediaRecorder("Video monitor",
+		B_MEDIA_RAW_VIDEO);
+	if (entry->sink != NULL) {
+		entry->sink->SetBufferHooks(&CortexMonitorView::FrameHook, NULL,
+			entry->window->View());
+	}
 
 	status_t status = B_NO_MEMORY;
-	if (entry->sink != NULL && entry->sink->Input() != NULL) {
-		BMediaInput* sinkInput = entry->sink->Input();
+	if (entry->sink != NULL && entry->sink->VideoInput() != NULL) {
+		BMediaInput* sinkInput = entry->sink->VideoInput();
 		if (pin->output == NULL) {
 			entry->isForeign = true;
 			status = _EndpointFor(node, pin, &entry->foreignSource)
@@ -1686,7 +1692,6 @@ CortexWindow::_OpenMonitor(int32 nodeIndex, int32 pinIndex)
 		return;
 	}
 
-	fOwnClients.AddItem(entry->sink);
 	if (entry->splitter != NULL)
 		fOwnClients.AddItem(entry->splitter);
 	fMonitors.AddItem(entry);
@@ -1703,7 +1708,7 @@ CortexWindow::_TearDownMonitor(CortexMonitorEntry* entry)
 	if (graph == NULL || entry->sink == NULL)
 		return;
 
-	BMediaInput* sinkInput = entry->sink->Input();
+	BMediaInput* sinkInput = entry->sink->VideoInput();
 	if (entry->splitter != NULL) {
 		graph->Disconnect(entry->sinkTap, sinkInput);
 		graph->Disconnect(entry->targetTap, entry->target);
@@ -1726,7 +1731,8 @@ CortexWindow::_CloseMonitor(CortexMonitorEntry* entry)
 		entry->splitter->Stop();
 		fOwnClients.RemoveItem(entry->splitter);
 	}
-	fOwnClients.RemoveItem(entry->sink);
+	delete entry->sink;
+	entry->sink = NULL;
 
 	if (window->Lock())
 		window->Quit();

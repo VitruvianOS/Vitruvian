@@ -130,79 +130,14 @@ CortexMonitorView::Draw(BRect updateRect)
 }
 
 
-class CortexVideoSink::_Input : public BMediaInput {
-public:
-								_Input(CortexMonitorView* view)
-									:
-									BMediaConnection(B_MEDIA_INPUT,
-										"monitor"),
-									BMediaInput("monitor"),
-									fView(view)
-	{
-		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO));
-	}
-
-protected:
-	virtual	status_t			AcceptFormat(BMediaFormat* format)
-	{
-		if (format == NULL || !format->IsRawVideo())
-			return B_BAD_VALUE;
-		return B_OK;
-	}
-
-	virtual	void				HandleBuffer(void* buffer, size_t size,
-									const BMediaFormat& format)
-	{
-		if (!format.IsRawVideo())
-			return;
-		fView->SetFrame((const uint8*)buffer, size,
-			format.format.u.raw_video.width,
-			format.format.u.raw_video.height);
-	}
-
-private:
-			CortexMonitorView*	fView;
-};
-
-
-CortexVideoSink::CortexVideoSink(CortexMonitorView* view)
-	:
-	BMediaClient("Video monitor", B_MEDIA_RECORDER),
-	fInput(NULL)
+/* static */ void
+CortexMonitorView::FrameHook(void* cookie, bigtime_t /*timestamp*/, void* data,
+	size_t size, const BMediaFormat& format)
 {
-	fInput = new(std::nothrow) _Input(view);
-	if (fInput != NULL)
-		RegisterInput(fInput);
-}
-
-
-CortexVideoSink::~CortexVideoSink()
-{
-	if (fInput != NULL) {
-		UnregisterInput(fInput);
-		delete fInput;
-	}
-}
-
-
-bool
-CortexVideoSink::IsInProcessRouted() const
-{
-	return true;
-}
-
-
-BMediaInput*
-CortexVideoSink::Input() const
-{
-	return fInput;
-}
-
-
-status_t
-CortexVideoSink::_StartConnections(void* /*backend*/)
-{
-	return B_OK;
+	if (!format.IsRawVideo())
+		return;
+	((CortexMonitorView*)cookie)->SetFrame((const uint8*)data, size,
+		format.format.u.raw_video.width, format.format.u.raw_video.height);
 }
 
 

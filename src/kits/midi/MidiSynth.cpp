@@ -14,6 +14,8 @@
 
 #include <string.h>
 
+#include <midi2/MidiProducerAccess.h>
+
 
 BMidiSynth::BMidiSynth()
 	:
@@ -57,12 +59,13 @@ BMidiSynth::EnableInput(bool enable, bool loadInstruments)
 	// Wire this façade's midi2 producer into the synth unit's MIDI input
 	// so events travel the graph, not a private engine call.
 	BMidiLocalProducer* producer = Producer();
-	if (producer != NULL && producer->Output() != NULL
-		&& synth->MidiInput() != NULL) {
-		BMediaClient* client = producer->Output()->Client();
+	BMidiOutput* output = producer != NULL
+		? BPrivate::MidiProducerAccess::Output(producer) : NULL;
+	if (output != NULL && synth->MidiInput() != NULL) {
+		BMediaClient* client = output->Client();
 		if (client != NULL && !client->IsStarted())
 			client->Start();
-		MediaGraph()->Connect(producer->Output(), synth->MidiInput());
+		MediaGraph()->Connect(output, synth->MidiInput());
 	}
 	return B_OK;
 }

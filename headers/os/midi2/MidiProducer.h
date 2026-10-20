@@ -12,7 +12,10 @@
 
 class BMidiOutput;
 
-namespace BPrivate { class BMidiRosterLooper; }
+namespace BPrivate {
+	class BMidiRosterLooper;
+	class MidiProducerAccess;
+}
 
 class BMidiProducer : public BMidiEndpoint
 {
@@ -23,15 +26,12 @@ public:
 	bool IsConnected(BMidiConsumer *cons) const;
 	BList *Connections() const;
 
-	// media2 realisation: the MIDI output this producer owns.
-	BMidiOutput* Output() const { return fOutput; }
-	void SetOutput(BMidiOutput* output) { fOutput = output; }
-
 private:
 
 	friend class BMidiLocalProducer;
 	friend class BMidiRoster;
 	friend class BPrivate::BMidiRosterLooper;
+	friend class BPrivate::MidiProducerAccess;
 
 	BMidiProducer(const char *name = NULL);
 	virtual ~BMidiProducer();

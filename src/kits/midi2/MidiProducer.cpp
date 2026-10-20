@@ -60,7 +60,7 @@ BMidiProducer::Connect(BMidiConsumer *cons)
 
 	// Real PipeWire link through the graph (W7/W8).
 	status_t status = B_OK;
-	BMidiOutput* output = Output();
+	BMidiOutput* output = fOutput;
 	if (output != NULL && cons->Input() != NULL)
 		status = MediaGraph()->Connect(output, cons->Input());
 	else if (output != NULL) {
@@ -92,7 +92,7 @@ BMidiProducer::Disconnect(BMidiConsumer *cons)
 			return B_OK;
 	}
 
-	BMidiOutput* output = Output();
+	BMidiOutput* output = fOutput;
 	if (output != NULL && cons->Input() != NULL)
 		MediaGraph()->Disconnect(output, cons->Input());
 
@@ -247,7 +247,7 @@ BMidiLocalProducer::BMidiLocalProducer(const char *name)
 	}
 
 	SetUnit(unit);
-	SetOutput(output);
+	fOutput = output;
 	fIsLocal = true;
 	fIsConsumer = false;
 

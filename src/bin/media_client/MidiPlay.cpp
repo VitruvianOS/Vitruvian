@@ -22,6 +22,8 @@
 #include <midi/Synth.h>
 #include <midi2/MidiProducer.h>
 
+#include <midi2/MidiProducerAccess.h>
+
 
 static volatile bool sMidiInterrupt = false;
 
@@ -125,8 +127,9 @@ media_midi_play(const char* uri)
 	// That is the §12.N chain: store timeline -> façade scheduler ->
 	// BMidiOutput ring -> PipeWire -> BSoundFontSynth.
 	BMidiLocalProducer* producer = store->Producer();
-	if (producer == NULL || producer->Output() == NULL
-		|| synth->MidiInput() == NULL) {
+	BMidiOutput* output = producer != NULL
+		? BPrivate::MidiProducerAccess::Output(producer) : NULL;
+	if (output == NULL || synth->MidiInput() == NULL) {
 		fprintf(stderr, "media_midi_play: cannot build MIDI path\n");
 		delete store;
 		synth->Stop();
@@ -134,7 +137,7 @@ media_midi_play(const char* uri)
 		return 2;
 	}
 
-	status = MediaGraph()->Connect(producer->Output(), synth->MidiInput());
+	status = MediaGraph()->Connect(output, synth->MidiInput());
 	if (status != B_OK) {
 		fprintf(stderr, "media_midi_play: cannot link MIDI source to "
 			"synth: %d\n", (int)status);

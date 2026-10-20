@@ -584,7 +584,8 @@ _CountImagesAndAreas(int fd, team_info* info)
 // /proc dirents are read ahead in batches. The enumeration cookie can only
 // carry the dir fd, so the pending batch lives here; when another fd needs
 // the slot, a batch with unhandled entries is seeked back into place first,
-// so no entry is lost or skipped.
+// so no entry is lost or skipped. Callers must drain the enumeration on
+// one thread; continuing a cookie from another thread drops the batch.
 static const int32 kTeamDirentBatch = 32;
 
 struct team_dirent_cache {

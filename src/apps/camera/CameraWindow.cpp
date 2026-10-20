@@ -304,6 +304,8 @@ CameraWindow::CameraWindow(BRect frame)
 	_RefreshFilterMenu();
 	_LoadSettings();
 
+	// No frame may ever arrive (no camera): fit the saved size once shown.
+	PostMessage(kMsgCameraFrameReshaped);
 }
 
 

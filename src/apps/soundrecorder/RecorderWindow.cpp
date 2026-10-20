@@ -2195,12 +2195,18 @@ RecorderWindow::_ShowInTracker()
 	if (item == NULL)
 		return;
 
-	entry_ref ref;
-	if (item->Entry().GetRef(&ref) != B_OK)
+	// Open the folder with the file selected, not the file.
+	BEntry parent;
+	entry_ref parentRef;
+	node_ref node;
+	if (item->Entry().GetNodeRef(&node) != B_OK
+		|| item->Entry().GetParent(&parent) != B_OK
+		|| parent.GetRef(&parentRef) != B_OK)
 		return;
 
 	BMessage message(B_REFS_RECEIVED);
-	message.AddRef("refs", &ref);
+	message.AddRef("refs", &parentRef);
+	message.AddData("nodeRefToSelect", B_RAW_TYPE, &node, sizeof(node));
 	be_roster->Launch("application/x-vnd.Be-TRAK", &message);
 }
 

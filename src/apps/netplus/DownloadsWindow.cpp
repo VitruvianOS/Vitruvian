@@ -44,6 +44,14 @@ public:
 								{
 								}
 
+	// The list does not erase behind items (see below); paint the row
+	// whole so progress updates do not flash.
+	virtual	void				DrawItem(BView* owner, BRect frame,
+									bool complete)
+								{
+									BStringItem::DrawItem(owner, frame, true);
+								}
+
 			uint64				fId;
 			BString				fFilename;
 			BString				fDestination;
@@ -51,6 +59,32 @@ public:
 			uint64				fTotal;
 			bool				fFinished;
 			bool				fFailed;
+};
+
+
+// Items paint their whole row; the list only fills the space below them.
+class DownloadsListView : public BListView {
+public:
+								DownloadsListView(const char* name)
+									:
+									BListView(name, B_SINGLE_SELECTION_LIST)
+								{
+									SetViewColor(B_TRANSPARENT_COLOR);
+								}
+
+	virtual	void				Draw(BRect updateRect)
+								{
+									BRect empty = Bounds();
+									const int32 count = CountItems();
+									if (count > 0)
+										empty.top = ItemFrame(count - 1).bottom + 1;
+									empty = empty & updateRect;
+									if (empty.IsValid()) {
+										SetLowColor(ui_color(B_LIST_BACKGROUND_COLOR));
+										FillRect(empty, B_SOLID_LOW);
+									}
+									BListView::Draw(updateRect);
+								}
 };
 
 
@@ -87,7 +121,7 @@ DownloadsWindow::DownloadsWindow(BRect frame, BWebView* webView)
 	fShowButton(NULL),
 	fWebView(webView)
 {
-	fList = new BListView("downloads", B_SINGLE_SELECTION_LIST);
+	fList = new DownloadsListView("downloads");
 	fList->SetSelectionMessage(new BMessage(kMsgListSelection));
 	BScrollView* scroller = new BScrollView("scroll", fList, 0, true, true);
 
@@ -219,6 +253,9 @@ DownloadsWindow::_UpdateLabel(DownloadItem* item)
 	} else {
 		label << " (" << formatBytes(item->fReceived) << ")";
 	}
+	// Progress ticks often leave the text unchanged; skip the redraw.
+	if (label == item->Text())
+		return;
 	item->SetText(label.String());
 	fList->InvalidateItem(fList->IndexOf(item));
 }
@@ -313,15 +350,20 @@ DownloadsWindow::MessageReceived(BMessage* message)
 			if (selected == NULL || selected->fDestination.IsEmpty())
 				break;
 
+			// Open the folder with the file selected, not the file.
 			BEntry entry(selected->fDestination.String());
-			entry_ref ref;
-			if (entry.GetRef(&ref) != B_OK)
+			BEntry parent;
+			entry_ref parentRef;
+			node_ref node;
+			if (entry.GetNodeRef(&node) != B_OK
+				|| entry.GetParent(&parent) != B_OK
+				|| parent.GetRef(&parentRef) != B_OK)
 				break;
 
 			BMessage refs(B_REFS_RECEIVED);
-			refs.AddRef("refs", &ref);
-			BMessenger tracker("application/x-vnd.Be-TRAK");
-			tracker.SendMessage(&refs);
+			refs.AddRef("refs", &parentRef);
+			refs.AddData("nodeRefToSelect", B_RAW_TYPE, &node, sizeof(node));
+			be_roster->Launch("application/x-vnd.Be-TRAK", &refs);
 			break;
 		}
 

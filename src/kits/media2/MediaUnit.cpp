@@ -81,6 +81,16 @@ struct BMediaUnit::Impl {
 	size_t					cycleSize;
 	std::vector<DetachedBuffer> detachedBuffers;
 
+	// Graph-mode video buffers dequeued for the current cycle; BufferFor()
+	// hands out the data and _OnProcess() queues them back afterwards.
+	struct GraphVideoBuffer {
+		BMediaConnection*		connection;
+		pw_buffer*				buffer;
+		void*					data;
+		size_t					size;
+	};
+	std::vector<GraphVideoBuffer> videoBuffers;
+
 	Impl()
 		:
 		detachLock("detached unit"),
@@ -355,6 +365,7 @@ BMediaUnit::_BuildFilter()
 
 error:
 	backend->Lock();
+	fImpl->videoBuffers.clear();
 	for (int32 i = 0; i < CountOutputs(); i++) {
 		BMediaOutput* output = OutputAt(i);
 		if (output != NULL && output->_GetFilterPort() != NULL)
@@ -400,14 +411,21 @@ BMediaUnit::_CreatePortFor(BMediaConnection* connection)
 	else if (connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI))
 		formatDSP = "8 bit raw midi";
 
-	if (formatDSP == NULL)
-		formatDSP = "32 bit float mono audio";
-
-	pw_properties* portProps = pw_properties_new(
-		PW_KEY_FORMAT_DSP, formatDSP,
-		PW_KEY_PORT_NAME, connection->Name(),
-		PW_KEY_PORT_GROUP, Name(),
-		NULL);
+	// Video ports pass raw buffers through; a DSP format would force
+	// audio conversion on them.
+	pw_properties* portProps = NULL;
+	if (formatDSP != NULL) {
+		portProps = pw_properties_new(
+			PW_KEY_FORMAT_DSP, formatDSP,
+			PW_KEY_PORT_NAME, connection->Name(),
+			PW_KEY_PORT_GROUP, Name(),
+			NULL);
+	} else {
+		portProps = pw_properties_new(
+			PW_KEY_PORT_NAME, connection->Name(),
+			PW_KEY_PORT_GROUP, Name(),
+			NULL);
+	}
 
 	backend->Lock();
 	void* port = pw_filter_add_port(fImpl->filter,
@@ -424,6 +442,15 @@ BMediaUnit::_CreatePortFor(BMediaConnection* connection)
 
 	memcpy(port, &pd, sizeof(port_data));
 	connection->_SetFilterPort(port);
+
+	// Pre-create the video slot so BufferFor() never allocates on the
+	// realtime thread.
+	Impl::GraphVideoBuffer slot;
+	slot.connection = connection;
+	slot.buffer = NULL;
+	slot.data = NULL;
+	slot.size = 0;
+	fImpl->videoBuffers.push_back(slot);
 	return B_OK;
 }
 
@@ -459,6 +486,14 @@ BMediaUnit::_RemoveLivePort(BMediaConnection* connection)
 	backend->Lock();
 	connection->_SetFilterPort(NULL);
 	pw_filter_remove_port(port);
+	// Drop the buffer slot with the port; a stale entry would shadow the
+	// slot a later _CreatePortFor() adds for the same connection.
+	for (size_t i = 0; i < fImpl->videoBuffers.size(); i++) {
+		if (fImpl->videoBuffers[i].connection == connection) {
+			fImpl->videoBuffers.erase(fImpl->videoBuffers.begin() + i);
+			break;
+		}
+	}
 	backend->Unlock();
 	return B_OK;
 }
@@ -513,6 +548,7 @@ BMediaUnit::_TeardownFilter()
 	// Clear before destroying: pw_filter_destroy() can reenter state_changed, which uses a NULL
 	// fImpl->filter to spot an intentional teardown.
 	fImpl->filter = NULL;
+	fImpl->videoBuffers.clear();
 	pw_filter_destroy(filter);
 
 	for (int32 i = 0; i < CountOutputs(); i++) {
@@ -604,6 +640,9 @@ BMediaUnit::BufferFor(BMediaConnection* connection, size_t* outSize)
 		return buffer;
 	}
 
+	if (connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO))
+		return _VideoBufferFor(connection, pd, outSize);
+
 	// MIDI ports never come through here: _OnProcess() hands the cycle's
 	// sequence to FillBuffer/HandleBuffer directly. Dequeuing a pw_buffer
 	// for the caller would strand it outside both queues.
@@ -644,6 +683,28 @@ BMediaUnit::Impl::_OnProcess(void* data, struct spa_io_position* position)
 	}
 
 	impl->owner->ProcessCycle(impl->quantum);
+
+	// Video buffers BufferFor() dequeued go back to the filter now; an
+	// output chunk carries the size the unit filled in. The slots stay:
+	// _BuildFilter() created them with the ports.
+	for (size_t i = 0; i < impl->videoBuffers.size(); i++) {
+		Impl::GraphVideoBuffer& slot = impl->videoBuffers[i];
+		if (slot.buffer == NULL || slot.connection == NULL)
+			continue;
+		port_data* pd = (port_data*)slot.connection->_GetFilterPort();
+		if (pd == NULL)
+			continue;
+		spa_buffer* spaBuf = slot.buffer->buffer;
+		if (spaBuf != NULL && spaBuf->datas[0].chunk != NULL
+				&& dynamic_cast<BMediaOutput*>(slot.connection) != NULL) {
+			spaBuf->datas[0].chunk->offset = 0;
+			spaBuf->datas[0].chunk->size = (uint32)slot.size;
+		}
+		pw_filter_queue_buffer(pd, slot.buffer);
+		slot.buffer = NULL;
+		slot.data = NULL;
+		slot.size = 0;
+	}
 
 	for (int32 i = 0; i < impl->owner->CountOutputs(); i++) {
 		BMediaOutput* output = impl->owner->OutputAt(i);
@@ -834,6 +895,8 @@ BMediaUnit::_EnterDetached()
 }
 
 
+
+
 void
 BMediaUnit::_DetachedLink(BMediaConnection* connection, bool attach)
 {
@@ -969,4 +1032,59 @@ BMediaUnit::_DetachedBufferFor(BMediaConnection* connection, size_t* outSize)
 	if (outSize != NULL)
 		*outSize = slot->size;
 	return slot->data;
+}
+
+
+void*
+BMediaUnit::_VideoBufferFor(BMediaConnection* connection, void* port,
+	size_t* outSize)
+{
+	// Slots are pre-created with the ports in _BuildFilter(); the lookup
+	// and the fill below never allocate.
+	Impl::GraphVideoBuffer* slot = NULL;
+	for (size_t i = 0; i < fImpl->videoBuffers.size(); i++) {
+		if (fImpl->videoBuffers[i].connection == connection) {
+			slot = &fImpl->videoBuffers[i];
+			break;
+		}
+	}
+	if (slot == NULL)
+		return NULL;
+
+	// One buffer per connection per cycle; _OnProcess() queues them back
+	// once ProcessCycle() is done with them.
+	if (slot->buffer != NULL) {
+		if (outSize != NULL)
+			*outSize = slot->size;
+		return slot->data;
+	}
+
+	port_data* pd = (port_data*)port;
+	pw_buffer* pb = pw_filter_dequeue_buffer(pd);
+	if (pb == NULL)
+		return NULL;
+
+	spa_buffer* spaBuf = pb->buffer;
+	if (spaBuf == NULL || spaBuf->datas[0].data == NULL) {
+		pw_filter_queue_buffer(pd, pb);
+		return NULL;
+	}
+
+	uint8* data = (uint8*)spaBuf->datas[0].data;
+	size_t size;
+	if (dynamic_cast<BMediaOutput*>(connection) != NULL) {
+		// The unit fills a whole frame; the chunk is set on queue-back.
+		size = spaBuf->datas[0].maxsize;
+	} else {
+		size = spaBuf->datas[0].chunk != NULL
+			? spaBuf->datas[0].chunk->size : spaBuf->datas[0].maxsize;
+	}
+
+	slot->buffer = pb;
+	slot->data = data;
+	slot->size = size;
+
+	if (outSize != NULL)
+		*outSize = size;
+	return data;
 }

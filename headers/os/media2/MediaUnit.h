@@ -120,6 +120,9 @@ private:
 			void*					_DetachedBufferFor(
 										BMediaConnection* connection,
 										size_t* outSize);
+			void*					_VideoBufferFor(
+										BMediaConnection* connection,
+										void* port, size_t* outSize);
 
 			struct Impl;
 			Impl*					fImpl;

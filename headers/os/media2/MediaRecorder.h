@@ -8,6 +8,7 @@
 #define _MEDIA2_MEDIA_RECORDER_H
 
 
+#include <media2/MediaClientDefs.h>
 #include <media2/MediaFormat.h>
 
 
@@ -37,6 +38,11 @@ public:
 		void* data, size_t size, const media_raw_audio_format& format);
 	typedef void (*NotifyFunc)(void* cookie, notification what, ...);
 
+	// Format-carrying hook for any media type: raw audio or raw video
+	// buffers arrive with their BMediaFormat.
+	typedef void (*BufferFunc)(void* cookie, bigtime_t timestamp,
+		void* data, size_t size, const BMediaFormat& format);
+
 
 	typedef ProcessFunc	RecordBuffer;
 	typedef NotifyFunc	Notifier;
@@ -54,12 +60,23 @@ public:
 	// one muxed file carries both streams.
 			status_t			SetAudioFormat(const BMediaFormat& format);
 
+	// B_MEDIA_RAW_VIDEO recorders: the recorder owns a capture stream from
+	// the given audio device (0 follows the system default input) and feeds
+	// the audio leg with it. Linked at Start(); without a usable device the
+	// file carries video only.
+			status_t			SetAudioSource(media_client_id device = 0);
+
 	virtual	status_t			Start(bool force = false);
 	virtual	status_t			Stop(bool force = false);
 			bool				IsRunning() const;
 			bool				IsRecording() const { return IsRunning(); }
 
 			status_t			SetHooks(ProcessFunc recordFunc = NULL,
+									NotifyFunc notifyFunc = NULL,
+									void* cookie = NULL);
+			// Every buffer reaching the recorder, video included, goes to
+			// bufferFunc before it is encoded (if an output file is set).
+			status_t			SetBufferHooks(BufferFunc bufferFunc = NULL,
 									NotifyFunc notifyFunc = NULL,
 									void* cookie = NULL);
 			void				SetCallbacks(RecordBuffer recordFunc = NULL,

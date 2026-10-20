@@ -13,11 +13,13 @@
 
 #include <Entry.h>
 #include <File.h>
+#include <ObjectList.h>
 #include <Path.h>
 #include <syscalls.h>
 
 #include <media2/MediaClient.h>
 #include <media2/MediaConnection.h>
+#include <media2/MediaGraph.h>
 #include <media2/SimpleMediaNode.h>
 
 #include "GStreamerBackend.h"
@@ -127,6 +129,7 @@ public:
 	const BMediaFormat& Format() const { return fFormat; }
 	status_t SetFormat(const BMediaFormat& format);
 	status_t SetAudioFormat(const BMediaFormat& format);
+	status_t SetAudioSource(media_client_id device);
 
 	BMediaInput* Input() const { return fInput; }
 	BMediaInput* VideoInput() const
@@ -139,6 +142,8 @@ public:
 	bool     IsRecording() const;
 
 	void SetCallbacks(BMediaRecorder::RecordBuffer recordFunc,
+		BMediaRecorder::Notifier notifyFunc, void* cookie);
+	void SetBufferHooks(BMediaRecorder::BufferFunc bufferFunc,
 		BMediaRecorder::Notifier notifyFunc, void* cookie);
 
 	size_t BufferSize() const { return fFormat.format.u.raw_audio.buffer_size; }
@@ -161,6 +166,10 @@ private:
 	void _DeliverAudio(void* buffer, size_t size, const BMediaFormat& format);
 	void _PushAudio(void* buffer, size_t size, uint32 frameCount,
 		const BMediaFormat& format);
+	status_t _StartMic();
+	void _StopMic();
+	static void _MicRecord(void* cookie, bigtime_t timestamp, void* data,
+		size_t size, const media_raw_audio_format& format);
 	void _SetVideoCaps(const BMediaFormat& format);
 	void _SetAudioCaps(const BMediaFormat& format);
 
@@ -175,6 +184,14 @@ private:
 	BMediaInput*		fInput;
 	status_t				fInitErr;
 
+	// Audio leg owned by the recorder, see SetAudioSource().
+	BMediaRecorder*			fMic;
+	bool					fMicWanted;
+	media_client_id			fMicDevice;
+	BMediaGraph::ForeignPort	fMicSource;
+	bool					fMicLinked;
+
+	BMediaRecorder::BufferFunc		fBufferFunc;
 	BMediaRecorder::RecordBuffer	fRecordFunc;
 	BMediaRecorder::Notifier		fNotifyFunc;
 	void*							fCookie;
@@ -211,6 +228,11 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	fClient(NULL),
 	fInput(NULL),
 	fInitErr(B_NO_INIT),
+	fMic(NULL),
+	fMicWanted(false),
+	fMicDevice(0),
+	fMicLinked(false),
+	fBufferFunc(NULL),
 	fRecordFunc(NULL),
 	fNotifyFunc(NULL),
 	fCookie(NULL),
@@ -284,6 +306,8 @@ BMediaRecorder::Impl::~Impl()
 	}
 	if (fClient != NULL)
 		fClient->Stop();
+	_StopMic();
+	delete fMic;
 	ClearOutputFile();
 	delete fInput;
 	delete fNode;
@@ -320,6 +344,110 @@ BMediaRecorder::Impl::SetAudioFormat(const BMediaFormat& fmt)
 
 
 status_t
+BMediaRecorder::Impl::SetAudioSource(media_client_id device)
+{
+	if (fClient == NULL)
+		return B_NOT_SUPPORTED;
+	if (IsRecording())
+		return B_NOT_ALLOWED;
+	fMicWanted = true;
+	fMicDevice = device;
+	return B_OK;
+}
+
+
+status_t
+BMediaRecorder::Impl::_StartMic()
+{
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	media_client_id device = fMicDevice;
+	if (device == 0) {
+		status_t status = graph->GetDefaultAudioInput(&device);
+		if (status != B_OK)
+			return status;
+	}
+
+	BObjectList<BMediaGraph::ForeignPort, true> ports;
+	status_t status = graph->GetForeignPorts((uint32)device, &ports);
+	if (status != B_OK)
+		return status;
+	BMediaGraph::ForeignPort* source = NULL;
+	for (int32 i = 0; i < ports.CountItems(); i++) {
+		if (ports.ItemAt(i)->direction == "out") {
+			source = ports.ItemAt(i);
+			break;
+		}
+	}
+	if (source == NULL)
+		return B_ENTRY_NOT_FOUND;
+	fMicSource = *source;
+
+	if (fMic == NULL) {
+		fMic = new(std::nothrow) BMediaRecorder("recorder-mic",
+			B_MEDIA_RAW_AUDIO);
+		if (fMic == NULL || fMic->InitCheck() != B_OK) {
+			delete fMic;
+			fMic = NULL;
+			return B_NO_MEMORY;
+		}
+		BMediaFormat format;
+		format.SetToDefault();
+		format.format.type = B_MEDIA_RAW_AUDIO;
+		media_raw_audio_format& raw = format.format.u.raw_audio;
+		raw.frame_rate = 48000.0f;
+		raw.channel_count = 2;
+		raw.format = media_raw_audio_format::B_AUDIO_SHORT;
+		raw.byte_order = B_MEDIA_HOST_ENDIAN;
+		raw.buffer_size = 4096;
+		fMic->SetFormat(format);
+	}
+
+	// The capture stream must exist before the server can link it.
+	fMic->SetHooks(&Impl::_MicRecord, NULL, this);
+	status = fMic->Start();
+	if (status == B_OK)
+		status = graph->ConnectChannels(fMicSource.nodeId, fMic->Input());
+	if (status != B_OK) {
+		fMic->Stop(true);
+		fMic->SetHooks(NULL, NULL, NULL);
+		return status;
+	}
+	fMicLinked = true;
+	return B_OK;
+}
+
+
+void
+BMediaRecorder::Impl::_StopMic()
+{
+	if (fMic == NULL || !fMicLinked)
+		return;
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph != NULL)
+		graph->Disconnect(&fMicSource, fMic->Input());
+	fMicLinked = false;
+	fMic->Stop(true);
+	fMic->SetHooks(NULL, NULL, NULL);
+}
+
+
+/* static */ void
+BMediaRecorder::Impl::_MicRecord(void* cookie, bigtime_t, void* data,
+	size_t size, const media_raw_audio_format& raw)
+{
+	Impl* self = (Impl*)cookie;
+	BMediaFormat format;
+	format.SetToDefault();
+	format.format.type = B_MEDIA_RAW_AUDIO;
+	format.format.u.raw_audio = raw;
+	self->_DeliverAudio(data, size, format);
+}
+
+
+status_t
 BMediaRecorder::Impl::Start()
 {
 	if (fNode == NULL && fClient == NULL)
@@ -328,9 +456,13 @@ BMediaRecorder::Impl::Start()
 	if (err != B_OK)
 		return err;
 
+	if (fClient != NULL && fMicWanted && !fMicLinked)
+		_StartMic();	// failure leaves a video-only file
+
 	// A leg nobody feeds must not hold the muxer back.
 	if (fClient != NULL && fEncodePipeline != NULL) {
-		if (!fClient->AudioInput()->IsConnected() && fEncodeAudioSrc != NULL)
+		if (!fClient->AudioInput()->IsConnected() && !fMicLinked
+			&& fEncodeAudioSrc != NULL)
 			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAudioSrc));
 		if (!fClient->VideoInput()->IsConnected() && fEncodeVideoSrc != NULL)
 			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeVideoSrc));
@@ -346,6 +478,7 @@ BMediaRecorder::Impl::Stop()
 {
 	if (fNode == NULL && fClient == NULL)
 		return;
+	_StopMic();
 	if (fClient != NULL) {
 		if (fClient->IsStarted())
 			fClient->Stop();
@@ -545,6 +678,16 @@ BMediaRecorder::Impl::SetCallbacks(BMediaRecorder::RecordBuffer recordFunc,
 
 
 void
+BMediaRecorder::Impl::SetBufferHooks(BMediaRecorder::BufferFunc bufferFunc,
+	BMediaRecorder::Notifier notifyFunc, void* cookie)
+{
+	fBufferFunc = bufferFunc;
+	fNotifyFunc = notifyFunc;
+	fCookie     = cookie;
+}
+
+
+void
 BMediaRecorder::Impl::_SetVideoCaps(const BMediaFormat& format)
 {
 	if (fEncodeVideoSrc == NULL || fVideoCapsSet || !format.IsRawVideo())
@@ -609,6 +752,9 @@ void
 BMediaRecorder::Impl::_DeliverVideo(void* buffer, size_t size,
 	const BMediaFormat& format)
 {
+	if (fBufferFunc != NULL && buffer != NULL && size > 0)
+		fBufferFunc(fCookie, 0, buffer, size, format);
+
 	if (fEncodePipeline == NULL || fEncodeVideoSrc == NULL || buffer == NULL
 		|| size == 0) {
 		return;
@@ -650,6 +796,9 @@ void
 BMediaRecorder::Impl::_DeliverAudio(void* buffer, size_t size,
 	const BMediaFormat& format)
 {
+	if (fBufferFunc != NULL && buffer != NULL && size > 0)
+		fBufferFunc(fCookie, 0, buffer, size, format);
+
 	if (fEncodePipeline == NULL || fEncodeAudioSrc == NULL)
 		return;
 
@@ -711,7 +860,9 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 {
 	Impl* self = (Impl*)cookie;
 
-	if (self->fRecordFunc != NULL) {
+	if (self->fBufferFunc != NULL) {
+		self->fBufferFunc(self->fCookie, 0, buffer, size, format);
+	} else if (self->fRecordFunc != NULL) {
 		// Legacy ProcessFunc signature: (cookie, timestamp, data, size, format)
 		self->fRecordFunc(self->fCookie, /*timestamp*/ 0, buffer, size,
 			format.format.u.raw_audio);
@@ -820,6 +971,7 @@ BMediaRecorder::Format() const
 
 status_t  BMediaRecorder::SetFormat(const BMediaFormat& f)  { return fImpl ? fImpl->SetFormat(f) : B_NO_INIT; }
 status_t  BMediaRecorder::SetAudioFormat(const BMediaFormat& f) { return fImpl ? fImpl->SetAudioFormat(f) : B_NO_INIT; }
+status_t  BMediaRecorder::SetAudioSource(media_client_id d) { return fImpl ? fImpl->SetAudioSource(d) : B_NO_INIT; }
 status_t  BMediaRecorder::Start(bool /*force*/)             { return fImpl ? fImpl->Start() : B_NO_INIT; }
 status_t  BMediaRecorder::Stop(bool /*force*/)              { if (fImpl) fImpl->Stop(); return B_OK; }
 bool      BMediaRecorder::IsRunning() const                 { return fImpl && fImpl->IsRecording(); }
@@ -855,6 +1007,17 @@ BMediaRecorder::SetCallbacks(RecordBuffer recordFunc, Notifier notifyFunc,
 {
 	if (fImpl != NULL)
 		fImpl->SetCallbacks(recordFunc, notifyFunc, cookie);
+}
+
+
+status_t
+BMediaRecorder::SetBufferHooks(BufferFunc bufferFunc, NotifyFunc notifyFunc,
+	void* cookie)
+{
+	if (fImpl == NULL)
+		return B_NO_INIT;
+	fImpl->SetBufferHooks(bufferFunc, notifyFunc, cookie);
+	return B_OK;
 }
 
 

@@ -21,8 +21,6 @@ AddOn(media2
 	RoutingStore.cpp
 	MediaNode.cpp
 	MediaUnit.cpp
-	MidiFilterExt.cpp
-	MidiRosterExt.cpp
 	MidiUnit.cpp
 	FilterUnitCore.cpp
 	MediaFilter.cpp

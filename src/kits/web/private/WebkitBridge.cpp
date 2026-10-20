@@ -111,7 +111,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	webkit_settings_set_user_agent(settings,
 		"Mozilla/5.0 (Linux; X11) "
 		"AppleWebKit/605.1.15 (KHTML, like Gecko) "
-		"Version/17.4 Safari/605.1.15 Net+/0.1");
+		"Version/17.4 Safari/605.1.15 NetPlus/0.5");
 
 	// 4. WebKitWebViewBackend wrapping our FDO wpe_view_backend.
 	// WebKit owns the exportable from here and destroys it after it is done
@@ -1035,12 +1035,12 @@ WebKitBridge::SetUserAgentSuffix(const std::string& suffix)
 			webkit_settings_set_user_agent(a->s,
 				"Mozilla/5.0 (Linux; X11) "
 				"AppleWebKit/605.1.15 (KHTML, like Gecko) "
-				"Version/17.4 Safari/605.1.15 Net+/0.1");
+				"Version/17.4 Safari/605.1.15 NetPlus/0.5");
 		} else {
 			std::string ua =
 				"Mozilla/5.0 (Linux; X11) "
 				"AppleWebKit/605.1.15 (KHTML, like Gecko) "
-				"Version/17.4 Safari/605.1.15 Net+/0.1 " + a->suffix;
+				"Version/17.4 Safari/605.1.15 NetPlus/0.5 " + a->suffix;
 			webkit_settings_set_user_agent(a->s, ua.c_str());
 		}
 		delete a;

@@ -653,7 +653,7 @@ MainWindow::MessageReceived(BMessage* message)
 		case B_ABOUT_REQUESTED:
 		{
 			BAlert* alert = new BAlert("About NetPlus",
-				"NetPlus Browser v0.1\n"
+				"NetPlus Browser v0.5\n"
 				"WPE WebKit + Vitruvian\n"
 				"\n\xa9 2026 VitruvianOS Project",
 				"OK");

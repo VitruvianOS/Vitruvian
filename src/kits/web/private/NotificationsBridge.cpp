@@ -30,7 +30,7 @@ void
 NotificationsBridge::Show(const std::string& title, const std::string& body)
 {
 	BNotification notif(B_INFORMATION_NOTIFICATION);
-	notif.SetGroup("Net+");
+	notif.SetGroup("NetPlus");
 	notif.SetTitle(title.c_str());
 	notif.SetContent(body.c_str());
 	status_t err = notif.Send();

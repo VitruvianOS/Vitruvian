@@ -71,13 +71,13 @@ UrlSchemeAdapter::_HandleVosAbout(WebKitURISchemeRequest* request, gpointer)
 	// injects as a user script so the page follows the engine from
 	// the settings.
 	_FinishWithHTML(request,
-		"<!DOCTYPE html><html><head><title>About Net+</title>"
+		"<!DOCTYPE html><html><head><meta charset='utf-8'><title>About NetPlus</title>"
 		"<meta name='viewport' content='width=device-width'>"
 		"</head>"
 		"<body style='font-family:sans-serif;text-align:center;"
 		"padding:3em'>"
-		"<h1>Net+ Browser</h1>"
-		"<p>Version 0.1 \xc2\xa9 2026 V\\OS</p>"
+		"<h1>NetPlus Browser</h1>"
+		"<p>Version 0.5 \xc2\xa9 2026 V\\OS</p>"
 		"<p>WPE WebKit on V\\OS</p>"
 		"<form style='margin:2em auto;max-width:28em' "
 		"onsubmit=\"event.preventDefault();"

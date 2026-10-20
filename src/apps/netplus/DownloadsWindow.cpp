@@ -276,7 +276,7 @@ DownloadsWindow::MessageReceived(BMessage* message)
 
 			if (finished && filename != NULL) {
 				BNotification notification(B_INFORMATION_NOTIFICATION);
-				notification.SetGroup("Net+");
+				notification.SetGroup("NetPlus");
 				notification.SetTitle("Download finished");
 				notification.SetContent(filename);
 				notification.Send();

@@ -17,6 +17,7 @@
 
 
 class BButton;
+class BGroupLayout;
 class BMediaRecorder;
 class BMessageRunner;
 class BMenuField;
@@ -25,6 +26,7 @@ class BSlider;
 class BStringView;
 class BMediaFilter;
 class BVideoSplitter;
+class BView;
 class CameraView;
 
 
@@ -47,6 +49,8 @@ private:
 			status_t			_OpenCamera(int32 index);
 			void				_SetMode(int32 mode);
 			void				_SetFilter(const char* filterId);
+			void				_BuildFilterControls();
+			void				_ClearFilterControls();
 			void				_FitToPicture();
 			void				_RefreshCameraMenu();
 			void				_RefreshResolutionMenu();
@@ -82,9 +86,7 @@ private:
 			BPopUpMenu*			fFilterMenu;
 			BPopUpMenu*			fMicMenu;
 			BSlider*			fZoomSlider;
-			BSlider*			fBrightnessSlider;
-			BSlider*			fContrastSlider;
-			BSlider*			fSaturationSlider;
+			BGroupLayout*		fFilterControlsLayout;
 
 			BCameraSource*		fSource;
 			BVideoSplitter*		fSplitter;

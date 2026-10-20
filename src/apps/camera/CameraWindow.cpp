@@ -14,10 +14,13 @@
 #include <Autolock.h>
 #include <Bitmap.h>
 #include <Button.h>
+#include <CheckBox.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <FindDirectory.h>
+#include <GroupLayout.h>
 #include <LayoutBuilder.h>
+#include <LayoutItem.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <MessageRunner.h>
@@ -26,6 +29,7 @@
 #include <Size.h>
 #include <Slider.h>
 #include <StringView.h>
+#include <View.h>
 
 #include <media2/FilterCatalog.h>
 #include <media2/MediaGraph.h>
@@ -48,9 +52,7 @@ static const uint32 kMsgFilterChanged = 'FILT';
 static const uint32 kMsgMicChanged = 'MICS';
 static const uint32 kMsgShutter = 'SHUT';
 static const uint32 kMsgZoomChanged = 'ZOOM';
-static const uint32 kMsgBrightChanged = 'BRGT';
-static const uint32 kMsgContrastChanged = 'CNTR';
-static const uint32 kMsgSaturChanged = 'SATR';
+static const uint32 kMsgFilterParamChanged = 'FLPC';
 static const uint32 kMsgThumbClicked = 'THMB';
 static const uint32 kMsgRecordTick = 'TICK';
 static const uint32 kMsgCaptureNow = 'CAPN';
@@ -66,6 +68,10 @@ static const camera_mode kFallbackModes[] = {
 
 // A device that ignores the requested size is followed at most this often.
 static const int32 kMaxReopens = 2;
+
+// Filter parameters arrive as float ranges; sliders work in thousandths
+// of the range so fractional values keep their precision.
+static const float kFilterParamScale = 1000.0f;
 
 
 static BMediaFormat
@@ -174,9 +180,7 @@ CameraWindow::CameraWindow(BRect frame)
 	fFilterMenu(NULL),
 	fMicMenu(NULL),
 	fZoomSlider(NULL),
-	fBrightnessSlider(NULL),
-	fContrastSlider(NULL),
-	fSaturationSlider(NULL),
+	fFilterControlsLayout(NULL),
 	fSource(NULL),
 	fSplitter(NULL),
 	fFilter(NULL),
@@ -236,22 +240,13 @@ CameraWindow::CameraWindow(BRect frame)
 	fZoomSlider = new BSlider("zoom", "Zoom",
 		new BMessage(kMsgZoomChanged), 10, 40, B_HORIZONTAL);
 	fZoomSlider->SetValue(10);
-
-	fBrightnessSlider = new BSlider("brightness", "Brightness",
-		new BMessage(kMsgBrightChanged), -50, 50, B_HORIZONTAL);
-	fContrastSlider = new BSlider("contrast", "Contrast",
-		new BMessage(kMsgContrastChanged), -50, 50, B_HORIZONTAL);
-	fSaturationSlider = new BSlider("saturation", "Saturation",
-		new BMessage(kMsgSaturChanged), -50, 50, B_HORIZONTAL);
-	fBrightnessSlider->SetEnabled(false);
-	fContrastSlider->SetEnabled(false);
-	fSaturationSlider->SetEnabled(false);
 	// Follow the knob while dragging, not only on release.
 	fZoomSlider->SetModificationMessage(new BMessage(kMsgZoomChanged));
-	fBrightnessSlider->SetModificationMessage(new BMessage(kMsgBrightChanged));
-	fContrastSlider->SetModificationMessage(
-		new BMessage(kMsgContrastChanged));
-	fSaturationSlider->SetModificationMessage(new BMessage(kMsgSaturChanged));
+
+	// One control per filter parameter is added here on filter change.
+	BView* filterControls = new BView("filter controls", B_WILL_DRAW);
+	fFilterControlsLayout = new BGroupLayout(B_VERTICAL, B_USE_SMALL_SPACING);
+	filterControls->SetLayout(fFilterControlsLayout);
 
 	fShutterButton = new BButton("shutter", "Capture",
 		new BMessage(kMsgShutter));
@@ -280,9 +275,7 @@ CameraWindow::CameraWindow(BRect frame)
 				.AddMenuField(fMicField, 0, 4)
 			.End()
 			.Add(fZoomSlider)
-			.Add(fBrightnessSlider)
-			.Add(fContrastSlider)
-			.Add(fSaturationSlider)
+			.Add(filterControls)
 			.Add(fStatusLabel)
 			.AddGroup(B_HORIZONTAL)
 				.Add(fShutterButton, 3.0f)
@@ -546,18 +539,27 @@ CameraWindow::MessageReceived(BMessage* message)
 			fView->SetZoom(fZoomSlider->Value() / 10.0f);
 			break;
 
-		case kMsgBrightChanged:
-		case kMsgContrastChanged:
-		case kMsgSaturChanged:
+		case kMsgFilterParamChanged:
 		{
-			BVideoBalanceFilter* balance
-				= dynamic_cast<BVideoBalanceFilter*>(fFilter);
-			if (balance != NULL) {
-				balance->SetBrightness(fBrightnessSlider->Value() / 100.0f);
-				balance->SetContrast(1.0f + fContrastSlider->Value() / 100.0f);
-				balance->SetSaturation(
-					1.0f + fSaturationSlider->Value() / 100.0f);
-			}
+			if (fFilter == NULL)
+				break;
+			int32 param = -1;
+			if (message->FindInt32("param", &param) != B_OK)
+				break;
+			float value = 0;
+			int32 raw = 0;
+			if (message->FindFloat("value", &value) == B_OK) {
+				// menu item carries the parameter value itself
+			} else if (message->FindInt32("value", &raw) == B_OK) {
+				bool scaled = false;
+				message->FindBool("scaled", &scaled);
+				// sliders post thousandths of the range; checkboxes
+				// post B_CONTROL_ON/B_CONTROL_OFF
+				value = scaled ? raw / kFilterParamScale
+					: (raw != 0 ? 1.0f : 0.0f);
+			} else
+				break;
+			fFilter->SetParameterValue(param, value);
 			break;
 		}
 
@@ -731,10 +733,94 @@ CameraWindow::_SetFilter(const char* filterId)
 	if (fFilterField->MenuItem() != NULL)
 		fFilterField->MenuItem()->SetLabel(label.String());
 
-	const bool balance = dynamic_cast<BVideoBalanceFilter*>(fFilter) != NULL;
-	fBrightnessSlider->SetEnabled(balance);
-	fContrastSlider->SetEnabled(balance);
-	fSaturationSlider->SetEnabled(balance);
+	_ClearFilterControls();
+	_BuildFilterControls();
+}
+
+
+// The kit reports each parameter as a name and a float range; the shape
+// of the range picks the control: a 0..1 switch reads as a checkbox, a
+// short whole-number span as a menu of steps, anything else as a slider.
+void
+CameraWindow::_BuildFilterControls()
+{
+	if (fFilter == NULL || fFilterControlsLayout == NULL)
+		return;
+
+	const int32 kMaxMenuSteps = 16;
+
+	for (int32 i = 0; i < fFilter->CountParameters(); i++) {
+		BString name;
+		float min = 0;
+		float max = 0;
+		float value = 0;
+		if (fFilter->GetParameterInfo(i, &name, &min, &max, &value) != B_OK)
+			continue;
+		if (max < min) {
+			float swap = min;
+			min = max;
+			max = swap;
+		}
+		if (name.IsEmpty())
+			name << "Parameter " << i;
+
+		BMessage* message = new BMessage(kMsgFilterParamChanged);
+		message->AddInt32("param", i);
+
+		if (min == 0 && max == 1) {
+			BCheckBox* checkBox
+				= new BCheckBox(name.String(), name.String(), message);
+			checkBox->SetValue(value != 0 ? B_CONTROL_ON : B_CONTROL_OFF);
+			fFilterControlsLayout->AddView(checkBox);
+			continue;
+		}
+
+		const bool whole = min == floorf(min) && max == floorf(max)
+			&& value == floorf(value);
+		const int32 steps = (int32)(max - min);
+		if (whole && steps > 2 && steps <= kMaxMenuSteps) {
+			BPopUpMenu* menu = new BPopUpMenu(name.String());
+			for (int32 step = 0; step <= steps; step++) {
+				const float itemValue = min + step;
+				char label[32];
+				snprintf(label, sizeof(label), "%d", (int)itemValue);
+				BMessage* itemMessage = new BMessage(*message);
+				itemMessage->AddFloat("value", itemValue);
+				BMenuItem* item = new BMenuItem(label, itemMessage);
+				if (itemValue == value)
+					item->SetMarked(true);
+				menu->AddItem(item);
+			}
+			menu->SetTargetForItems(this);
+			fFilterControlsLayout->AddView(
+				new BMenuField(name.String(), NULL, menu));
+			delete message;
+			continue;
+		}
+
+		message->AddBool("scaled", true);
+		BSlider* slider = new BSlider(name.String(), name.String(), message,
+			(int32)(min * kFilterParamScale),
+			(int32)(max * kFilterParamScale), B_HORIZONTAL);
+		slider->SetValue((int32)(value * kFilterParamScale));
+		// Follow the knob while dragging, not only on release.
+		slider->SetModificationMessage(new BMessage(*message));
+		fFilterControlsLayout->AddView(slider);
+	}
+}
+
+
+void
+CameraWindow::_ClearFilterControls()
+{
+	if (fFilterControlsLayout == NULL)
+		return;
+
+	while (fFilterControlsLayout->CountItems() > 0) {
+		BLayoutItem* item = fFilterControlsLayout->RemoveItem(0);
+		delete item->View();
+		delete item;
+	}
 }
 
 

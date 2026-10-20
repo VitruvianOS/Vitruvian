@@ -16,6 +16,19 @@ _resolve_disk() {
     fi
 }
 
+# UEFI by default; VOS_QEMU_FIRMWARE=bios (bake --legacy-boot) uses
+# QEMU's built-in SeaBIOS. A fresh vars copy per boot type.
+_amd64_firmware_args() {
+    _fw_basedir="$1"; _fw_tag="$2"
+    _firmware_args=""
+    [ "${VOS_QEMU_FIRMWARE:-uefi}" = "bios" ] && return 0
+    [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ] \
+        || die "OVMF_VARS_4M.fd not found. Install package 'ovmf'."
+    _fw_vars="$_fw_basedir/OVMF_VARS.$_fw_tag.fd"
+    cp -f /usr/share/OVMF/OVMF_VARS_4M.fd "$_fw_vars"
+    _firmware_args="-drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd -drive if=pflash,format=raw,file=$_fw_vars"
+}
+
 run_qemu() {
     _basedir="$1"
     _arch="$2"
@@ -78,19 +91,15 @@ run_qemu() {
             _resolve_disk "$_disk_image"
             [ -f "$_resolved_disk" ] || [ -b "$_resolved_disk" ] \
                 || die "disk image not found: $_disk_image"
-            [ "$_arch" = "amd64" ] || die "--image-type=disk is amd64/UEFI only (got $_arch)"
+            [ "$_arch" = "amd64" ] || die "--image-type=disk is amd64 only (got $_arch)"
 
-            [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ] \
-                || die "OVMF_VARS_4M.fd not found. Install package 'ovmf'."
-            _disk_vars="$_basedir/OVMF_VARS.disk.fd"
-            cp -f /usr/share/OVMF/OVMF_VARS_4M.fd "$_disk_vars"
+            _amd64_firmware_args "$_basedir" disk
 
             log_step "Booting disk image $_resolved_disk in QEMU ($_qemu_cmd)..."
             "$_qemu_cmd" \
                 -m 4096 -cpu host -smp sockets=1,cores=2,threads=2 --enable-kvm \
                 -drive file="$_resolved_disk",format=raw,if=virtio,cache=writethrough \
-                -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
-                -drive if=pflash,format=raw,file="$_disk_vars" \
+                $_firmware_args \
                 -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
                 -device virtio-net-pci,netdev=mynet \
                 -device intel-hda -device hda-duplex,audiodev=snd0 -audiodev pa,id=snd0 \
@@ -156,7 +165,9 @@ run_qemu() {
             log_step "Booting ISO in QEMU ($_qemu_cmd)..."
             case "$_arch" in
                 amd64)
+                    _amd64_firmware_args "$_basedir" iso
                     "$_qemu_cmd" \
+                        $_firmware_args \
                         -cdrom "$_iso" -boot order=dc,menu=on \
                         -m 8G -cpu host -smp sockets=1,cores=2,threads=2 --enable-kvm \
                         -netdev user,id=mynet,hostfwd=tcp::2222-:22 \

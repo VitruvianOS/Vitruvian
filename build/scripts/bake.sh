@@ -53,6 +53,8 @@ Boot options:
   --enable-console-stdout  Stream serial output to stdio (combine to tee)
   --use-bochs-drm        Use QEMU's std VGA (bochs-drm) instead of virtio-gpu
                           (shared-folder/usb-disk: amd64, arm64, riscv64)
+  --legacy-boot          amd64 iso/disk: boot with legacy BIOS (SeaBIOS)
+                          instead of the default UEFI firmware (OVMF)
 
 Build options:
   --image-type=TYPE      Image type(s), comma-separated: raw, iso, raspberry, rpi-arm32,
@@ -65,6 +67,8 @@ Build options:
   --enable-console-log   Write serial output to vitruvian-console.log
   --enable-console-stdout  Stream serial output to stdio (combine with --enable-console-log to tee)
   --use-bochs-drm        Use QEMU's std VGA (bochs-drm) instead of virtio-gpu
+  --legacy-boot          amd64 iso/disk: boot with legacy BIOS (SeaBIOS)
+                          instead of the default UEFI firmware (OVMF)
   --regenerate-chroot    Recreate the chroot before building
   --arch=ARCH            Target architecture: amd64, arm64, arm32, riscv64
                           (reads from buildstate.conf if omitted)
@@ -149,6 +153,10 @@ cmd_build() {
             --use-bochs-drm)
                 VOS_QEMU_VGA=std
                 export VOS_QEMU_VGA
+                ;;
+            --legacy-boot)
+                VOS_QEMU_FIRMWARE=bios
+                export VOS_QEMU_FIRMWARE
                 ;;
             --enable-console-stdout)
                 _console_stdout=1
@@ -341,6 +349,10 @@ cmd_boot() {
             --use-bochs-drm)
                 VOS_QEMU_VGA=std
                 export VOS_QEMU_VGA
+                ;;
+            --legacy-boot)
+                VOS_QEMU_FIRMWARE=bios
+                export VOS_QEMU_FIRMWARE
                 ;;
             --enable-console-stdout)
                 _console_stdout=1

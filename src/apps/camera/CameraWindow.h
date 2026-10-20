@@ -16,7 +16,6 @@
 #include <media2/CameraSource.h>
 
 
-class AudioCapture;
 class BButton;
 class BMediaRecorder;
 class BMessageRunner;
@@ -26,7 +25,6 @@ class BSlider;
 class BStringView;
 class BMediaFilter;
 class BVideoSplitter;
-class CameraPreviewTap;
 class CameraView;
 
 
@@ -63,6 +61,9 @@ private:
 			void				_StoreSettings();
 			void				_FrameArrived(BMessage* message);
 			status_t			_RunTimer();
+	static	void				_PreviewFrame(void* cookie, bigtime_t timestamp,
+									void* data, size_t size,
+									const BMediaFormat& format);
 	static	status_t			_TimerEntry(void* data);
 
 			CameraView*			fView;
@@ -88,8 +89,7 @@ private:
 			BVideoSplitter*		fSplitter;
 			BMediaFilter*	fFilter;
 			BMediaRecorder*		fRecorder;
-			AudioCapture*		fAudio;
-			CameraPreviewTap*	fTap;
+			BMediaRecorder*		fPreview;
 
 			BLocker				fFrameLock;
 			BBitmap*			fLastFrame;

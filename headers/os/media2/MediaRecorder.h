@@ -66,6 +66,9 @@ public:
 	// file carries video only.
 			status_t			SetAudioSource(media_client_id device = 0);
 
+			// True once Start() has linked the audio source.
+			bool				HasAudioSource() const;
+
 	virtual	status_t			Start(bool force = false);
 	virtual	status_t			Stop(bool force = false);
 			bool				IsRunning() const;

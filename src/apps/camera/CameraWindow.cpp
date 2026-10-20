@@ -36,7 +36,6 @@
 #include <algorithm>
 #include <math.h>
 
-#include "AudioCapture.h"
 #include "CameraApp.h"
 #include "CameraView.h"
 #include "PhotoWriter.h"
@@ -128,79 +127,6 @@ _OpusEncoding()
 }
 
 
-// End of the chain: hands the frames that survive the filter to the window.
-class CameraPreviewTap : public BMediaClient {
-public:
-								CameraPreviewTap(CameraWindow* window)
-									:
-									BMediaClient("preview", B_MEDIA_RECORDER),
-									fInput(NULL),
-									fWindow(window)
-	{
-		fInput = new(std::nothrow) _Input(this);
-		if (fInput != NULL)
-			RegisterInput(fInput);
-	}
-
-	virtual						~CameraPreviewTap()
-	{
-		if (fInput != NULL) {
-			UnregisterInput(fInput);
-			delete fInput;
-		}
-	}
-
-	virtual	bool				IsInProcessRouted() const { return true; }
-
-			BMediaInput*		Input() const { return fInput; }
-
-protected:
-	virtual	status_t			_StartConnections(void* /*backend*/)
-	{
-		return B_OK;
-	}
-
-private:
-	class _Input : public BMediaInput {
-	public:
-								_Input(CameraPreviewTap* owner)
-									:
-									BMediaConnection(B_MEDIA_INPUT, "in"),
-									BMediaInput("in"),
-									fOwner(owner)
-		{
-			SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO));
-		}
-
-		virtual					~_Input() {}
-
-	protected:
-		virtual status_t		AcceptFormat(BMediaFormat* format)
-		{
-			if (format == NULL || !format->IsRawVideo())
-				return B_BAD_VALUE;
-			return B_OK;
-		}
-
-		virtual void			HandleBuffer(void* buffer, size_t size,
-									const BMediaFormat& format)
-		{
-			if (!format.IsRawVideo())
-				return;
-			fOwner->fWindow->HandleFrame((const uint8*)buffer, size,
-				format.format.u.raw_video.width,
-				format.format.u.raw_video.height);
-		}
-
-	private:
-		CameraPreviewTap*		fOwner;
-	};
-
-			_Input*				fInput;
-			CameraWindow*		fWindow;
-};
-
-
 static const char*
 _LocationLabel(camera_location location)
 {
@@ -214,6 +140,17 @@ _LocationLabel(camera_location location)
 		default:
 			return "Camera";
 	}
+}
+
+
+/* static */ void
+CameraWindow::_PreviewFrame(void* cookie, bigtime_t /*timestamp*/, void* data,
+	size_t size, const BMediaFormat& format)
+{
+	if (!format.IsRawVideo())
+		return;
+	((CameraWindow*)cookie)->HandleFrame((const uint8*)data, size,
+		format.format.u.raw_video.width, format.format.u.raw_video.height);
 }
 
 
@@ -250,8 +187,7 @@ CameraWindow::CameraWindow(BRect frame)
 	fSplitter(NULL),
 	fFilter(NULL),
 	fRecorder(NULL),
-	fAudio(NULL),
-	fTap(NULL),
+	fPreview(NULL),
 	fFrameLock("camera frames"),
 	fLastFrame(NULL),
 	fCameras(NULL),
@@ -377,9 +313,8 @@ CameraWindow::~CameraWindow()
 	delete fSplitter;
 	delete fFilter;
 	delete fRecorder;
-	delete fAudio;
 	delete fSource;
-	delete fTap;
+	delete fPreview;
 	delete fLastFrame;
 	delete fCameras;
 }
@@ -410,8 +345,9 @@ CameraWindow::_BuildGraph()
 	fSource = new BCameraSource("camera");
 	fSplitter = new BVideoSplitter();
 	fRecorder = new BMediaRecorder("camera-recorder", B_MEDIA_RAW_VIDEO);
-	fAudio = new AudioCapture("camera-mic");
-	fTap = new CameraPreviewTap(this);
+	fPreview = new BMediaRecorder("camera-preview", B_MEDIA_RAW_VIDEO);
+	fPreview->SetBufferHooks(&CameraWindow::_PreviewFrame, NULL, this);
+	fPreview->Start();
 
 	fRecorder->SetFormat(_RawVideoFormat(fWidth, fHeight, fFrameRate));
 	fRecorder->SetAudioFormat(_RawAudioFormat());
@@ -440,7 +376,7 @@ CameraWindow::_RebuildChain()
 
 	BMediaOutput* tapOutput = fSplitter->AddOutput();
 	if (tapOutput != NULL)
-		graph->Connect(tapOutput, fTap->Input());
+		graph->Connect(tapOutput, fPreview->VideoInput());
 }
 
 
@@ -984,10 +920,12 @@ CameraWindow::_RefreshMicMenu()
 	defaultMessage.AddInt32("device", 0);
 	fMicMenu->AddItem(new BMenuItem("Default", new BMessage(defaultMessage)));
 
-	BObjectList<AudioCapture::Device, true> devices;
-	AudioCapture::GetDevices(&devices);
+	BObjectList<BMediaGraph::AudioDevice, true> devices;
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph != NULL)
+		graph->GetAudioInputs(&devices);
 	for (int32 i = 0; i < devices.CountItems(); i++) {
-		AudioCapture::Device* device = devices.ItemAt(i);
+		BMediaGraph::AudioDevice* device = devices.ItemAt(i);
 		BMessage message(kMsgMicChanged);
 		message.AddInt32("device", (int32)device->id);
 		BMenuItem* item = new BMenuItem(device->name.String(),
@@ -1132,19 +1070,10 @@ CameraWindow::_StartRecording()
 	}
 
 	// Without a microphone the file carries video only.
-	bool hasAudio = false;
-	if (graph->Connect(fAudio->AudioOutput(), fRecorder->AudioInput())
-			== B_OK) {
-		fAudio->SetDevice(fMicId);
-		hasAudio = fAudio->Start() == B_OK;
-	}
-
+	fRecorder->SetAudioSource(fMicId);
 	status = fRecorder->Start();
 	if (status != B_OK) {
 		fStatusLabel->SetText("Record start failed");
-		if (hasAudio)
-			fAudio->Stop();
-		_Unlink(graph, fAudio->AudioOutput());
 		fSplitter->RemoveOutput(recordOutput);
 		fRecorder->ClearOutputFile();
 		return;
@@ -1157,7 +1086,7 @@ CameraWindow::_StartRecording()
 	fShutterButton->SetLabel("Stop");
 	delete fTicker;
 	fTicker = new BMessageRunner(this, new BMessage(kMsgRecordTick), 500000);
-	if (!hasAudio)
+	if (!fRecorder->HasAudioSource())
 		fStatusLabel->SetText("REC (no microphone)");
 }
 
@@ -1173,11 +1102,9 @@ CameraWindow::_StopRecording()
 	fTicker = NULL;
 
 	fRecorder->Stop();
-	fAudio->Stop();
 
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph != NULL) {
-		_Unlink(graph, fAudio->AudioOutput());
 		// Output 0 is the preview tap; the recorder holds the others.
 		while (fSplitter->CountOutputs() > 1)
 			fSplitter->RemoveOutput(fSplitter->OutputAt(1));

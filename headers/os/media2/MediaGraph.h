@@ -51,6 +51,15 @@ public:
 			status_t				GetClients(BObjectList<media_client_id, true>* clients);
 			status_t				GetClientInfo(media_client_id id, BMessage* info);
 
+			struct AudioDevice {
+				media_client_id		id;
+				BString				name;
+			};
+
+			// Capture devices (audio sources that are not cameras).
+			status_t				GetAudioInputs(
+										BObjectList<AudioDevice, true>* outDevices);
+
 			status_t				GetDefaultAudioOutput(media_client_id* id);
 			status_t				GetDefaultAudioInput(media_client_id* id);
 			status_t				GetDefaultCamera(media_client_id* id);

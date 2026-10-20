@@ -537,6 +537,45 @@ BMediaGraph::GetDefaultAudioInput(media_client_id* id)
 
 
 status_t
+BMediaGraph::GetAudioInputs(BObjectList<AudioDevice, true>* outDevices)
+{
+	if (outDevices == NULL)
+		return B_BAD_VALUE;
+	outDevices->MakeEmpty();
+
+	BObjectList<media_client_id, true> clients;
+	status_t status = GetClients(&clients);
+	if (status != B_OK)
+		return status;
+
+	for (int32 i = 0; i < clients.CountItems(); i++) {
+		const media_client_id id = *clients.ItemAt(i);
+		BMessage info;
+		if (GetClientInfo(id, &info) != B_OK)
+			continue;
+		bool isSource = false;
+		bool isVideo = false;
+		info.FindBool("is.source", &isSource);
+		info.FindBool("is.video", &isVideo);
+		if (!isSource || isVideo)
+			continue;
+
+		AudioDevice* device = new(std::nothrow) AudioDevice();
+		if (device == NULL)
+			break;
+		device->id = id;
+		if (info.FindString("name", &device->name) != B_OK
+			|| device->name.Length() == 0) {
+			info.FindString("node_name", &device->name);
+		}
+		if (!outDevices->AddItem(device))
+			delete device;
+	}
+	return B_OK;
+}
+
+
+status_t
 BMediaGraph::SetDefaultAudioOutput(media_client_id id)
 {
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();

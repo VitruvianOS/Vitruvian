@@ -130,6 +130,7 @@ public:
 	status_t SetFormat(const BMediaFormat& format);
 	status_t SetAudioFormat(const BMediaFormat& format);
 	status_t SetAudioSource(media_client_id device);
+	bool     HasAudioSource() const { return fMicLinked; }
 
 	BMediaInput* Input() const { return fInput; }
 	BMediaInput* VideoInput() const
@@ -972,6 +973,7 @@ BMediaRecorder::Format() const
 status_t  BMediaRecorder::SetFormat(const BMediaFormat& f)  { return fImpl ? fImpl->SetFormat(f) : B_NO_INIT; }
 status_t  BMediaRecorder::SetAudioFormat(const BMediaFormat& f) { return fImpl ? fImpl->SetAudioFormat(f) : B_NO_INIT; }
 status_t  BMediaRecorder::SetAudioSource(media_client_id d) { return fImpl ? fImpl->SetAudioSource(d) : B_NO_INIT; }
+bool      BMediaRecorder::HasAudioSource() const { return fImpl && fImpl->HasAudioSource(); }
 status_t  BMediaRecorder::Start(bool /*force*/)             { return fImpl ? fImpl->Start() : B_NO_INIT; }
 status_t  BMediaRecorder::Stop(bool /*force*/)              { if (fImpl) fImpl->Stop(); return B_OK; }
 bool      BMediaRecorder::IsRunning() const                 { return fImpl && fImpl->IsRecording(); }

@@ -2,7 +2,6 @@
 # Distributed under the terms of the MIT License.
 Application(Camera
 	SOURCES
-		AudioCapture.cpp
 		CameraApp.cpp
 		CameraView.cpp
 		CameraWindow.cpp

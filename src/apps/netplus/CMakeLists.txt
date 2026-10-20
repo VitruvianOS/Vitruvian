@@ -8,7 +8,6 @@ Application(
 	SettingsWindow.cpp
 	DeskbarEntry.cpp
 	DownloadsModel.cpp
-	DownloadsPanel.cpp
 	HistoryStore.cpp
 	InstalledAppStore.cpp
 	PanelMenu.cpp

@@ -20,7 +20,6 @@ class BMenuItem;
 class BMenu;
 class BMenuBar;
 class BWebView;
-class DownloadsPanel;
 class PanelMenu;
 class StatusBarView;
 class ToolbarView;
@@ -59,7 +58,6 @@ private:
 			const char*			_SearchTemplate() const;
 			void				_AddHistory(const char* url);
 			void				_ShowAppMenu(BPoint anchor);
-			void				_ShowDownloads(BPoint anchor);
 			void				_HandleDownloadMessage(BMessage* message);
 			void				_RefreshDownloadUI();
 			void				_HandleManifestMessage(BMessage* message);
@@ -83,10 +81,8 @@ private:
 			float				fSavedLimits[4];
 			BString				fStatusBase;
 			PanelMenu*			fAppMenu;
-			DownloadsPanel*		fDownloadsPanel;
 			BPoint				fLastOrigin;
 			BMessenger			fAppMenuWindow;
-			BMessenger			fDownloadsWindow;
 			DownloadsModel		fDownloadsModel;
 			HistoryStore		fHistory;
 			int32				fSearchEngine;

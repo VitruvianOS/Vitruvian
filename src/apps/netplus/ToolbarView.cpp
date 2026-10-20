@@ -106,7 +106,7 @@ ToolbarView::AttachedToWindow()
 	// itself (only actions do).
 	fToolBar->AddView(fURLBar);
 
-	fToolBar->AddAction(MSG_DOWNLOADS, this, fDownloadIcon,
+	fToolBar->AddAction(MSG_DOWNLOADS, Window(), fDownloadIcon,
 		"Downloads");
 	fToolBar->AddAction(MSG_APP_MENU, this, kNetPlusMenuIcon,
 		kNetPlusMenuIconSize, "Main menu");
@@ -121,7 +121,6 @@ ToolbarView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case MSG_APP_MENU:
-		case MSG_DOWNLOADS:
 		{
 			// Anchor under the pressed button, like BToolBar's own
 			// overflow popup does.

@@ -6,7 +6,6 @@
 
 #include "DownloadsWindow.h"
 #include "DeskbarEntry.h"
-#include "DownloadsPanel.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
@@ -147,7 +146,6 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fFullScreen(false),
 	fSavedFrame(frame),
 	fAppMenu(nullptr),
-	fDownloadsPanel(nullptr),
 	fLastOrigin(frame.LeftTop()),
 	fSearchEngine(0),
 	fPwaMode(pwa != NULL && pwa->installed),
@@ -277,10 +275,6 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 
 MainWindow::~MainWindow()
 {
-	if (fDownloadsPanel != NULL) {
-		fDownloadsPanel->Quit();
-		fDownloadsPanel = nullptr;
-	}
 	if (fAppMenu != NULL) {
 		fAppMenu->Quit();
 		fAppMenu = nullptr;
@@ -505,7 +499,7 @@ MainWindow::FrameMoved(BPoint where)
 	const BPoint delta = where - fLastOrigin;
 	fLastOrigin = where;
 	// Messengers, not the pointers: a closing panel may already be gone.
-	BMessenger* panels[] = { &fAppMenuWindow, &fDownloadsWindow };
+	BMessenger* panels[] = { &fAppMenuWindow };
 	for (BMessenger* panel : panels) {
 		BLooper* looper = NULL;
 		if (panel->LockTargetWithTimeout(0) == B_OK
@@ -592,21 +586,6 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 
 
 void
-MainWindow::_ShowDownloads(BPoint anchor)
-{
-	if (fDownloadsPanel != nullptr) {
-		fDownloadsPanel->Activate();
-		fDownloadsPanel->SetModel(fDownloadsModel);
-		return;
-	}
-
-	fDownloadsPanel = new DownloadsPanel(fDownloadsModel, BMessenger(this));
-	fDownloadsWindow = BMessenger(fDownloadsPanel);
-	fDownloadsPanel->Go(anchor);
-}
-
-
-void
 MainWindow::_HandleDownloadMessage(BMessage* message)
 {
 	uint64 id = 0;
@@ -667,8 +646,6 @@ MainWindow::_RefreshDownloadUI()
 {
 	if (fToolbar != nullptr)
 		fToolbar->SetDownloadsActive(fDownloadsModel.ActiveCount());
-	if (fDownloadsPanel != nullptr)
-		fDownloadsPanel->SetModel(fDownloadsModel);
 }
 
 
@@ -834,68 +811,7 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case MSG_DOWNLOADS:
-		{
-			BPoint anchor;
-			if (message->FindPoint("anchor", &anchor) == B_OK)
-				_ShowDownloads(anchor);
-			break;
-		}
-
-		case MSG_DOWNLOADS_CLOSED:
-			fDownloadsPanel = nullptr;
-			break;
-
-		case MSG_DOWNLOAD_CANCEL:
-		{
-			int64 id = 0;
-			if (message->FindInt64("id", &id) == B_OK && fWebView)
-				fWebView->CancelDownload((uint64)id);
-			break;
-		}
-
-		case MSG_DOWNLOAD_RETRY:
-		{
-			int64 id = 0;
-			if (message->FindInt64("id", &id) != B_OK || fWebView == nullptr)
-				break;
-			int32 index = fDownloadsModel.IndexOf((uint64)id);
-			if (index < 0)
-				break;
-			std::string url = fDownloadsModel.ItemAt(index).url;
-			if (!url.empty())
-				fWebView->DownloadURI(url.c_str(), NULL);
-			break;
-		}
-
-		case MSG_DOWNLOAD_SHOW:
-		{
-			int64 id = 0;
-			if (message->FindInt64("id", &id) != B_OK)
-				break;
-			int32 index = fDownloadsModel.IndexOf((uint64)id);
-			if (index < 0)
-				break;
-
-			// Reveal the folder that holds the file; Tracker opens
-			// a window at a directory ref.
-			BPath path(fDownloadsModel.ItemAt(index).destination.c_str());
-			BPath parent;
-			if (path.GetParent(&parent) != B_OK)
-				break;
-			BEntry dir(parent.Path());
-			entry_ref ref;
-			if (dir.GetRef(&ref) != B_OK)
-				break;
-			BMessage show(B_REFS_RECEIVED);
-			show.AddRef("refs", &ref);
-			BMessenger tracker("application/x-vnd.Be-TRAK");
-			tracker.SendMessage(&show);
-			break;
-		}
-
-		case MSG_DOWNLOAD_CLEAR:
-			fDownloadsModel.ClearFinished();
-			_RefreshDownloadUI();
+			DownloadsWindow::ShowWindow(fWebView);
 			break;
 
 		case MSG_PANEL_NEW_WINDOW:

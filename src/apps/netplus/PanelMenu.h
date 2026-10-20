@@ -39,6 +39,7 @@ public:
 			const PanelMenuModel&	Model() const;
 
 	virtual	bool				QuitRequested();
+	virtual	void				FrameMoved(BPoint where);
 
 private:
 	friend class PanelMenuView;
@@ -52,7 +53,7 @@ private:
 			PanelMenuModel		fModel;
 			BMessenger*			fTarget;
 			PanelMenuView*		fView;
-			sem_id				fQuitSem;
+			PanelMenuTrackData*	fTrack;
 			thread_id			fTrackThread;
 			BPoint				fAnchor;
 };

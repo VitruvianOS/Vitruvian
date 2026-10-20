@@ -148,6 +148,7 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fSavedFrame(frame),
 	fAppMenu(nullptr),
 	fDownloadsPanel(nullptr),
+	fLastOrigin(frame.LeftTop()),
 	fSearchEngine(0),
 	fPwaMode(pwa != NULL && pwa->installed),
 	fPwaDisplay(kManifestDisplayStandalone),
@@ -496,6 +497,29 @@ MainWindow::_AddHistory(const char* url)
 
 
 void
+MainWindow::FrameMoved(BPoint where)
+{
+	BWindow::FrameMoved(where);
+
+	// Open panels stay anchored to their toolbar button.
+	const BPoint delta = where - fLastOrigin;
+	fLastOrigin = where;
+	// Messengers, not the pointers: a closing panel may already be gone.
+	BMessenger* panels[] = { &fAppMenuWindow, &fDownloadsWindow };
+	for (BMessenger* panel : panels) {
+		BLooper* looper = NULL;
+		if (panel->LockTargetWithTimeout(0) == B_OK
+			&& panel->Target(&looper) != NULL) {
+			BWindow* window = dynamic_cast<BWindow*>(looper);
+			if (window != NULL)
+				window->MoveBy(delta.x, delta.y);
+			looper->Unlock();
+		}
+	}
+}
+
+
+void
 MainWindow::_ShowAppMenu(BPoint anchor)
 {
 	if (fAppMenu != nullptr) {
@@ -562,6 +586,7 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 	model.AddActionRow(root, "Quit NetPlus", B_QUIT_REQUESTED, "Ctrl+Q");
 
 	fAppMenu = new PanelMenu(model, BMessenger(this));
+	fAppMenuWindow = BMessenger(fAppMenu);
 	fAppMenu->Go(anchor);
 }
 
@@ -576,6 +601,7 @@ MainWindow::_ShowDownloads(BPoint anchor)
 	}
 
 	fDownloadsPanel = new DownloadsPanel(fDownloadsModel, BMessenger(this));
+	fDownloadsWindow = BMessenger(fDownloadsPanel);
 	fDownloadsPanel->Go(anchor);
 }
 

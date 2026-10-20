@@ -22,7 +22,11 @@
 #include <View.h>
 #include <Window.h>
 
+#include <Autolock.h>
+#include <Locker.h>
+
 #include <algorithm>
+#include <atomic>
 #include <math.h>
 #include <stdio.h>
 #include <string>
@@ -39,10 +43,14 @@ static const char kBackArrow[] = "\xe2\x86\x90";
 static const char kChevron[] = "\xe2\x80\xba";
 
 
+// Shared with the click-outside tracker; the panel owns it.
 struct PanelMenuTrackData {
-	BMessenger	panel;
-	sem_id		sem;
-	BRect		frame;
+	BMessenger			panel;
+	BLocker				lock;
+	BRect				frame;
+	std::atomic<bool>	quit;
+
+	PanelMenuTrackData() : lock("panel menu track"), quit(false) {}
 };
 
 
@@ -336,7 +344,7 @@ PanelMenu::PanelMenu(const PanelMenuModel& model, const BMessenger& target)
 	fModel(model),
 	fTarget(new BMessenger(target)),
 	fView(NULL),
-	fQuitSem(-1),
+	fTrack(NULL),
 	fTrackThread(-1)
 {
 	fView = new PanelMenuView(BRect(0, 0, 0, 0), this);
@@ -348,18 +356,14 @@ PanelMenu::PanelMenu(const PanelMenuModel& model, const BMessenger& target)
 
 PanelMenu::~PanelMenu()
 {
-	// Let the click-outside tracker finish before tearing down the
-	// semaphore it polls; it never locks the window, so waiting here
-	// cannot deadlock against us. The extra release covers teardown
-	// paths that skip QuitRequested.
-	if (fQuitSem >= B_OK)
-		release_sem(fQuitSem);
+	// The tracker never locks the window, so waiting cannot deadlock.
+	if (fTrack != NULL)
+		fTrack->quit = true;
 	if (fTrackThread >= B_OK) {
 		status_t status;
 		wait_for_thread(fTrackThread, &status);
 	}
-	if (fQuitSem >= B_OK)
-		delete_sem(fQuitSem);
+	delete fTrack;
 
 	delete fTarget;
 }
@@ -406,31 +410,34 @@ PanelMenu::Go(BPoint where)
 
 	// Close on click-outside: wait for the opening click to finish,
 	// then watch for the next press that lands off the panel.
-	PanelMenuTrackData* data = new PanelMenuTrackData;
-	data->panel = BMessenger(this);
-	data->frame = Frame();
-	fQuitSem = create_sem(0, "panel menu tracker");
-	if (fQuitSem >= B_OK) {
-		fTrackThread = spawn_thread(_TrackEntry, "panel menu tracker",
-			B_DISPLAY_PRIORITY, data);
-		if (fTrackThread >= B_OK)
-			resume_thread(fTrackThread);
-		else {
-			fTrackThread = -1;
-			delete_sem(fQuitSem);
-			fQuitSem = -1;
-			delete data;
-		}
-	} else
-		delete data;
+	fTrack = new PanelMenuTrackData;
+	fTrack->panel = BMessenger(this);
+	fTrack->frame = Frame();
+	fTrackThread = spawn_thread(_TrackEntry, "panel menu tracker",
+		B_DISPLAY_PRIORITY, fTrack);
+	if (fTrackThread >= B_OK)
+		resume_thread(fTrackThread);
+	else
+		fTrackThread = -1;
+}
+
+
+void
+PanelMenu::FrameMoved(BPoint where)
+{
+	BWindow::FrameMoved(where);
+	if (fTrack != NULL) {
+		BAutolock _(fTrack->lock);
+		fTrack->frame = Frame();
+	}
 }
 
 
 bool
 PanelMenu::QuitRequested()
 {
-	if (fQuitSem >= B_OK)
-		release_sem(fQuitSem);
+	if (fTrack != NULL)
+		fTrack->quit = true;
 
 	// Let the owner drop its panel pointer before we are destroyed.
 	if (fTarget->IsValid()) {
@@ -519,21 +526,19 @@ PanelMenu::_TrackEntry(void* data)
 	uint32 buttons;
 	do {
 		get_mouse(&point, &buttons);
-		if (acquire_sem_etc(track->sem, 0, B_TIMEOUT, 20000) != B_WOULD_BLOCK) {
-			delete track;
-			return 0;
-		}
-	} while (buttons != 0);
+		snooze(20000);
+	} while (buttons != 0 && !track->quit);
 
-	while (acquire_sem_etc(track->sem, 0, B_TIMEOUT, 20000) == B_WOULD_BLOCK) {
+	while (!track->quit) {
 		get_mouse(&point, &buttons);
-		if ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0
-			&& !track->frame.Contains(point)) {
-			track->panel.SendMessage(B_QUIT_REQUESTED);
-			break;
+		if ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0) {
+			BAutolock _(track->lock);
+			if (!track->frame.Contains(point)) {
+				track->panel.SendMessage(B_QUIT_REQUESTED);
+				break;
+			}
 		}
+		snooze(20000);
 	}
-
-	delete track;
 	return 0;
 }

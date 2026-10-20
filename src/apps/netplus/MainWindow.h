@@ -6,6 +6,7 @@
 #define MAIN_WINDOW_H
 
 
+#include <Messenger.h>
 #include <String.h>
 #include <Window.h>
 
@@ -47,6 +48,7 @@ public:
 
 	virtual bool				QuitRequested();
 	virtual void				MessageReceived(BMessage* message);
+	virtual	void				FrameMoved(BPoint where);
 
 private:
 			void				_ApplySettings();
@@ -82,6 +84,9 @@ private:
 			BString				fStatusBase;
 			PanelMenu*			fAppMenu;
 			DownloadsPanel*		fDownloadsPanel;
+			BPoint				fLastOrigin;
+			BMessenger			fAppMenuWindow;
+			BMessenger			fDownloadsWindow;
 			DownloadsModel		fDownloadsModel;
 			HistoryStore		fHistory;
 			int32				fSearchEngine;

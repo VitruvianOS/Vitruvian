@@ -83,7 +83,7 @@ _partlib_gpt_type_guid() {
         esp)        printf '%s\n' "C12A7328-F81F-11D2-BA4B-00A0C93EC93B" ;;
         linux)      printf '%s\n' "0FC63DAF-8483-4772-8E79-3D69D8477DE4" ;;
         linux_swap) printf '%s\n' "0657FD6D-A4AB-43C4-84E5-0933C84B4F4F" ;;
-        bios_boot)  printf '%s\n' "21686148-6449-6E6F-744F-656E63656453" ;;
+        bios_boot)  printf '%s\n' "21686148-6449-6E6F-744E-656564454649" ;;
         *)          printf '%s\n' "$1" ;;
     esac
 }
@@ -920,6 +920,9 @@ _partlib_table_resize() {
         log "resize: sfdisk table resize failed on $_disk#$_partno: $_err"
         return 1
     fi
+    # --no-reread leaves the kernel on the old size; a mounted or unmounted
+    # fs grow reads it from the block device.
+    command -v partx >/dev/null 2>&1 && partx -u "$_disk" >/dev/null 2>&1 || true
     _partlib_settle "$_disk"
     return 0
 }
@@ -959,6 +962,20 @@ _partlib_safe_umount() {
 _partlib_btrfs_resize_mounted() {
     _target="$1"
     _size_mib="$2"
+
+    _live_mnt="$(findmnt -n -o TARGET --source "$_target" 2>/dev/null | head -n1)"
+    if [ -n "$_live_mnt" ]; then
+        if [ -n "$_size_mib" ]; then
+            _err="$(btrfs filesystem resize "${_size_mib}M" "$_live_mnt" 2>&1 >/dev/null)"
+        else
+            _err="$(btrfs filesystem resize max "$_live_mnt" 2>&1 >/dev/null)"
+        fi
+        if [ $? -ne 0 ]; then
+            log "resize: btrfs filesystem resize failed: $_err"
+            return 1
+        fi
+        return 0
+    fi
 
     mkdir -p /run/vos-partition-helper 2>/dev/null || true
     _mnt="$(mktemp -d /run/vos-partition-helper/mnt-XXXXXX 2>/dev/null)"
@@ -1013,12 +1030,23 @@ _partlib_resize() {
     _fs="$3"
     _new_size_mib="$4"
 
-    if [ "$_fs" != "btrfs" ]; then
-        if _mnt="$(findmnt -n -o TARGET --source "$_target" 2>/dev/null)" \
-                && [ -n "$_mnt" ]; then
-            log "resize: $_target is mounted at $_mnt; unmount it first"
-            return 1
-        fi
+    # ext4 and xfs grow online; every other case needs the fs unmounted.
+    _mnt=""
+    _mnt="$(findmnt -n -o TARGET --source "$_target" 2>/dev/null | head -n1)" || true
+    if [ "$_fs" != "btrfs" ] && [ -n "$_mnt" ]; then
+        _cur_mib="$(_partlib_part_size_mib "$_disk" "$_target")"
+        case "$_fs" in
+            ext4|xfs)
+                if [ -z "$_cur_mib" ] || [ "$_new_size_mib" -le "$_cur_mib" ]; then
+                    log "resize: $_target is mounted at $_mnt; unmount it to shrink"
+                    return 1
+                fi
+                ;;
+            *)
+                log "resize: $_target is mounted at $_mnt; unmount it first"
+                return 1
+                ;;
+        esac
     fi
 
     _partno="$(_partlib_partno "$_disk" "$_target")"
@@ -1064,7 +1092,7 @@ _partlib_resize() {
             ;;
         xfs:1)
             _partlib_table_resize "$_disk" "$_partno" "$_new_size_mib" || return 1
-            _err="$(xfs_growfs "$_target" 2>&1 >/dev/null)"
+            _err="$(xfs_growfs "${_mnt:-$_target}" 2>&1 >/dev/null)"
             if [ $? -ne 0 ]; then
                 log "resize: xfs_growfs failed on $_target: $_err"
                 return 1
@@ -1113,6 +1141,15 @@ _partlib_ext4_exclude_opt() {
     printf '%s\n' "${_str%,}"
 }
 
+# Runs a mkfs tool, logging its own message on failure instead of dropping it.
+_partlib_mkfs() {
+    _mk_out="$("$@" 2>&1)" || {
+        log "format: $1 failed: $_mk_out"
+        return 1
+    }
+    return 0
+}
+
 _partlib_format() {
     _devnode="$1"
     _fs="$2"
@@ -1123,40 +1160,44 @@ _partlib_format() {
         ext4)
             _optstr="$(_partlib_ext4_exclude_opt "$_ext4_extra")"
             if [ -n "$_label" ]; then
-                mkfs.ext4 -q -F -O "$_optstr" -L "$_label" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.ext4 -q -F -O "$_optstr" -L "$_label" "$_devnode"
             else
-                mkfs.ext4 -q -F -O "$_optstr" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.ext4 -q -F -O "$_optstr" "$_devnode"
             fi
             ;;
         fat32)
+            # FAT labels are capped at 11 bytes; mkfs.fat refuses longer ones.
+            _label="$(printf '%.11s' "$_label")"
             if [ -n "$_label" ]; then
-                mkfs.fat -F 32 -n "$_label" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.fat -F 32 -n "$_label" "$_devnode"
             else
-                mkfs.fat -F 32 "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.fat -F 32 "$_devnode"
             fi
             ;;
         btrfs)
             if [ -n "$_label" ]; then
-                mkfs.btrfs -f -q -L "$_label" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.btrfs -f -q -L "$_label" "$_devnode"
             else
-                mkfs.btrfs -f -q "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.btrfs -f -q "$_devnode"
             fi
             ;;
         xfs)
             # XFS labels are capped at 12 bytes; a longer one makes
             # mkfs.xfs fail outright, so clamp instead of losing the fs.
             _label="$(printf '%.12s' "$_label")"
+            # GRUB 2.12 misreads files on reflink/nrext64 filesystems.
             if [ -n "$_label" ]; then
-                mkfs.xfs -f -L "$_label" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.xfs -f -m reflink=0 -i nrext64=0 \
+                    -L "$_label" "$_devnode"
             else
-                mkfs.xfs -f "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkfs.xfs -f -m reflink=0 -i nrext64=0 "$_devnode"
             fi
             ;;
         swap)
             if [ -n "$_label" ]; then
-                mkswap -L "$_label" "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkswap -L "$_label" "$_devnode"
             else
-                mkswap "$_devnode" >/dev/null 2>&1
+                _partlib_mkfs mkswap "$_devnode"
             fi
             ;;
         *)

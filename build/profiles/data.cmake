@@ -43,8 +43,9 @@ install(FILES data/etc/installer/excludes.list
   DESTINATION /usr/share/vos/installer/ COMPONENT data)
 
 # update-grub must yield rw root and keep the Safe Mode/Debug entries.
-# 40_vos goes to /etc/grub.d, and /etc/default/grub is left to the image and installer writers.
-install(PROGRAMS data/etc/grub.d/40_vos
+# 15_vos sorts before 30_uefi-firmware so the order matches the other menus;
+# it goes to /etc/grub.d, and /etc/default/grub is left to the image and installer writers.
+install(PROGRAMS data/etc/grub.d/15_vos
   DESTINATION /etc/grub.d/)
 install(FILES data/etc/default/grub
   DESTINATION /usr/share/vos/grub/ COMPONENT data)

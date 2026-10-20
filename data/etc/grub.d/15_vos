@@ -27,11 +27,18 @@ _initrd="/boot/initrd.img-$_kver"
 _rel_vmlinuz="$(make_system_path_relative_to_its_root "$_vmlinuz")"
 _rel_initrd="$(make_system_path_relative_to_its_root "$_initrd")"
 
+# 10_linux adds this itself; the entries below are hand-written.
+_rf=""
+if [ "$(findmnt -no FSTYPE / 2>/dev/null || true)" = "btrfs" ]; then
+    _fsroot="$(findmnt -no FSROOT / 2>/dev/null | sed 's/\[//;s/\]//' || true)"
+    [ -n "$_fsroot" ] && [ "$_fsroot" != "/" ] && _rf="rootflags=subvol=${_fsroot#/}"
+fi
+
 _debug=""
 if [ -f /etc/systemd/system/vos-sshdebug.service ]; then
     _debug="menuentry \"Vitruvian (SSH Debug)\" {
     prepare_grub_to_access_device \"${GRUB_DEVICE_BOOT}\"
-    linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
+    linux $_rel_vmlinuz root=UUID=$_root rw $_rf console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd $_rel_initrd
 }"
 fi
@@ -41,12 +48,12 @@ menuentry "Vitruvian (Safe Mode)" {
     prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
     insmod all_video
     set gfxpayload=1024x768x32,1024x768,800x600,auto
-    linux $_rel_vmlinuz root=UUID=$_root rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
+    linux $_rel_vmlinuz root=UUID=$_root rw $_rf nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd $_rel_initrd
 }
 menuentry "Vitruvian (Recovery)" {
     prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
-    linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
+    linux $_rel_vmlinuz root=UUID=$_root rw $_rf console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target noresume
     initrd $_rel_initrd
 }
 $_debug

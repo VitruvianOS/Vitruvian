@@ -242,3 +242,6 @@ if [ -e /etc/vos/live ]; then
     mkdir -p /var/lib/systemd/linger 2>/dev/null || true
     touch /var/lib/systemd/linger/vos-live 2>/dev/null || true
 fi
+
+# Renamed to 15_vos; a kept copy would list every entry twice.
+rm -f /etc/grub.d/40_vos

@@ -229,7 +229,7 @@ ln -sfn boot/initrd.img-\$_kver /initrd.img
 
 mkdir -p /etc/default
 # update-grub's generated entries need rw root, or the installed system hangs at boot.
-# Safe Mode/Debug come from the vos package's /etc/grub.d/40_vos.
+# Safe Mode/Debug come from the vos package's /etc/grub.d/15_vos.
 if [ ! -f /usr/share/vos/grub/grub ]; then
     echo missing packaged /usr/share/vos/grub/grub >&2
     exit 1
@@ -308,7 +308,7 @@ insmod normal
 insmod all_video
 insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_root_uuid
-set timeout=1
+set timeout=3
 # One-shot next_entry from the ESP grubenv (vm-boot-recovery.sh sets it).
 search --no-floppy --fs-uuid --set=esp $_esp_uuid
 if [ -n "\$esp" -a -s "(\$esp)/boot/grub/grubenv" ]; then
@@ -568,7 +568,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
 insmod all_video
 search --set=root --file /VITRUVIAN_CUSTOM
 set default="0"
-set timeout=5
+set timeout=3
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
     linux /vmlinuz boot=live noeject quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 oops=panic panic_on_warn=1 panic=0

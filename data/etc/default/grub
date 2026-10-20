@@ -1,5 +1,9 @@
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
+GRUB_TIMEOUT=3
+GRUB_TIMEOUT_STYLE=menu
+# One flat menu in the same order as the image and installer menus.
+GRUB_DISABLE_SUBMENU=y
+GRUB_DISABLE_RECOVERY=true
 GRUB_DISTRIBUTOR="Vitruvian"
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3 fsck.mode=auto fsck.repair=preen"
 # rw: initramfs checkfs still e2fsck-preens root before mount; ro would only move that check.

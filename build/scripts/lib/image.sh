@@ -1,13 +1,8 @@
 #!/bin/sh
 
-# Shared cleanup for all loop-device image builders (create_raw, create_raspberry, create_uboot_board).
-# Reads globals: _mnt, _loop, _raw — set before the trap is armed.
-# Safe to call multiple times (success path + trap). Synchronous: waits for
-# lazy umounts to actually release the loop, retries losetup -d, and as a
-# last resort detaches every loop still backed by $_raw.
+# Cleanup for the loop-device image builders. Reads _mnt, _loop, _raw; idempotent (success path + trap).
 _loop_image_cleanup() {
-    # Unmount everything beneath $_mnt, deepest first, so lazy umounts on
-    # parents don't get blocked by mounted children.
+    # Deepest first, so lazy umounts on parents aren't blocked by children.
     if [ -n "$_mnt" ]; then
         for _mp in $(awk -v m="$_mnt" '$2 ~ "^"m {print $2}' /proc/mounts | sort -r); do
             sudo umount "$_mp" 2>/dev/null \
@@ -17,8 +12,7 @@ _loop_image_cleanup() {
 
     sudo udevadm settle 2>/dev/null || true
 
-    # Retry losetup -d a few times — lazy umounts release the bdev
-    # asynchronously, so an immediate detach can hit EBUSY.
+    # Lazy umounts release the bdev asynchronously; immediate detach can hit EBUSY.
     if [ -n "$_loop" ]; then
         _i=0
         while [ $_i -lt 10 ]; do
@@ -28,8 +22,7 @@ _loop_image_cleanup() {
         done
     fi
 
-    # Belt-and-braces: if anything is still attached to $_raw (subshells,
-    # udisks auto-mounts, partition children), detach them all.
+    # Detach anything still on $_raw (udisks auto-mounts, partition children).
     if [ -n "$_raw" ] && [ -f "$_raw" ]; then
         for _stale in $(sudo losetup -j "$_raw" -O NAME --noheadings 2>/dev/null); do
             for _mp in $(awk -v dev="$_stale" '$1 ~ dev {print $2}' /proc/mounts \
@@ -95,12 +88,8 @@ print(f"set part {num} type {guid} (entries CRC {crc:#x})")
 PYEOF
 }
 
-# EFI raw image assembled without loop devices or partition mounts, so the
-# build runs in sandboxed/container environments: the root tree is staged as
-# a plain directory and written in one shot with mke2fs -d, the ESP with
-# mtools, the disk image as an sfdisk table plus dd writes at the partition
-# offsets. UUIDs/volume IDs are generated up front so fstab and the embedded
-# grub.cfg are written before any filesystem exists.
+# EFI raw image built without loop devices or mounts (works in containers): mke2fs -d for root,
+# mtools for the ESP, sfdisk + dd for the table. UUIDs are generated first so fstab/grub.cfg exist before any fs.
 create_raw() {
     _basedir="$1"
     _arch="$2"
@@ -150,9 +139,7 @@ create_raw() {
     mkdir -p "$_basedir/output" "$_host_shared" "$_basedir/image_tree/scratch"
     sudo mkdir -p "$_root_dir" "$_esp_dir"
 
-    # Pre-generate the identifiers the loop-based path read back from blkid
-    # after mkfs; here nothing is mkfs'd until the directory trees are
-    # complete, so fstab/grub.cfg need them first.
+    # fstab/grub.cfg need the ids before any mkfs.
     _root_uuid="$(cat /proc/sys/kernel/random/uuid)"
     _esp_volid="$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n' | tr 'a-f' 'A-F')"
     _esp_uuid="${_esp_volid%????}-${_esp_volid#????}"
@@ -377,9 +364,7 @@ EOF
         sudo rm -rf "$_root_dir/scratch"
     fi
 
-    # These EFI binaries go into the separate ESP staging directory, not into
-    # $_root_dir; the ESP is a different filesystem that is never mounted
-    # underneath the root tree here.
+    # EFI binaries go to the ESP staging dir, not the root tree.
     sudo mkdir -p "$_esp_dir/EFI/BOOT"
     sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_esp_dir/EFI/BOOT/$_boot_efi"
     if [ "$_arch" = amd64 ]; then
@@ -406,9 +391,7 @@ EOF
     log_step "Building populated filesystem images (no mount)..."
     rm -f "$_esp_img" "$_root_img"
 
-    # ESP: build an empty FAT32 filesystem of the exact partition size, then
-    # inject files with mtools; mcopy/mmd operate on the image file
-    # directly and need no mount, no loop device, no root.
+    # ESP: empty FAT32 image, files injected with mtools (no mount needed).
     truncate -s "${_esp_size_mib}M" "$_esp_img"
     mkfs.vfat -F32 -i "$_esp_volid" "$_esp_img" >/dev/null
     mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub
@@ -418,8 +401,7 @@ EOF
     fi
     mcopy -i "$_esp_img" "$_esp_dir/boot/grub/grubenv" ::/boot/grub/grubenv
 
-    # Root: mke2fs -d populates the filesystem from a directory in one shot,
-    # preserving ownership/permissions/xattrs/symlinks; no mount involved.
+    # mke2fs -d populates root from a directory, keeping owner/perms/xattrs.
     sudo mke2fs -F -t ext4 -I 512 \
         -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
         -L vitruvian-root -U "$_root_uuid" \
@@ -525,7 +507,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     sudo mkdir -p "$_basedir/image_tree/image/live"
     sudo chown "$(id -u):$(id -g)" "$_basedir/image_tree/scratch" "$_basedir/image_tree/image" "$_basedir/image_tree/image/live"
 
-    # Ensure empty mountpoint dirs exist in chroot (these were excluded from squashfs anyway)
+    # Empty mountpoints excluded from the squashfs.
     for _d in dev/hugepages dev/mqueue run/lock \
               sys/kernel/debug sys/kernel/tracing \
               sys/fs/fuse/connections sys/kernel/config; do
@@ -533,10 +515,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     done
 
     log_step "Compressing chroot..."
-    # zstd by default: a live ISO pays decompression on every file read for
-    # the whole session, and xz's ~19% smaller media is not worth the slower
-    # reads. Both compressors are supported by the shipped kernel
-    # (CONFIG_SQUASHFS_ZSTD=y) and mksquashfs, so this is a runtime choice.
+    # zstd: faster reads for a live ISO than xz's ~19% smaller media (kernel supports both).
     case "${VOS_SQUASHFS_COMP:-zstd}" in
         zstd) _sq_comp_args="-comp zstd -Xcompression-level ${VOS_SQUASHFS_LEVEL:-15}" ;;
         xz)   _sq_comp_args="-comp xz -Xdict-size 100%" ;;
@@ -674,10 +653,7 @@ EOF
     cd "$_saved_pwd"
 
     log_step "Generating ISO..."
-    # ESP is published as a real GPT partition (visible to strict UEFI per
-    # issue #186) and El Torito's EFI alt-boot references that same partition
-    # via --interval:appended_partition_2 — so there is exactly one ESP on
-    # the image, not a duplicate embedded inside the ISO9660 tree.
+    # One real GPT ESP, referenced by El Torito via --interval:appended_partition_2; not duplicated in the ISO tree.
     if [ "$_arch" = "amd64" ]; then
         xorriso \
             -as mkisofs \
@@ -781,11 +757,7 @@ if ! getent passwd vos-live >/dev/null; then
     for g in sudo video render input plugdev scanner lpadmin nexus; do
         getent group \$g >/dev/null && adduser vos-live \$g || true
     done
-    # shadow-utils useradd copy_tree does not preserve user.* xattrs on
-    # all Debian versions, so BEOS:TYPE and friends on skel files get
-    # dropped — Tracker's \"New\" menu then can't identify templates and
-    # falls back to only \"New Folder\". Re-sync from /etc/skel with
-    # xattr-preserving cp to restore them.
+    # useradd does not preserve user.* xattrs (BEOS:TYPE); re-sync skel with cp to keep Tracker's New menu.
     cp -a --preserve=all /etc/skel/. /home/vos-live/
     chown -R vos-live:vos-live /home/vos-live/
 fi
@@ -806,14 +778,8 @@ getent group nexus >/dev/null && \\
 systemctl mask getty@tty1.service 2>/dev/null || true
 
 # Mask units that are noisy on QEMU / Vitruvian and provide no value:
-#  - systemd-ssh-generator: pokes AF_VSOCK CIDs that don't exist under
-#    qemu user-mode networking; emits an error every boot.
-#  - serial-getty@ttyS0: some hypervisors (e.g. VirtualBox) don't expose
-#    the serial port; agetty then fails and respawns in a loop.
-#  - dev-hugepages/dev-mqueue/sys-fs-fuse-connections/sys-kernel-{config,debug,tracing}:
-#    kernel pseudo-FS that this kernel build does not expose; the static
-#    mount units fail every boot for no reason. Masking is the upstream
-#    recommendation when the FS isn't available.
+# Masked: systemd-ssh-generator (AF_VSOCK noise), serial-getty@ttyS0 (absent on some hypervisors),
+# and kernel pseudo-FS mount units this kernel does not expose.
 
 for _u in \\
     systemd-ssh-generator.service \\
@@ -845,11 +811,8 @@ ln -sf /dev/null /etc/systemd/system-generators/systemd-ssh-generator" || die "_
 }
 
 _debug_ssh_setup() {
-    # Stage the opt-in debug SSH path. _common_chroot_setup leaves exactly
-    # one way to start sshd at boot: vos-sshdebug.service, inert unless the
-    # Debug GRUB entry put vitruvian.sshdebug on the cmdline. The unit is
-    # shipped from staging because the vos deb only carries it when the deb
-    # itself was built Debug, which need not match this image.
+    # Stage the opt-in debug SSH path: vos-sshdebug.service, inert unless the Debug GRUB entry sets
+    # vitruvian.sshdebug. Shipped from staging since the vos deb carries it only when built Debug.
     local _chroot="$1"
     chroot_isolated "$_chroot" /bin/bash -eux <<'SSHEOF'
 export DEBIAN_FRONTEND=noninteractive
@@ -974,18 +937,15 @@ create_raspberry() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
-    # The second stage unmounts /proc and /sys on exit; systemd >= 262
-    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    # Second stage unmounts /proc and /sys; systemd >= 262 postinsts then fail.
     for _m in dev proc sys; do
         mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
     done
-    # Downloads stay on the build host: the debs and the installed system
-    # together do not fit the image.
+    # Downloads stay on the host; debs plus installed system would not fit.
     sudo mkdir -p "$_mnt/var/cache/apt/archives"
     sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
 
-    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
-    # ca-certificates); a copied bundle without that symlink does not verify.
+    # apt needs the /usr/lib/ssl/cert.pem symlink; a copied bundle lacks it.
     sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
         || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
@@ -1002,8 +962,7 @@ deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free n
 deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 APTSRC
 
-    # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
-    # own debootstrap and never went through it.
+    # Key-gated VitruvianOS repo, as chroot.sh.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
         # No default suite; see chroot.sh.
@@ -1308,18 +1267,15 @@ create_uboot_board() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
-    # The second stage unmounts /proc and /sys on exit; systemd >= 262
-    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    # Second stage unmounts /proc and /sys; systemd >= 262 postinsts then fail.
     for _m in dev proc sys; do
         mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
     done
-    # Downloads stay on the build host: the debs and the installed system
-    # together do not fit the image.
+    # Downloads stay on the host; debs plus installed system would not fit.
     sudo mkdir -p "$_mnt/var/cache/apt/archives"
     sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
 
-    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
-    # ca-certificates); a copied bundle without that symlink does not verify.
+    # apt needs the /usr/lib/ssl/cert.pem symlink; a copied bundle lacks it.
     sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
         || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
@@ -1469,12 +1425,8 @@ apt-get autoremove -y --purge" || die "uboot chroot bash-c failed"
     _boot_dtb="$(board_config "$_board" boot_dtb 2>/dev/null)"
     _fdt_line=""
     [ -n "$_boot_dtb" ] && _fdt_line="    fdt /dtbs/$_boot_dtb"
-    # FAT has no symlinks and the partition is small: reference the
-    # versioned kernel/initrd directly instead of duplicating them under
-    # fixed names (riscv64's uncompressed vmlinux alone is ~200 MB; two
-    # initrd copies overflowed a 240 MiB boot partition, 2026-10-17).
-    # Nothing updates extlinux.conf on a running system (no flash-kernel),
-    # so bake-time names are what the config would hold anyway.
+    # FAT is small and has no symlinks: reference the versioned kernel/initrd directly
+    # (duplicates overflowed a 240 MiB boot partition).
     if [ -f "$_mnt/boot/vmlinuz-$_kver" ]; then
         _ext_linux="/vmlinuz-$_kver"
     elif [ -f "$_mnt/boot/vmlinux-$_kver" ]; then
@@ -1526,9 +1478,7 @@ BBOOTINI
         log_info "  wrote /boot/boot.ini (Hardkernel boot_scripts path) dtb=$_dtb_bootini console=$_ext_console"
     fi
 
-    # Kernel and initrd stay under their versioned names only — the boot
-    # configs reference them directly (see _ext_linux/_ext_initrd above);
-    # duplicating them onto the FAT partition is what overflowed it.
+    # Kernel/initrd stay under versioned names only; see _ext_linux.
 
     case "$_root_fs" in
         # passno 0: fsck.xfs is a no-op; do not schedule a fake check.
@@ -1540,13 +1490,8 @@ $_ext_rootdev  /        $_root_mkfs  defaults,noatime  0 $_root_pass
 $_ext_bootdev  /boot    vfat         defaults          0 2
 FSTAB
 
-    # Stage U-Boot out of the rootfs before unmounting: Debian's packages
-    # put per-board blobs under /usr/lib/u-boot/<variant>/. The old code
-    # looked only in firmware/<board>/ on the host, which no build populated.
-    #
-    # U-Boot is per-BOARD, not per-SoC-family, so a family image has to pick
-    # one. VOS_UBOOT_VARIANT overrides the board table's default for a build
-    # targeting a specific machine.
+    # Stage U-Boot from the rootfs (/usr/lib/u-boot/<variant>/) before unmount. U-Boot is per-board;
+    # VOS_UBOOT_VARIANT overrides the table default.
     _uboot_stage=""
     # uboot_variant may list several dirs, staged in order (k3: R5 and A53).
     _variants="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
@@ -1627,11 +1572,7 @@ FSTAB
              [ -n "$_uboot_dir" ] || _uboot_dir="(unset)"
              die "no U-Boot blobs for $_board: firmware/$_board absent and rootfs staging empty (boards.sh extra_pkgs: $(board_config "$_board" extra_pkgs 2>/dev/null); Debian pkg installed?)"
          }
-         # image.sh is SOURCED by bake.sh, so $0 is bake.sh's path and
-         # dirname "$0" is wherever bake runs from (generated.<arch>/) --
-         # the helper actually lives in the source tree, 1-2 levels up.
-         # Measured 2026-09-27: odroid-n2 attempt 2 died after 2773 s with
-         # "FIP helper not found at ../fip.sh" on exactly this.
+         # image.sh is sourced by bake.sh, so $0 is not the source tree; the helper is 1-2 levels up.
          _fip_helper=""
          for _fip_dir in "$_basedir" "$_basedir/.." "$_basedir/../.."; do
              if [ -f "$_fip_dir/build/scripts/lib/fip.sh" ]; then

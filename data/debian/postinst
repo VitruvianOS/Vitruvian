@@ -51,7 +51,7 @@ mkdir -p "/etc/skel/config/settings/Tracker/Tracker New Templates"
 mkdir -p /etc/skel/config/settings/printers/Preview
 mkdir -p "/etc/skel/config/settings/printers/Save as PDF"
 
-# addattr (the Haiku tool) is not used here: it loads libroot2, which needs
+# addattr is not used here: it loads libroot2, which needs
 # nexus IPC that is unavailable when postinst runs on the host.
 
 beos_string() {

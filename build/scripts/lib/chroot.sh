@@ -25,16 +25,13 @@ qemu_eject() {
         "$_chroot_dir/usr/bin/${_qemu_name%-static}" 2>/dev/null || true
 }
 
-# Debian mirror used by debootstrap and apt inside the chroot. Override
-# by exporting DEBIAN_MIRROR before invoking setupenv / bake.
+# Debian mirror for debootstrap/apt in the chroot; override with DEBIAN_MIRROR.
 : "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
 
-# Debian suite bootstrapped for the chroot and every board rootfs; trixie
-# is the only suite proven against so far.
+# Debian suite for the chroot and board rootfs; only trixie is proven.
 : "${VOS_BASE_SUITE:=trixie}"
 
-# Persistent .deb cache shared across chroot regenerations. Path is per
-# arch (laid down by setupenv); same arch == same cache.
+# Persistent per-arch .deb cache shared across chroot regenerations.
 chroot_cache_dir() {
     echo "$1/deb"
 }
@@ -136,9 +133,7 @@ chroot_mount_deb_cache() {
         sudo mount --bind "$_cache_dir/archives" \
             "$_chroot_dir/var/cache/apt/archives"
     fi
-    # Make apt keep what it downloads (default config drops .debs after
-    # install, defeating the cache). Per-config-file drop so apt-get
-    # update / install honor it without touching the chroot's own conf.
+    # Keep downloaded .debs (default drops them after install), via a drop-in config.
     sudo mkdir -p "$_chroot_dir/etc/apt/apt.conf.d"
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
         | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/99-keep-debs" >/dev/null
@@ -182,9 +177,7 @@ chroot_create() {
     chroot_mount "$_chroot_dir"
     chroot_mount_deb_cache "$_chroot_dir" "$_cache_dir"
 
-    # Force apt inside the chroot onto the same mirror so its sources.list
-    # matches what debootstrap used. debootstrap writes a default one
-    # pointing at the mirror, but make it explicit and overridable.
+    # Pin apt to the debootstrap mirror.
     : "${DEBIAN_SECURITY_MIRROR:=http://security.debian.org/debian-security}"
     sudo tee "$_chroot_dir/etc/apt/sources.list" >/dev/null <<EOF
 deb $DEBIAN_MIRROR $VOS_BASE_SUITE main contrib non-free non-free-firmware
@@ -196,10 +189,7 @@ EOF
     # whole apt update, taking Debian access down with it.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
-        # No default suite on purpose. The retired trixie-testing sat here
-        # for months and kept resolving to a suite that no longer exists;
-        # with four suites now, defaulting to any one of them is the same
-        # bug one rename later.
+        # No default suite on purpose: a stale default once resolved to a retired suite.
         [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
         sudo install -m 644 "$VOS_REPO_KEY" \
@@ -230,8 +220,7 @@ VOSEOF
     mountpoint -q "$_chroot_dir/dev" || die "dev mount failed"
 
     if is_cross_build "$_arch"; then
-        # The second stage unpacks from /var/cache/apt/archives, which is
-        # bound to $_cache_dir/archives; debootstrap cached elsewhere.
+        # Second stage unpacks from /var/cache/apt/archives, bound to $_cache_dir/archives.
         sudo sh -c 'cp -n "$1"/*.deb "$2"/ 2>/dev/null || true' _ \
             "$_debootstrap_cache" "$_cache_dir/archives"
         log_step "Running debootstrap second stage..."
@@ -265,8 +254,7 @@ VOSEOF
     _dev_pkgs="$(get_dev_packages "$_arch")"
 
     log_step "Installing packages..."
-    # dpkg's per-file fsyncs are pure overhead on a chroot that gets
-    # discarded; opt-in so it is never silently on for a local tree.
+    # Skip dpkg fsyncs on a throwaway chroot; opt-in.
     if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
         sudo install -d -m 755 "$_chroot_dir/etc/dpkg/dpkg.cfg.d"
         printf 'force-unsafe-io\n' \

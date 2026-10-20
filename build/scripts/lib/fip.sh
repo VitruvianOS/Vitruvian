@@ -24,10 +24,7 @@ _fip_die()  { printf '[fip] ERROR: %s\n' "$*" >&2; return 1; }
 _fip_apply_compat_patches() {
     _dir="$1"
 
-    # compiler-gcc{12..16}.h shims; the tree only ships gcc3/4. The list
-    # must cover the builder's current cross-GCC major — GCC 16 asked for
-    # compiler-gcc16.h and the 2026-10-17 amlogic leg died on it after
-    # the list stopped at 14 (job ...3967500).
+    # compiler-gcc{12..16}.h shims; the tree only ships gcc3/4. Must cover the builder's cross-GCC major.
     for _ver in 12 13 14 15 16 17; do
         _h="$_dir/include/linux/compiler-gcc${_ver}.h"
         if [ ! -f "$_h" ]; then
@@ -50,13 +47,8 @@ SHIMEOF
     find "$_dir" -name "Makefile" \
         -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' {} \; 2>/dev/null || true
 
-    # 2b. GCC 14 promotes int-conversion (pointer -> integer in initializers)
-    #     to a hard error. Measured 2026-09-27 on the odroid-n2 proof builds:
-    #     attempts 1-3 all died at common/bootm.c:333/350 ("initialization of
-    #     'long long unsigned int' from 'void *'"). The old tree initializes
-    #     u64 fields from pointer values on purpose; -Wno-error above does NOT
-    #     neutralize GCC 14's promoted diagnostics, so disable the promoted
-    #     check explicitly on the KBUILD_CFLAGS line.
+    # GCC 14 makes int-conversion a hard error; the old tree initializes u64 from pointers on purpose,
+    # and -Wno-error does not cover promoted diagnostics, so disable it on KBUILD_CFLAGS.
     find "$_dir" -maxdepth 1 -name "Makefile" \
         -exec sed -i '/^KBUILD_CFLAGS.*:=/s/:=/:= -Wno-error=int-conversion /' {} \; 2>/dev/null || true
 
@@ -64,12 +56,8 @@ SHIMEOF
     # must keep its own arm-none-eabi- values.
     _scp_mk="$_dir/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile"
     if [ -f "$_scp_mk" ]; then
-        # Debian's gcc-arm-none-eabi (>=12) ships no stdint.h at all — not
-        # even in -print-file-name=include (verified in the worker image,
-        # gcc 15.3) — and libnewlib-arm-none-eabi is not installable there
-        # (Candidate: none). uart.c includes <stdint.h>. Write a minimal
-        # freestanding stdint.h built from GCC builtin macros (correct for
-        # any target) and put it on the scp_task -I path via $(buildsrc).
+        # gcc-arm-none-eabi (>=12) ships no stdint.h and newlib is not installable; write a minimal
+        # freestanding one from GCC builtin macros on the scp_task -I path.
         mkdir -p "$_dir/scp-shim"
         [ -f "$_dir/scp-shim/stdint.h" ] || cat > "$_dir/scp-shim/stdint.h" <<'STDINT_EOF'
 /* Minimal freestanding stdint.h for BL301 scp_task. Debian's
@@ -192,16 +180,9 @@ fip_amlogic_assemble() {
     _size=$(wc -c < "$_output")
     _fip_log "FIP assembly complete: $_output ($_size bytes)"
 
-    # The AML BootROM magic must sit at DISK offset 0x211 (529). The blob
-    # is written at sector 1 (create_uboot_board dd seek=1; boards.sh
-    # amlogic: "The FIP is written from sector 1"), so the file offset to
-    # check is 529 - 512 = 17. Byte-level dump 2026-10-18 (job
-    # ...1759606): "AML" present at file offset 17 — on disk that IS
-    # 0x211. The old skip=529 checked as if the file carried sector-0
-    # padding and refused a correct blob.
+    # AML magic must sit at disk offset 0x211; the blob starts at sector 1, so check file offset 529-512 = 17.
     if ! dd if="$_output" bs=1 skip=17 count=3 2>/dev/null | grep -q "AML"; then
-        # Diagnose before dying (2026-10-18: GCC 16 build produced a blob
-        # without the magic at 0x211; need ground truth on where/if it is).
+        # Diagnose before dying.
         _fip_warn "first bytes of sd_fuse/u-boot.bin:"
         od -A x -t x1z -N 560 "$_output" 2>/dev/null | tail -8 >&2
         _fip_warn "AML occurrences (offset: ): $(grep -abo 'AML' "$_output" | head -5 | tr '\n' ' ')"
@@ -289,15 +270,8 @@ fip_licheerv_assemble() {
         fi
 
         _fip_log "Building OpenSBI (PLATFORM=generic)..."
-        # GCC 15+ defaults to C23, where bool is a keyword and OpenSBI
-        # v1.5.1's `typedef int bool;` is a HARD error ("cannot be defined
-        # via typedef"), not just a -Werror'd warning — seen 2026-10-16
-        # and again 2026-10-17 after the -Werror strip. Force the pre-C23
-        # standard instead, the same fix distros used for the GCC 15
-        # wave. One sed swaps the flag on the Makefile's single -Werror
-        # occurrence (verified: exactly one in v1.5.1). A command-line
-        # CFLAGS+= would override the Makefile's whole CFLAGS (losing its
-        # -I paths — third failure mode, also 2026-10-17), so sed it is.
+        # GCC 15+ defaults to C23, where OpenSBI's `typedef int bool;` is a hard error. Force the pre-C23
+        # standard by sed on the single -Werror (a CFLAGS+= would drop the Makefile's -I paths).
         sed -i 's/ -Werror\b/ -std=gnu11/' "$_opensbi_work/Makefile"
         if ! make -C "$_opensbi_work" \
                 CROSS_COMPILE="$FIP_LICHEERV_CROSS_COMPILE" \

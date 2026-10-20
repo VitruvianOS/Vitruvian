@@ -996,6 +996,7 @@ struct ForeignLinkInfo {
 	uint32			inputForeignPortId;
 	enum pw_link_state	state;
 	spa_hook		listener;
+	spa_hook		proxyListener;
 };
 
 
@@ -1019,6 +1020,44 @@ _HasForeignLink(const BMediaConnection* connection)
 
 
 static std::multiset<std::pair<uint32, uint32> > sPendingEdges;
+
+
+// Caller holds sForeignLinksLock (and the backend lock for the proxy).
+static void
+_release_foreign_link(ForeignLinkInfo& info)
+{
+	spa_hook_remove(&info.listener);
+	spa_hook_remove(&info.proxyListener);
+	pw_proxy_destroy(info.proxy);
+}
+
+
+// PipeWire deleted the link, e.g. its device went away. Loop thread, backend
+// lock held.
+void
+PipeWireBackend::_ForeignLinkRemoved(void* data)
+{
+	ForeignLinkInfo* linkInfo = (ForeignLinkInfo*)data;
+	BMediaConnection* endpoint = linkInfo->output != NULL
+		? (BMediaConnection*)linkInfo->output
+		: (BMediaConnection*)linkInfo->input;
+	{
+		BAutolock _(sForeignLinksLock);
+		auto it = sForeignLinks.find(linkInfo->proxy);
+		if (it == sForeignLinks.end())
+			return;
+		_release_foreign_link(it->second);
+		sForeignLinks.erase(it);
+	}
+
+	if (endpoint != NULL && endpoint->IsConnected()
+			&& !endpoint->HasBinding() && !_HasForeignLink(endpoint))
+		endpoint->Disconnected();
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend != NULL)
+		backend->_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED);
+}
 
 
 static void
@@ -1047,6 +1086,24 @@ static const struct pw_link_events sForeignLinkEvents = {
 	PW_VERSION_LINK_EVENTS,
 	.info = _foreign_link_info
 };
+
+
+static const struct pw_proxy_events sForeignProxyEvents = {
+	PW_VERSION_PROXY_EVENTS,
+	.removed = PipeWireBackend::_ForeignLinkRemoved
+};
+
+
+static void
+_add_foreign_link_listeners(ForeignLinkInfo& info)
+{
+	memset(&info.listener, 0, sizeof(info.listener));
+	memset(&info.proxyListener, 0, sizeof(info.proxyListener));
+	pw_link_add_listener((struct pw_link*)info.proxy, &info.listener,
+		&sForeignLinkEvents, &info);
+	pw_proxy_add_listener(info.proxy, &info.proxyListener,
+		&sForeignProxyEvents, &info);
+}
 
 
 static bool
@@ -1381,10 +1438,7 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 		info.inputForeignNodeId = foreignPort->nodeId;
 		info.inputForeignPortId = foreignPort->id;
 		info.state = PW_LINK_STATE_INIT;
-		memset(&info.listener, 0, sizeof(info.listener));
-
-		pw_link_add_listener((struct pw_link*)proxy, &info.listener,
-			&sForeignLinkEvents, &info);
+		_add_foreign_link_listeners(info);
 	}
 
 	status_t result = backend->RoundtripLocked();
@@ -1399,8 +1453,7 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 		BAutolock linksLock(sForeignLinksLock);
 		auto it = sForeignLinks.find(key);
 		if (it != sForeignLinks.end()) {
-			spa_hook_remove(&it->second.listener);
-			pw_proxy_destroy(it->second.proxy);
+			_release_foreign_link(it->second);
 			sForeignLinks.erase(it);
 		}
 	}
@@ -1601,10 +1654,7 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 		info.inputForeignNodeId = 0;
 		info.inputForeignPortId = 0;
 		info.state = PW_LINK_STATE_INIT;
-		memset(&info.listener, 0, sizeof(info.listener));
-
-		pw_link_add_listener((struct pw_link*)proxy, &info.listener,
-			&sForeignLinkEvents, &info);
+		_add_foreign_link_listeners(info);
 	}
 
 	status_t result = backend->RoundtripLocked();
@@ -1623,8 +1673,7 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 		BAutolock linksLock(sForeignLinksLock);
 		auto it = sForeignLinks.find(key);
 		if (it != sForeignLinks.end()) {
-			spa_hook_remove(&it->second.listener);
-			pw_proxy_destroy(it->second.proxy);
+			_release_foreign_link(it->second);
 			sForeignLinks.erase(it);
 		}
 	}
@@ -1658,8 +1707,7 @@ BMediaGraph::Disconnect(BMediaOutput* output, const ForeignPort* foreignPort)
 				it->second.foreignNodeId == foreignPort->nodeId &&
 				it->second.foreignPortId == foreignPort->id &&
 				!it->second.outputIsForeign) {
-				spa_hook_remove(&it->second.listener);
-				pw_proxy_destroy(it->second.proxy);
+				_release_foreign_link(it->second);
 				sForeignLinks.erase(it);
 				result = B_OK;
 				break;
@@ -1694,8 +1742,7 @@ BMediaGraph::Disconnect(const ForeignPort* foreignPort, BMediaInput* input)
 			if (it->second.input == input &&
 				it->second.foreignNodeId == foreignPort->nodeId &&
 				it->second.outputIsForeign) {
-				spa_hook_remove(&it->second.listener);
-				pw_proxy_destroy(it->second.proxy);
+				_release_foreign_link(it->second);
 				it = sForeignLinks.erase(it);
 				result = B_OK;
 			} else
@@ -1794,10 +1841,7 @@ BMediaGraph::Connect(const ForeignPort* outputPort,
 		info.inputForeignNodeId = inputPort->nodeId;
 		info.inputForeignPortId = inputPort->id;
 		info.state = PW_LINK_STATE_INIT;
-		memset(&info.listener, 0, sizeof(info.listener));
-
-		pw_link_add_listener((struct pw_link*)proxy, &info.listener,
-			&sForeignLinkEvents, &info);
+		_add_foreign_link_listeners(info);
 	}
 
 	status_t result = backend->RoundtripLocked();
@@ -1812,8 +1856,7 @@ BMediaGraph::Connect(const ForeignPort* outputPort,
 		BAutolock linksLock(sForeignLinksLock);
 		auto it = sForeignLinks.find(key);
 		if (it != sForeignLinks.end()) {
-			spa_hook_remove(&it->second.listener);
-			pw_proxy_destroy(it->second.proxy);
+			_release_foreign_link(it->second);
 			sForeignLinks.erase(it);
 		}
 	}
@@ -1924,8 +1967,7 @@ BMediaGraph::Disconnect(const ForeignPort* outputPort,
 				&& link.foreignPortId == outputPort->id
 				&& link.inputForeignNodeId == inputPort->nodeId
 				&& link.inputForeignPortId == inputPort->id) {
-				spa_hook_remove(&link.listener);
-				pw_proxy_destroy(link.proxy);
+				_release_foreign_link(link);
 				sForeignLinks.erase(it);
 				result = B_OK;
 				break;

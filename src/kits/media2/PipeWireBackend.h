@@ -199,6 +199,8 @@ public:
 
 		void					_Broadcast(uint32 what, uint32 deviceId = 0);
 
+	static	void					_ForeignLinkRemoved(void* linkInfo);
+
 		enum NotificationType {
 			kNotificationDeviceAdded		= 'mdad',
 			kNotificationDeviceRemoved	= 'mdre',

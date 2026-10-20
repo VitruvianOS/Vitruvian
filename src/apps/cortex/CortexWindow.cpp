@@ -571,6 +571,32 @@ CortexWindow::_Rebuild()
 		graph->GetDefaultAudioInput(&defaultIn);
 	}
 
+	// Forget foreign links PipeWire removed (device unplugged).
+	if (graph != NULL) {
+		BObjectList<BMediaGraph::Link, true> links(20);
+		graph->GetLinks(&links);
+		for (int32 i = fForeignLinks.CountItems() - 1; i >= 0; i--) {
+			CortexForeignLinkEntry* entry = fForeignLinks.ItemAt(i);
+			bool found = false;
+			for (int32 j = 0; entry != NULL && j < links.CountItems(); j++) {
+				BMediaGraph::Link* link = links.ItemAt(j);
+				if (entry->outputIsOwn) {
+					found = link->output == entry->ownOutput
+						&& link->inputNodeId == entry->foreignNodeId
+						&& link->inputPortId == entry->foreignPortId;
+				} else {
+					found = link->input == entry->ownInput
+						&& link->outputNodeId == entry->foreignNodeId
+						&& link->outputPortId == entry->foreignPortId;
+				}
+				if (found)
+					break;
+			}
+			if (!found)
+				fForeignLinks.RemoveItemAt(i);
+		}
+	}
+
 	fModel->Rebuild(&fOwnClients, &fForeignLinks);
 
 	if (graph != NULL) {

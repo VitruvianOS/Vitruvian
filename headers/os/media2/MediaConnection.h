@@ -23,6 +23,10 @@ class BMediaGraph;
 class BMediaUnit;
 class BMediaOutput;
 
+namespace BPrivate { namespace media {
+	class PipeWireBackend;
+} }
+
 class BMediaConnection {
 public:
 			media_connection_id		Id() const;
@@ -54,6 +58,9 @@ protected:
 										const char* name = NULL);
 	virtual							~BMediaConnection();
 
+			// Hooks run on the caller's thread or the media thread (e.g. a
+			// device went away): return quickly, never block or call back
+			// into BMediaGraph synchronously.
 	virtual	void					Connected(const BMediaFormat& format);
 	virtual	void					Disconnected();
 
@@ -97,6 +104,7 @@ private:
 	friend class BSimpleMediaNode;
 	friend class BMediaGraph;
 	friend class BMediaOutput;
+	friend class BPrivate::media::PipeWireBackend;
 };
 
 

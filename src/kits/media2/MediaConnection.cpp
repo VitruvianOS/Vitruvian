@@ -362,6 +362,25 @@ BMediaInput::~BMediaInput()
 }
 
 
+static status_t
+_CheckAcceptedType(const BMediaConnection* connection,
+	const BMediaFormat* format)
+{
+	if (format == NULL || format->Type() == B_MEDIA_NO_TYPE)
+		return B_BAD_VALUE;
+	if ((connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(format->Type())) == 0)
+		return B_BAD_VALUE;
+	return B_OK;
+}
+
+
+status_t
+BMediaInput::AcceptFormat(BMediaFormat* format)
+{
+	return _CheckAcceptedType(this, format);
+}
+
+
 void
 BMediaInput::HandleBuffer(void* /*buffer*/, size_t /*size*/,
 	const BMediaFormat& /*format*/)
@@ -397,6 +416,24 @@ BMediaOutput::BMediaOutput(const char* name)
 
 BMediaOutput::~BMediaOutput()
 {
+}
+
+
+status_t
+BMediaOutput::PrepareToConnect(BMediaFormat* format)
+{
+	return _CheckAcceptedType(this, format);
+}
+
+
+status_t
+BMediaOutput::FormatProposal(BMediaFormat* format)
+{
+	if (format == NULL)
+		return B_BAD_VALUE;
+	if (Format().Type() != B_MEDIA_NO_TYPE)
+		*format = Format();
+	return B_OK;
 }
 
 

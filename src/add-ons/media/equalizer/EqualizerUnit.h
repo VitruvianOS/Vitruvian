@@ -15,33 +15,6 @@
 #include "Equalizer.h"
 
 
-class EqualizerInput : public BMediaInput {
-public:
-							EqualizerInput(const char* name)
-								:
-								// Virtual base is initialized by the
-								// most-derived class.
-								BMediaConnection(B_MEDIA_INPUT, name),
-								BMediaInput(name)
-							{}
-protected:
-	virtual	status_t		AcceptFormat(BMediaFormat*) { return B_OK; }
-};
-
-
-class EqualizerOutput : public BMediaOutput {
-public:
-							EqualizerOutput(const char* name)
-								:
-								BMediaConnection(B_MEDIA_OUTPUT, name),
-								BMediaOutput(name)
-							{}
-protected:
-	virtual	status_t		PrepareToConnect(BMediaFormat*) { return B_OK; }
-	virtual	status_t		FormatProposal(BMediaFormat*) { return B_OK; }
-};
-
-
 class EqualizerUnit : public BMediaUnit {
 public:
 							EqualizerUnit(int32 channels = 2);
@@ -69,8 +42,8 @@ private:
 
 			int32			fChannelCount;
 			Equalizer		fEqualizer[MAX_CHANNELS];
-			EqualizerInput*	fInputs[MAX_CHANNELS];
-			EqualizerOutput*	fOutputs[MAX_CHANNELS];
+			BMediaInput*	fInputs[MAX_CHANNELS];
+			BMediaOutput*	fOutputs[MAX_CHANNELS];
 			BControllable*	fControllable;
 			std::atomic<uint32>	fConfiguredRate;
 			std::atomic<int32>	fMute;

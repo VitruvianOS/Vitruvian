@@ -26,21 +26,6 @@
 namespace {
 
 
-class _InputConnection : public BMediaInput {
-public:
-	_InputConnection()
-		:
-		BMediaConnection(B_MEDIA_INPUT, "BMediaRecorder-in"),
-		BMediaInput("BMediaRecorder-in")
-	{
-	}
-	virtual ~_InputConnection() {}
-
-protected:
-	virtual status_t AcceptFormat(BMediaFormat* /*format*/) override { return B_OK; }
-};
-
-
 typedef void (*_DeliverFunc)(void* cookie, void* buffer, size_t size,
 	const BMediaFormat& format);
 
@@ -187,7 +172,7 @@ private:
 	BMediaFormat	fAudioFormat;
 	BSimpleMediaNode*		fNode;
 	_RecorderClient*		fClient;
-	_InputConnection*		fInput;
+	BMediaInput*		fInput;
 	status_t				fInitErr;
 
 	BMediaRecorder::RecordBuffer	fRecordFunc;
@@ -277,7 +262,7 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	fNode->SetFormat(fFormat);
 	fNode->SetProcessHook(&Impl::_ProcessHook, this);
 
-	fInput = new(std::nothrow) _InputConnection();
+	fInput = new(std::nothrow) BMediaInput("BMediaRecorder-in");
 	if (fInput == NULL) {
 		fInitErr = B_NO_MEMORY;
 		return;

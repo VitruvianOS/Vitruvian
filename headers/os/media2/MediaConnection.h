@@ -108,7 +108,8 @@ public:
 			size_t					BufferSize() const;
 
 protected:
-	virtual	status_t				AcceptFormat(BMediaFormat* format) = 0;
+	// Default: accept any format whose type is in AcceptedTypes().
+	virtual	status_t				AcceptFormat(BMediaFormat* format);
 	virtual	void					HandleBuffer(void* buffer, size_t size,
 										const BMediaFormat& format);
 	virtual	void					Connected(const BMediaFormat& format) override;
@@ -132,8 +133,10 @@ public:
 			size_t					BufferSize() const;
 
 protected:
-	virtual	status_t				PrepareToConnect(BMediaFormat* format) = 0;
-	virtual	status_t				FormatProposal(BMediaFormat* format) = 0;
+	// Defaults: accept a format whose type is in AcceptedTypes(), and
+	// propose the format set on the output.
+	virtual	status_t				PrepareToConnect(BMediaFormat* format);
+	virtual	status_t				FormatProposal(BMediaFormat* format);
 	virtual	void					Connected(const BMediaFormat& format) override;
 	virtual	void					Disconnected() override;
 

@@ -254,7 +254,7 @@ BMediaPluginAdapter::_SetupPorts()
 	for (int32 i = 0; i < nIn; i++) {
 		BString name;
 		name.SetToFormat("in_%d", i);
-		PluginInput* input = new(std::nothrow) PluginInput(name.String());
+		BMediaInput* input = new(std::nothrow) BMediaInput(name.String());
 		if (input == NULL)
 			return;
 		input->SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
@@ -267,7 +267,7 @@ BMediaPluginAdapter::_SetupPorts()
 	for (int32 i = 0; i < nOut; i++) {
 		BString name;
 		name.SetToFormat("out_%d", i);
-		PluginOutput* output = new(std::nothrow) PluginOutput(name.String());
+		BMediaOutput* output = new(std::nothrow) BMediaOutput(name.String());
 		if (output == NULL)
 			return;
 		output->SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));

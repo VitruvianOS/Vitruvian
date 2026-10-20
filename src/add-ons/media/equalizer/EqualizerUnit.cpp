@@ -47,8 +47,8 @@ EqualizerUnit::EqualizerUnit(int32 channels)
 		BString outName;
 		outName.SetToFormat("output_%d", i);
 
-		fInputs[i] = new(std::nothrow) EqualizerInput(inName.String());
-		fOutputs[i] = new(std::nothrow) EqualizerOutput(outName.String());
+		fInputs[i] = new(std::nothrow) BMediaInput(inName.String());
+		fOutputs[i] = new(std::nothrow) BMediaOutput(outName.String());
 		if (fInputs[i] == NULL || fOutputs[i] == NULL) {
 			fInitStatus = B_NO_MEMORY;
 			return;

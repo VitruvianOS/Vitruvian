@@ -18,31 +18,6 @@
 #include "LadspaAbi.h"
 
 
-class PluginInput : public BMediaInput {
-public:
-							PluginInput(const char* name)
-								:
-								BMediaConnection(B_MEDIA_INPUT, name),
-								BMediaInput(name)
-							{}
-protected:
-	virtual	status_t		AcceptFormat(BMediaFormat*) { return B_OK; }
-};
-
-
-class PluginOutput : public BMediaOutput {
-public:
-							PluginOutput(const char* name)
-								:
-								BMediaConnection(B_MEDIA_OUTPUT, name),
-								BMediaOutput(name)
-							{}
-protected:
-	virtual	status_t		PrepareToConnect(BMediaFormat*) { return B_OK; }
-	virtual	status_t		FormatProposal(BMediaFormat*) { return B_OK; }
-};
-
-
 // In-process LV2/LADSPA host as a BMediaUnit (§2.8, §2.10 leaning).
 // BMediaAddOn is discovery only; hosting lives here.
 class BMediaPluginAdapter : public BMediaUnit {
@@ -84,8 +59,8 @@ private:
 			void*			fModule;
 			const LADSPA_Descriptor*	fDescriptor;
 			LADSPA_Handle	fHandle;
-			std::vector<PluginInput*>	fInputs;
-			std::vector<PluginOutput*>	fOutputs;
+			std::vector<BMediaInput*>	fInputs;
+			std::vector<BMediaOutput*>	fOutputs;
 			std::vector<float*>		fPortBuffers;
 			std::vector<uint32>		fPortIsInput;
 			std::vector<float>		fControlValues;

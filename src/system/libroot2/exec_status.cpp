@@ -16,7 +16,9 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
+#include <signal.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -149,7 +151,9 @@ CheckDynamicLoader(const char* path, char* detail, size_t detailSize)
 	if (pipe2(pipeFd, O_CLOEXEC) != 0)
 		return B_OK;
 
-	pid_t pid = fork();
+	// Raw clone, not fork(): the child only execs, and fork() would run the
+	// atfork handlers, opening /dev/nexus for a team that never lives.
+	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid < 0) {
 		close(pipeFd[0]);
 		close(pipeFd[1]);

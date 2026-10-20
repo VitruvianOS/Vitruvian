@@ -12,6 +12,7 @@
 #include <AppDefs.h>
 #include <InterfaceDefs.h>
 #include <Message.h>
+#include <OS.h>
 #include <Point.h>
 #include <View.h>
 
@@ -78,6 +79,14 @@ EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 	if (legacyMods & (B_CONTROL_KEY | B_OPTION_KEY))
 		wpe |= wpe_input_keyboard_modifier_alt;
 	return wpe;
+}
+
+
+static uint32_t
+_NowMs()
+{
+	// WebKit counts double clicks from the event timestamps.
+	return (uint32_t)(system_time() / 1000);
 }
 
 
@@ -290,6 +299,7 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
+	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_button;
 	event.x = _Clamp(where.x, fViewWidth);
 	event.y = _Clamp(where.y, fViewHeight);
@@ -316,6 +326,7 @@ EventAdapter::TranslateMouseUp(const BMessage* msg)
 
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
+	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_button;
 	event.x = _Clamp(where.x, fViewWidth);
 	event.y = _Clamp(where.y, fViewHeight);
@@ -355,6 +366,7 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
+	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_motion;
 	event.x = _Clamp(where.x, fViewWidth);
 	event.y = _Clamp(where.y, fViewHeight);

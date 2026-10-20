@@ -1415,6 +1415,9 @@ BWebView::MouseDown(BPoint where)
 #ifdef HAS_WPE
 	fImpl->fLastMouse = where;
 
+	// Keep the drag (text selection) flowing outside the view.
+	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
+
 	std::string hoverLink;
 	{
 		std::lock_guard<std::mutex> lock(fImpl->fHoverMutex);

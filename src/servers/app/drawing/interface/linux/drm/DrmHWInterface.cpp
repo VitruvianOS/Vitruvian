@@ -3715,8 +3715,8 @@ DrmHWInterface::_AtomicSetCursor(uint32_t /*fb_id*/, uint32_t /*crtc_id*/,
 
 
 status_t
-DrmHWInterface::_AtomicFlip(uint32_t /*fb_id*/, const BRect* /*dirty_rects*/,
-	uint32_t /*nrects*/)
+DrmHWInterface::_AtomicFlip(uint32_t /*fb_id*/, FlipToken* /*token*/,
+	const BRect* /*dirty_rects*/, uint32_t /*nrects*/)
 {
 	return B_UNSUPPORTED;
 }
@@ -3725,7 +3725,7 @@ DrmHWInterface::_AtomicFlip(uint32_t /*fb_id*/, const BRect* /*dirty_rects*/,
 status_t
 DrmHWInterface::_AtomicCommitFrame(uint32_t /*fb_id*/,
 	const BRegion* /*damage*/, const CursorUpdate* /*cursor*/,
-	bool /*wantFlip*/)
+	FlipToken* /*token*/)
 {
 	return B_UNSUPPORTED;
 }

@@ -922,7 +922,8 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 		float value = node->volume;
 		selected->Message()->FindFloat("value", &value);
 		_OpenVolume((media_client_id)node->id, true, title, value);
-	}
+	} else if (selected != NULL && selected->Message() != NULL)
+		PostMessage(selected->Message());
 
 	delete menu;
 }

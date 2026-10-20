@@ -1250,7 +1250,7 @@ CortexGraphView::_ShowLinkMenu(int32 linkIndex, BPoint where)
 		menu->AddItem(monitorItem);
 	}
 
-	menu->Go(ConvertToScreen(where));
+	menu->Go(ConvertToScreen(where), true, true);
 	delete menu;
 }
 

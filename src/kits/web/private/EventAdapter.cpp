@@ -315,7 +315,8 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 void
 EventAdapter::TranslateMouseUp(const BMessage* msg)
 {
-	if (!fBackend)
+	// No press reached the page (the context menu took it).
+	if (!fBackend || fPressedButton == 0)
 		return;
 
 	BPoint where;
@@ -355,6 +356,15 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
+
+	// Moves during a drag may not carry the buttons; the press we sent
+	// is still held until its release.
+	if (buttons == 0 && fPressedButton == 1)
+		buttons = B_PRIMARY_MOUSE_BUTTON;
+	else if (buttons == 0 && fPressedButton == 2)
+		buttons = B_SECONDARY_MOUSE_BUTTON;
+	else if (buttons == 0 && fPressedButton == 3)
+		buttons = B_TERTIARY_MOUSE_BUTTON;
 
 	uint32_t wpeMods = _LegacyPointerModsToWPE(modifiers);
 	if (buttons & B_PRIMARY_MOUSE_BUTTON)

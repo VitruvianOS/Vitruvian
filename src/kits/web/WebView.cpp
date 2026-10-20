@@ -1419,9 +1419,11 @@ BWebView::MouseDown(BPoint where)
 	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
 
 	std::string hoverLink;
+	std::string hoverImage;
 	{
 		std::lock_guard<std::mutex> lock(fImpl->fHoverMutex);
 		hoverLink = fImpl->fHoverLink;
+		hoverImage = fImpl->fHoverImage;
 	}
 
 	// Middle click opens the link under the pointer in a new window.
@@ -1429,6 +1431,16 @@ BWebView::MouseDown(BPoint where)
 		int32 buttons = 0;
 		if (Window() != NULL && Window()->CurrentMessage() != NULL)
 			Window()->CurrentMessage()->FindInt32("buttons", &buttons);
+		// This WebKit never emits "context-menu": the secondary button
+		// shows our menu for what is under the pointer.
+		if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+			BMessage menu(kMsgShowContextMenu);
+			menu.AddString(B_WEB_URL_FIELD, hoverLink.c_str());
+			menu.AddString(B_WEB_IMAGE_FIELD, hoverImage.c_str());
+			fImpl->fSelfMessenger.SendMessage(&menu);
+			return;
+		}
+
 		if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
 			&& !hoverLink.empty() && fTarget.IsValid()) {
 			BMessage msg(B_WEB_PAGE_NEW_WINDOW);

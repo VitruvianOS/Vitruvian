@@ -868,20 +868,18 @@ TBarApp::Unsubscribe(const BMessenger &subscriber)
 BBitmap*
 TBarApp::FetchTeamIcon(team_id team, int32 size)
 {
+	// Called from the Switcher's thread while AddTeam() hands barInfo->icon
+	// to the subscribers; leave that pointer alone.
+	BAutolock autolock(sSubscriberLock);
+	if (!autolock.IsLocked())
+		return NULL;
+
 	int32 teamCount = sBarTeamInfoList.CountItems();
 	for (int32 i = 0; i < teamCount; i++) {
 		BarTeamInfo* barInfo = (BarTeamInfo*)sBarTeamInfoList.ItemAt(i);
 		if (barInfo->teams->HasItem((void*)(addr_t)team)) {
-			_CacheTeamIcon(barInfo, size);
-			BBitmap* icon = barInfo->icon;
-
-			// restore icon pointer back to setting
-			if (size != fSettings.iconSize) {
-				int32 index = (fSettings.iconSize - kMinimumIconSize)
-					/ kIconSizeInterval;
-				barInfo->icon = barInfo->iconCache[index];
-			}
-
+			BBitmap* icon = NULL;
+			_CacheTeamIcon(barInfo, size, &icon);
 			return icon;
 		}
 	}
@@ -937,10 +935,23 @@ TBarApp::AddTeam(team_id team, uint32 flags, const char* sig, entry_ref* ref)
 		return;
 	}
 
-	BAutolock autolock(sSubscriberLock);
-	if (!autolock.IsLocked())
-		return;
+	std::vector<PendingSend> pending;
+	{
+		BAutolock autolock(sSubscriberLock);
+		if (!autolock.IsLocked())
+			return;
 
+		_AddTeamLocked(team, flags, sig, ref, pending);
+	}
+
+	_SendAll(pending);
+}
+
+
+void
+TBarApp::_AddTeamLocked(team_id team, uint32 flags, const char* sig,
+	entry_ref* ref, std::vector<PendingSend>& pending)
+{
 	// have we already seen this team, is this another instance of
 	// a known app?
 	BarTeamInfo* multiLaunchTeam = NULL;
@@ -957,13 +968,13 @@ TBarApp::AddTeam(team_id team, uint32 flags, const char* sig, entry_ref* ref)
 		multiLaunchTeam->teams->AddItem((void*)(addr_t)team);
 
 		int32 subsCount = sSubscribers.CountItems();
-		if (subsCount > 0) {
-			BMessage message(kAddTeam);
-			message.AddInt32("team", team);
-			message.AddString("sig", multiLaunchTeam->sig);
-
-			for (int32 i = 0; i < subsCount; i++)
-				((BMessenger*)sSubscribers.ItemAt(i))->SendMessage(&message);
+		for (int32 i = 0; i < subsCount; i++) {
+			PendingSend send;
+			send.target = *(BMessenger*)sSubscribers.ItemAt(i);
+			send.message.what = kAddTeam;
+			send.message.AddInt32("team", team);
+			send.message.AddString("sig", multiLaunchTeam->sig);
+			pending.push_back(send);
 		}
 		return;
 	}
@@ -982,25 +993,23 @@ TBarApp::AddTeam(team_id team, uint32 flags, const char* sig, entry_ref* ref)
 	sBarTeamInfoList.AddItem(barInfo);
 
 	int32 subsCount = sSubscribers.CountItems();
-	if (subsCount > 0) {
-		for (int32 i = 0; i < subsCount; i++) {
-			BMessenger* messenger = (BMessenger*)sSubscribers.ItemAt(i);
-			BMessage message(B_SOME_APP_LAUNCHED);
+	for (int32 i = 0; i < subsCount; i++) {
+		PendingSend send;
+		send.target = *(BMessenger*)sSubscribers.ItemAt(i);
+		send.message.what = B_SOME_APP_LAUNCHED;
 
-			BList* tList = new BList(*(barInfo->teams));
-			message.AddPointer("teams", tList);
+		BList* tList = new BList(*(barInfo->teams));
+		send.message.AddPointer("teams", tList);
 
-			BBitmap* icon = new BBitmap(barInfo->icon);
-			ASSERT(icon);
+		BBitmap* icon = new BBitmap(barInfo->icon);
+		ASSERT(icon);
 
-			message.AddPointer("icon", icon);
+		send.message.AddPointer("icon", icon);
 
-			message.AddInt32("flags", static_cast<int32>(barInfo->flags));
-			message.AddString("name", barInfo->name);
-			message.AddString("sig", barInfo->sig);
-
-			messenger->SendMessage(&message);
-		}
+		send.message.AddInt32("flags", static_cast<int32>(barInfo->flags));
+		send.message.AddString("name", barInfo->name);
+		send.message.AddString("sig", barInfo->sig);
+		pending.push_back(send);
 	}
 }
 
@@ -1008,39 +1017,56 @@ TBarApp::AddTeam(team_id team, uint32 flags, const char* sig, entry_ref* ref)
 void
 TBarApp::RemoveTeam(team_id team)
 {
-	BAutolock autolock(sSubscriberLock);
-	if (!autolock.IsLocked())
-		return;
+	std::vector<PendingSend> pending;
+	{
+		BAutolock autolock(sSubscriberLock);
+		if (!autolock.IsLocked())
+			return;
 
-	int32 teamCount = sBarTeamInfoList.CountItems();
-	for (int32 i = 0; i < teamCount; i++) {
-		BarTeamInfo* barInfo = (BarTeamInfo*)sBarTeamInfoList.ItemAt(i);
-		if (barInfo->teams->HasItem((void*)(addr_t)team)) {
+		int32 teamCount = sBarTeamInfoList.CountItems();
+		for (int32 i = 0; i < teamCount; i++) {
+			BarTeamInfo* barInfo = (BarTeamInfo*)sBarTeamInfoList.ItemAt(i);
+			if (!barInfo->teams->HasItem((void*)(addr_t)team))
+				continue;
+
 			int32 subsCount = sSubscribers.CountItems();
-			if (subsCount > 0) {
-				BMessage message((barInfo->teams->CountItems() == 1)
-					? B_SOME_APP_QUIT : kRemoveTeam);
-
-				message.AddInt32("team", team);
-				for (int32 i = 0; i < subsCount; i++) {
-					BMessenger* messenger = (BMessenger*)sSubscribers.ItemAt(i);
-					messenger->SendMessage(&message);
-				}
+			for (int32 j = 0; j < subsCount; j++) {
+				PendingSend send;
+				send.target = *(BMessenger*)sSubscribers.ItemAt(j);
+				send.message.what = barInfo->teams->CountItems() == 1
+					? B_SOME_APP_QUIT : kRemoveTeam;
+				send.message.AddInt32("team", team);
+				pending.push_back(send);
 			}
 
 			barInfo->teams->RemoveItem((void*)(addr_t)team);
-			if (barInfo->teams->CountItems() < 1) {
+			if (barInfo->teams->CountItems() < 1)
 				delete (BarTeamInfo*)sBarTeamInfoList.RemoveItem(i);
-				return;
-			}
+			break;
 		}
 	}
+
+	_SendAll(pending);
+}
+
+
+// Sent with the subscriber lock released: a subscriber whose port is full
+// may itself be waiting for that lock (the Switcher in FetchTeamIcon()).
+void
+TBarApp::_SendAll(std::vector<PendingSend>& pending)
+{
+	for (size_t i = 0; i < pending.size(); i++)
+		pending[i].target.SendMessage(&pending[i].message);
 }
 
 
 void
 TBarApp::ResizeTeamIcons()
 {
+	BAutolock autolock(sSubscriberLock);
+	if (!autolock.IsLocked())
+		return;
+
 	for (int32 i = sBarTeamInfoList.CountItems() - 1; i >= 0; i--) {
 		BarTeamInfo* barInfo = (BarTeamInfo*)sBarTeamInfoList.ItemAt(i);
 		if ((barInfo->flags & B_BACKGROUND_APP) == 0
@@ -1102,14 +1128,18 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo)
 	if (barInfo == NULL)
 		return B_BAD_VALUE;
 
-	return _CacheTeamIcon(barInfo, fSettings.iconSize);
+	BBitmap* icon = NULL;
+	status_t status = _CacheTeamIcon(barInfo, fSettings.iconSize, &icon);
+	if (status == B_OK)
+		barInfo->icon = icon;
+	return status;
 }
 
 
 status_t
-TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
+TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size, BBitmap** _icon)
 {
-	if (barInfo == NULL || size < kMinimumIconSize)
+	if (barInfo == NULL || _icon == NULL || size < kMinimumIconSize)
 		return B_BAD_VALUE;
 
 	// icon index based on icon size
@@ -1121,8 +1151,8 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
 	}
 
 	// first look in the icon cache
-	barInfo->icon = barInfo->iconCache[index];
-	if (barInfo->icon != NULL)
+	*_icon = barInfo->iconCache[index];
+	if (*_icon != NULL)
 		return B_OK;
 
 	int32 composed = be_control_look->ComposeIconSize(size).IntegerWidth() + 1;
@@ -1136,7 +1166,7 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
 		BFile file(&appInfo.ref, B_READ_ONLY);
 		BAppFileInfo appMime(&file);
 		if (appMime.GetIcon(icon, (icon_size)size) == B_OK) {
-			barInfo->iconCache[index] = barInfo->icon = icon;
+			barInfo->iconCache[index] = *_icon = icon;
 
 			return B_OK;
 		}
@@ -1147,7 +1177,7 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
 	BMimeType defaultAppMime;
 	defaultAppMime.SetTo(B_APP_MIME_TYPE);
 	if (defaultAppMime.GetIcon(icon, (icon_size)size) == B_OK) {
-		barInfo->iconCache[index] = barInfo->icon = icon;
+		barInfo->iconCache[index] = *_icon = icon;
 
 		return B_OK;
 	}
@@ -1169,7 +1199,7 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
 			iconBits[i] = B_TRANSPARENT_MAGIC_CMAP8;
 	}
 
-	barInfo->iconCache[index] = barInfo->icon = icon;
+	barInfo->iconCache[index] = *_icon = icon;
 
 	return B_OK;
 }

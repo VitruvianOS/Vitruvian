@@ -38,6 +38,8 @@ All rights reserved.
 
 #include <Server.h>
 
+#include <vector>
+
 #include "BarSettings.h"
 
 
@@ -176,7 +178,18 @@ private:
 
 			void					ResizeTeamIcons();
 			status_t				_CacheTeamIcon(BarTeamInfo* barInfo);
-			status_t				_CacheTeamIcon(BarTeamInfo* barInfo, int32 size);
+			status_t				_CacheTeamIcon(BarTeamInfo* barInfo, int32 size,
+										BBitmap** _icon);
+
+			struct PendingSend {
+				BMessenger			target;
+				BMessage			message;
+			};
+
+			void					_AddTeamLocked(team_id team, uint32 flags,
+										const char* sig, entry_ref* ref,
+										std::vector<PendingSend>& pending);
+	static	void					_SendAll(std::vector<PendingSend>& pending);
 			status_t				_CacheWindowIcon(WindowIconCache* winCache);
 
 private:

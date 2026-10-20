@@ -49,7 +49,8 @@ TeamBarMenu::TeamBarMenu(const char* title, info_pack* infos, int32 teamCount,
 		AddItem(new NoiseBarMenuItem());
 
 	fKernelLastTime = fLastTotalTime;
-	fKernelPrevUsage = fKernelThreads ? 0 : SumKernelUsage();
+	fKernelPrevUsage = 0;
+	fKernelSeeded = false;
 }
 
 
@@ -69,23 +70,6 @@ TeamBarMenu::Draw(BRect updateRect)
 		Pulse();
 		fFirstShow = false;
 	}
-}
-
-
-bigtime_t
-TeamBarMenu::SumKernelUsage()
-{
-	bigtime_t sum = 0;
-	int32 cookie = 0;
-	team_info info;
-	while (get_next_team_info(&cookie, &info) == B_OK) {
-		if (!is_kernel_thread(info.team))
-			continue;
-		team_usage_info usage;
-		if (get_team_usage_info(info.team, B_TEAM_USAGE_SELF, &usage) == B_OK)
-			sum += usage.user_time + usage.kernel_time;
-	}
-	return sum;
 }
 
 
@@ -193,10 +177,13 @@ TeamBarMenu::Pulse()
 
 	if (!fKernelThreads) {
 		// Kernel threads have no items here, so their CPU time would
-		// otherwise vanish from the idle math.
+		// otherwise vanish from the idle math. The first pulse only
+		// seeds the sample; a since-boot total against a zero previous
+		// would peg the idle math.
 		bigtime_t now = system_time();
-		if (now > fKernelLastTime)
+		if (fKernelSeeded && now > fKernelLastTime)
 			total += double(kernelUsageSum - fKernelPrevUsage) / double(now - fKernelLastTime);
+		fKernelSeeded = true;
 		fKernelPrevUsage = kernelUsageSum;
 		fKernelLastTime = now;
 

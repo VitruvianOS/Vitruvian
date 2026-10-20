@@ -38,11 +38,10 @@ class TeamBarMenu : public BMenu {
 
 		// The "Kernel Team" submenu only pulses while it's visible, so the
 		// top-level menu tracks kernel usage itself rather than reading it
-		// back from those items.
+		// back from those items. The first pulse only seeds the sample.
 		bigtime_t		fKernelPrevUsage;
 		bigtime_t		fKernelLastTime;
-
-		bigtime_t		SumKernelUsage();
+		bool			fKernelSeeded;
 };
 
 #endif // _TEAM_BAR_MENU_H_

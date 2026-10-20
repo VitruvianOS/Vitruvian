@@ -1004,6 +1004,20 @@ static BLocker sForeignLinksLock("media graph foreign links");
 static std::map<pw_proxy*, ForeignLinkInfo> sForeignLinks;
 
 
+// Whether a foreign link still holds our endpoint.
+static bool
+_HasForeignLink(const BMediaConnection* connection)
+{
+	BAutolock _(sForeignLinksLock);
+	for (auto& entry : sForeignLinks) {
+		if (entry.second.output == connection
+				|| entry.second.input == connection)
+			return true;
+	}
+	return false;
+}
+
+
 static std::multiset<std::pair<uint32, uint32> > sPendingEdges;
 
 
@@ -1393,6 +1407,9 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 
 	backend->Unlock();
 	_ReleaseReservedEdge(outNodeId, foreignPort->nodeId);
+	// A foreign link connects our endpoint as a binding would.
+	if (result == B_OK && !output->IsConnected())
+		output->Connected(output->AcceptedFormat());
 
 	return result;
 }
@@ -1614,6 +1631,9 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 
 	backend->Unlock();
 	_ReleaseReservedEdge(foreignPort->nodeId, inNodeId);
+	// A foreign link connects our endpoint as a binding would.
+	if (result == B_OK && !input->IsConnected())
+		input->Connected(input->AcceptedFormat());
 
 	return result;
 }
@@ -1647,6 +1667,9 @@ BMediaGraph::Disconnect(BMediaOutput* output, const ForeignPort* foreignPort)
 		}
 	}
 	backend->Unlock();
+	if (output->IsConnected() && !output->HasBinding()
+			&& !_HasForeignLink(output))
+		output->Disconnected();
 
 	return result;
 }
@@ -1680,6 +1703,9 @@ BMediaGraph::Disconnect(const ForeignPort* foreignPort, BMediaInput* input)
 		}
 	}
 	backend->Unlock();
+	if (input->IsConnected() && !input->HasBinding()
+			&& !_HasForeignLink(input))
+		input->Disconnected();
 
 	return result;
 }

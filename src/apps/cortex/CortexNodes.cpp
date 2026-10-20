@@ -160,7 +160,7 @@ CortexToneUnit::_Cycle(void* cookie, BSimpleMediaUnit* unit,
 		return;
 
 	// Unlinked, the unit stays silent.
-	if (!self->fOutput->HasBinding()) {
+	if (!self->fOutput->IsConnected()) {
 		memset(buffer, 0, size);
 		return;
 	}

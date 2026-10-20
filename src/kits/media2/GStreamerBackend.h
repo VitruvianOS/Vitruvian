@@ -1,6 +1,6 @@
 /*
  * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 #ifndef _VITRUVIAN_MEDIA2_GSTREAMER_BACKEND_H

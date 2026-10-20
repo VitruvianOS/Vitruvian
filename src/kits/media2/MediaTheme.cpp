@@ -1,6 +1,6 @@
 /*
  * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 #include <media2/MediaTheme.h>

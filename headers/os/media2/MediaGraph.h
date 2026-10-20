@@ -1,7 +1,7 @@
 /*
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 #ifndef _MEDIA2_MEDIA_GRAPH_H

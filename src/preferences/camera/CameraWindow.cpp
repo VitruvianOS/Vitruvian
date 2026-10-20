@@ -18,7 +18,6 @@
 #include <ScrollView.h>
 #include <StringItem.h>
 
-#include <media2/CameraSettings.h>
 #include <media2/MediaGraph.h>
 
 #include "CameraMessages.h"
@@ -342,27 +341,7 @@ CameraWindow::_SaveDeviceSettings()
 	if (fCamera == NULL || fSelectedStableId.IsEmpty())
 		return;
 
-	camera_device_info info;
-	info.id = fSelectedId;
-	info.stableId = fSelectedStableId;
-	info.location = fCamera->Location();
-
-	BMessage controls;
-	controls.AddFloat("brightness",
-		fBrightnessSlider->Value() / 100.0f);
-	controls.AddFloat("contrast", fContrastSlider->Value() / 100.0f);
-	controls.AddFloat("exposure", (float)fExposureSlider->Value());
-	controls.AddBool("exposure_auto", fExposureSlider->Value() < 50);
-	controls.AddFloat("white_balance",
-		(float)fWhiteBalanceSlider->Value());
-	controls.AddBool("white_balance_auto", true);
-	controls.AddBool("mirror", fMirrorCheck->Value() == B_CONTROL_ON);
-
-	BCameraSettings settings;
-	settings.Load();
-	settings.SetDevice(info, &controls);
-	settings.Save();
-
+	// BCameraSource persists each control through _SaveControls.
 	fCamera->SetControl(B_CAMERA_PARAM_BRIGHTNESS,
 		fBrightnessSlider->Value() / 100.0f);
 	fCamera->SetControl(B_CAMERA_PARAM_CONTRAST,

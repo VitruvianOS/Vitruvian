@@ -243,43 +243,15 @@ BCameraSource::~BCameraSource()
 status_t
 BCameraSource::SetToDefault()
 {
-	BCameraSettings settings;
-	if (settings.Load() != B_OK)
-		return B_ERROR;
-
-	BString defaultId = settings.DefaultCameraId();
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph == NULL)
 		return B_DEVICE_NOT_FOUND;
 
-	BObjectList<media_client_id, true> clients;
-	if (graph->GetClients(&clients) != B_OK)
-		return B_DEVICE_NOT_FOUND;
+	media_client_id defaultId = 0;
+	if (graph->GetDefaultCamera(&defaultId) != B_OK || defaultId == 0)
+		return B_ENTRY_NOT_FOUND;
 
-	for (int32 i = 0; i < clients.CountItems(); i++) {
-		media_client_id id = *clients.ItemAt(i);
-		BMessage msg;
-		if (graph->GetClientInfo(id, &msg) != B_OK)
-			continue;
-		bool isVideo = false;
-		msg.FindBool("is.video", &isVideo);
-		if (!isVideo)
-			continue;
-		BString stable;
-		msg.FindString("stable_id", &stable);
-		if (!defaultId.IsEmpty() && stable != defaultId)
-			continue;
-		return SetToDevice(id);
-	}
-
-	if (!defaultId.IsEmpty()) {
-		camera_device_info info;
-		info.id = 0;
-		info.stableId = defaultId;
-		info.location = B_CAMERA_LOCATION_UNKNOWN;
-		return SetToDevice(info);
-	}
-	return B_ENTRY_NOT_FOUND;
+	return SetToDevice(defaultId);
 }
 
 

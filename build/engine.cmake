@@ -151,6 +151,15 @@ function( LinkRdefs target )
 	get_property(_rsrc_files TARGET ${target} PROPERTY RDEF_RSRC_FILES)
 	get_property(_staging    TARGET ${target} PROPERTY RDEF_STAGING)
 
+	# attrs-staging placeholder for apps_attrs (build/profiles/base.cmake);
+	# must run BEFORE the no-rsrcs early return below.
+	if(_staging)
+		add_custom_command(TARGET ${target} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch           "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}"
+		)
+	endif()
+
 	if(NOT _rsrc_files)
 		return()
 	endif()
@@ -167,10 +176,6 @@ function( LinkRdefs target )
 	endforeach()
 
 	if(_staging)
-		add_custom_command(TARGET ${target} POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
-			COMMAND ${CMAKE_COMMAND} -E touch           "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}"
-		)
 		foreach(_rsrc IN LISTS _rsrc_files)
 			add_custom_command(TARGET ${target} POST_BUILD
 				COMMAND "${_rsattr}" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}" "${_rsrc}"
@@ -220,6 +225,9 @@ macro( Application name )
 	foreach( RDEF_FILE ${_APPLICATION_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()
+	# Ship-invariant: every Application stages an attrs placeholder, even
+	# without RDEF (build/profiles/base.cmake cp's it for listed apps).
+	set_property(TARGET ${name} PROPERTY RDEF_STAGING TRUE)
 	LinkRdefs(${name})
 endmacro()
 

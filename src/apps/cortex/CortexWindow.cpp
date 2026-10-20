@@ -1767,6 +1767,10 @@ CortexWindow::_OpenMonitor(int32 nodeIndex, int32 pinIndex)
 
 	if (entry->splitter != NULL)
 		fOwnClients.AddItem(entry->splitter);
+	// The recorder's client carries the tap in the graph view.
+	BMediaClient* sinkClient = entry->sink->Client();
+	if (sinkClient != NULL)
+		fOwnClients.AddItem(sinkClient);
 	fMonitors.AddItem(entry);
 	entry->window->Show();
 	_Rebuild();
@@ -1803,6 +1807,13 @@ CortexWindow::_CloseMonitor(CortexMonitorEntry* entry)
 	if (entry->splitter != NULL) {
 		entry->splitter->Stop();
 		fOwnClients.RemoveItem(entry->splitter);
+	}
+	if (entry->sink != NULL) {
+		// The recorder owns its client; take it out of the view list
+		// before the sink goes away.
+		BMediaClient* sinkClient = entry->sink->Client();
+		if (sinkClient != NULL)
+			fOwnClients.RemoveItem(sinkClient, false);
 	}
 	delete entry->sink;
 	entry->sink = NULL;

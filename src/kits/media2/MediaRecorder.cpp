@@ -137,6 +137,7 @@ public:
 		{ return fClient != NULL ? (BMediaInput*)fClient->VideoInput() : NULL; }
 	BMediaInput* AudioInput() const
 		{ return fClient != NULL ? (BMediaInput*)fClient->AudioInput() : NULL; }
+	BMediaClient* Client() const { return fClient; }
 
 	status_t Start();
 	void     Stop();
@@ -991,6 +992,13 @@ BMediaInput*
 BMediaRecorder::AudioInput() const
 {
 	return fImpl != NULL ? fImpl->AudioInput() : NULL;
+}
+
+
+BMediaClient*
+BMediaRecorder::Client() const
+{
+	return fImpl != NULL ? fImpl->Client() : NULL;
 }
 
 

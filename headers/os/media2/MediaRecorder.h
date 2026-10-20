@@ -13,6 +13,7 @@
 
 
 class BFile;
+class BMediaClient;
 class BMediaInput;
 
 
@@ -129,6 +130,10 @@ public:
 			// Valid for B_MEDIA_RAW_VIDEO recorders.
 			BMediaInput*		VideoInput() const;
 			BMediaInput*		AudioInput() const;
+
+			// The in-process client behind the capture inputs; lets a
+			// host show the recorder as a node in its own graph view.
+			BMediaClient*		Client() const;
 
 private:
 			class Impl;

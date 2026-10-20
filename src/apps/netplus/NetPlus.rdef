@@ -11,3 +11,10 @@ resource app_version {
 	short_info = "NetPlus",
 	long_info = "NetPlus 0.5 \xc2\xa9 2026 VitruvianOS Project"
 };
+
+resource file_types message {
+	"types" = "application/x-vnd.Be.URL.http",
+	"types" = "application/x-vnd.Be.URL.https",
+	"types" = "text/html",
+	"types" = "application/xhtml+xml"
+};

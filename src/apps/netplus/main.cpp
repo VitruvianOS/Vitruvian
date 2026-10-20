@@ -184,7 +184,12 @@ NetPlusApp::ArgvReceived(int32 argc, char** argv)
 			}
 			continue;
 		}
-		if (fStartupURL.IsEmpty() && argv[i][0] != '-')
+		if (argv[i][0] == '-')
+			continue;
+		// A link opened while running (e.g. /bin/open) gets a window.
+		if (fReady)
+			OpenWindow(argv[i], fSettings->PrivateBrowsing());
+		else if (fStartupURL.IsEmpty())
 			fStartupURL = argv[i];
 	}
 }
@@ -219,7 +224,16 @@ NetPlusApp::RefsReceived(BMessage* message)
 
 	InstalledApp app;
 	if (!_LookupInstalled(ref.name, &app)) {
-		BApplication::RefsReceived(message);
+		// A document (an .html file): open it as a file URL.
+		BPath path(&ref);
+		if (path.InitCheck() != B_OK)
+			return;
+		BString url("file://");
+		url << path.Path();
+		if (fReady)
+			OpenWindow(url.String(), fSettings->PrivateBrowsing());
+		else if (fStartupURL.IsEmpty())
+			fStartupURL = url;
 		return;
 	}
 

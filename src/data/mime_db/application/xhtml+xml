@@ -11,7 +11,7 @@ resource(2, "META:SNIFF_RULE") #'CSTR' array {
 
 resource(3, "META:S:DESC") #'MSDC' "XHTML file";
 
-resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-WebPositive";
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Vitruvian-NetPlus";
 
 resource(5, "META:EXTENS") message(234) {
 	"extensions" = "xhtml",

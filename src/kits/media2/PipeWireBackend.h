@@ -105,6 +105,17 @@ public:
 		status_t				SetNodeControls(const char* nodeName,
 										const std::vector<NodeControlInfo>& props);
 
+		// Capture sizes a Video/Source node offers, with the best frame
+		// rate for each (30 when offered, else the highest).
+		struct NodeVideoMode {
+			uint32			width;
+			uint32			height;
+			float			frameRate;
+		};
+
+		status_t				QueryNodeVideoModes(const char* nodeName,
+										std::vector<NodeVideoMode>& out);
+
 		struct DevicePort {
 			std::string		name;
 			std::string		description;
@@ -335,6 +346,10 @@ private:
 				bool					done;
 			};
 			static void				_NodeControlParamThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+
+			static void				_NodeVideoModeThunk(void* data, int seq,
 										uint32 id, uint32 index, uint32 next,
 										const struct spa_pod* param);
 

@@ -1561,6 +1561,151 @@ PipeWireBackend::QueryNodeControls(const char* nodeName,
 }
 
 
+static float
+_PickFrameRate(const spa_pod* value)
+{
+	uint32 count = 0;
+	uint32 choice = SPA_CHOICE_None;
+	const spa_pod* values = spa_pod_get_values(value, &count, &choice);
+	if (values == NULL || values->type != SPA_TYPE_Fraction || count == 0)
+		return 0;
+
+	const spa_fraction* f = (const spa_fraction*)SPA_POD_BODY(values);
+	float best = 0;
+	if (choice == SPA_CHOICE_Range && count >= 3) {
+		const float min = f[1].denom != 0 ? (float)f[1].num / f[1].denom : 0;
+		const float max = f[2].denom != 0 ? (float)f[2].num / f[2].denom : 0;
+		return (min <= 30 && max >= 30) ? 30 : max;
+	}
+	// Enum: the first entry is the default; scan them all.
+	for (uint32 i = 0; i < count; i++) {
+		if (f[i].denom == 0)
+			continue;
+		const float rate = (float)f[i].num / f[i].denom;
+		if (fabsf(rate - 30) < 0.01f)
+			return 30;
+		if (rate > best)
+			best = rate;
+	}
+	return best;
+}
+
+
+/* static */ void
+PipeWireBackend::_NodeVideoModeThunk(void* data, int, uint32 id, uint32,
+	uint32, const struct spa_pod* param)
+{
+	std::vector<NodeVideoMode>* modes = (std::vector<NodeVideoMode>*)data;
+	if (modes == NULL || param == NULL || id != SPA_PARAM_EnumFormat)
+		return;
+
+	const spa_pod_prop* sizeProp = spa_pod_find_prop(param, NULL,
+		SPA_FORMAT_VIDEO_size);
+	if (sizeProp == NULL)
+		return;
+	const spa_pod_prop* rateProp = spa_pod_find_prop(param, NULL,
+		SPA_FORMAT_VIDEO_framerate);
+	const float rate = rateProp != NULL ? _PickFrameRate(&rateProp->value) : 0;
+
+	uint32 count = 0;
+	uint32 choice = SPA_CHOICE_None;
+	const spa_pod* values = spa_pod_get_values(&sizeProp->value, &count,
+		&choice);
+	if (values == NULL || values->type != SPA_TYPE_Rectangle || count == 0)
+		return;
+
+	const spa_rectangle* r = (const spa_rectangle*)SPA_POD_BODY(values);
+	// A range lists default, min, max; offer the default and the maximum.
+	uint32 first = 0;
+	uint32 last = count;
+	if (choice == SPA_CHOICE_Range || choice == SPA_CHOICE_Step) {
+		first = 0;
+		last = 1;
+		if (count >= 3 && (r[2].width != r[0].width
+				|| r[2].height != r[0].height)) {
+			NodeVideoMode mode = { r[2].width, r[2].height, rate };
+			modes->push_back(mode);
+		}
+	} else if (choice == SPA_CHOICE_Enum && count > 1)
+		first = 1;
+
+	for (uint32 i = first; i < last; i++) {
+		NodeVideoMode mode = { r[i].width, r[i].height, rate };
+		modes->push_back(mode);
+	}
+}
+
+
+status_t
+PipeWireBackend::QueryNodeVideoModes(const char* nodeName,
+	std::vector<NodeVideoMode>& out)
+{
+	out.clear();
+	if (nodeName == NULL || nodeName[0] == '\0')
+		return B_BAD_VALUE;
+	if (fRegistry == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	uint32 nodeId = 0;
+	{
+		std::lock_guard<std::mutex> _(fDevicesLock);
+		for (auto& d : fDevices) {
+			if (d.isVideo && d.nodeName == nodeName) {
+				nodeId = d.id;
+				break;
+			}
+		}
+	}
+	if (nodeId == 0)
+		return B_ENTRY_NOT_FOUND;
+
+	std::vector<NodeVideoMode> found;
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook listener;
+	memset(&listener, 0, sizeof(listener));
+	static const pw_node_events kModeEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeVideoModeThunk
+	};
+	pw_node_add_listener(node, &listener, &kModeEvents, &found);
+	pw_node_enum_params(node, 0, SPA_PARAM_EnumFormat, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&listener);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	// One entry per size, keeping the best rate any pixel format gave it.
+	for (size_t i = 0; i < found.size(); i++) {
+		bool merged = false;
+		for (size_t j = 0; j < out.size(); j++) {
+			if (out[j].width == found[i].width
+				&& out[j].height == found[i].height) {
+				if (out[j].frameRate != 30
+					&& (found[i].frameRate == 30
+						|| found[i].frameRate > out[j].frameRate))
+					out[j].frameRate = found[i].frameRate;
+				merged = true;
+				break;
+			}
+		}
+		if (!merged)
+			out.push_back(found[i]);
+	}
+	std::sort(out.begin(), out.end(),
+		[](const NodeVideoMode& a, const NodeVideoMode& b) {
+			return (uint64)a.width * a.height < (uint64)b.width * b.height;
+		});
+	return out.empty() ? B_ENTRY_NOT_FOUND : B_OK;
+}
+
+
 status_t
 PipeWireBackend::SetNodeControls(const char* nodeName,
 	const std::vector<NodeControlInfo>& props)

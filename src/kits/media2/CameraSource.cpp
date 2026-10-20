@@ -1023,6 +1023,32 @@ BCameraSource::_SaveControls()
 }
 
 
+status_t
+BCameraSource::GetModes(std::vector<camera_mode>* outModes) const
+{
+	if (outModes == NULL)
+		return B_BAD_VALUE;
+	outModes->clear();
+	if (fNodeName.IsEmpty())
+		return B_NO_INIT;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	std::vector<PipeWireBackend::NodeVideoMode> modes;
+	status_t status = backend->QueryNodeVideoModes(fNodeName.String(), modes);
+	if (status != B_OK)
+		return status;
+	for (size_t i = 0; i < modes.size(); i++) {
+		camera_mode mode = { modes[i].width, modes[i].height,
+			modes[i].frameRate > 0 ? modes[i].frameRate : 30.0f };
+		outModes->push_back(mode);
+	}
+	return B_OK;
+}
+
+
 void
 BCameraSource::_QueryDeviceControls()
 {

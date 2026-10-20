@@ -43,6 +43,13 @@ struct camera_device_info {
 };
 
 
+struct camera_mode {
+	uint32			width;
+	uint32			height;
+	float			frameRate;
+};
+
+
 // Parameter ids owned by BCameraSource's control web.
 enum {
 	B_CAMERA_PARAM_BRIGHTNESS         = 1,
@@ -79,6 +86,8 @@ public:
 			status_t			SetMode(uint32 width, uint32 height,
 									float frameRate);
 
+			// Modes the current device offers, smallest first.
+			status_t			GetModes(std::vector<camera_mode>* outModes) const;
 			status_t			SetFrameTarget(const BMessenger& target);
 			media_raw_video_format VideoFormat() const;
 

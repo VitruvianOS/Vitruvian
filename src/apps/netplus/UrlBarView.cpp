@@ -25,6 +25,7 @@
 #include <TextView.h>
 #include <Window.h>
 
+#include <algorithm>
 #include <math.h>
 #include <vector>
 
@@ -59,6 +60,7 @@ public:
 
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				MouseDown(BPoint where);
+	virtual	void				FrameResized(float width, float height);
 
 protected:
 	virtual	void				InsertText(const char* text, int32 length,
@@ -77,6 +79,17 @@ UrlTextView::UrlTextView(BRect frame, UrlBarView* owner)
 {
 	SetWordWrap(false);
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+void
+UrlTextView::FrameResized(float width, float height)
+{
+	BTextView::FrameResized(width, height);
+
+	// Center the line vertically, in line with the toolbar icons.
+	const float pad = std::max(0.0f, floorf((height + 1 - LineHeight(0)) / 2));
+	SetInsets(0, pad, 0, pad);
 }
 
 

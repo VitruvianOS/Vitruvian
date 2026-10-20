@@ -895,6 +895,23 @@ BMediaUnit::_EnterDetached()
 }
 
 
+status_t
+BMediaUnit::_LeaveDetached()
+{
+	if (fImpl == NULL)
+		return B_NO_INIT;
+	BAutolock _(fImpl->detachLock);
+	if (fImpl->detachedOnly)
+		return B_NOT_SUPPORTED;
+	if (!fImpl->detachedMode)
+		return B_OK;
+	// Still linked to in-process peers or running: refuse the switch;
+	// disconnect and stop first.
+	if (fImpl->detachedLinks > 0 || IsStarted())
+		return B_NOT_ALLOWED;
+	fImpl->detachedMode = false;
+	return B_OK;
+}
 
 
 void

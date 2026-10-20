@@ -112,6 +112,7 @@ private:
 			void					_Restart();
 
 			status_t				_EnterDetached();
+			status_t				_LeaveDetached();
 			void					_DetachedLink(BMediaConnection* connection,
 										bool attach);
 			status_t				_DetachedDeliver(BMediaInput* input,

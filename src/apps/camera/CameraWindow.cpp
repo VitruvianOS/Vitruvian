@@ -858,20 +858,27 @@ CameraWindow::_LoadModes()
 			+ sizeof(kFallbackModes) / sizeof(kFallbackModes[0]));
 	}
 
-	// Keep the chosen size if the device has it, else take the closest.
+	// Keep the chosen size if the device has it, else the closest one with
+	// the same shape, so the picture keeps its form factor.
+	const double wantedAspect = fHeight > 0 ? (double)fWidth / fHeight : 0;
 	const int64 wanted = (int64)fWidth * fHeight;
 	size_t best = 0;
+	bool bestSameShape = false;
 	int64 bestDelta = -1;
 	for (size_t i = 0; i < fModes.size(); i++) {
 		if (fModes[i].width == fWidth && fModes[i].height == fHeight) {
 			fFrameRate = fModes[i].frameRate;
 			return;
 		}
+		const double aspect = (double)fModes[i].width / fModes[i].height;
+		const bool sameShape = fabs(aspect - wantedAspect) < 0.01;
 		int64 delta = (int64)fModes[i].width * fModes[i].height - wanted;
 		if (delta < 0)
 			delta = -delta;
-		if (bestDelta < 0 || delta < bestDelta) {
+		if (bestDelta < 0 || (sameShape && !bestSameShape)
+			|| (sameShape == bestSameShape && delta < bestDelta)) {
 			bestDelta = delta;
+			bestSameShape = sameShape;
 			best = i;
 		}
 	}

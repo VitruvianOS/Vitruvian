@@ -26,13 +26,6 @@ public:
 	virtual						~_Input() {}
 
 protected:
-	virtual	status_t			AcceptFormat(BMediaFormat* format)
-	{
-		if (format == NULL || format->Type() != fOwner->fType)
-			return B_BAD_VALUE;
-		return B_OK;
-	}
-
 	virtual	void				Connected(const BMediaFormat& format)
 	{
 		BMediaInput::Connected(format);
@@ -41,60 +34,24 @@ protected:
 			fOwner->Output()->SetFormat(format);
 	}
 
-	virtual	void				HandleBuffer(void* buffer, size_t size,
-									const BMediaFormat& format)
-	{
-		fOwner->_HandleBuffer(buffer, size, format);
-	}
-
 private:
 			BMediaFilter*	fOwner;
-};
-
-
-class BMediaFilter::_Output : public BMediaOutput {
-public:
-								_Output(media_type type)
-									:
-									BMediaConnection(B_MEDIA_OUTPUT, "out"),
-									BMediaOutput("out"),
-									fType(type)
-	{
-		SetAcceptedTypes(B_MEDIA_TYPE_BIT(type));
-	}
-
-	virtual						~_Output() {}
-
-protected:
-	virtual	status_t			PrepareToConnect(BMediaFormat* format)
-	{
-		if (format == NULL || format->Type() != fType)
-			return B_BAD_VALUE;
-		return B_OK;
-	}
-
-	virtual	status_t			FormatProposal(BMediaFormat* /*format*/)
-	{
-		return B_OK;
-	}
-
-private:
-			media_type			fType;
 };
 
 
 BMediaFilter::BMediaFilter(const char* name, const char* description,
 	media_type type)
 	:
-	BMediaClient(name != NULL ? name : "MediaFilter",
+	BMediaUnit(name != NULL ? name : "MediaFilter",
 		(media_client_kinds)(B_MEDIA_FILTER | B_MEDIA_CONTROLLABLE)),
 	fType(type),
 	fCore(NULL),
 	fInput(NULL),
 	fOutput(NULL)
 {
+	SetDetachedOnly(true);
 	fInput = new(std::nothrow) _Input(this);
-	fOutput = new(std::nothrow) _Output(type);
+	fOutput = new(std::nothrow) BMediaOutput("out");
 	if (fInput == NULL || fOutput == NULL) {
 		delete fInput;
 		delete fOutput;
@@ -103,6 +60,7 @@ BMediaFilter::BMediaFilter(const char* name, const char* description,
 		return;
 	}
 
+	fOutput->SetAcceptedTypes(B_MEDIA_TYPE_BIT(type));
 	if (RegisterInput(fInput) != B_OK || RegisterOutput(fOutput) != B_OK) {
 		delete fInput;
 		delete fOutput;
@@ -164,10 +122,13 @@ BMediaFilter::Output() const
 }
 
 
-bool
-BMediaFilter::IsInProcessRouted() const
+void
+BMediaFilter::ProcessCycle(uint32 /*frameCount*/)
 {
-	return true;
+	size_t size = 0;
+	void* buffer = BufferFor(fInput, &size);
+	if (buffer != NULL)
+		_HandleBuffer(buffer, size, CycleFormat());
 }
 
 

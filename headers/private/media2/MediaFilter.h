@@ -7,17 +7,17 @@
 #define _MEDIA2_MEDIA_FILTER_H
 
 
-// Filters are BMediaClients because they run as an in-process GStreamer
-// chain, routed buffer-to-buffer by BMediaGraph::_ConnectInProcess: not a
-// pw_filter (BMediaUnit) nor a per-connection pw_stream (BMediaNode).
+// Filters are detached-only BMediaUnits: they run as an in-process
+// GStreamer chain (or a CPU callback), driven buffer-to-buffer by the
+// in-process sender, and refuse graph peers with B_NOT_SUPPORTED.
 
 #include <Locker.h>
 #include <ObjectList.h>
 
-#include <media2/MediaClient.h>
+#include <media2/MediaUnit.h>
 
 
-class BMediaFilter : public BMediaClient {
+class BMediaFilter : public BMediaUnit {
 public:
 								// type: B_MEDIA_RAW_AUDIO or
 								// B_MEDIA_RAW_VIDEO; NULL description =
@@ -33,8 +33,6 @@ public:
 			BMediaInput*		Input() const;
 			BMediaOutput*		Output() const;
 
-	virtual	bool				IsInProcessRouted() const;
-
 			int32				CountParameters() const;
 			status_t			GetParameterInfo(int32 index,
 									BString* outName, float* outMin,
@@ -43,13 +41,14 @@ public:
 			float				ParameterValue(int32 index) const;
 
 protected:
+	virtual	void				ProcessCycle(uint32 frameCount) override;
+
 	// CPU filters override this; data is a private writable copy.
 	virtual	void				ProcessBuffer(void* buffer, size_t size,
 									const BMediaFormat& format);
 
 private:
 	class _Input;
-	class _Output;
 
 			void				_HandleBuffer(void* buffer, size_t size,
 									const BMediaFormat& format);
@@ -61,7 +60,7 @@ private:
 			media_type			fType;
 			void*				fCore;			// FilterUnitCore*
 			_Input*				fInput;
-			_Output*			fOutput;
+			BMediaOutput*		fOutput;
 			BMediaFormat		fLastFormat;
 };
 
@@ -175,12 +174,10 @@ public:
 
 // Pass-through with one input and N outputs; every frame goes to all of
 // them (preview + recorder sharing one camera feed).
-class BVideoSplitter : public BMediaClient {
+class BVideoSplitter : public BMediaUnit {
 public:
 								BVideoSplitter();
 	virtual						~BVideoSplitter();
-
-	virtual	bool				IsInProcessRouted() const;
 
 			BMediaInput*		Input() const;
 			BMediaOutput*		AddOutput();
@@ -188,9 +185,11 @@ public:
 			BMediaOutput*		OutputAt(int32 index) const;
 			status_t			RemoveOutput(BMediaOutput* output);
 
+protected:
+	virtual	void				ProcessCycle(uint32 frameCount) override;
+
 private:
 	class _Input;
-	class _Output;
 
 			_Input*				fInput;
 			BObjectList<BMediaOutput, false>* fOutputs;

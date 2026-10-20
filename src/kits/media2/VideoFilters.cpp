@@ -212,13 +212,6 @@ public:
 	virtual						~_Input() {}
 
 protected:
-	virtual	status_t			AcceptFormat(BMediaFormat* format)
-	{
-		if (format == NULL || !format->IsRawVideo())
-			return B_BAD_VALUE;
-		return B_OK;
-	}
-
 	virtual	void				Connected(const BMediaFormat& format)
 	{
 		BMediaInput::Connected(format);
@@ -227,55 +220,14 @@ protected:
 			fOwner->fOutputs->ItemAt(i)->SetFormat(format);
 	}
 
-	virtual	void				HandleBuffer(void* buffer, size_t size,
-									const BMediaFormat& format)
-	{
-		BAutolock _(fOwner->fLock);
-		for (int32 i = 0; i < fOwner->fOutputs->CountItems(); i++) {
-			BMediaOutput* output = fOwner->fOutputs->ItemAt(i);
-			if (output != NULL && output->IsConnected()) {
-				// Frames carry their own shape; it changes with the mode.
-				output->SetFormat(format);
-				output->SendBuffer(buffer, size);
-			}
-		}
-	}
-
 private:
 			BVideoSplitter*		fOwner;
 };
 
 
-class BVideoSplitter::_Output : public BMediaOutput {
-public:
-								_Output()
-									:
-									BMediaConnection(B_MEDIA_OUTPUT, "out"),
-									BMediaOutput("out")
-	{
-		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO));
-	}
-
-	virtual						~_Output() {}
-
-protected:
-	virtual	status_t			PrepareToConnect(BMediaFormat* format)
-	{
-		if (format == NULL || !format->IsRawVideo())
-			return B_BAD_VALUE;
-		return B_OK;
-	}
-
-	virtual	status_t			FormatProposal(BMediaFormat* /*format*/)
-	{
-		return B_OK;
-	}
-};
-
-
 BVideoSplitter::BVideoSplitter()
 	:
-	BMediaClient("Splitter",
+	BMediaUnit("Splitter",
 		(media_client_kinds)(B_MEDIA_FILTER | B_MEDIA_VIRTUAL)),
 	fInput(NULL),
 	fOutputs(NULL),
@@ -290,6 +242,7 @@ BVideoSplitter::BVideoSplitter()
 		fOutputs = NULL;
 		return;
 	}
+	SetDetachedOnly(true);
 	RegisterInput(fInput);
 }
 
@@ -309,10 +262,23 @@ BVideoSplitter::~BVideoSplitter()
 }
 
 
-bool
-BVideoSplitter::IsInProcessRouted() const
+void
+BVideoSplitter::ProcessCycle(uint32 /*frameCount*/)
 {
-	return true;
+	size_t size = 0;
+	void* buffer = BufferFor(fInput, &size);
+	if (buffer == NULL)
+		return;
+
+	BAutolock _(fLock);
+	for (int32 i = 0; i < fOutputs->CountItems(); i++) {
+		BMediaOutput* output = fOutputs->ItemAt(i);
+		if (output != NULL && output->IsConnected()) {
+			// Frames carry their own shape; it changes with the mode.
+			output->SetFormat(CycleFormat());
+			output->SendBuffer(buffer, size);
+		}
+	}
 }
 
 
@@ -327,9 +293,10 @@ BMediaOutput*
 BVideoSplitter::AddOutput()
 {
 	BAutolock _(fLock);
-	_Output* output = new(std::nothrow) _Output();
+	BMediaOutput* output = new(std::nothrow) BMediaOutput("out");
 	if (output == NULL)
 		return NULL;
+	output->SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO));
 	if (RegisterOutput(output) != B_OK) {
 		delete output;
 		return NULL;

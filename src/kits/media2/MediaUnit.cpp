@@ -69,6 +69,7 @@ struct BMediaUnit::Impl {
 		std::vector<uint8>		storage;
 		void*					data;
 		size_t					size;
+		bool					requested;
 	};
 
 	BLocker					detachLock;
@@ -76,6 +77,8 @@ struct BMediaUnit::Impl {
 	bool					detachedMode;
 	int32					detachedLinks;
 	BMediaInput*			drivingInput;
+	BMediaFormat			cycleFormat;
+	size_t					cycleSize;
 	std::vector<DetachedBuffer> detachedBuffers;
 
 	Impl()
@@ -84,7 +87,8 @@ struct BMediaUnit::Impl {
 		detachedOnly(false),
 		detachedMode(false),
 		detachedLinks(0),
-		drivingInput(NULL)
+		drivingInput(NULL),
+		cycleSize(0)
 	{
 	}
 
@@ -783,6 +787,13 @@ BMediaUnit::SetDetachedOnly(bool detachedOnly)
 }
 
 
+const BMediaFormat&
+BMediaUnit::CycleFormat() const
+{
+	return fImpl->cycleFormat;
+}
+
+
 void
 BMediaUnit::SetDrivingInput(BMediaInput* input)
 {
@@ -823,6 +834,7 @@ BMediaUnit::_DetachedLink(BMediaConnection* connection, bool attach)
 			fresh.connection = connection;
 			fresh.data = NULL;
 			fresh.size = 0;
+			fresh.requested = false;
 			fImpl->detachedBuffers.push_back(fresh);
 		}
 		return;
@@ -856,8 +868,6 @@ BMediaUnit::_DetachedDeliver(BMediaInput* input, void* buffer, size_t size,
 	}
 
 	BAutolock _(fImpl->detachLock);
-	if (!IsStarted())
-		return B_OK;
 
 	if (fImpl->drivingInput == NULL) {
 		for (int32 i = 0; i < CountInputs(); i++) {
@@ -893,16 +903,13 @@ BMediaUnit::_DetachedDeliver(BMediaInput* input, void* buffer, size_t size,
 		fImpl->quantum = (uint32)size;
 	}
 	fImpl->cycleStartTime = system_time();
+	fImpl->cycleFormat = format;
 
-	// Output buffers are sized to the cycle by _DetachedBufferFor().
-	for (size_t i = 0; i < fImpl->detachedBuffers.size(); i++) {
-		Impl::DetachedBuffer& out = fImpl->detachedBuffers[i];
-		if (dynamic_cast<BMediaOutput*>(out.connection) != NULL) {
-			out.storage.resize(size);
-			out.data = out.storage.data();
-			out.size = size;
-		}
-	}
+	// Output buffers are sized to the cycle on request, see
+	// _DetachedBufferFor(); the previous cycle's requests are forgotten.
+	fImpl->cycleSize = size;
+	for (size_t i = 0; i < fImpl->detachedBuffers.size(); i++)
+		fImpl->detachedBuffers[i].requested = false;
 
 	ProcessCycle(fImpl->quantum);
 
@@ -914,8 +921,9 @@ BMediaUnit::_DetachedDeliver(BMediaInput* input, void* buffer, size_t size,
 				|| (output->AcceptedTypes()
 					& B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) != 0)
 			continue;
+		// Only outputs the cycle asked a buffer for are sent.
 		Impl::DetachedBuffer* out = fImpl->_Detached(output);
-		if (out == NULL || out->data == NULL)
+		if (out == NULL || out->data == NULL || !out->requested)
 			continue;
 		status_t sent = output->SendBuffer(out->data, out->size);
 		if (sent != B_OK)
@@ -931,6 +939,14 @@ BMediaUnit::_DetachedBufferFor(BMediaConnection* connection, size_t* outSize)
 	// Called from ProcessCycle() on the sender's thread, lock already held.
 	BAutolock _(fImpl->detachLock);
 	Impl::DetachedBuffer* slot = fImpl->_Detached(connection);
+	if (slot != NULL && dynamic_cast<BMediaOutput*>(connection) != NULL) {
+		if (slot->size != fImpl->cycleSize) {
+			slot->storage.resize(fImpl->cycleSize);
+			slot->data = slot->storage.data();
+			slot->size = fImpl->cycleSize;
+		}
+		slot->requested = true;
+	}
 	if (slot == NULL || slot->data == NULL) {
 		if (outSize != NULL)
 			*outSize = 0;

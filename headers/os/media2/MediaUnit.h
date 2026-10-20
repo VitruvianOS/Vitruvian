@@ -66,6 +66,11 @@ protected:
 	// inputs are latched. Defaults to the first non-MIDI input.
 			void					SetDrivingInput(BMediaInput* input);
 
+	// Format of the buffer that drives the current detached cycle. In
+	// detached mode only outputs whose BufferFor() the cycle asked for are
+	// sent downstream afterwards.
+			const BMediaFormat&		CycleFormat() const;
+
 	// In graph mode ProcessCycle runs on the realtime thread and must not
 	// block. In detached mode it runs on the sender's thread.
 	virtual	void					ProcessCycle(uint32 frameCount);

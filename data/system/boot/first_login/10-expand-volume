@@ -5,9 +5,9 @@
 # then writes ~/config/settings/first_login.
 #
 # Only the live user gets this: an installed system's first boot has no
-# unclaimed disk tail by construction (the installer sized the partition),
-# and popping an empty dialog there would just be noise. The app itself
-# degrades to an explanatory pane when there is nothing to claim.
+# unclaimed disk tail by construction (the installer sized the partition).
+# Launched by hand, the app shows an explanatory pane when nothing is
+# claimable.
 [ "${USER:-}" = "vos-live" ] || exit 0
 
 APP="/system/apps/ExpandVolume"
@@ -19,6 +19,8 @@ MARKER="$HOME/config/settings/expandvolume-done"
 [ -e "$MARKER" ] && exit 0
 
 # Background: the first_login chain is sequential and must not block on
-# the popup (or on the user's pkexec prompt inside it).
-"$APP" >/dev/null 2>&1 &
+# the popup (or on the user's pkexec prompt inside it). --if-expandable
+# keeps it silent unless the root is a growable disk root with free space
+# behind it (never on read-only/overlay live media).
+"$APP" --if-expandable >/dev/null 2>&1 &
 exit 0

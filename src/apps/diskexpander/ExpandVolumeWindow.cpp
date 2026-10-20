@@ -15,6 +15,7 @@
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <Message.h>
+#include <Messenger.h>
 #include <Notification.h>
 #include <Path.h>
 #include <Partition.h>
@@ -35,6 +36,8 @@
 #include <sys/statvfs.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <RootMedia.h>
 
 #include "DiskDeviceJobQueue.h"
 #include "PartitionReference.h"
@@ -115,6 +118,13 @@ _ProbeRootPartition(ProbeResult& result)
 	result.mounted = false;
 	result.canResizeWhileMounted = false;
 
+	BString rootFs;
+	if (!root_is_persistent_rw(&rootFs)) {
+		result.error = B_TRANSLATE("The system is running from read-only "
+			"media; there is nothing to expand.");
+		return;
+	}
+
 	// The system volume: whatever "/" is mounted from.
 	BDiskDeviceRoster roster;
 	BDiskDevice* device = new(std::nothrow) BDiskDevice();
@@ -169,9 +179,12 @@ _ProbeRootPartition(ProbeResult& result)
 
 	bool canResizeContents = false;
 	if (!partition->CanResize(&canResizeContents,
-			&result.canResizeWhileMounted)) {
-		result.error = B_TRANSLATE("This partition cannot be resized: the "
-			"partition table or the filesystem does not allow it.");
+			&result.canResizeWhileMounted)
+		|| !result.canResizeWhileMounted) {
+		BString text;
+		text.SetToFormat(B_TRANSLATE("The system filesystem (%s) cannot be "
+			"grown here."), rootFs.String());
+		result.error = text;
 		delete device;
 		return;
 	}
@@ -315,6 +328,8 @@ _ApplyThread(void* data)
 		= (partition_id)request->FindInt64("partitionID");
 	off_t newSize = request->FindInt64("newSize");
 	int32 generation = request->FindInt32("generation");
+	BMessenger target;
+	request->FindMessenger("target", &target);
 	delete request;
 
 	status_t applyStatus = B_ERROR;
@@ -372,7 +387,7 @@ _ApplyThread(void* data)
 	message.AddString("failedOp", failedOp);
 	message.AddString("helperStatus", helperStatus);
 
-	be_app->PostMessage(&message);
+	target.SendMessage(&message);
 	return NULL;
 }
 
@@ -380,13 +395,14 @@ _ApplyThread(void* data)
 // #pragma mark - window
 
 
-ExpandVolumeWindow::ExpandVolumeWindow()
+ExpandVolumeWindow::ExpandVolumeWindow(bool onlyIfExpandable)
 	:
 	BWindow(BRect(0, 0, 460, 320), B_TRANSLATE("Expand Volume"),
 		B_TITLED_WINDOW,
 		B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE | B_AUTO_UPDATE_SIZE_LIMITS
 			| B_QUIT_ON_WINDOW_CLOSE),
 	fState(kStateProbing),
+	fOnlyIfExpandable(onlyIfExpandable),
 	fRootPartitionID(-1),
 	fDeviceID(-1),
 	fCurrentSize(0),
@@ -407,7 +423,11 @@ ExpandVolumeWindow::ExpandVolumeWindow()
 {
 	_BuildControls();
 	CenterOnScreen();
-	Show();
+	// Stays hidden until the probe finds something to claim.
+	if (fOnlyIfExpandable)
+		Run();
+	else
+		Show();
 
 	_StartProbe();
 }
@@ -518,6 +538,14 @@ ExpandVolumeWindow::_ApplyProbeResult(BMessage* message)
 	message->FindString("error", &error);
 	BString gapExplanation;
 	message->FindString("gapExplanation", &gapExplanation);
+
+	if (fOnlyIfExpandable
+		&& (!error.IsEmpty() || fMaxSize <= fCurrentSize)) {
+		be_app->PostMessage(B_QUIT_REQUESTED);
+		return;
+	}
+	if (fOnlyIfExpandable && IsHidden())
+		Show();
 
 	fVolumeView->SetText(fVolumeName.String());
 
@@ -638,6 +666,10 @@ ExpandVolumeWindow::_SetStateDone(const BString& summary)
 	fNoticeView->SetText(summary.String());
 	fNoticeView->Show();
 
+	BAlert* alert = new BAlert(B_TRANSLATE("Expand volume"), summary.String(),
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_INFO_ALERT);
+	alert->Go(NULL);
+
 	// The grow succeeded; keep the read-only lines honest.
 	fCurrentSize = fPendingApplySize > 0 ? fPendingApplySize : fMaxSize;
 	_UpdateSizeLabels();
@@ -655,6 +687,10 @@ ExpandVolumeWindow::_SetStateError(const BString& detail)
 	fProgress->Hide();
 	fNoticeView->SetText(detail.String());
 	fNoticeView->Show();
+
+	BAlert* alert = new BAlert(B_TRANSLATE("Expand volume"), detail.String(),
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+	alert->Go(NULL);
 }
 
 
@@ -739,6 +775,7 @@ ExpandVolumeWindow::_StartApply()
 	request->AddInt64("partitionID", (int64)fRootPartitionID);
 	request->AddInt64("newSize", requested);
 	request->AddInt32("generation", generation);
+	request->AddMessenger("target", BMessenger(this));
 
 	pthread_t thread;
 	if (pthread_create(&thread, NULL, _ApplyThread, request) == 0) {
@@ -932,6 +969,7 @@ ExpandVolumeWindow::QuitRequested()
 	// Any completed look at the popup (including the no-space pane)
 	// counts as "seen": do not raise it again on the next TryNow boot
 	// when the live home persists.
-	_WriteMarker();
+	if (!fOnlyIfExpandable || !IsHidden())
+		_WriteMarker();
 	return true;
 }

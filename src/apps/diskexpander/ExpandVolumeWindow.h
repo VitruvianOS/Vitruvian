@@ -37,7 +37,7 @@ enum {
 // privileged plan helper (also off the window thread).
 class ExpandVolumeWindow : public BWindow {
 public:
-							ExpandVolumeWindow();
+							ExpandVolumeWindow(bool onlyIfExpandable = false);
 	virtual					~ExpandVolumeWindow();
 
 	virtual	void			MessageReceived(BMessage* message);
@@ -72,6 +72,7 @@ private:
 			BButton*		fCloseButton;
 
 			int				fState;
+			bool			fOnlyIfExpandable;
 
 			// Probe results, filled once from the probe thread's message.
 			partition_id	fRootPartitionID;

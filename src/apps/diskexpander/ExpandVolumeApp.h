@@ -17,10 +17,14 @@ public:
 							ExpandVolumeApp();
 
 	virtual	void			MessageReceived(BMessage* message);
+	virtual	void			ArgvReceived(int32 argc, char** argv);
 	virtual	void			ReadyToRun();
 	virtual	bool			QuitRequested();
 
 	static	const char*		Signature();
+
+private:
+			bool			fOnlyIfExpandable;
 };
 
 

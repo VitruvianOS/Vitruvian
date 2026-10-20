@@ -13,6 +13,7 @@
 #include <Window.h>
 
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -79,15 +80,26 @@ WriteExpandVolumeDoneMarker()
 
 ExpandVolumeApp::ExpandVolumeApp()
 	:
-	BApplication(kAppSignature)
+	BApplication(kAppSignature),
+	fOnlyIfExpandable(false)
 {
+}
+
+
+void
+ExpandVolumeApp::ArgvReceived(int32 argc, char** argv)
+{
+	for (int32 i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--if-expandable") == 0)
+			fOnlyIfExpandable = true;
+	}
 }
 
 
 void
 ExpandVolumeApp::ReadyToRun()
 {
-	new ExpandVolumeWindow();
+	new ExpandVolumeWindow(fOnlyIfExpandable);
 }
 
 

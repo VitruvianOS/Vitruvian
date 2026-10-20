@@ -18,14 +18,11 @@ public:
 
 	bigtime_t Latency() const;
 
-	// media2 realisation: the MIDI input this consumer owns.
-	BMidiInput* Input() const { return fInput; }
-	void SetInput(BMidiInput* input) { fInput = input; }
-
 private:
 
 	friend class BMidiLocalConsumer;
 	friend class BMidiLocalProducer;
+	friend class BMidiProducer;
 	friend class BMidiRoster;
 	friend class BPrivate::BMidiRosterLooper;
 
@@ -43,6 +40,9 @@ private:
 
 	port_id fPort;
 	bigtime_t fLatency;
+	BMidiInput* Input() const { return fInput; }
+	void SetInput(BMidiInput* input) { fInput = input; }
+
 	BMidiInput* fInput;
 
 	uint32 _reserved[2];

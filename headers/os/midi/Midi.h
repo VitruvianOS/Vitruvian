@@ -14,6 +14,8 @@ class BList;
 class BMidiLocalProducer;
 class BMidiLocalConsumer;
 
+namespace BPrivate { class MidiAccess; }
+
 class BMidi {
 public:
 
@@ -66,11 +68,6 @@ public:
 
 	void SnoozeUntil(uint32 time) const;
 
-	// media2 wiring: the local midi2 pair this façade owns. Public so a
-	// caller can link Producer()->Output() into a graph MIDI input.
-	BMidiLocalProducer* Producer() const { return fProducer; }
-	BMidiLocalConsumer* Consumer() const { return fConsumer; }
-
 protected:
 
 	void SprayNoteOff(
@@ -110,6 +107,7 @@ protected:
 private:
 
 	friend status_t _run_thread(void* data);
+	friend class BPrivate::MidiAccess;
 
 	virtual void _ReservedMidi1();
 	virtual void _ReservedMidi2();

@@ -14,7 +14,7 @@ class BMidiOutput;
 
 namespace BPrivate {
 	class BMidiRosterLooper;
-	class MidiProducerAccess;
+	class MidiAccess;
 }
 
 class BMidiProducer : public BMidiEndpoint
@@ -31,7 +31,7 @@ private:
 	friend class BMidiLocalProducer;
 	friend class BMidiRoster;
 	friend class BPrivate::BMidiRosterLooper;
-	friend class BPrivate::MidiProducerAccess;
+	friend class BPrivate::MidiAccess;
 
 	BMidiProducer(const char *name = NULL);
 	virtual ~BMidiProducer();

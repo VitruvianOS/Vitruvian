@@ -87,16 +87,13 @@ public:
 
 	int32 CountClients(void) const;
 
-	// media2 realisation: the process singleton owning one BSoundFontSynth.
-	// Unlike upstream's process-private BSoundPlayer, ours is a real
-	// graph node: it appears in the mixer, routes anywhere, and can be
-	// played by any MIDI source in the session.
-			BSoundFontSynth*	SoundFont() const;
-
 private:
 
 	friend class BMidiSynth;
 	friend class BMidiSynthFile;
+
+	// The process singleton owning one BSoundFontSynth graph node.
+			BSoundFontSynth*	SoundFont() const;
 
 	virtual void _ReservedSynth1();
 	virtual void _ReservedSynth2();

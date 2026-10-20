@@ -58,6 +58,7 @@ public:
 								UrlTextView(BRect frame, UrlBarView* owner);
 
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
+	virtual	void				MouseDown(BPoint where);
 
 protected:
 	virtual	void				InsertText(const char* text, int32 length,
@@ -76,6 +77,19 @@ UrlTextView::UrlTextView(BRect frame, UrlBarView* owner)
 {
 	SetWordWrap(false);
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+void
+UrlTextView::MouseDown(BPoint where)
+{
+	// The click that focuses the field selects the whole URL.
+	if (!IsFocus()) {
+		MakeFocus(true);
+		SelectAll();
+		return;
+	}
+	BTextView::MouseDown(where);
 }
 
 

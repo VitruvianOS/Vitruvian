@@ -200,6 +200,13 @@ static gboolean
 vos_toplevel_set_fullscreen(WPEToplevel* toplevel, gboolean fullscreen)
 {
 	auto* self = VOS_TOPLEVEL(toplevel);
+	// The exit sequence asks twice (Escape, then WebKit's own exit);
+	// only the edge reaches the host.
+	bool isFullscreen = (wpe_toplevel_get_state(toplevel)
+		& WPE_TOPLEVEL_STATE_FULLSCREEN) != 0;
+	if (isFullscreen == (fullscreen != FALSE))
+		return TRUE;
+
 	if (self->host == nullptr || !self->host->onFullscreenRequest)
 		return FALSE;
 	self->host->onFullscreenRequest(fullscreen != FALSE);

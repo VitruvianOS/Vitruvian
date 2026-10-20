@@ -78,7 +78,6 @@ UrlSchemeAdapter::_HandleVosAbout(WebKitURISchemeRequest* request, gpointer)
 		"padding:3em'>"
 		"<h1>NetPlus Browser</h1>"
 		"<p>Version 0.5 \xc2\xa9 2026 V\\OS</p>"
-		"<p>WPE WebKit on V\\OS</p>"
 		"<form style='margin:2em auto;max-width:28em' "
 		"onsubmit=\"event.preventDefault();"
 		"var t = window.NETPLUS_SEARCH_TEMPLATE"

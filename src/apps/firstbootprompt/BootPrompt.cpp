@@ -76,6 +76,16 @@ BootPromptApp::MessageReceived(BMessage* message)
 			PostMessage(B_QUIT_REQUESTED);
 			break;
 		}
+		case MSG_SETUP_INSTALL:
+		{
+			// The installer in account-only mode, converting this root.
+			char* args[] = { (char*)"Installer", (char*)"--setup-account",
+				NULL };
+			be_roster->Launch("application/x-vnd.Haiku-Installer", 2, args);
+			sExitValue = 0;
+			PostMessage(B_QUIT_REQUESTED);
+			break;
+		}
 		case MSG_REBOOT_REQUESTED:
 		{
 			BRoster::Private(be_roster).ShutDown(true, false, false);

@@ -36,6 +36,12 @@ struct InstallSpec {
 		bool				allowReformatEsp;
 		bool				allowClobberEfi;
 		bool				nvram;
+		bool				keepSsh;
+		// "partition", "file", "none"; empty keeps the helper's default.
+		BString				swapMode;
+		// Devnode for "partition"; empty means the plan's role=swap volume.
+		BString				swapDevice;
+		int64				swapSizeMiB;
 };
 
 

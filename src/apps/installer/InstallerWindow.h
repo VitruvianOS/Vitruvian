@@ -36,7 +36,7 @@ enum InstallStatus {
 
 class InstallerWindow : public BWindow {
 public:
-								InstallerWindow();
+								InstallerWindow(bool setupMode = false);
 	virtual						~InstallerWindow();
 
 	virtual	void				MessageReceived(BMessage* message);
@@ -45,6 +45,7 @@ public:
 private:
 			void				_ScanPartitions();
 			void				_UpdateControls();
+			void				_FinishSetup();
 			void				_UpdateAdvancedEnabled();
 			void				_UpdatePasswordStatus();
 			bool				_ValidateSetup(BString& errorOut);
@@ -58,6 +59,10 @@ private:
 			BString				_ComposeSummary(const char* targetLabel,
 									bool inPlace);
 			void				_ReadBootloaderChoice();
+			void				_ReadSwapChoice();
+			void				_UpdateSwapControls();
+			int64				_SwapSizeMiB() const;
+			bool				_SwapSizeOk() const;
 
 			BMenu*				fDestMenu;
 			BMenuField*			fDestMenuField;
@@ -68,6 +73,13 @@ private:
 			BMenuItem*			fBootloaderSetupItem;
 			BPopUpMenu*			fBootloaderChoiceMenu;
 			BMenuField*			fBootloaderField;
+			BPopUpMenu*			fSwapChoiceMenu;
+			BMenuField*			fSwapField;
+			BTextControl*		fSwapSizeField;
+			BStringView*		fSwapNote;
+			BView*				fTargetAdvancedView;
+			BCheckBox*			fNvramCheck;
+			BCheckBox*			fKeepSshCheck;
 			BButton*			fLaunchDriveSetupButton;
 			BButton*			fTargetSetupButton;
 
@@ -88,6 +100,7 @@ private:
 			BButton*			fInstallButton;
 			BButton*			fQuitButton;
 
+			bool				fSetupMode;
 			InstallStatus		fInstallStatus;
 
 			WorkerThread*		fWorkerThread;
@@ -97,6 +110,14 @@ private:
 			// by the helper only after the final confirmation.
 			BString				fPlanText;
 			BString				fBootloaderChoice;
+			bool				fBootloaderExplicit;
+			// "part:<devnode>", "plan", "file" or "none".
+			BString				fSwapChoice;
+			bool				fSwapExplicit;
+			BString				fSwapFileSizeText;
+			BString				fPlanSwapHint;
+			int64				fPlanSwapHintMiB;
+			int64				fPlanSwapMiB;
 };
 
 

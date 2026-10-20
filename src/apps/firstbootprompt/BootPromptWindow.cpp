@@ -45,6 +45,8 @@
 #include <TextView.h>
 #include <UnicodeChar.h>
 
+#include <RootMedia.h>
+
 #include "BootPrompt.h"
 #include "Keymap.h"
 #include "KeymapNames.h"
@@ -209,7 +211,8 @@ BootPromptWindow::BootPromptWindow()
 		B_TITLED_WINDOW, B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE | B_NOT_RESIZABLE
 			| B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE,
 		B_ALL_WORKSPACES),
-	fDefaultKeymapItem(NULL)
+	fDefaultKeymapItem(NULL),
+	fSetupButton(NULL)
 {
 	SetSizeLimits(450, 16384, 350, 16384);
 
@@ -243,6 +246,12 @@ BootPromptWindow::BootPromptWindow()
 	fInstallButton = new BButton("installer", "",
 		new BMessage(MSG_RUN_INSTALLER));
 	fInstallButton->SetIcon(&installerIcon);
+
+	// The raw image booted from a disk has a writable root to convert.
+	fSetupButton = new BButton("setup", "",
+		new BMessage(MSG_SETUP_INSTALL));
+	if (access("/etc/vos/live", F_OK) != 0 || !root_is_persistent_rw())
+		fSetupButton->Hide();
 
 	data = (const uint8_t*)res->LoadResource('VICN', "Language", &size);
 	IconView* languageIcon = new IconView(B_LARGE_ICON);
@@ -313,6 +322,7 @@ BootPromptWindow::BootPromptWindow()
 				.SetInsets(0)
 				.AddGlue()
 				.Add(fInstallButton)
+				.Add(fSetupButton)
 				.Add(fTryItButton)
 			.End()
 		.End();
@@ -361,6 +371,7 @@ BootPromptWindow::MessageReceived(BMessage* message)
 
 		case MSG_BOOT_DESKTOP:
 		case MSG_RUN_INSTALLER:
+		case MSG_SETUP_INSTALL:
 			_ApplyLocaleToSession();
 			be_app->PostMessage(message);
 			break;
@@ -453,15 +464,28 @@ BootPromptWindow::_InitCatalog(bool saveSettings)
 void
 BootPromptWindow::_UpdateStrings()
 {
-	SetTitle(B_TRANSLATE("Welcome"));
-	fInfoTextView->SetText(B_TRANSLATE_COMMENT(
-			"Thank you for trying out Vitruvian! Please select your "
-			"preferred language and keymap. Both settings can also be "
-			"changed later.\n\n"
-			"Do you wish to install the system now, or try it out first?",
-			"FBP intro; both buttons follow this text."));
+	SetTitle(B_TRANSLATE("Welcome to V\\OS"));
+	BString intro = B_TRANSLATE(
+		"Choose your language and keyboard layout. You can change both "
+		"later.");
+	intro << "\n\n";
+	// A disk root keeps what a guest session writes; read-only media do not.
+	if (fSetupButton->IsHidden()) {
+		intro << B_TRANSLATE_COMMENT(
+			"Try It Now starts the desktop from this media without touching "
+			"your disks. Install copies V\\OS to a disk of your choice.",
+			"Live media: two buttons follow this text.");
+	} else {
+		intro << B_TRANSLATE_COMMENT(
+			"Try It Now starts the desktop with a guest account. Set up this "
+			"install keeps V\\OS on this disk and creates your own account. "
+			"Install copies V\\OS to another disk.",
+			"Installed disk: three buttons follow this text.");
+	}
+	fInfoTextView->SetText(intro.String());
 	fTryItButton->SetLabel(B_TRANSLATE("Try It Now"));
 	fInstallButton->SetLabel(B_TRANSLATE("Install"));
+	fSetupButton->SetLabel(B_TRANSLATE("Set up this install"));
 
 	fLanguagesLabelView->SetText(B_TRANSLATE("Language"));
 	fKeymapsMenuLabel->SetText(B_TRANSLATE("Keymap"));

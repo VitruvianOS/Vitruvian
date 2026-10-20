@@ -19,11 +19,14 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 
+	virtual	void				ArgvReceived(int32 argc, char** argv);
 	virtual	void				ReadyToRun();
 	virtual	void				Quit();
 
 private:
 			EULAWindow*			fEULAWindow;
+			bool				fSetupMode;
+			bool				fSetupDone;
 };
 
 #endif // INSTALLER_APP_H

@@ -13,6 +13,7 @@
 enum {
 	MSG_BOOT_DESKTOP	= 'dktp',
 	MSG_RUN_INSTALLER	= 'inst',
+	MSG_SETUP_INSTALL	= 'sset',
 	MSG_REBOOT_REQUESTED	= 'rebt'
 };
 

@@ -164,6 +164,25 @@ TargetSetupWindow::TargetSetupWindow(const BMessenger& notify)
 		B_TRANSLATE("Create BIOS boot partition (1 MiB)"), NULL);
 	fBiosBootCheck->SetValue(B_CONTROL_ON);
 
+	fSwapMenu = new BPopUpMenu("swap");
+	fSwapMenu->AddItem(new BMenuItem(B_TRANSLATE("New swap partition"),
+		new BMessage(kMsgModeChanged)));
+	fSwapMenu->AddItem(new BMenuItem(B_TRANSLATE("Swap file"),
+		new BMessage(kMsgModeChanged)));
+	fSwapMenu->AddItem(new BMenuItem(B_TRANSLATE("None"),
+		new BMessage(kMsgModeChanged)));
+	fSwapMenu->ItemAt(0)->SetMarked(true);
+	fSwapMenu->SetTargetForItems(this);
+	fSwapField = new BMenuField("swapField", B_TRANSLATE("Swap:"),
+		fSwapMenu);
+
+	BString ramSize;
+	ramSize << installer_ram_mib();
+	fSwapSizeField = new BTextControl("swapSize",
+		B_TRANSLATE("Swap size (MiB):"), ramSize.String(), NULL);
+	fSwapSizeField->SetToolTip(B_TRANSLATE("Defaults to the amount of "
+		"RAM, which hibernation needs"));
+
 	fPreview = new BTextView("preview");
 	fPreview->MakeEditable(false);
 	fPreview->SetExplicitMinSize(BSize(B_SIZE_UNSET, 120));
@@ -181,6 +200,8 @@ TargetSetupWindow::TargetSetupWindow(const BMessenger& notify)
 		.Add(fTableField)
 		.Add(fEspSizeField)
 		.Add(fBiosBootCheck)
+		.Add(fSwapField)
+		.Add(fSwapSizeField)
 		.Add(fFilesystemField)
 		.Add(fPreview)
 		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
@@ -229,10 +250,11 @@ TargetSetupWindow::_ScanDisks()
 	BDiskDevice device;
 	while (roster.GetNextDevice(&device) == B_OK) {
 		BPath path;
-		if (device.GetPath(&path) != B_OK)
+		if (device.IsReadOnlyMedia() || device.GetPath(&path) != B_OK)
 			continue;
 		BMessage* message = new BMessage(kMsgDiskChosen);
 		message->AddString("disk", path.Path());
+		message->AddInt64("size_mib", device.Size() / (1024 * 1024));
 		BString label;
 		BString contentName = device.ContentName();
 		if (!contentName.IsEmpty())
@@ -277,6 +299,10 @@ TargetSetupWindow::_UpdateControls()
 	fTableField->SetEnabled(eraseMode);
 	fEspSizeField->SetEnabled(eraseMode);
 	fExistingField->SetEnabled(!eraseMode);
+	fSwapField->SetEnabled(eraseMode);
+	BMenuItem* swap = fSwapMenu->FindMarked();
+	fSwapSizeField->SetEnabled(eraseMode && swap != NULL
+		&& fSwapMenu->IndexOf(swap) != 2);
 
 	BMenuItem* table = fTableMenu->FindMarked();
 	bool gpt = table == NULL || fTableMenu->IndexOf(table) == 0;
@@ -334,6 +360,22 @@ TargetSetupWindow::_BuildPlan(BString& planOut, BString& errorOut)
 		bool biosBoot = fBiosBootCheck->Value() == B_CONTROL_ON
 			&& strcmp(tableType, "gpt") == 0;
 
+		BMenuItem* swapItem = fSwapMenu->FindMarked();
+		int32 swapKind = swapItem != NULL ? fSwapMenu->IndexOf(swapItem) : 1;
+		off_t swapSize = 0;
+		if (swapKind != 2) {
+			char* end = NULL;
+			swapSize = strtoll(fSwapSizeField->Text(), &end, 10);
+			if (end == fSwapSizeField->Text() || *end != '\0'
+				|| swapSize <= 0) {
+				errorOut = B_TRANSLATE("Swap size must be a number of "
+					"MiB greater than 0.");
+				return false;
+			}
+		}
+		int64 diskMiB = 0;
+		diskItem->Message()->FindInt64("size_mib", &diskMiB);
+
 		builder.SetDisk(disk);
 		builder.AddCreateTable("t0", tableType);
 		off_t offset = 1;
@@ -352,9 +394,27 @@ TargetSetupWindow::_BuildPlan(BString& planOut, BString& errorOut)
 			builder.AddSetFlags("sf_esp", "p_esp", flags);
 			offset += espSize;
 		}
-		builder.AddCreate("p_root", offset, -1, "linux", "root");
-		builder.AddFormat("f_root", "p_root", filesystem.String(),
-			"vitruvian-root", "root", NULL);
+		if (swapKind == 0) {
+			// Swap goes last; 1 MiB stays free for the backup GPT.
+			off_t rootSize = diskMiB - offset - swapSize - 1;
+			if (rootSize < 4096) {
+				errorOut = B_TRANSLATE("The swap partition leaves less "
+					"than 4096 MiB for the root partition. Use a smaller "
+					"swap or a swap file.");
+				return false;
+			}
+			builder.AddCreate("p_root", offset, rootSize, "linux", "root");
+			builder.AddFormat("f_root", "p_root", filesystem.String(),
+				"vitruvian-root", "root", NULL);
+			builder.AddCreate("p_swap", offset + rootSize, swapSize,
+				"linux_swap", "swap");
+			builder.AddFormat("f_swap", "p_swap", "swap", "swap", "swap",
+				NULL);
+		} else {
+			builder.AddCreate("p_root", offset, -1, "linux", "root");
+			builder.AddFormat("f_root", "p_root", filesystem.String(),
+				"vitruvian-root", "root", NULL);
+		}
 	}
 
 	if (!builder.IsValid()) {
@@ -383,6 +443,14 @@ TargetSetupWindow::_Apply()
 
 	BMessage message(MSG_PLAN_READY);
 	message.AddString("plan", plan);
+	BMenuItem* swapItem = fSwapMenu->FindMarked();
+	if (fModeMenu->IndexOf(fModeMenu->FindMarked()) == 0 && swapItem != NULL) {
+		int32 swapKind = fSwapMenu->IndexOf(swapItem);
+		message.AddString("swap", swapKind == 0 ? "partition"
+			: swapKind == 1 ? "file" : "none");
+		message.AddInt64("swap_size", strtoll(fSwapSizeField->Text(), NULL,
+			10));
+	}
 	fNotify.SendMessage(&message);
 	PostMessage(B_QUIT_REQUESTED);
 }

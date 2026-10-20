@@ -7,7 +7,9 @@
  */
 
 #include "InstallerApp.h"
+#include "InstallerDefs.h"
 
+#include <string.h>
 #include <unistd.h>
 
 #include <Alert.h>
@@ -38,7 +40,9 @@ int main(int, char **)
 
 InstallerApp::InstallerApp()
 	:
-	BApplication("application/x-vnd.Haiku-Installer")
+	BApplication("application/x-vnd.Haiku-Installer"),
+	fSetupMode(false),
+	fSetupDone(false)
 {
 }
 
@@ -50,12 +54,25 @@ InstallerApp::MessageReceived(BMessage* message)
 		case kMsgAgree:
 			fEULAWindow->PostMessage(B_QUIT_REQUESTED);
 			break;
+		case MSG_SETUP_DONE:
+			fSetupDone = true;
+			break;
 		case kMsgNext:
-			new InstallerWindow();
+			new InstallerWindow(fSetupMode);
 			break;
 
 		default:
 			BApplication::MessageReceived(message);
+	}
+}
+
+
+void
+InstallerApp::ArgvReceived(int32 argc, char** argv)
+{
+	for (int32 i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--setup-account") == 0)
+			fSetupMode = true;
 	}
 }
 
@@ -68,7 +85,7 @@ InstallerApp::ReadyToRun()
 	fEULAWindow = new EULAWindow();
 #else
 	// Show the installer window without EULA.
-	new InstallerWindow();
+	new InstallerWindow(fSetupMode);
 #endif
 }
 
@@ -95,6 +112,8 @@ InstallerApp::Quit()
 			// on disk (which we might just have ejected)
 			BRoster::Private((BRoster*)be_roster).ShutDown(true, false,
 				false);
+		} else if (fSetupDone) {
+			// Setup finished: the prompt no longer applies to this root.
 		} else {
 			// Return to FirstBootPrompt if the user hasn't
 			// installed Haiku yet

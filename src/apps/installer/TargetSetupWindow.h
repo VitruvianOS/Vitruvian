@@ -48,6 +48,9 @@ private:
 			BMenuField*			fExistingField;
 			BTextControl*		fEspSizeField;
 			BCheckBox*			fBiosBootCheck;
+			BPopUpMenu*			fSwapMenu;
+			BMenuField*			fSwapField;
+			BTextControl*		fSwapSizeField;
 			BTextView*			fPreview;
 			BButton*			fApplyButton;
 			BButton*			fCloseButton;

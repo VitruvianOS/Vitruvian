@@ -56,6 +56,7 @@ private:
 			BMenuItem*			fDefaultKeymapItem;
 			BButton*			fTryItButton;
 			BButton*			fInstallButton;
+			BButton*			fSetupButton;
 };
 
 

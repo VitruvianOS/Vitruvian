@@ -53,7 +53,9 @@ InstallSpec::InstallSpec()
 	biosMode("none"),
 	allowReformatEsp(false),
 	allowClobberEfi(false),
-	nvram(false)
+	nvram(false),
+	keepSsh(false),
+	swapSizeMiB(0)
 {
 }
 
@@ -154,7 +156,7 @@ public:
 		if (type == NULL)
 			return false;
 		if (strcmp(type, "c12a7328-f81f-11d2-ba4b-00a0c93ec93b") != 0
-			&& strcasecmp(type, "EFI") != 0)
+			&& strcasecmp(type, "EFI") != 0 && strcasecmp(type, "0xef") != 0)
 			return false;
 		BPath path;
 		if (partition->GetPath(&path) != B_OK)
@@ -554,7 +556,9 @@ WorkerThread::_RunFullInstall(const char* devicePath, const InstallSpec& spec,
 
 	// One helper run does plan, copy, config and bootloader, so the
 	// user's single confirmation covers every disk write.
-	const char* argv[24];
+	BString swapArg;
+	BString swapSizeArg;
+	const char* argv[32];
 	int argc = 0;
 	argv[argc++] = "pkexec";
 	argv[argc++] = kInstallHelper;
@@ -581,6 +585,25 @@ WorkerThread::_RunFullInstall(const char* devicePath, const InstallSpec& spec,
 		argv[argc++] = "--allow-clobber-efi";
 	if (spec.nvram)
 		argv[argc++] = "--nvram";
+	if (spec.keepSsh)
+		argv[argc++] = "--keep-ssh";
+	if (!spec.swapMode.IsEmpty()) {
+		if (spec.swapMode == "partition") {
+			swapArg << "partition:"
+				<< (spec.swapDevice.IsEmpty() ? "plan"
+					: spec.swapDevice.String());
+		} else {
+			swapArg = spec.swapMode;
+		}
+		argv[argc++] = "--swap";
+		argv[argc++] = swapArg.String();
+		if (spec.swapMode != "none" && spec.swapMode != "partition"
+			&& spec.swapSizeMiB > 0) {
+			swapSizeArg << spec.swapSizeMiB;
+			argv[argc++] = "--swap-size";
+			argv[argc++] = swapSizeArg.String();
+		}
+	}
 	argv[argc] = NULL;
 
 	int inPipe[2];
@@ -765,6 +788,9 @@ WorkerThread::_HandleProgressLine(const char* line, ProgressReporter* reporter)
 	const char* p = line;
 	while (*p == ' ' || *p == '\t')
 		p++;
+	// "vos-progress N%" is the helper's overall stage; anything else is
+	// rsync's own percentage, which fills the copy's share of the bar.
+	bool stage = strncmp(p, "vos-progress ", 13) == 0;
 	while (*p && *p != ' ' && *p != '\t')
 		p++;
 	while (*p == ' ' || *p == '\t')
@@ -774,6 +800,29 @@ WorkerThread::_HandleProgressLine(const char* line, ProgressReporter* reporter)
 	long pct = strtol(p, &endptr, 10);
 	if (endptr == p || pct < 0 || pct > 100 || *endptr != '%')
 		return false;
+	if (stage) {
+		// Optional step key after the percentage.
+		const char* key = endptr + 1;
+		while (*key == ' ')
+			key++;
+		const char* step = NULL;
+		if (strncmp(key, "partition", 9) == 0)
+			step = B_TRANSLATE("Partitioning...");
+		else if (strncmp(key, "copy", 4) == 0)
+			step = B_TRANSLATE("Copying files...");
+		else if (strncmp(key, "configure", 9) == 0)
+			step = B_TRANSLATE("Configuring the system...");
+		else if (strncmp(key, "initramfs", 9) == 0)
+			step = B_TRANSLATE("Building the initramfs...");
+		else if (strncmp(key, "account", 7) == 0)
+			step = B_TRANSLATE("Setting up your account...");
+		else if (strncmp(key, "bootloader", 10) == 0)
+			step = B_TRANSLATE("Installing the boot loader...");
+		if (step != NULL)
+			_SetStatusMessage(step);
+	}
+	if (!stage)
+		pct = 5 + pct * 80 / 100;
 
 	if (reporter != NULL) {
 		int delta = (int)pct - fLastReportedPercent;
@@ -806,6 +855,10 @@ WorkerThread::_CommitSetup(const char* target)
 		dup2(pipefd[0], STDIN_FILENO);
 		close(pipefd[0]);
 		close(pipefd[1]);
+		if (fInstallSpec.keepSsh) {
+			execl("/usr/bin/pkexec", "pkexec", kInstallHelper,
+				"--commit-setup", "--keep-ssh", target, (char*)NULL);
+		}
 		execl("/usr/bin/pkexec", "pkexec", kInstallHelper,
 			"--commit-setup", target, (char*)NULL);
 		_exit(127);

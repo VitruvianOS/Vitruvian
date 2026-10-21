@@ -494,15 +494,18 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 }
 
 
-static pthread_once_t gBootTimeOnce = PTHREAD_ONCE_INIT;
-static double gBootTime = 0;
+// btime is the wall clock at boot, so stepping the clock moves it and a
+// copy cached for the process lifetime drifts from then on. Refresh it
+// once per batch of team calls instead; each thread keeps its own value
+// (the team walk drains on one thread).
+static __thread double gBootTime = 0;
 
 
 static void
-_InitBootTime()
+_RefreshBootTime()
 {
-	// btime in /proc/stat is fixed at boot; one read beats re-reading
-	// /proc/uptime for every team.
+	// One /proc/stat read per batch beats re-reading /proc/uptime for
+	// every team; a read that fails keeps the last good value.
 	FILE* stat = fopen("/proc/stat", "r");
 	if (stat == NULL)
 		return;
@@ -510,7 +513,9 @@ _InitBootTime()
 	char line[256];
 	while (fgets(line, sizeof(line), stat) != NULL) {
 		if (strncmp(line, "btime ", 6) == 0) {
-			gBootTime = strtod(line + 6, NULL);
+			double bootTime = strtod(line + 6, NULL);
+			if (bootTime > 0.0)
+				gBootTime = bootTime;
 			break;
 		}
 	}
@@ -732,8 +737,8 @@ kill_team(team_id team)
 }
 
 
-status_t
-_get_team_info(team_id id, team_info* info, size_t size)
+static status_t
+_ReadTeamInfo(team_id id, team_info* info, size_t size)
 {
 	#define UID_LINE 8
 	#define GID_LINE 9
@@ -895,7 +900,6 @@ _get_team_info(team_id id, team_info* info, size_t size)
 					if (ticks <= 0)
 						ticks = 100;
 
-					pthread_once(&gBootTimeOnce, _InitBootTime);
 					if (gBootTime > 0.0) {
 						double startSeconds
 							= (double)starttime / (double)ticks;
@@ -914,6 +918,17 @@ _get_team_info(team_id id, team_info* info, size_t size)
 
 
 status_t
+_get_team_info(team_id id, team_info* info, size_t size)
+{
+	// A standalone lookup is a batch of its own: refresh the boot time
+	// so a clock step shows up in it too. The team walk refreshes once
+	// per walk instead, in _get_next_team_info().
+	_RefreshBootTime();
+	return _ReadTeamInfo(id, info, size);
+}
+
+
+status_t
 _get_next_team_info(int32* cookie, team_info* info, size_t size)
 {
 	if (cookie == NULL || *cookie < 0 || info == NULL
@@ -928,6 +943,8 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 		fd = _kern_open_dir(-1, "/proc");
 		if (fd < 0)
 			return B_ERROR;
+		// One refresh covers every team of the walk that follows.
+		_RefreshBootTime();
 	} else
 		fd = *cookie - 1;
 
@@ -943,7 +960,7 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 		if (pid <= 0)
 			continue;
 
-		if (_get_team_info((team_id)pid, info, size) == B_OK) {
+		if (_ReadTeamInfo((team_id)pid, info, size) == B_OK) {
 			*cookie = fd + 1;
 			return B_OK;
 		}

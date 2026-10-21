@@ -87,6 +87,9 @@ public:
 
 			status_t				GetDeviceVolume(media_client_id id,
 										float* outMaster, bool* outMute);
+			status_t				GetDeviceChannelVolumes(media_client_id id,
+										float* outVolumes, size_t maxCount,
+										size_t* outCount);
 			status_t				SetDeviceVolume(media_client_id id,
 										float master);
 			status_t				SetDeviceChannelVolumes(media_client_id id,

@@ -19,6 +19,7 @@ class BFilePanel;
 class BMenu;
 class BSlider;
 struct CortexAddOn;
+class CortexDeviceControllable;
 class CortexGraphView;
 class CortexModel;
 class CortexMonitorWindow;
@@ -52,7 +53,8 @@ enum {
 	kMsgMonitorPin			= 'CMPN',
 	kMsgMonitorClosed		= 'CMCL',
 	kMsgAddUnit			= 'CAUN',
-	kMsgLoadPlugin			= 'CLPL'
+	kMsgLoadPlugin			= 'CLPL',
+	kMsgToggleRun			= 'CTRG'
 };
 
 
@@ -129,6 +131,9 @@ private:
 			void		_CloseMonitor(CortexMonitorEntry* entry);
 			void		_DropMonitorsOn(BMediaClient* client);
 			void		_TearDownMonitor(CortexMonitorEntry* entry);
+			void		_ToggleRun(int32 nodeIndex);
+			CortexDeviceControllable* _DeviceControllable(media_client_id id);
+			bool		_NodeHasControls(CortexNode* node);
 
 			CortexGraphView*	fView;
 			CortexModel*		fModel;
@@ -138,6 +143,9 @@ private:
 			bool			fRebuildPending;
 			BObjectList<uint32, true>	fMeteredIds;
 			BObjectList<CortexMonitorEntry, true>	fMonitors;
+			// One controllable per device node, kept for the session so
+			// the Control panel can be reopened.
+			BObjectList<CortexDeviceControllable, true>	fDeviceControllables;
 			BMenu*			fAddMenu;
 			BFilePanel*		fFilePanel;
 			// Media add-on images; kept loaded until the window closes

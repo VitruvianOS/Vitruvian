@@ -806,6 +806,30 @@ BMediaGraph::GetDeviceVolume(media_client_id id, float* outMaster, bool* outMute
 
 
 status_t
+BMediaGraph::GetDeviceChannelVolumes(media_client_id id, float* outVolumes,
+	size_t maxCount, size_t* outCount)
+{
+	if (outVolumes == NULL && maxCount > 0)
+		return B_BAD_VALUE;
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	std::vector<float> vols;
+	status_t s = backend->GetDeviceVolume((uint32)id, vols, NULL);
+	if (s != B_OK)
+		return s;
+
+	const size_t copy = vols.size() < maxCount ? vols.size() : maxCount;
+	for (size_t i = 0; i < copy; i++)
+		outVolumes[i] = vols[i];
+	if (outCount != NULL)
+		*outCount = vols.size();
+	return B_OK;
+}
+
+
+status_t
 BMediaGraph::SetDeviceVolume(media_client_id id, float master)
 {
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();

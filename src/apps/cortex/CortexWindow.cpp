@@ -32,15 +32,18 @@
 #include <string.h>
 
 #include <media2/Controllable.h>
+#include <media2/DynamicAudioUnits.h>
 #include <media2/FilterCatalog.h>
 #include <media2/MediaFilter.h>
 #include <media2/MediaRecorder.h>
 #include <media2/MediaTheme.h>
+#include <media2/MidiUnit.h>
 #include <media2/ParameterWeb.h>
 #include <media2/RoutingStore.h>
 
 #include <MediaUnitAddOn.h>
 
+#include "CortexDeviceControls.h"
 #include "CortexGraphView.h"
 #include "CortexMonitor.h"
 #include "CortexNodes.h"
@@ -405,6 +408,15 @@ CortexWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgToggleRun:
+		{
+			int32 nodeIndex = -1;
+			message->FindInt32("node", &nodeIndex);
+			_ToggleRun(nodeIndex);
+			_Rebuild();
+			break;
+		}
+
 		case kMsgRestoreRoutes:
 			_RestoreRoutes();
 			break;
@@ -520,15 +532,8 @@ CortexWindow::_GraphReady()
 		return;
 	fGraphReady = true;
 
-	int32 count = 0;
-	BMediaClient** clients = CreateCortexDemoClients(&count);
-	if (clients != NULL) {
-		for (int32 i = 0; i < count; i++) {
-			clients[i]->Start();
-			fOwnClients.AddItem(clients[i]);
-		}
-		delete[] clients;
-	}
+	// Cortex starts with no nodes of its own; units come from the
+	// Add menu.
 
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph != NULL)
@@ -738,8 +743,21 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 	BMessage* panelMessage = menu->ItemAt(1)->Message();
 	panelMessage->AddInt32("node", nodeIndex);
 
-	if (node->ownClient == NULL)
+	if (!_NodeHasControls(node)) {
+		menu->ItemAt(1)->SetLabel(
+			"Control panel (this node has no controls)");
 		menu->ItemAt(1)->SetEnabled(false);
+	}
+
+	if (node->kind == kCortexNodeOwn && node->ownClient != NULL) {
+		BMessage* runMessage = new BMessage(kMsgToggleRun);
+		runMessage->AddInt32("node", nodeIndex);
+		const bool started = node->ownClient->IsStarted();
+		BMenuItem* runItem = new BMenuItem(started ? "Stop" : "Start",
+			runMessage);
+		runItem->SetTarget(this);
+		menu->AddItem(runItem);
+	}
 
 	if (node->kind == kCortexNodeDevice && graph != NULL) {
 		menu->AddSeparatorItem();
@@ -976,6 +994,17 @@ CortexWindow::TryConnectPins(int32 outNodeIndex, int32 outPinIndex,
 		BAlert* alert = new(std::nothrow) BAlert("Connect",
 			"Foreign to foreign links belong to WirePlumber. Cortex is a "
 			"view and a trigger, not a policy engine.", "OK");
+		if (alert != NULL)
+			alert->Go();
+		return;
+	}
+
+	// One in-process input takes one link; fan-in goes through the
+	// mixer's per source inputs, which PipeWire fans in on its side.
+	if (inPin->input != NULL && inPin->input->IsConnected()) {
+		BAlert* alert = new(std::nothrow) BAlert("Connect",
+			"That input pin already has a link. To mix several sources "
+			"into one destination, link them to a Mixer's inputs.", "OK");
 		if (alert != NULL)
 			alert->Go();
 		return;
@@ -1339,10 +1368,15 @@ CortexWindow::_OpenControlPanel(int32 nodeIndex)
 	if (fModel == NULL)
 		return;
 	CortexNode* node = fModel->NodeAt(nodeIndex);
-	if (node == NULL || node->ownClient == NULL)
+	if (node == NULL)
 		return;
 
-	BControllable* controllable = node->ownClient->Controllable();
+	BControllable* controllable = NULL;
+	if (node->ownClient != NULL)
+		controllable = node->ownClient->Controllable();
+	else if (node->kind == kCortexNodeDevice)
+		controllable = _DeviceControllable(node->id);
+
 	if (controllable == NULL || controllable->Web() == NULL) {
 		_ReportStatus("control panel", B_NOT_SUPPORTED);
 		return;
@@ -1821,6 +1855,30 @@ CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
 	while (menu->CountItems() > 0)
 		delete menu->RemoveItem((int32)0);
 
+	// Built-in units; every one of them can be added more than once.
+	static const struct {
+		const char*	kind;
+		const char*	label;
+	} kBuiltIns[] = {
+		{ "mixer", "Mixer" },
+		{ "splitter", "Splitter" },
+		{ "tone", "Tone generator" },
+		{ "midi-out", "MIDI Out" }
+	};
+	for (size_t i = 0; i < sizeof(kBuiltIns) / sizeof(kBuiltIns[0]); i++) {
+		BMessage* message = new BMessage(kMsgAddUnit);
+		message->AddString("source", "builtin");
+		message->AddString("kind", kBuiltIns[i].kind);
+		if (at != NULL) {
+			message->AddFloat("x", at->x);
+			message->AddFloat("y", at->y);
+		}
+		BMenuItem* item = new BMenuItem(kBuiltIns[i].label, message);
+		item->SetTarget(this);
+		menu->AddItem(item);
+	}
+	menu->AddSeparatorItem();
+
 	BObjectList<BFilterCatalog::Entry, true> entries;
 	BFilterCatalog::ListEntries(&entries, NULL);
 	BObjectList<BString, true> groups(true);
@@ -1982,6 +2040,22 @@ CortexWindow::_AddUnit(BMessage* message)
 	if (source == NULL)
 		return;
 
+	if (strcmp(source, "builtin") == 0) {
+		const char* kind = NULL;
+		message->FindString("kind", &kind);
+		BMediaClient* unit = NULL;
+		if (kind != NULL && strcmp(kind, "mixer") == 0)
+			unit = new(std::nothrow) BMixerUnit();
+		else if (kind != NULL && strcmp(kind, "splitter") == 0)
+			unit = new(std::nothrow) BSplitterUnit();
+		else if (kind != NULL && strcmp(kind, "tone") == 0)
+			unit = new(std::nothrow) BToneUnit();
+		else if (kind != NULL && strcmp(kind, "midi-out") == 0)
+			unit = CreateCortexMidiOut("MIDI Out");
+		_AdoptUnit(unit, "add unit", hasPoint ? &point : NULL);
+		return;
+	}
+
 	if (strcmp(source, "catalog") == 0) {
 		const char* id = NULL;
 		const char* kind = NULL;
@@ -2068,4 +2142,58 @@ CortexWindow::_AdoptUnit(BMediaClient* unit, const char* action,
 	if (at != NULL && fModel != NULL)
 		fModel->RememberOrigin(unit->Id(), kCortexNodeOwn, *at);
 	_Rebuild();
+}
+
+
+void
+CortexWindow::_ToggleRun(int32 nodeIndex)
+{
+	if (fModel == NULL)
+		return;
+	CortexNode* node = fModel->NodeAt(nodeIndex);
+	if (node == NULL || node->ownClient == NULL)
+		return;
+
+	// Stopping a unit silences its output; stopping a producer node
+	// pauses the stream. Both go through the client's own Stop().
+	if (node->ownClient->IsStarted())
+		node->ownClient->Stop();
+	else
+		node->ownClient->Start();
+}
+
+
+CortexDeviceControllable*
+CortexWindow::_DeviceControllable(media_client_id id)
+{
+	for (int32 i = 0; i < fDeviceControllables.CountItems(); i++) {
+		CortexDeviceControllable* controllable
+			= fDeviceControllables.ItemAt(i);
+		if (controllable != NULL && controllable->DeviceId() == id)
+			return controllable;
+	}
+
+	CortexDeviceControllable* controllable
+		= new(std::nothrow) CortexDeviceControllable(id);
+	if (controllable == NULL || controllable->Web() == NULL) {
+		delete controllable;
+		return NULL;
+	}
+	fDeviceControllables.AddItem(controllable);
+	return controllable;
+}
+
+
+bool
+CortexWindow::_NodeHasControls(CortexNode* node)
+{
+	if (node == NULL)
+		return false;
+	if (node->ownClient != NULL) {
+		BControllable* controllable = node->ownClient->Controllable();
+		return controllable != NULL && controllable->Web() != NULL;
+	}
+	if (node->kind == kCortexNodeDevice)
+		return _DeviceControllable(node->id) != NULL;
+	return false;
 }

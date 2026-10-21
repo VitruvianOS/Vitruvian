@@ -243,6 +243,8 @@ CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
 			node->id = client->Id();
 			node->pwNodeId = 0;
 			node->name.SetTo(client->Name());
+			if (!client->IsStarted())
+				node->name << " [stopped]";
 			node->mediaClass.SetTo("in-process client");
 			node->ownClient = client;
 			node->hasVolume = false;

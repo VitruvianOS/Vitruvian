@@ -3,6 +3,7 @@ Application(
 
 	SOURCES
 	CortexApp.cpp
+	CortexDeviceControls.cpp
 	CortexDump.cpp
 	CortexGraphView.cpp
 	CortexMonitor.cpp

@@ -32,6 +32,19 @@ public:
 			status_t		LoadLv2(const char* uri);
 #endif
 
+			// The plugin's own UI (LV2 UI extension, through suil).
+			// kMediaPluginUIQuery flags; see MediaUnitAddOn.h.
+			uint32			UiFlags() const;
+			status_t		OpenUi(uint32 parentWindow);
+			void			CloseUi();
+
+			// UI thread side: a control port write from the plugin's UI.
+			void			UiPortWritten(uint32 portIndex, float value);
+			int32			Lv2PortIndexForSymbol(const char* symbol) const;
+
+			// Lv2PluginState, for the UI host; NULL until loaded.
+			void*			Lv2State() const;
+
 			const char*		PluginName() const;
 			int32			AudioInputCount() const;
 			int32			AudioOutputCount() const;
@@ -54,6 +67,12 @@ private:
 								const void* value, size_t size, void* cookie);
 			void			_SetupPorts();
 			void			_TeardownPlugin();
+#ifdef VOS_HAS_LILV
+			status_t		_StartLv2();
+			void			_ProcessLv2(uint32 frameCount);
+			void			_PublishAndBindLv2();
+			void			_PushUiPortEvent(uint32 portIndex, float value);
+#endif
 
 			BString			fPluginName;
 			void*			fModule;
@@ -70,8 +89,9 @@ private:
 			status_t		fInitStatus;
 
 #ifdef VOS_HAS_LILV
-			// LV2 state lives in a pimpl once lilv is available.
+			// Lv2PluginState; the UI host exists only with suil.
 			void*			fLv2;
+			void*			fUiHost;
 #endif
 };
 

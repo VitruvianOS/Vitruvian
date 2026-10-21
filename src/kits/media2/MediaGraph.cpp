@@ -1126,6 +1126,12 @@ PipeWireBackend::_ForeignLinkRemoved(void* data)
 			&& !endpoint->HasBinding() && !_HasForeignLink(endpoint))
 		endpoint->Disconnected();
 
+	// The graph never sees a link PipeWire deleted, so drop our end here.
+	// peer is NULL as for any foreign link; the hook must return fast on
+	// the media thread (it may drop a dynamic pin, never block).
+	if (endpoint != NULL && endpoint->Client() != NULL)
+		endpoint->Client()->HandleUnlink(endpoint, NULL);
+
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend != NULL)
 		backend->_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED);

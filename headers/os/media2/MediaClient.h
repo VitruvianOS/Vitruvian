@@ -82,8 +82,10 @@ protected:
 										void* buffer, size_t bufferSize,
 										uint32 frameCount);
 
-	// Called on the app thread when the graph links or unlinks one of
-	// this client's endpoints (peer is NULL for foreign links). Units
+	// Called on the caller's thread when the graph links or unlinks one
+	// of this client's endpoints (peer is NULL for foreign links): the
+	// app thread, or the media thread when PipeWire itself drops a link.
+	// Return quickly; never block or call back into BMediaGraph. Units
 	// with dynamic pin counts add or drop their ports here.
 	virtual	void					HandleLink(BMediaConnection* local,
 									BMediaConnection* peer);
@@ -106,6 +108,7 @@ private:
 	friend class BMidiUnit;
 	friend class BSimpleMediaNode;
 	friend class BMediaGraph;
+	friend class BPrivate::media::PipeWireBackend;
 };
 
 

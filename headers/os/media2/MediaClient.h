@@ -79,8 +79,8 @@ protected:
 										bigtime_t performanceTime);
 
 	virtual	void					ProcessCallback(BMediaConnection* connection,
-									void* buffer, size_t bufferSize,
-									uint32 frameCount);
+										void* buffer, size_t bufferSize,
+										uint32 frameCount);
 
 	// Called on the app thread when the graph links or unlinks one of
 	// this client's endpoints (peer is NULL for foreign links). Units

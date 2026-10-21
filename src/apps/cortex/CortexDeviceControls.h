@@ -1,5 +1,6 @@
 /*
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
  */
 
 #ifndef _CORTEX_DEVICE_CONTROLS_H

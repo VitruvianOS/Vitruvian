@@ -74,7 +74,8 @@ extern status_t		_kern_create_symlink(int fd, const char *path,
 extern status_t		_kern_unlink(int fd, const char *path);
 extern status_t		_kern_rename(int oldDir, const char *oldpath, int newDir,
 						const char *newpath);
-extern int			_kern_open_attr_dir(int fd, const char *path);
+extern int			_kern_open_attr_dir(int fd, const char *path,
+						bool traverseLeafLink);
 extern status_t		_kern_remove_attr(int fd, const char *name);
 extern status_t		_kern_rename_attr(int fromFile, const char *fromName,
 						int toFile, const char *toName);

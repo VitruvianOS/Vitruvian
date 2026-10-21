@@ -23,7 +23,9 @@ AddOn(media2
 	MediaUnit.cpp
 	NativeAudioUnits.cpp
 	DynamicAudioUnits.cpp
+	NativeMidiUnits.cpp
 	MidiUnit.cpp
+	MidiUnitUI.cpp
 	FilterUnitCore.cpp
 	MediaFilter.cpp
 	VideoFilters.cpp

@@ -16,6 +16,7 @@
 
 #include <media2/MediaFilter.h>
 #include <media2/NativeAudioUnits.h>
+#include <media2/NativeMidiUnits.h>
 
 
 namespace {
@@ -144,6 +145,30 @@ BFilterCatalog::ListEntries(BObjectList<Entry, true>* outEntries,
 			NULL);
 	}
 
+	if (kindFilter == NULL || strcmp(kindFilter, "midi") == 0) {
+		_AddEntry(outEntries, "midi-out", "MIDI Out", "midi", "MIDI", NULL);
+		_AddEntry(outEntries, "midi-keyboard", "Virtual Keyboard", "midi",
+			"MIDI", NULL);
+		_AddEntry(outEntries, "midi-monitor", "MIDI Monitor", "midi", "MIDI",
+			NULL);
+		_AddEntry(outEntries, "midi-transpose", "Transpose", "midi", "MIDI",
+			NULL);
+		_AddEntry(outEntries, "midi-channel-filter", "Channel Filter", "midi",
+			"MIDI", NULL);
+		_AddEntry(outEntries, "midi-key-split", "Key Split", "midi", "MIDI",
+			NULL);
+		_AddEntry(outEntries, "midi-velocity-curve", "Velocity Curve", "midi",
+			"MIDI", NULL);
+		_AddEntry(outEntries, "midi-file-player", "MIDI File Player", "midi",
+			"MIDI", NULL);
+		_AddEntry(outEntries, "midi-clock", "Clock", "midi", "MIDI", NULL);
+		_AddEntry(outEntries, "midi-arp", "Arpeggiator", "midi", "MIDI",
+			NULL);
+		_AddEntry(outEntries, "midi-chord", "Chord", "midi", "MIDI", NULL);
+		_AddEntry(outEntries, "midi-cc-mapper", "CC Mapper", "midi", "MIDI",
+			NULL);
+	}
+
 	_ScanRegistry(outEntries, kindFilter);
 
 	{
@@ -235,6 +260,46 @@ BFilterCatalog::CreateAudioUnit(const Entry& entry)
 	else if (entry.factory.Length() > 0)
 		unit = new(std::nothrow) BMediaFilter(entry.name.String(),
 			entry.factory.String(), B_MEDIA_RAW_AUDIO);
+
+	if (unit != NULL && unit->InitCheck() != B_OK) {
+		delete unit;
+		return NULL;
+	}
+	return unit;
+}
+
+
+/* static */ BMediaClient*
+BFilterCatalog::CreateMidiUnit(const Entry& entry)
+{
+	if (entry.kind != "midi")
+		return NULL;
+
+	BMidiNativeUnit* unit = NULL;
+	if (entry.id == "midi-out")
+		unit = new(std::nothrow) BMidiOutUnit();
+	else if (entry.id == "midi-keyboard")
+		unit = new(std::nothrow) BMidiKeyboardUnit();
+	else if (entry.id == "midi-monitor")
+		unit = new(std::nothrow) BMidiMonitorUnit();
+	else if (entry.id == "midi-transpose")
+		unit = new(std::nothrow) BTransposeUnit();
+	else if (entry.id == "midi-channel-filter")
+		unit = new(std::nothrow) BChannelFilterUnit();
+	else if (entry.id == "midi-key-split")
+		unit = new(std::nothrow) BKeySplitUnit();
+	else if (entry.id == "midi-velocity-curve")
+		unit = new(std::nothrow) BVelocityCurveUnit();
+	else if (entry.id == "midi-file-player")
+		unit = new(std::nothrow) BMidiFilePlayerUnit();
+	else if (entry.id == "midi-clock")
+		unit = new(std::nothrow) BClockUnit();
+	else if (entry.id == "midi-arp")
+		unit = new(std::nothrow) BArpeggiatorUnit();
+	else if (entry.id == "midi-chord")
+		unit = new(std::nothrow) BChordUnit();
+	else if (entry.id == "midi-cc-mapper")
+		unit = new(std::nothrow) BCCMapperUnit();
 
 	if (unit != NULL && unit->InitCheck() != B_OK) {
 		delete unit;

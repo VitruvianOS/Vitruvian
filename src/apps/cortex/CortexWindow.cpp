@@ -2078,9 +2078,13 @@ CortexWindow::_AddUnit(BMessage* message)
 			return;
 		}
 
-		BMediaClient* unit = strcmp(kind, "video") == 0
-			? (BMediaClient*)BFilterCatalog::CreateVideoUnit(*chosen)
-			: (BMediaClient*)BFilterCatalog::CreateAudioUnit(*chosen);
+		BMediaClient* unit = NULL;
+		if (strcmp(kind, "video") == 0)
+			unit = (BMediaClient*)BFilterCatalog::CreateVideoUnit(*chosen);
+		else if (strcmp(kind, "midi") == 0)
+			unit = BFilterCatalog::CreateMidiUnit(*chosen);
+		else
+			unit = BFilterCatalog::CreateAudioUnit(*chosen);
 		_AdoptUnit(unit, "add unit", hasPoint ? &point : NULL);
 		return;
 	}

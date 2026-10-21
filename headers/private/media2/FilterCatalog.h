@@ -21,12 +21,12 @@ public:
 	struct Entry {
 		BString		id;
 		BString		name;
-		BString		kind;		// "video" or "audio"
+		BString		kind;		// "video", "audio" or "midi"
 		BString		group;		// "Built-in", "Native", "frei0r", "LADSPA", "LV2", "Custom"
 		BString		factory;	// backend factory for plugin entries
 	};
 
-	// kindFilter: "video", "audio" or NULL for both.
+	// kindFilter: "video", "audio", "midi" or NULL for all.
 	static	status_t			ListEntries(BObjectList<Entry, true>* outEntries,
 									const char* kindFilter);
 
@@ -34,6 +34,8 @@ public:
 	// Audio units are BMediaFilters (detached-only GStreamer chains) or
 	// native units that also run as graph nodes.
 	static	BMediaClient*		CreateAudioUnit(const Entry& entry);
+	// Native MIDI units: filters, sources and sinks on BMidiUnit.
+	static	BMediaClient*		CreateMidiUnit(const Entry& entry);
 };
 
 

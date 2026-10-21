@@ -583,8 +583,8 @@ _CountImagesAndAreas(int fd, team_info* info)
 
 // /proc dirents are read ahead in batches. The enumeration cookie can only
 // carry the dir fd, so the pending batch lives here; when another fd needs
-// the slot, a batch with unhandled entries is seeked back into place first,
-// so no entry is lost or skipped. Callers must drain the enumeration on
+// the slot, we seek the old fd back to the first unconsumed entry, so
+// no entry is lost or skipped. Callers must drain the enumeration on
 // one thread; continuing a cookie from another thread drops the batch.
 static const int32 kTeamDirentBatch = 32;
 
@@ -606,9 +606,17 @@ _FillTeamDirentCache(int fd)
 			return true;
 	} else if (gTeamDirentCache.fd >= 0
 		&& gTeamDirentCache.index < gTeamDirentCache.count) {
-		_kern_seek(gTeamDirentCache.fd,
-			gTeamDirentCache.entries[gTeamDirentCache.index].d_off,
-			SEEK_SET);
+		// d_off of an entry points at the entry *after* it, so seeking
+		// to entries[index].d_off would resume past entries[index] and
+		// drop it. entries[index-1] is the last entry handed out; its
+		// d_off is where the unconsumed tail continues. index is >= 1
+		// there (the tail is only left over once entries[0] went out);
+		// guard it anyway.
+		int32 resume = gTeamDirentCache.index - 1;
+		if (resume >= 0) {
+			_kern_seek(gTeamDirentCache.fd,
+				gTeamDirentCache.entries[resume].d_off, SEEK_SET);
+		}
 	}
 
 	ssize_t count = _kern_read_dir(fd, gTeamDirentCache.entries,

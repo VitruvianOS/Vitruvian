@@ -19,6 +19,7 @@
 #include <pipewire/loop.h>
 #include <spa/param/audio/format.h>
 #include <spa/param/props.h>
+#include <spa/param/video/raw-utils.h>
 #include <spa/utils/type.h>
 #include <spa/pod/builder.h>
 
@@ -427,14 +428,28 @@ BMediaUnit::_CreatePortFor(BMediaConnection* connection)
 			NULL);
 	}
 
+	// Without a DSP format the port enumerates no format at all, and
+	// link negotiation gives up with ENOENT on the output side, so offer
+	// video/raw: mediaType and subtype only, no size or frame rate yet.
+	const spa_pod* portParams = NULL;
+	uint8 formatBuffer[256];
+	if (formatDSP == NULL) {
+		spa_video_info_raw videoFormat;
+		memset(&videoFormat, 0, sizeof(videoFormat));
+		spa_pod_builder builder = SPA_POD_BUILDER_INIT(formatBuffer,
+			sizeof(formatBuffer));
+		portParams = spa_format_video_raw_build(&builder,
+			SPA_PARAM_EnumFormat, &videoFormat);
+	}
+
 	backend->Lock();
 	void* port = pw_filter_add_port(fImpl->filter,
 		pwDirection,
 		PW_FILTER_PORT_FLAG_MAP_BUFFERS,
 		sizeof(port_data),
 		portProps,
-		NULL,
-		0);
+		&portParams,
+		portParams != NULL ? 1 : 0);
 	backend->Unlock();
 
 	if (port == NULL)

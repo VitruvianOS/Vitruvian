@@ -29,9 +29,15 @@ public:
 									BMediaInput(name)
 	{
 		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		fRetiredNext = NULL;
+		fRetiredGeneration = 0;
 	}
 
 	virtual						~_Input() {}
+
+	// Retired pins chain through BMixerUnit::fRetired, under fLock.
+	_Input*						fRetiredNext;
+	uint64						fRetiredGeneration;
 };
 
 
@@ -42,6 +48,8 @@ BMixerUnit::BMixerUnit()
 	fOutputLeft(NULL),
 	fOutputRight(NULL),
 	fFreeInput(NULL),
+	fRetired(NULL),
+	fCycleGeneration(0),
 	fControllable(NULL),
 	fMasterGain(1.0f),
 	fMasterMute(false),
@@ -86,19 +94,28 @@ BMixerUnit::~BMixerUnit()
 {
 	Stop();
 
+	_Input* inputs[kMaxChannels];
+	int32 count = 0;
 	{
 		BAutolock _(fLock);
 		for (int32 i = 0; i < kMaxChannels; i++) {
 			_Input* input = fChannels[i].connection;
 			if (input == NULL)
 				continue;
+			inputs[count++] = input;
 			fChannels[i].used.store(false);
 			fChannels[i].connection = NULL;
-			_RemoveLivePort(input);
-			BMediaClient::UnregisterInput(input);
-			delete input;
 		}
 		fFreeInput = NULL;
+		// Stop() ended the cycles, so nothing can hold a retired pin.
+		_ReapRetiredLocked(true);
+	}
+
+	// Port surgery runs outside the unit lock, as in _RemoveChannelInput.
+	for (int32 i = 0; i < count; i++) {
+		_RemoveLivePort(inputs[i]);
+		BMediaClient::UnregisterInput(inputs[i]);
+		delete inputs[i];
 	}
 
 	if (fOutputLeft != NULL) {
@@ -265,70 +282,129 @@ BMixerUnit::_ChangeHook(int32 id, bigtime_t /*when*/, const void* value,
 void
 BMixerUnit::_AddChannelInput()
 {
-	BAutolock _(fLock);
+	_Input* input = NULL;
+	{
+		BAutolock _(fLock);
 
-	int32 slot = -1;
-	for (int32 i = 0; i < kMaxChannels; i++) {
-		if (!fChannels[i].used.load()) {
-			slot = i;
-			break;
+		// A pin an earlier unlink retired is free to go once a cycle has
+		// started past it; this path never runs on that cycle.
+		_ReapRetiredLocked(false);
+
+		int32 slot = -1;
+		for (int32 i = 0; i < kMaxChannels; i++) {
+			if (!fChannels[i].used.load()) {
+				slot = i;
+				break;
+			}
 		}
-	}
-	if (slot < 0)
-		return;
+		if (slot < 0)
+			return;
 
-	BString name;
-	name.SetToFormat("in %d", slot + 1);
-	_Input* input = new(std::nothrow) _Input(name.String());
-	if (input == NULL)
-		return;
+		BString name;
+		name.SetToFormat("in %d", slot + 1);
+		input = new(std::nothrow) _Input(name.String());
+		if (input == NULL)
+			return;
 
-	// BMediaUnit::RegisterInput refuses while started; growing the pin
-	// set is exactly what this unit is for.
-	if (BMediaClient::RegisterInput(input) != B_OK) {
-		delete input;
-		return;
+		// BMediaUnit::RegisterInput refuses while started; growing the pin
+		// set is exactly what this unit is for.
+		if (BMediaClient::RegisterInput(input) != B_OK) {
+			delete input;
+			return;
+		}
+
+		fChannels[slot].connection = input;
+		fChannels[slot].gain.store(1.0f);
+		fChannels[slot].pan.store(0.0f);
+		fChannels[slot].mute.store(false);
+		fChannels[slot].solo.store(false);
+		fChannels[slot].used.store(true);
+		fFreeInput = input;
+
+		BParameterGroup* group = _ChannelGroup(slot);
+		if (group != NULL)
+			group->SetFlags(0);
 	}
+
+	// Port surgery runs outside the unit lock: HandleUnlink also runs on
+	// the PipeWire loop thread, which already holds the backend lock, so
+	// the unit lock must never be held while waiting for that lock.
 	_AddLivePort(input);
-
-	fChannels[slot].connection = input;
-	fChannels[slot].gain.store(1.0f);
-	fChannels[slot].pan.store(0.0f);
-	fChannels[slot].mute.store(false);
-	fChannels[slot].solo.store(false);
-	fChannels[slot].used.store(true);
-	fFreeInput = input;
-
-	BParameterGroup* group = _ChannelGroup(slot);
-	if (group != NULL)
-		group->SetFlags(0);
 }
 
 
 void
 BMixerUnit::_RemoveChannelInput(_Input* input)
 {
-	BAutolock _(fLock);
+	{
+		BAutolock _(fLock);
 
-	const int32 slot = _IndexOf(input);
-	if (slot < 0)
+		const int32 slot = _IndexOf(input);
+		if (slot < 0)
+			return;
+
+		// The cycle stops at used == false; one that already picked the
+		// channel keeps its pointer, so the input is retired below and
+		// deleted only after a later cycle has started. No grace sleep.
+		fChannels[slot].used.store(false);
+		BMediaClient::UnregisterInput(input);
+		if (fFreeInput == input)
+			fFreeInput = NULL;
+		fChannels[slot].connection = NULL;
+
+		BParameterGroup* group = _ChannelGroup(slot);
+		if (group != NULL)
+			group->SetFlags(B_HIDDEN_PARAMETER);
+	}
+
+	// Port surgery runs outside the unit lock: HandleUnlink also runs on
+	// the PipeWire loop thread, which already holds the backend lock, so
+	// the unit lock must never be held while waiting for that lock.
+	_RemoveLivePort(input);
+
+	{
+		BAutolock _(fLock);
+		_RetireLocked(input);
+		// The acknowledging cycle has usually not run yet; the next pin
+		// change on this unit, or the destructor, collects the pin.
+		_ReapRetiredLocked(false);
+	}
+}
+
+
+void
+BMixerUnit::_RetireLocked(_Input* input)
+{
+	if (input == NULL)
 		return;
 
-	// The realtime cycle stops at used == false; the port goes away
-	// under the backend lock, and the grace period lets a cycle that
-	// already picked the channel finish before the input is deleted.
-	fChannels[slot].used.store(false);
-	_RemoveLivePort(input);
-	BMediaClient::UnregisterInput(input);
-	if (fFreeInput == input)
-		fFreeInput = NULL;
-	fChannels[slot].connection = NULL;
-	snooze(50000);
-	delete input;
+	// The generation counts process cycles. A pin retired at generation G
+	// was still reachable while the cycle that started at G runs, so only
+	// a cycle starting later is clear of it.
+	input->fRetiredGeneration = fCycleGeneration.load();
+	input->fRetiredNext = fRetired;
+	fRetired = input;
+}
 
-	BParameterGroup* group = _ChannelGroup(slot);
-	if (group != NULL)
-		group->SetFlags(B_HIDDEN_PARAMETER);
+
+void
+BMixerUnit::_ReapRetiredLocked(bool force)
+{
+	const uint64 cycle = fCycleGeneration.load();
+	_Input* kept = NULL;
+	_Input* pin = fRetired;
+	fRetired = NULL;
+	while (pin != NULL) {
+		_Input* next = pin->fRetiredNext;
+		if (force || cycle > pin->fRetiredGeneration)
+			delete pin;
+		else {
+			pin->fRetiredNext = kept;
+			kept = pin;
+		}
+		pin = next;
+	}
+	fRetired = kept;
 }
 
 
@@ -366,6 +442,11 @@ BMixerUnit::HandleUnlink(BMediaConnection* local, BMediaConnection* /*peer*/)
 void
 BMixerUnit::ProcessCycle(uint32 frameCount)
 {
+	// Each cycle announces itself first: a pin retired at an earlier
+	// generation is out of reach from here on, so the reap that runs on
+	// the link paths may delete it once this cycle has started.
+	fCycleGeneration.fetch_add(1);
+
 	size_t leftSize = 0;
 	size_t rightSize = 0;
 	float* left = (float*)BufferFor(fOutputLeft, &leftSize);
@@ -450,9 +531,15 @@ public:
 									BMediaOutput(name)
 	{
 		SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		fRetiredNext = NULL;
+		fRetiredGeneration = 0;
 	}
 
 	virtual						~_Output() {}
+
+	// Retired pins chain through BSplitterUnit::fRetired, under fLock.
+	_Output*					fRetiredNext;
+	uint64						fRetiredGeneration;
 };
 
 
@@ -462,6 +549,8 @@ BSplitterUnit::BSplitterUnit()
 		| B_MEDIA_CONTROLLABLE)),
 	fInput(NULL),
 	fFreeOutput(NULL),
+	fRetired(NULL),
+	fCycleGeneration(0),
 	fControllable(NULL),
 	fLock("splitter unit"),
 	fInitStatus(B_NO_INIT)
@@ -496,19 +585,28 @@ BSplitterUnit::~BSplitterUnit()
 {
 	Stop();
 
+	_Output* outputs[kMaxOutputs];
+	int32 count = 0;
 	{
 		BAutolock _(fLock);
 		for (int32 i = 0; i < kMaxOutputs; i++) {
 			_Output* output = fChannels[i].connection;
 			if (output == NULL)
 				continue;
+			outputs[count++] = output;
 			fChannels[i].used.store(false);
 			fChannels[i].connection = NULL;
-			_RemoveLivePort(output);
-			BMediaClient::UnregisterOutput(output);
-			delete output;
 		}
 		fFreeOutput = NULL;
+		// Stop() ended the cycles, so nothing can hold a retired pin.
+		_ReapRetiredLocked(true);
+	}
+
+	// Port surgery runs outside the unit lock, as in _RemoveChannelOutput.
+	for (int32 i = 0; i < count; i++) {
+		_RemoveLivePort(outputs[i]);
+		BMediaClient::UnregisterOutput(outputs[i]);
+		delete outputs[i];
 	}
 
 	if (fInput != NULL) {
@@ -613,63 +711,123 @@ BSplitterUnit::_ChangeHook(int32 id, bigtime_t /*when*/, const void* value,
 void
 BSplitterUnit::_AddChannelOutput()
 {
-	BAutolock _(fLock);
+	_Output* output = NULL;
+	{
+		BAutolock _(fLock);
 
-	int32 slot = -1;
-	for (int32 i = 0; i < kMaxOutputs; i++) {
-		if (!fChannels[i].used.load()) {
-			slot = i;
-			break;
+		// A pin an earlier unlink retired is free to go once a cycle has
+		// started past it; this path never runs on that cycle.
+		_ReapRetiredLocked(false);
+
+		int32 slot = -1;
+		for (int32 i = 0; i < kMaxOutputs; i++) {
+			if (!fChannels[i].used.load()) {
+				slot = i;
+				break;
+			}
 		}
-	}
-	if (slot < 0)
-		return;
+		if (slot < 0)
+			return;
 
-	BString name;
-	name.SetToFormat("out %d", slot + 1);
-	_Output* output = new(std::nothrow) _Output(name.String());
-	if (output == NULL)
-		return;
+		BString name;
+		name.SetToFormat("out %d", slot + 1);
+		output = new(std::nothrow) _Output(name.String());
+		if (output == NULL)
+			return;
 
-	if (BMediaClient::RegisterOutput(output) != B_OK) {
-		delete output;
-		return;
+		if (BMediaClient::RegisterOutput(output) != B_OK) {
+			delete output;
+			return;
+		}
+
+		fChannels[slot].connection = output;
+		fChannels[slot].gain.store(1.0f);
+		fChannels[slot].mute.store(false);
+		fChannels[slot].used.store(true);
+		fFreeOutput = output;
+
+		BParameterGroup* group = _ChannelGroup(slot);
+		if (group != NULL)
+			group->SetFlags(0);
 	}
+
+	// Port surgery runs outside the unit lock: HandleUnlink also runs on
+	// the PipeWire loop thread, which already holds the backend lock, so
+	// the unit lock must never be held while waiting for that lock.
 	_AddLivePort(output);
-
-	fChannels[slot].connection = output;
-	fChannels[slot].gain.store(1.0f);
-	fChannels[slot].mute.store(false);
-	fChannels[slot].used.store(true);
-	fFreeOutput = output;
-
-	BParameterGroup* group = _ChannelGroup(slot);
-	if (group != NULL)
-		group->SetFlags(0);
 }
 
 
 void
 BSplitterUnit::_RemoveChannelOutput(_Output* output)
 {
-	BAutolock _(fLock);
+	{
+		BAutolock _(fLock);
 
-	const int32 slot = _IndexOf(output);
-	if (slot < 0)
+		const int32 slot = _IndexOf(output);
+		if (slot < 0)
+			return;
+
+		// The cycle stops at used == false; one that already picked the
+		// channel keeps its pointer, so the output is retired below and
+		// deleted only after a later cycle has started. No grace sleep.
+		fChannels[slot].used.store(false);
+		BMediaClient::UnregisterOutput(output);
+		if (fFreeOutput == output)
+			fFreeOutput = NULL;
+		fChannels[slot].connection = NULL;
+
+		BParameterGroup* group = _ChannelGroup(slot);
+		if (group != NULL)
+			group->SetFlags(B_HIDDEN_PARAMETER);
+	}
+
+	// Port surgery runs outside the unit lock, as in _AddChannelOutput.
+	_RemoveLivePort(output);
+
+	{
+		BAutolock _(fLock);
+		_RetireLocked(output);
+		// The acknowledging cycle has usually not run yet; the next pin
+		// change on this unit, or the destructor, collects the pin.
+		_ReapRetiredLocked(false);
+	}
+}
+
+
+void
+BSplitterUnit::_RetireLocked(_Output* output)
+{
+	if (output == NULL)
 		return;
 
-	fChannels[slot].used.store(false);
-	_RemoveLivePort(output);
-	BMediaClient::UnregisterOutput(output);
-	if (fFreeOutput == output)
-		fFreeOutput = NULL;
-	fChannels[slot].connection = NULL;
-	snooze(50000);
-	delete output;
+	// The generation counts process cycles. A pin retired at generation G
+	// was still reachable while the cycle that started at G runs, so only
+	// a cycle starting later is clear of it.
+	output->fRetiredGeneration = fCycleGeneration.load();
+	output->fRetiredNext = fRetired;
+	fRetired = output;
+}
 
-	BParameterGroup* group = _ChannelGroup(slot);
-	if (group != NULL)
-		group->SetFlags(B_HIDDEN_PARAMETER);
+
+void
+BSplitterUnit::_ReapRetiredLocked(bool force)
+{
+	const uint64 cycle = fCycleGeneration.load();
+	_Output* kept = NULL;
+	_Output* pin = fRetired;
+	fRetired = NULL;
+	while (pin != NULL) {
+		_Output* next = pin->fRetiredNext;
+		if (force || cycle > pin->fRetiredGeneration)
+			delete pin;
+		else {
+			pin->fRetiredNext = kept;
+			kept = pin;
+		}
+		pin = next;
+	}
+	fRetired = kept;
 }
 
 
@@ -707,6 +865,11 @@ BSplitterUnit::HandleUnlink(BMediaConnection* local, BMediaConnection* /*peer*/)
 void
 BSplitterUnit::ProcessCycle(uint32 frameCount)
 {
+	// Each cycle announces itself first: a pin retired at an earlier
+	// generation is out of reach from here on, so the reap that runs on
+	// the link paths may delete it once this cycle has started.
+	fCycleGeneration.fetch_add(1);
+
 	size_t inSize = 0;
 	const float* in = (const float*)BufferFor(fInput, &inSize);
 	const uint32 inFrames = (uint32)(inSize / sizeof(float));

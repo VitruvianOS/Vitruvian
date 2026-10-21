@@ -64,6 +64,10 @@ private:
 			void				_BuildWeb();
 			void				_AddChannelInput();
 			void				_RemoveChannelInput(_Input* input);
+			// Both need fLock: the retired list never leaves it, and only
+			// a cycle past the retire generation clears it.
+			void				_RetireLocked(_Input* input);
+			void				_ReapRetiredLocked(bool force);
 			int32				_IndexOf(BMediaInput* input) const;
 			BParameterGroup*	_ChannelGroup(int32 slot);
 
@@ -71,6 +75,10 @@ private:
 			BMediaOutput*		fOutputRight;
 			Channel				fChannels[kMaxChannels];
 			_Input*				fFreeInput;
+			// Pins an unlink gave up, held until a process cycle that
+			// started after the unlink acknowledges them.
+			_Input*				fRetired;
+			std::atomic<uint64>	fCycleGeneration;
 			BControllable*		fControllable;
 			std::atomic<float>	fMasterGain;
 			std::atomic<bool>	fMasterMute;
@@ -115,12 +123,20 @@ private:
 			void				_BuildWeb();
 			void				_AddChannelOutput();
 			void				_RemoveChannelOutput(_Output* output);
+			// Both need fLock: the retired list never leaves it, and only
+			// a cycle past the retire generation clears it.
+			void				_RetireLocked(_Output* output);
+			void				_ReapRetiredLocked(bool force);
 			int32				_IndexOf(BMediaOutput* output) const;
 			BParameterGroup*	_ChannelGroup(int32 slot);
 
 			BMediaInput*		fInput;
 			Channel				fChannels[kMaxOutputs];
 			_Output*			fFreeOutput;
+			// Pins an unlink gave up, held until a process cycle that
+			// started after the unlink acknowledges them.
+			_Output*			fRetired;
+			std::atomic<uint64>	fCycleGeneration;
 			BControllable*		fControllable;
 			mutable BLocker		fLock;
 			status_t			fInitStatus;

@@ -292,6 +292,11 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 	_ReleaseReservedEdge(outNodeId, inNodeId);
 
 	if (result == B_OK) {
+		// As with a foreign link, the endpoints count as connected.
+		if (!output->IsConnected())
+			output->Connected(output->AcceptedFormat());
+		if (!input->IsConnected())
+			input->Connected(input->AcceptedFormat());
 		if (outClient != NULL)
 			outClient->HandleLink(output, input);
 		if (inClient != NULL)
@@ -300,6 +305,10 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 
 	return result;
 }
+
+
+// Whether a foreign link still holds our endpoint.
+static bool _HasForeignLink(const BMediaConnection* connection);
 
 
 status_t
@@ -338,6 +347,23 @@ BMediaGraph::Disconnect(BMediaOutput* output, BMediaInput* input)
 	backend->Unlock();
 
 	if (any) {
+		// An input keeps one link; an output may still fan out.
+		if (!input->HasBinding() && !_HasForeignLink(input))
+			input->Disconnected();
+		if (!output->HasBinding() && !_HasForeignLink(output)) {
+			bool moreLinks = false;
+			BAutolock _(sLinksLock);
+			for (const auto& entry : sLinks) {
+				if (entry.second.output == output
+						&& entry.second.state != PW_LINK_STATE_ERROR
+						&& entry.second.state != PW_LINK_STATE_UNLINKED) {
+					moreLinks = true;
+					break;
+				}
+			}
+			if (!moreLinks)
+				output->Disconnected();
+		}
 		if (outClient != NULL)
 			outClient->HandleUnlink(output, input);
 		if (inClient != NULL)

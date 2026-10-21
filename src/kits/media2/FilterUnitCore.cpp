@@ -145,6 +145,8 @@ _NamesMatch(const BString& a, const BString& b)
 	right.ReplaceAll(" ", "");
 	left.ReplaceAll("_", "");
 	right.ReplaceAll("_", "");
+	left.ReplaceAll("-", "");
+	right.ReplaceAll("-", "");
 	return left == right;
 }
 

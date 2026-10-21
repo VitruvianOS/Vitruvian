@@ -43,6 +43,7 @@ enum {
 	kMsgSetPort			= 'CSPR',
 	kMsgMoveStream			= 'CMVS',
 	kMsgControlPanel		= 'CCPN',
+	kMsgPluginUI			= 'CPUI',
 	kMsgInfo			= 'CINF',
 	kMsgSendTestNote		= 'CNOT',
 	kMsgDisconnectOwn		= 'CDOI',
@@ -104,6 +105,9 @@ private:
 			void		_SaveSettings();
 			void		_OpenInfo(int32 nodeIndex);
 			void		_OpenControlPanel(int32 nodeIndex);
+			void		_OpenPluginUI(int32 nodeIndex);
+			status_t	_PluginUiCommand(BMediaClient* client, int32 command,
+							void* arg);
 			void		_OpenVolume(media_client_id id, bool isStream,
 					const BString& title, float value);
 			void		_ReportStatus(const char* action, status_t status);

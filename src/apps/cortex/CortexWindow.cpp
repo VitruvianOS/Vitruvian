@@ -55,16 +55,20 @@ struct CortexAddOn {
 	image_id		image;
 	int32			count;
 	BObjectList<BString, true>	names;
+	BObjectList<BString, true>	groups;
 	BMediaUnit*		(*instantiate)(int32);
 	BMediaUnit*		(*loadFile)(const char*);
+	status_t		(*uiCommand)(BMediaUnit*, int32, void*);
 
 	CortexAddOn()
 		:
 		image(-1),
 		count(0),
 		names(true),
+		groups(true),
 		instantiate(NULL),
-		loadFile(NULL)
+		loadFile(NULL),
+		uiCommand(NULL)
 	{
 	}
 
@@ -415,6 +419,14 @@ CortexWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgPluginUI:
+		{
+			int32 nodeIndex = -1;
+			message->FindInt32("node", &nodeIndex);
+			_OpenPluginUI(nodeIndex);
+			break;
+		}
+
 		case kMsgRestoreRoutes:
 			_RestoreRoutes();
 			break;
@@ -735,11 +747,15 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 		new BMessage(kMsgInfo)));
 	menu->AddItem(new BMenuItem("Control panel",
 		new BMessage(kMsgControlPanel)));
+	menu->AddItem(new BMenuItem("Plugin UI" B_UTF8_ELLIPSIS,
+		new BMessage(kMsgPluginUI)));
 
 	BMessage* infoMessage = menu->ItemAt(0)->Message();
 	infoMessage->AddInt32("node", nodeIndex);
 	BMessage* panelMessage = menu->ItemAt(1)->Message();
 	panelMessage->AddInt32("node", nodeIndex);
+	BMessage* uiMessage = menu->ItemAt(2)->Message();
+	uiMessage->AddInt32("node", nodeIndex);
 
 	if (!_NodeHasControls(node)) {
 		menu->ItemAt(1)->SetLabel(
@@ -755,6 +771,15 @@ CortexWindow::ShowNodeMenu(int32 nodeIndex, BPoint screenPoint)
 			runMessage);
 		runItem->SetTarget(this);
 		menu->AddItem(runItem);
+	}
+
+	// Only a hosted plugin with a supported UI of its own offers one.
+	uint32 uiFlags = 0;
+	if (node->ownClient == NULL
+			|| _PluginUiCommand(node->ownClient, kMediaPluginUIQuery,
+				&uiFlags) != B_OK
+			|| (uiFlags & kMediaPluginUIFlagHasUi) == 0) {
+		menu->ItemAt(2)->SetEnabled(false);
 	}
 
 	if (node->kind == kCortexNodeDevice && graph != NULL) {
@@ -1402,6 +1427,44 @@ CortexWindow::_OpenControlPanel(int32 nodeIndex)
 }
 
 
+status_t
+CortexWindow::_PluginUiCommand(BMediaClient* client, int32 command, void* arg)
+{
+	if (client == NULL)
+		return B_BAD_VALUE;
+
+	for (int32 i = 0; i < fAddOns.CountItems(); i++) {
+		CortexAddOn* addOn = fAddOns.ItemAt(i);
+		if (addOn->uiCommand == NULL)
+			continue;
+		status_t status = addOn->uiCommand((BMediaUnit*)client, command,
+			arg);
+		if (status != B_NOT_SUPPORTED)
+			return status;
+	}
+	return B_NOT_SUPPORTED;
+}
+
+
+void
+CortexWindow::_OpenPluginUI(int32 nodeIndex)
+{
+	if (fModel == NULL)
+		return;
+	CortexNode* node = fModel->NodeAt(nodeIndex);
+	if (node == NULL || node->ownClient == NULL) {
+		_ReportStatus("plugin UI", B_BAD_VALUE);
+		return;
+	}
+
+	// The parent XID comes from the X display once one exists; until
+	// then the plugin's UI owns its window outright.
+	status_t status = _PluginUiCommand(node->ownClient, kMediaPluginUIOpen,
+		(void*)(uintptr_t)0);
+	_ReportStatus("plugin UI", status);
+}
+
+
 void
 CortexWindow::_OpenVolume(media_client_id id, bool isStream,
 	const BString& title, float value)
@@ -1925,7 +1988,8 @@ CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
 	for (int32 i = 0; i < fAddOns.CountItems(); i++) {
 		CortexAddOn* addOn = fAddOns.ItemAt(i);
 		for (int32 u = 0; u < addOn->count; u++) {
-			if (!separated) {
+			const BString& group = *addOn->groups.ItemAt(u);
+			if (!separated && group.Length() == 0) {
 				if (menu->CountItems() > 0)
 					menu->AddSeparatorItem();
 				separated = true;
@@ -1941,7 +2005,18 @@ CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
 			BMenuItem* item = new BMenuItem(addOn->names.ItemAt(u)->String(),
 				message);
 			item->SetTarget(this);
-			menu->AddItem(item);
+			if (group.Length() == 0) {
+				menu->AddItem(item);
+				continue;
+			}
+
+			BMenuItem* groupItem = menu->FindItem(group.String());
+			BMenu* groupMenu = groupItem != NULL ? groupItem->Submenu() : NULL;
+			if (groupMenu == NULL) {
+				groupMenu = new BMenu(group.String());
+				menu->AddItem(groupMenu);
+			}
+			groupMenu->AddItem(item);
 		}
 	}
 
@@ -2004,8 +2079,13 @@ CortexWindow::_ScanAddOns()
 
 			int32 (*countFn)() = NULL;
 			const char* (*nameFn)(int32) = NULL;
+			const char* (*groupFn)(int32) = NULL;
+			get_image_symbol(image, MEDIA_UNIT_GROUP_SYMBOL,
+				B_SYMBOL_TYPE_TEXT, (void**)&groupFn);
 			get_image_symbol(image, MEDIA_PLUGIN_LOAD_FILE_SYMBOL,
 				B_SYMBOL_TYPE_TEXT, (void**)&addOn->loadFile);
+			get_image_symbol(image, MEDIA_PLUGIN_UI_COMMAND_SYMBOL,
+				B_SYMBOL_TYPE_TEXT, (void**)&addOn->uiCommand);
 			if (get_image_symbol(image, MEDIA_UNIT_COUNT_SYMBOL,
 					B_SYMBOL_TYPE_TEXT, (void**)&countFn) == B_OK
 				&& get_image_symbol(image, MEDIA_UNIT_NAME_SYMBOL,
@@ -2017,6 +2097,9 @@ CortexWindow::_ScanAddOns()
 					const char* name = nameFn(u);
 					addOn->names.AddItem(new BString(
 						name != NULL ? name : path.Leaf()));
+					const char* group = groupFn != NULL ? groupFn(u) : NULL;
+					addOn->groups.AddItem(new BString(
+						group != NULL ? group : ""));
 				}
 				addOn->count = addOn->names.CountItems();
 			}

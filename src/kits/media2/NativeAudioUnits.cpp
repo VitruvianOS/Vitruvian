@@ -292,11 +292,11 @@ BCompressorUnit::BCompressorUnit()
 	BNativeAudioUnit("Compressor"),
 	fEnvelope(0.0f)
 {
-	AddParameter("Threshold", -60.0f, 0.0f, -18.0f);
+	AddParameter("Threshold", -60.0f, 0.0f, -18.0f, B_COMPRESSION, "dB");
 	AddParameter("Ratio", 1.0f, 20.0f, 4.0f);
-	AddParameter("Attack", 1.0f, 200.0f, 10.0f);
-	AddParameter("Release", 10.0f, 1000.0f, 100.0f);
-	AddParameter("Makeup", 0.0f, 24.0f, 0.0f);
+	AddParameter("Attack", 1.0f, 200.0f, 10.0f, B_GENERIC, "ms");
+	AddParameter("Release", 10.0f, 1000.0f, 100.0f, B_GENERIC, "ms");
+	AddParameter("Makeup", 0.0f, 24.0f, 0.0f, B_GENERIC, "dB");
 }
 
 

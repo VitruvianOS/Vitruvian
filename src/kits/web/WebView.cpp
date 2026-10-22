@@ -350,6 +350,7 @@ sync_view_size(const BView* view, Impl* impl)
 #endif
 
 
+#ifdef HAS_WPE
 // True when the target took the message and will report back through
 // NotifyFullScreen() once its window resized.
 static bool
@@ -362,6 +363,7 @@ send_fullscreen(const BMessenger& target, bool entered)
 	msg.AddBool(B_WEB_FULLSCREEN_FIELD, entered);
 	return target.SendMessage(&msg) == B_OK;
 }
+#endif
 
 
 BWebView::BWebView(BRect frame, const char* name)

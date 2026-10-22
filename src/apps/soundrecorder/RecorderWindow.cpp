@@ -1081,9 +1081,18 @@ RecorderWindow::Save(BMessage * message)
 
 	// Update the save panel and show it.
 	char automatic[B_FILE_NAME_LENGTH];
-	_AutoName(automatic, sizeof(automatic));
-	snprintf(automatic, sizeof(automatic), "%s.%s", automatic,
+	char automaticBase[B_FILE_NAME_LENGTH];
+	_AutoName(automaticBase, sizeof(automaticBase));
+	// A long base name truncates the extension; the save panel copes.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+	snprintf(automatic, sizeof(automatic), "%s.%s", automaticBase,
 		_ExtensionForEncoding(fEncoding));
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 	BMessage saveMsg(B_SAVE_REQUESTED);
 	entry_ref ref;
 	pItem->Entry().GetRef(&ref);
@@ -2238,9 +2247,18 @@ RecorderWindow::_ExportSelected()
 	}
 
 	char name[B_FILE_NAME_LENGTH];
-	_AutoName(name, sizeof(name));
-	snprintf(name, sizeof(name), "%s.%s", name,
+	char nameBase[B_FILE_NAME_LENGTH];
+	_AutoName(nameBase, sizeof(nameBase));
+	// A long base name truncates the extension; the file name still fits.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+	snprintf(name, sizeof(name), "%s.%s", nameBase,
 		_ExtensionForEncoding(fEncoding));
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 	status_t err = _ReEncode(item, dir, name);
 	if (err < B_OK) {
@@ -2291,7 +2309,7 @@ RecorderWindow::_ReEncode(SoundListItem* item, const BDirectory& dir,
 
 	// Create the destination file first so it can be referenced.
 	BFile created;
-	if (dir.CreateFile(name, &created) != B_OK)
+	if (const_cast<BDirectory&>(dir).CreateFile(name, &created) != B_OK)
 		return B_ERROR;
 	created.Unset();
 	entry_ref outRef;

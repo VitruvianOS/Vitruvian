@@ -50,6 +50,7 @@ public:
 			void				SetValues(const std::vector<float>& values);
 
 	virtual	void				Draw();
+			using					BView::Draw;
 
 private:
 			std::vector<BString>	fNames;
@@ -141,6 +142,7 @@ public:
 			void				SetStates(const std::vector<char>& states);
 
 	virtual	void				Draw();
+			using					BView::Draw;
 	virtual	void				FrameResized(float newWidth, float newHeight);
 
 private:

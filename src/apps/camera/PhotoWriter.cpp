@@ -242,7 +242,7 @@ PhotoWriter::BuildExif(const char* cameraName, const char* dateTime,
 	io.Write(cameraName, modelLength);
 	char dateBuffer[20];
 	memset(dateBuffer, 0, sizeof(dateBuffer));
-	strncpy(dateBuffer, dateTime, 19);
+	memcpy(dateBuffer, dateTime, 19);
 	io.Write(dateBuffer, dateLength);
 
 	outExif->Write(io.Buffer(), io.BufferLength());

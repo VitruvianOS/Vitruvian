@@ -473,7 +473,7 @@ public:
 			return B_OK;
 
 		const int32 count = (int32)fTracks.size();
-		int32 codecIds[2];
+		int32 codecIds[2] = { 0, 0 };
 		GstCaps* caps[2] = { NULL, NULL };
 		GstElement* appSrcs[2] = { NULL, NULL };
 		for (int32 i = 0; i < count; i++) {

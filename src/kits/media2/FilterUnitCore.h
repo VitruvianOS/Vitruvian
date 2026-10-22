@@ -44,7 +44,7 @@ public:
 			int32				CountParameters() const;
 			status_t			GetParameterInfo(int32 index,
 									BString* outName, float* outMin,
-									float* outMax, float* outValue);
+									float* outMax, float* outValue) const;
 			status_t			SetParameterValue(int32 index, float value);
 			float				ParameterValue(int32 index) const;
 

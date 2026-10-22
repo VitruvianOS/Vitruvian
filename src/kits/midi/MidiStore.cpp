@@ -598,7 +598,6 @@ BMidiStore::ReadTrack()
 			// status is actually data1.
 			uint8 data1 = status;
 			uint8 data2 = 0;
-			uchar channel = runningStatus & 0x0f;
 			uchar kind = runningStatus & 0xf0;
 			uint32 length = 1;
 			if (kind != 0xC0 && kind != 0xD0)
@@ -619,7 +618,6 @@ BMidiStore::ReadTrack()
 			continue;
 		}
 
-		uchar channel = status & 0x0f;
 		uchar kind = status & 0xf0;
 		uint8 data1 = 0;
 		uint8 data2 = 0;

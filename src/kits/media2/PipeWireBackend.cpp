@@ -3480,7 +3480,7 @@ PipeWireBackend::_PodFromValue(const NodePropValue& value,
 {
 	if (buffer == NULL || bufferSize < 64)
 		return NULL;
-	spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, bufferSize);
+	spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, (uint32)bufferSize);
 	const struct spa_pod* pod = NULL;
 	switch (value.valueType) {
 		case SPA_TYPE_Float:

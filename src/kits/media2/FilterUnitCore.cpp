@@ -589,7 +589,7 @@ FilterUnitCore::CountParameters() const
 
 status_t
 FilterUnitCore::GetParameterInfo(int32 index, BString* outName,
-	float* outMin, float* outMax, float* outValue)
+	float* outMin, float* outMax, float* outValue) const
 {
 	if (fImpl == NULL || index < 0 || index >= (int32)fImpl->params.size())
 		return B_BAD_VALUE;

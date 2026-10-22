@@ -2044,6 +2044,8 @@ BWebView::NotifyFullScreen(bool entered)
 void
 BWebView::SetDefaultProfileDir(const char*) {}
 void
+BWebView::SetDownloadTarget(const BMessenger&) {}
+void
 BWebView::SetSession(const char*, bool) {}
 void
 BWebView::ClearDefaultProfileData() {}

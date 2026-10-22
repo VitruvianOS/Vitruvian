@@ -19,6 +19,9 @@
 #include <media2/MediaNode.h>
 
 
+class BControllable;
+
+
 enum camera_location {
 	B_CAMERA_LOCATION_UNKNOWN  = 0,
 	B_CAMERA_LOCATION_FRONT    = 1,
@@ -104,7 +107,8 @@ public:
 			status_t			ControlSupported(int32 id) const;
 
 			// Built with MakeContinuousParameter; preflet reads values via
-			// GetControl and writes via SetControl.
+			// GetControl and writes via SetControl. The same web backs the
+			// controllable behind the Control panel.
 			void*				ParameterWebHandle() const { return fParameterWeb; }
 
 private:
@@ -119,6 +123,9 @@ private:
 			bigtime_t			fDiagLast = 0;
 			void				_SeedOutputFormat();
 			void				_BuildParameterWeb();
+	static	void				_ControlChangeHook(int32 id, bigtime_t when,
+									const void* value, size_t size,
+									void* cookie);
 			void				_SaveControls();
 			void				_OnCaptureFrame(void* data, size_t size,
 									const media_raw_video_format& format);
@@ -172,6 +179,7 @@ private:
 			void*				fCaptureStream;
 			void*				fCaptureLink;
 			void*				fParameterWeb;
+			BControllable*		fControllable;
 			// Private MJPEG decode state; NULL while a raw mode is negotiated.
 			void*				fMjpeg;
 };

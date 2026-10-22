@@ -54,11 +54,15 @@ extern const char* const B_SIMPLE_TRANSPORT;
 extern const char* const B_INPUT_MUX;
 extern const char* const B_ENABLE;
 extern const char* const B_MUTE;
+extern const char* const B_SWITCH;
 
 
 
 enum {
-	B_HIDDEN_PARAMETER = 0x01
+	B_HIDDEN_PARAMETER = 0x01,
+	// Continuous value is mapped on a log scale by the theme; the stored
+	// value stays in the parameter's natural range.
+	B_LOGARITHMIC_PARAMETER = 0x02
 };
 
 

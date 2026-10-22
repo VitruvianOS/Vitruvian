@@ -6,6 +6,7 @@
 
 #include <private/media/DefaultMediaTheme.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -504,6 +505,35 @@ MessageFilter::FilterFor(BView *view, BParameter &parameter)
 //	#pragma mark -
 
 
+// Logarithmic sliders track position on a log scale; the stored value stays
+// in the parameter's natural range.
+static float
+_ValueForPosition(BContinuousParameter& parameter, float position)
+{
+	const float min = parameter.MinValue();
+	const float max = parameter.MaxValue();
+	if ((parameter.Flags() & B_LOGARITHMIC_PARAMETER) != 0
+		&& min > 0.0f && max > min) {
+		const float t = position / 1000.0f;
+		return min * powf(max / min, t);
+	}
+	return position / 1000.0f;
+}
+
+
+static float
+_PositionForValue(BContinuousParameter& parameter, float value)
+{
+	const float min = parameter.MinValue();
+	const float max = parameter.MaxValue();
+	if ((parameter.Flags() & B_LOGARITHMIC_PARAMETER) != 0
+		&& min > 0.0f && max > min && value > 0.0f) {
+		return 1000.0f * logf(value / min) / logf(max / min);
+	}
+	return 1000.0f * value;
+}
+
+
 ContinuousMessageFilter::ContinuousMessageFilter(BControl *control,
 		BContinuousParameter &parameter)
 	: MessageFilter(),
@@ -536,7 +566,8 @@ ContinuousMessageFilter::Filter(BMessage *message, BHandler **target)
 		float value[fParameter.CountChannels()];
 
 		if (BSlider *slider = dynamic_cast<BSlider *>(fControl)) {
-			value[0] = (float)(slider->Value() / 1000.0);
+			value[0] = _ValueForPosition(fParameter,
+				(float)slider->Value());
 		} else if (BChannelSlider *slider
 				= dynamic_cast<BChannelSlider *>(fControl)) {
 			for (int32 i = 0; i < fParameter.CountChannels(); i++)
@@ -570,7 +601,7 @@ ContinuousMessageFilter::_UpdateControl()
 		return;
 
 	if (BSlider *slider = dynamic_cast<BSlider *>(fControl)) {
-		slider->SetValue((int32) (1000 * value[0]));
+		slider->SetValue((int32)_PositionForValue(fParameter, value[0]));
 		slider->SetModificationMessage(new BMessage(kMsgParameterChanged));
 	} else if (BChannelSlider *slider
 			= dynamic_cast<BChannelSlider *>(fControl)) {
@@ -887,6 +918,7 @@ DefaultMediaTheme::MakeViewFor(BParameter *parameter)
 
 			if (!strcmp(discrete.Kind(), B_ENABLE)
 				|| !strcmp(discrete.Kind(), B_MUTE)
+				|| !strcmp(discrete.Kind(), B_SWITCH)
 				|| discrete.CountItems() == 0) {
 				return new CheckBox(discrete.Name(), discrete.Name(), discrete);
 			} else {
@@ -932,9 +964,35 @@ DefaultMediaTheme::MakeViewFor(BParameter *parameter)
 				return slider;
 			}
 
+			BString label(parameter->Name());
+			if (continuous.Unit()[0] != '\0')
+				label << " (" << continuous.Unit() << ")";
+
+			// Logarithmic sliders track position 0..1000; linear ones keep
+			// the value scaled by 1000.
+			const bool logarithmic = (continuous.Flags()
+				& B_LOGARITHMIC_PARAMETER) != 0
+				&& continuous.MinValue() > 0.0f
+				&& continuous.MaxValue() > continuous.MinValue();
+			const int32 sliderMin = logarithmic
+				? 0 : int32(continuous.MinValue() * 1000);
+			const int32 sliderMax = logarithmic
+				? 1000 : int32(continuous.MaxValue() * 1000);
+
 			BSlider *slider = new Slider(parameter->Name(),
-				parameter->Name(), int32(continuous.MinValue() * 1000),
-				int32(continuous.MaxValue() * 1000), continuous);
+				label.String(), sliderMin, sliderMax, continuous);
+
+			BString minLabel, maxLabel;
+			if (continuous.Unit()[0] != '\0') {
+				minLabel.SetToFormat("%g %s", continuous.MinValue(),
+					continuous.Unit());
+				maxLabel.SetToFormat("%g %s", continuous.MaxValue(),
+					continuous.Unit());
+			} else {
+				minLabel.SetToFormat("%g", continuous.MinValue());
+				maxLabel.SetToFormat("%g", continuous.MaxValue());
+			}
+			slider->SetLimitLabels(minLabel.String(), maxLabel.String());
 
 			return slider;
 		}

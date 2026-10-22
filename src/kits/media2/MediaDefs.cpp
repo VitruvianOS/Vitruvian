@@ -25,6 +25,7 @@ extern const char* const B_GENERIC             = "B_GENERIC";
 extern const char* const B_INPUT_MUX           = "B_INPUT_MUX";
 extern const char* const B_ENABLE              = "B_ENABLE";
 extern const char* const B_MUTE                = "B_MUTE";
+extern const char* const B_SWITCH              = "B_SWITCH";
 extern const char* const B_LEVEL               = "B_LEVEL";
 extern const char* const B_SHUTTLE_SPEED       = "B_SHUTTLE_SPEED";
 extern const char* const B_CROSSFADE           = "B_CROSSFADE";

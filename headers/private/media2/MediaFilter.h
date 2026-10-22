@@ -17,6 +17,9 @@
 #include <media2/MediaUnit.h>
 
 
+class BControllable;
+
+
 class BMediaFilter : public BMediaUnit {
 public:
 								// type: B_MEDIA_RAW_AUDIO or
@@ -56,11 +59,16 @@ private:
 									size_t size, const BMediaFormat& format);
 	static	void				_CpuThunk(void* buffer, size_t size,
 									void* cookie);
+	static	void				_ChangeHook(int32 id, bigtime_t when,
+									const void* value, size_t size,
+									void* cookie);
+			void				_BuildWeb();
 
 			media_type			fType;
 			void*				fCore;			// FilterUnitCore*
 			_Input*				fInput;
 			BMediaOutput*		fOutput;
+			BControllable*		fControllable;
 			BMediaFormat		fLastFormat;
 };
 

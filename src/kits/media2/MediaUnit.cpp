@@ -322,99 +322,23 @@ BMediaUnit::_BuildFilter()
 	if (filter == NULL)
 		return B_ERROR;
 
+	// Published before the ports are added: _CreatePortFor() and any
+	// early state change look here; the error path clears it again.
+	fImpl->filter = filter;
+
 	backend->Lock();
 	pw_filter_add_listener(filter, &fImpl->listener, &fImpl->kFilterEvents,
 		fImpl);
 	backend->Unlock();
 
 	for (int32 i = 0; i < nOut; i++) {
-		BMediaOutput* output = OutputAt(i);
-		if (output == NULL)
-			continue;
-
-		port_data* pd = new(std::nothrow) port_data();
-		if (pd == NULL)
+		if (_CreatePortFor(OutputAt(i)) != B_OK)
 			goto error;
-		pd->connection = output;
-		pd->direction  = PW_DIRECTION_OUTPUT;
-
-		const char* formatDSP = NULL;
-		if (output->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO))
-			formatDSP = "32 bit float mono audio";
-		else if (output->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI))
-			formatDSP = "8 bit raw midi";
-
-		if (formatDSP == NULL)
-			formatDSP = "32 bit float mono audio";
-
-		pw_properties* portProps = pw_properties_new(
-			PW_KEY_FORMAT_DSP, formatDSP,
-			PW_KEY_PORT_NAME, output->Name(),
-			PW_KEY_PORT_GROUP, Name(),
-			NULL);
-
-		backend->Lock();
-		void* port = pw_filter_add_port(filter,
-			PW_DIRECTION_OUTPUT,
-			PW_FILTER_PORT_FLAG_MAP_BUFFERS,
-			sizeof(port_data),
-			portProps,
-			NULL,
-			0);
-		backend->Unlock();
-
-		if (port == NULL) {
-			delete pd;
-			goto error;
-		}
-
-		memcpy(port, pd, sizeof(port_data));
-		output->_SetFilterPort(port);
 	}
 
 	for (int32 i = 0; i < nIn; i++) {
-		BMediaInput* input = InputAt(i);
-		if (input == NULL)
-			continue;
-
-		port_data* pd = new(std::nothrow) port_data();
-		if (pd == NULL)
+		if (_CreatePortFor(InputAt(i)) != B_OK)
 			goto error;
-		pd->connection = input;
-		pd->direction  = PW_DIRECTION_INPUT;
-
-		const char* formatDSP = NULL;
-		if (input->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO))
-			formatDSP = "32 bit float mono audio";
-		else if (input->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI))
-			formatDSP = "8 bit raw midi";
-
-		if (formatDSP == NULL)
-			formatDSP = "32 bit float mono audio";
-
-		pw_properties* portProps = pw_properties_new(
-			PW_KEY_FORMAT_DSP, formatDSP,
-			PW_KEY_PORT_NAME, input->Name(),
-			PW_KEY_PORT_GROUP, Name(),
-			NULL);
-
-		backend->Lock();
-		void* port = pw_filter_add_port(filter,
-			PW_DIRECTION_INPUT,
-			PW_FILTER_PORT_FLAG_MAP_BUFFERS,
-			sizeof(port_data),
-			portProps,
-			NULL,
-			0);
-		backend->Unlock();
-
-		if (port == NULL) {
-			delete pd;
-			goto error;
-		}
-
-		memcpy(port, pd, sizeof(port_data));
-		input->_SetFilterPort(port);
 	}
 
 	backend->Lock();
@@ -427,7 +351,6 @@ BMediaUnit::_BuildFilter()
 	if (r < 0)
 		goto error;
 
-	fImpl->filter = filter;
 	return B_OK;
 
 error:
@@ -444,9 +367,100 @@ error:
 	}
 	if (filter != NULL)
 		pw_filter_destroy(filter);
+	fImpl->filter = NULL;
 	backend->Unlock();
 
 	return B_ERROR;
+}
+
+
+status_t
+BMediaUnit::_CreatePortFor(BMediaConnection* connection)
+{
+	if (connection == NULL || fImpl == NULL || fImpl->filter == NULL)
+		return B_BAD_VALUE;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	const uint32 direction = dynamic_cast<BMediaOutput*>(connection) != NULL
+		? PW_DIRECTION_OUTPUT : PW_DIRECTION_INPUT;
+	const enum pw_direction pwDirection
+		= direction == PW_DIRECTION_OUTPUT
+			? PW_DIRECTION_OUTPUT : PW_DIRECTION_INPUT;
+
+	port_data pd;
+	pd.connection = connection;
+	pd.direction = direction;
+
+	const char* formatDSP = NULL;
+	if (connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO))
+		formatDSP = "32 bit float mono audio";
+	else if (connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI))
+		formatDSP = "8 bit raw midi";
+
+	if (formatDSP == NULL)
+		formatDSP = "32 bit float mono audio";
+
+	pw_properties* portProps = pw_properties_new(
+		PW_KEY_FORMAT_DSP, formatDSP,
+		PW_KEY_PORT_NAME, connection->Name(),
+		PW_KEY_PORT_GROUP, Name(),
+		NULL);
+
+	backend->Lock();
+	void* port = pw_filter_add_port(fImpl->filter,
+		pwDirection,
+		PW_FILTER_PORT_FLAG_MAP_BUFFERS,
+		sizeof(port_data),
+		portProps,
+		NULL,
+		0);
+	backend->Unlock();
+
+	if (port == NULL)
+		return B_ERROR;
+
+	memcpy(port, &pd, sizeof(port_data));
+	connection->_SetFilterPort(port);
+	return B_OK;
+}
+
+
+status_t
+BMediaUnit::_AddLivePort(BMediaConnection* connection)
+{
+	if (connection == NULL)
+		return B_BAD_VALUE;
+	if (connection->_GetFilterPort() != NULL)
+		return B_OK;
+	// No filter yet (detached or stopped): there is no port to add.
+	if (fImpl == NULL || fImpl->filter == NULL)
+		return B_OK;
+	return _CreatePortFor(connection);
+}
+
+
+status_t
+BMediaUnit::_RemoveLivePort(BMediaConnection* connection)
+{
+	if (connection == NULL)
+		return B_BAD_VALUE;
+
+	void* port = connection->_GetFilterPort();
+	if (port == NULL || fImpl == NULL || fImpl->filter == NULL)
+		return B_OK;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_ERROR;
+
+	backend->Lock();
+	connection->_SetFilterPort(NULL);
+	pw_filter_remove_port(port);
+	backend->Unlock();
+	return B_OK;
 }
 
 

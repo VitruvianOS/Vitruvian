@@ -190,6 +190,7 @@ BCameraSource::BCameraSource(const char* name)
 	fCaptureStream(NULL),
 	fCaptureLink(NULL),
 	fParameterWeb(NULL),
+	fControllable(NULL),
 	fMjpeg(NULL)
 {
 	memset(&fLastFormat, 0, sizeof(fLastFormat));
@@ -233,6 +234,8 @@ BCameraSource::~BCameraSource()
 	if (CountOutputs() > 0)
 		UnregisterOutput(OutputAt(0));
 
+	delete fControllable;
+	fControllable = NULL;
 	delete (BParameterWeb*)fParameterWeb;
 	fParameterWeb = NULL;
 
@@ -382,8 +385,7 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 	// See which controls the device exposes; stored values still win.
 	_QueryDeviceControls();
 	_AdoptDeviceValues();
-	delete (BParameterWeb*)fParameterWeb;
-	fParameterWeb = NULL;
+	// The controllable owns the old web and swaps in the new one.
 	_BuildParameterWeb();
 	return B_OK;
 }
@@ -937,11 +939,12 @@ BCameraSource::_BuildParameterWeb()
 	BParameterWeb* web = new(std::nothrow) BParameterWeb();
 	if (web == NULL)
 		return;
-	fParameterWeb = web;
 
 	BParameterGroup* group = web->MakeGroup("Camera");
-	if (group == NULL)
+	if (group == NULL) {
+		delete web;
 		return;
+	}
 
 	// Skip device controls the hardware does not expose.
 	auto supported = [this](int32 id) {
@@ -979,6 +982,29 @@ BCameraSource::_BuildParameterWeb()
 			0.0f, 60.0f, 50.0f);
 	group->MakeContinuousParameter(B_CAMERA_PARAM_MIRROR, B_MEDIA_RAW_VIDEO,
 		"Mirror", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
+
+	// Same web behind the Control panel; the hook feeds SetControl().
+	if (fControllable == NULL)
+		fControllable = new(std::nothrow) BControllable();
+	if (fControllable == NULL) {
+		delete web;
+		return;
+	}
+	fParameterWeb = web;
+	fControllable->SetChangeHook(&BCameraSource::_ControlChangeHook, this);
+	fControllable->SetParameterWeb(web);
+	SetControllable(fControllable);
+}
+
+
+/* static */ void
+BCameraSource::_ControlChangeHook(int32 id, bigtime_t /*when*/,
+	const void* value, size_t size, void* cookie)
+{
+	BCameraSource* self = (BCameraSource*)cookie;
+	if (self == NULL || value == NULL || size < sizeof(float))
+		return;
+	self->SetControl(id, *(const float*)value);
 }
 
 

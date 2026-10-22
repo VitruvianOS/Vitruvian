@@ -291,6 +291,13 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 
 	_ReleaseReservedEdge(outNodeId, inNodeId);
 
+	if (result == B_OK) {
+		if (outClient != NULL)
+			outClient->HandleLink(output, input);
+		if (inClient != NULL)
+			inClient->HandleLink(input, output);
+	}
+
 	return result;
 }
 
@@ -329,6 +336,13 @@ BMediaGraph::Disconnect(BMediaOutput* output, BMediaInput* input)
 		}
 	}
 	backend->Unlock();
+
+	if (any) {
+		if (outClient != NULL)
+			outClient->HandleUnlink(output, input);
+		if (inClient != NULL)
+			inClient->HandleUnlink(input, output);
+	}
 
 	return any ? B_OK : B_ENTRY_NOT_FOUND;
 }
@@ -406,6 +420,10 @@ BMediaGraph::_ConnectInProcess(BMediaOutput* output, BMediaInput* input)
 		inUnit->_DetachedLink(input, true);
 	output->Connected(format);
 	input->Connected(format);
+	if (output->Client() != NULL)
+		output->Client()->HandleLink(output, input);
+	if (input->Client() != NULL)
+		input->Client()->HandleLink(input, output);
 	return B_OK;
 }
 
@@ -438,6 +456,10 @@ BMediaGraph::_DisconnectInProcess(BMediaOutput* output, BMediaInput* input)
 		inUnit->_DetachedLink(input, false);
 	output->Disconnected();
 	input->Disconnected();
+	if (output->Client() != NULL)
+		output->Client()->HandleUnlink(output, input);
+	if (input->Client() != NULL)
+		input->Client()->HandleUnlink(input, output);
 	return B_OK;
 }
 
@@ -1463,6 +1485,8 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 	// A foreign link connects our endpoint as a binding would.
 	if (result == B_OK && !output->IsConnected())
 		output->Connected(output->AcceptedFormat());
+	if (result == B_OK && output->Client() != NULL)
+		output->Client()->HandleLink(output, NULL);
 
 	return result;
 }
@@ -1683,6 +1707,8 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 	// A foreign link connects our endpoint as a binding would.
 	if (result == B_OK && !input->IsConnected())
 		input->Connected(input->AcceptedFormat());
+	if (result == B_OK && input->Client() != NULL)
+		input->Client()->HandleLink(input, NULL);
 
 	return result;
 }
@@ -1718,6 +1744,8 @@ BMediaGraph::Disconnect(BMediaOutput* output, const ForeignPort* foreignPort)
 	if (output->IsConnected() && !output->HasBinding()
 			&& !_HasForeignLink(output))
 		output->Disconnected();
+	if (result == B_OK && output->Client() != NULL)
+		output->Client()->HandleUnlink(output, NULL);
 
 	return result;
 }
@@ -1753,6 +1781,8 @@ BMediaGraph::Disconnect(const ForeignPort* foreignPort, BMediaInput* input)
 	if (input->IsConnected() && !input->HasBinding()
 			&& !_HasForeignLink(input))
 		input->Disconnected();
+	if (result == B_OK && input->Client() != NULL)
+		input->Client()->HandleUnlink(input, NULL);
 
 	return result;
 }

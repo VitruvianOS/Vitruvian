@@ -333,6 +333,8 @@ BMediaClient::Seek(bigtime_t mediaTime, bigtime_t performanceTime)
 void BMediaClient::HandleStart(bigtime_t) {}
 void BMediaClient::HandleStop(bigtime_t)  {}
 void BMediaClient::HandleSeek(bigtime_t, bigtime_t) {}
+void BMediaClient::HandleLink(BMediaConnection*, BMediaConnection*) {}
+void BMediaClient::HandleUnlink(BMediaConnection*, BMediaConnection*) {}
 
 
 status_t

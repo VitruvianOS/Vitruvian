@@ -9,6 +9,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <OS.h>
+
+#include <media2/Controllable.h>
+#include <media2/ParameterWeb.h>
+
 #include "FilterUnitCore.h"
 
 
@@ -47,7 +52,8 @@ BMediaFilter::BMediaFilter(const char* name, const char* description,
 	fType(type),
 	fCore(NULL),
 	fInput(NULL),
-	fOutput(NULL)
+	fOutput(NULL),
+	fControllable(NULL)
 {
 	SetDetachedOnly(true);
 	fInput = new(std::nothrow) _Input(this);
@@ -72,6 +78,8 @@ BMediaFilter::BMediaFilter(const char* name, const char* description,
 	fCore = new(std::nothrow) BPrivate::media::FilterUnitCore(
 		name != NULL ? name : "MediaFilter", description,
 		B_MEDIA_TYPE_BIT(type), &BMediaFilter::_ForwardThunk, this);
+	if (fCore != NULL)
+		_BuildWeb();
 }
 
 
@@ -87,8 +95,69 @@ BMediaFilter::~BMediaFilter()
 		delete fOutput;
 		fOutput = NULL;
 	}
+	delete fControllable;
+	fControllable = NULL;
 	delete (BPrivate::media::FilterUnitCore*)fCore;
 	fCore = NULL;
+}
+
+
+// The GStreamer properties become one control each, so MakeView() and
+// Cortex's Control panel work with no app code.
+void
+BMediaFilter::_BuildWeb()
+{
+	BPrivate::media::FilterUnitCore* core
+		= (BPrivate::media::FilterUnitCore*)fCore;
+	if (core == NULL || core->InitCheck() != B_OK)
+		return;
+
+	BParameterWeb* web = new(std::nothrow) BParameterWeb();
+	if (web == NULL)
+		return;
+
+	BParameterGroup* group = web->MakeGroup(Name());
+	if (group == NULL) {
+		delete web;
+		return;
+	}
+	core->BuildParameterWeb(group);
+
+	fControllable = new(std::nothrow) BControllable();
+	if (fControllable == NULL) {
+		delete web;
+		return;
+	}
+	fControllable->SetParameterWeb(web);
+	fControllable->SetChangeHook(&BMediaFilter::_ChangeHook, this);
+	SetControllable(fControllable);
+
+	// Seed the stored values with what the chain holds now.
+	const int32 count = core->CountParameters();
+	for (int32 i = 0; i < count; i++) {
+		const float value = core->ParameterValue(i);
+		fControllable->SetParameterValue(i, system_time(), &value,
+			sizeof(value));
+	}
+}
+
+
+/* static */ void
+BMediaFilter::_ChangeHook(int32 id, bigtime_t /*when*/, const void* value,
+	size_t size, void* cookie)
+{
+	BMediaFilter* self = (BMediaFilter*)cookie;
+	if (self == NULL || value == NULL || size == 0)
+		return;
+
+	float floatValue = 0.0f;
+	if (size == sizeof(int32))
+		floatValue = (float)*(const int32*)value;
+	else if (size >= sizeof(float))
+		floatValue = *(const float*)value;
+	else
+		return;
+	self->SetParameterValue(id, floatValue);
 }
 
 

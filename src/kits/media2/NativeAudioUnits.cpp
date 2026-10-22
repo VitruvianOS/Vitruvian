@@ -19,7 +19,8 @@ static const uint32 kMaxSampleRate = 192000;
 
 BNativeAudioUnit::BNativeAudioUnit(const char* name)
 	:
-	BMediaUnit(name, B_MEDIA_FILTER),
+	BMediaUnit(name, (media_client_kinds)(B_MEDIA_FILTER
+		| B_MEDIA_CONTROLLABLE)),
 	fInput(NULL),
 	fOutput(NULL),
 	fControllable(NULL),
@@ -69,7 +70,7 @@ BNativeAudioUnit::InitCheck() const
 
 void
 BNativeAudioUnit::AddParameter(const char* name, float minValue,
-	float maxValue, float defaultValue)
+	float maxValue, float defaultValue, const char* kind, const char* unit)
 {
 	if (fParameterCount >= 16)
 		return;
@@ -77,11 +78,16 @@ BNativeAudioUnit::AddParameter(const char* name, float minValue,
 	if (parameter == NULL)
 		return;
 	parameter->name = name;
+	parameter->kind = kind != NULL ? kind : B_GENERIC;
+	parameter->unit = unit != NULL ? unit : "";
 	parameter->minValue = minValue;
 	parameter->maxValue = maxValue;
 	parameter->defaultValue = defaultValue;
 	parameter->value.store(defaultValue);
 	fParameters[fParameterCount++] = parameter;
+
+	// The web is rebuilt so MakeView() always sees every parameter.
+	_BuildWeb();
 }
 
 
@@ -185,7 +191,49 @@ BNativeAudioUnit::_PublishAndBind()
 
 	PublishNodeParams(propIds, names, types, minValues, maxValues, steps,
 		valuePointers, valueSizes, fParameterCount);
-	fControllable->BindNode(nodeId);
+}
+
+
+// The parameters get a local web, so MakeView() and the Control panel
+// work without a server round trip; the change hook feeds the atomics
+// the realtime cycle reads.
+void
+BNativeAudioUnit::_BuildWeb()
+{
+	if (fControllable == NULL)
+		return;
+
+	BParameterWeb* web = new(std::nothrow) BParameterWeb();
+	if (web == NULL)
+		return;
+
+	BParameterGroup* group = web->MakeGroup(Name());
+	if (group == NULL) {
+		delete web;
+		return;
+	}
+
+	for (int32 i = 0; i < fParameterCount; i++) {
+		Parameter* parameter = fParameters[i];
+		BContinuousParameter* continuous
+			= group->MakeContinuousParameter((int32)kPropBase + i,
+				B_MEDIA_RAW_AUDIO, parameter->name.String(),
+				parameter->kind.String(), parameter->unit.String(),
+				parameter->minValue, parameter->maxValue,
+				(parameter->maxValue - parameter->minValue) / 100.0f);
+		if (continuous != NULL && parameter->minValue > 0.0f
+			&& parameter->maxValue / parameter->minValue >= 100.0f) {
+			continuous->SetFlags(B_LOGARITHMIC_PARAMETER);
+		}
+	}
+
+	fControllable->SetParameterWeb(web);
+
+	for (int32 i = 0; i < fParameterCount; i++) {
+		const float value = fParameters[i]->value.load();
+		fControllable->SetParameterValue((int32)kPropBase + i, system_time(),
+			&value, sizeof(value));
+	}
 }
 
 
@@ -223,7 +271,7 @@ BGainUnit::BGainUnit()
 	:
 	BNativeAudioUnit("Gain")
 {
-	AddParameter("Gain", 0.0f, 4.0f, 1.0f);
+	AddParameter("Gain", 0.0f, 4.0f, 1.0f, B_GAIN);
 }
 
 

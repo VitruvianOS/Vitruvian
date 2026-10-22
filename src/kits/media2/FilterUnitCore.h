@@ -13,6 +13,9 @@
 #include <media2/MediaFormat.h>
 
 
+class BParameterGroup;
+
+
 namespace BPrivate { namespace media {
 
 
@@ -44,6 +47,9 @@ public:
 									float* outMax, float* outValue);
 			status_t			SetParameterValue(int32 index, float value);
 			float				ParameterValue(int32 index) const;
+
+			// One control per collected property; ids are the indexes.
+			status_t			BuildParameterWeb(BParameterGroup* group);
 
 private:
 			struct Parameter;

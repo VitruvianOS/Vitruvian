@@ -16,6 +16,7 @@
 #include <String.h>
 
 #include <media2/MediaUnit.h>
+#include <media2/ParameterWeb.h>
 
 
 class BControllable;
@@ -40,7 +41,9 @@ protected:
 								BNativeAudioUnit(const char* name);
 
 			void				AddParameter(const char* name, float minValue,
-									float maxValue, float defaultValue);
+									float maxValue, float defaultValue,
+									const char* kind = B_GENERIC,
+									const char* unit = "");
 
 	// Called per cycle; in and out may alias.
 	virtual	void				Process(const float* in, float* out,
@@ -48,9 +51,11 @@ protected:
 
 	virtual	void				ProcessCycle(uint32 frameCount) override;
 
-private:
+	private:
 	struct Parameter {
 		BString					name;
+		BString					kind;
+		BString					unit;
 		float					minValue;
 		float					maxValue;
 		float					defaultValue;
@@ -61,6 +66,7 @@ private:
 									const void* value, size_t size,
 									void* cookie);
 			void				_PublishAndBind();
+			void				_BuildWeb();
 
 			BMediaInput*		fInput;
 			BMediaOutput*		fOutput;

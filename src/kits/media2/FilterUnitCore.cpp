@@ -5,8 +5,10 @@
 
 #include "FilterUnitCore.h"
 
+#include <dlfcn.h>
 #include <new>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <vector>
 
@@ -15,18 +17,81 @@
 #include <gst/app/gstappsink.h>
 
 #include <media2/MediaDefs.h>
+#include <media2/ParameterWeb.h>
+
+
+// Minimal LADSPA ABI declarations; ladspa.h is not a build dependency and
+// this interface has been frozen since 1.0.
+typedef float LADSPA_Data;
+typedef int LADSPA_PortDescriptor;
+typedef int LADSPA_PortHintDescriptor;
+
+enum {
+	LADSPA_PORT_INPUT		= 0x1,
+	LADSPA_PORT_CONTROL		= 0x4
+};
+
+enum {
+	LADSPA_HINT_BOUNDED_BELOW	= 0x1,
+	LADSPA_HINT_BOUNDED_ABOVE	= 0x2,
+	LADSPA_HINT_TOGGLED		= 0x10,
+	LADSPA_HINT_SAMPLE_RATE		= 0x20,
+	LADSPA_HINT_LOGARITHMIC		= 0x40,
+	LADSPA_HINT_INTEGER		= 0x100
+};
+
+struct LADSPA_PortRangeHint {
+	LADSPA_PortDescriptor		PortDescriptor;
+	LADSPA_PortHintDescriptor	HintDescriptor;
+	LADSPA_Data			LowerBound;
+	LADSPA_Data			UpperBound;
+};
+
+struct LADSPA_Descriptor {
+	unsigned long			UniqueID;
+	const char*			Label;
+	unsigned long			Properties;
+	const char*			Name;
+	const char*			Maker;
+	const char*			Copyright;
+	unsigned long			PortCount;
+	const LADSPA_PortRangeHint*	PortRangeHints;
+	const char* const*		PortNames;
+	void*				ImplementationData;
+	void				(*instantiate)(const struct LADSPA_Descriptor*, unsigned long);
+	void				(*connect_port)(void*, unsigned long, LADSPA_Data*);
+	void				(*activate)(void*);
+	void				(*run)(void*, unsigned long);
+	void				(*run_adding)(void*, unsigned long);
+	void				(*set_run_adding_gain)(void*, LADSPA_Data);
+	void				(*deactivate)(void*);
+	void				(*cleanup)(void*);
+};
+
+typedef const LADSPA_Descriptor* (*LADSPA_Descriptor_Function)(unsigned long);
 
 
 namespace BPrivate { namespace media {
 
 
 struct FilterUnitCore::Parameter {
+	enum Kind {
+		kFloatValue,
+		kIntegerValue,
+		kBooleanValue,
+		kEnumerationValue
+	};
+
 	BString		name;
+	BString		unit;
 	GObject*	object;
 	BString		property;
+	Kind		kind;
 	float		min;
 	float		max;
-	bool		isInteger;
+	bool		logarithmic;
+	// Enum value to nick name; empty for the other kinds.
+	std::vector<std::pair<int, BString> > items;
 };
 
 
@@ -46,7 +111,42 @@ struct FilterUnitCore::Impl {
 	std::vector<Parameter>	params;
 
 			void				CollectParameters(GstElement* element);
+			void				ApplyLadspaHints(GstElement* element,
+									size_t first);
 };
+
+
+// "Gain (dB)" becomes name "Gain" with unit "dB".
+static void
+_SplitUnitSuffix(BString& name, BString& unit)
+{
+	int32 open = name.FindLast("(");
+	if (open == B_ERROR || !name.EndsWith(")"))
+		return;
+	BString suffix = name.String() + open + 1;
+	suffix.Truncate(suffix.Length() - 1);
+	suffix.Trim();
+	if (suffix.Length() == 0 || suffix.Length() > 8)
+		return;
+	unit = suffix;
+	name.Truncate(open);
+	name.Trim();
+}
+
+
+static bool
+_NamesMatch(const BString& a, const BString& b)
+{
+	BString left(a);
+	BString right(b);
+	left.ToLower();
+	right.ToLower();
+	left.ReplaceAll(" ", "");
+	right.ReplaceAll(" ", "");
+	left.ReplaceAll("_", "");
+	right.ReplaceAll("_", "");
+	return left == right;
+}
 
 
 static bool
@@ -69,9 +169,89 @@ _IsHelperElement(GstElement* element)
 }
 
 
+// Applies LADSPA port hints to the parameters collected from one element.
+// GStreamer drops the hints; the descriptor still carries them.
+void
+FilterUnitCore::Impl::ApplyLadspaHints(GstElement* element, size_t first)
+{
+	GstElementFactory* factory = gst_element_get_factory(element);
+	const char* factoryName = factory != NULL
+		? gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)) : NULL;
+	if (factoryName == NULL || !g_str_has_prefix(factoryName, "ladspa-"))
+		return;
+
+	gchar* pluginPath = NULL;
+	gchar* label = NULL;
+	g_object_get(element, "plugin", &pluginPath, "label", &label, NULL);
+	if (pluginPath == NULL || label == NULL) {
+		g_free(pluginPath);
+		g_free(label);
+		return;
+	}
+
+	void* library = dlopen(pluginPath, RTLD_NOW | RTLD_LOCAL);
+	if (library == NULL) {
+		g_free(pluginPath);
+		g_free(label);
+		return;
+	}
+
+	LADSPA_Descriptor_Function descriptorFunction
+		= (LADSPA_Descriptor_Function)dlsym(library, "ladspa_descriptor");
+	if (descriptorFunction == NULL) {
+		dlclose(library);
+		g_free(pluginPath);
+		g_free(label);
+		return;
+	}
+
+	const LADSPA_Descriptor* descriptor = NULL;
+	for (unsigned long i = 0; ; i++) {
+		const LADSPA_Descriptor* candidate = descriptorFunction(i);
+		if (candidate == NULL)
+			break;
+		if (candidate->Label != NULL && strcmp(candidate->Label, label) == 0) {
+			descriptor = candidate;
+			break;
+		}
+	}
+
+	if (descriptor != NULL && descriptor->PortNames != NULL) {
+		for (size_t p = first; p < params.size(); p++) {
+			Parameter& param = params[p];
+			for (unsigned long port = 0; port < descriptor->PortCount;
+					port++) {
+				const char* portName = descriptor->PortNames[port];
+				if (portName == NULL
+					|| !_NamesMatch(param.name, BString(portName))) {
+					continue;
+				}
+				const LADSPA_PortRangeHint& hint
+					= descriptor->PortRangeHints[port];
+				if ((hint.HintDescriptor & LADSPA_HINT_LOGARITHMIC) != 0)
+					param.logarithmic = true;
+				if ((hint.HintDescriptor & LADSPA_HINT_TOGGLED) != 0
+						&& param.kind == Parameter::kIntegerValue) {
+					param.kind = Parameter::kBooleanValue;
+					param.min = 0;
+					param.max = 1;
+				}
+				break;
+			}
+		}
+	}
+
+	dlclose(library);
+	g_free(pluginPath);
+	g_free(label);
+}
+
+
 void
 FilterUnitCore::Impl::CollectParameters(GstElement* element)
 {
+	const size_t first = params.size();
+
 	GObjectClass* klass = G_OBJECT_GET_CLASS(element);
 	guint count = 0;
 	GParamSpec** properties = g_object_class_list_properties(klass, &count);
@@ -82,7 +262,9 @@ FilterUnitCore::Impl::CollectParameters(GstElement* element)
 			continue;
 		}
 		if (strcmp(g_param_spec_get_name(spec), "name") == 0
-			|| strcmp(g_param_spec_get_name(spec), "parent") == 0) {
+			|| strcmp(g_param_spec_get_name(spec), "parent") == 0
+			|| strcmp(g_param_spec_get_name(spec), "plugin") == 0
+			|| strcmp(g_param_spec_get_name(spec), "label") == 0) {
 			continue;
 		}
 
@@ -90,34 +272,71 @@ FilterUnitCore::Impl::CollectParameters(GstElement* element)
 		param.object = G_OBJECT(g_object_ref(element));
 		param.property = g_param_spec_get_name(spec);
 		param.name = param.property;
+		param.unit = "";
+		param.logarithmic = false;
 
-		if (G_IS_PARAM_SPEC_INT(spec)) {
+		if (G_IS_PARAM_SPEC_BOOLEAN(spec)) {
+			param.kind = Parameter::kBooleanValue;
+			param.min = 0.0f;
+			param.max = 1.0f;
+		} else if (G_IS_PARAM_SPEC_ENUM(spec)) {
+			param.kind = Parameter::kEnumerationValue;
+			param.min = 0.0f;
+			param.max = 0.0f;
+			GEnumClass* enumClass = (GEnumClass*)g_type_class_ref(
+				G_PARAM_SPEC_VALUE_TYPE(spec));
+			if (enumClass != NULL) {
+				for (guint e = 0; e < enumClass->n_values; e++) {
+					const GEnumValue& value = enumClass->values[e];
+					const char* nick = value.value_nick != NULL
+						? value.value_nick : value.value_name;
+					param.items.push_back(std::make_pair(value.value,
+						BString(nick != NULL ? nick : "value")));
+					if ((float)value.value > param.max)
+						param.max = (float)value.value;
+				}
+				g_type_class_unref(enumClass);
+			}
+		} else if (G_IS_PARAM_SPEC_INT(spec)) {
 			GParamSpecInt* intSpec = G_PARAM_SPEC_INT(spec);
+			param.kind = Parameter::kIntegerValue;
 			param.min = (float)intSpec->minimum;
 			param.max = (float)intSpec->maximum;
-			param.isInteger = true;
 		} else if (G_IS_PARAM_SPEC_UINT(spec)) {
 			GParamSpecUInt* uintSpec = G_PARAM_SPEC_UINT(spec);
+			param.kind = Parameter::kIntegerValue;
 			param.min = (float)uintSpec->minimum;
 			param.max = (float)uintSpec->maximum;
-			param.isInteger = true;
 		} else if (G_IS_PARAM_SPEC_FLOAT(spec)) {
 			GParamSpecFloat* floatSpec = G_PARAM_SPEC_FLOAT(spec);
+			param.kind = Parameter::kFloatValue;
 			param.min = (float)floatSpec->minimum;
 			param.max = (float)floatSpec->maximum;
-			param.isInteger = false;
 		} else if (G_IS_PARAM_SPEC_DOUBLE(spec)) {
 			GParamSpecDouble* doubleSpec = G_PARAM_SPEC_DOUBLE(spec);
+			param.kind = Parameter::kFloatValue;
 			param.min = (float)doubleSpec->minimum;
 			param.max = (float)doubleSpec->maximum;
-			param.isInteger = false;
 		} else {
+			g_object_unref(param.object);
 			continue;
+		}
+
+		// Units travel in the property name, e.g. "threshold (dB)".
+		_SplitUnitSuffix(param.name, param.unit);
+
+		// Ports spanning decades (20 Hz to 20 kHz) get a log slider when
+		// the plugin did not say anything.
+		if (param.kind == Parameter::kFloatValue && param.min > 0.0f
+			&& param.max / param.min >= 100.0f) {
+			param.logarithmic = true;
 		}
 
 		params.push_back(param);
 	}
 	g_free(properties);
+
+	ApplyLadspaHints(element, first);
 }
 
 
@@ -381,12 +600,12 @@ FilterUnitCore::GetParameterInfo(int32 index, BString* outName,
 	if (outMax != NULL)
 		*outMax = param.max;
 	if (outValue != NULL) {
-		if (param.isInteger) {
-			gint value = 0;
+		if (param.kind == Parameter::kFloatValue) {
+			gdouble value = 0;
 			g_object_get(param.object, param.property.String(), &value, NULL);
 			*outValue = (float)value;
 		} else {
-			gdouble value = 0;
+			gint value = 0;
 			g_object_get(param.object, param.property.String(), &value, NULL);
 			*outValue = (float)value;
 		}
@@ -407,11 +626,11 @@ FilterUnitCore::SetParameterValue(int32 index, float value)
 	if (value > param.max)
 		value = param.max;
 
-	if (param.isInteger)
-		g_object_set(param.object, param.property.String(), (gint)value,
+	if (param.kind == Parameter::kFloatValue)
+		g_object_set(param.object, param.property.String(), (gdouble)value,
 			NULL);
 	else
-		g_object_set(param.object, param.property.String(), (gdouble)value,
+		g_object_set(param.object, param.property.String(), (gint)value,
 			NULL);
 	return B_OK;
 }
@@ -424,6 +643,47 @@ FilterUnitCore::ParameterValue(int32 index) const
 	if (GetParameterInfo(index, NULL, NULL, NULL, &value) != B_OK)
 		return 0.0f;
 	return value;
+}
+
+
+// One group, one control per collected property; ids are the indexes.
+status_t
+FilterUnitCore::BuildParameterWeb(BParameterGroup* group)
+{
+	if (fImpl == NULL || group == NULL)
+		return B_NO_INIT;
+
+	for (size_t i = 0; i < fImpl->params.size(); i++) {
+		const Parameter& param = fImpl->params[i];
+		const int32 id = (int32)i;
+
+		if (param.kind == Parameter::kBooleanValue) {
+			BDiscreteParameter* discrete = group->MakeDiscreteParameter(id,
+				B_MEDIA_NO_TYPE, param.name.String(), B_SWITCH);
+			if (discrete != NULL) {
+				discrete->AddItem(0, "Off");
+				discrete->AddItem(1, "On");
+			}
+		} else if (param.kind == Parameter::kEnumerationValue) {
+			BDiscreteParameter* discrete = group->MakeDiscreteParameter(id,
+				B_MEDIA_NO_TYPE, param.name.String(), B_GENERIC);
+			if (discrete != NULL) {
+				for (size_t e = 0; e < param.items.size(); e++)
+					discrete->AddItem(param.items[e].first,
+						param.items[e].second.String());
+			}
+		} else {
+			BContinuousParameter* continuous
+				= group->MakeContinuousParameter(id, B_MEDIA_NO_TYPE,
+					param.name.String(), B_GENERIC, param.unit.String(),
+					param.min, param.max,
+					param.kind == Parameter::kIntegerValue
+						? 1.0f : (param.max - param.min) / 1000.0f);
+			if (continuous != NULL && param.logarithmic)
+				continuous->SetFlags(B_LOGARITHMIC_PARAMETER);
+		}
+	}
+	return B_OK;
 }
 
 

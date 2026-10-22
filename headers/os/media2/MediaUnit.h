@@ -78,6 +78,12 @@ protected:
 			void*					BufferFor(BMediaConnection* connection,
 										size_t* outSize);
 
+	// Port surgery on a running filter, for units whose pin count grows
+	// and shrinks with the links. Call from the app thread, never from
+	// the process path; a detached unit has no ports to add.
+			status_t				_AddLivePort(BMediaConnection* connection);
+			status_t				_RemoveLivePort(BMediaConnection* connection);
+
 public:
 			void*					_GetFilter() const;
 
@@ -101,6 +107,7 @@ public:
 private:
 	virtual	status_t				_StartConnections(void* backend) override;
 			status_t				_BuildFilter();
+			status_t				_CreatePortFor(BMediaConnection* connection);
 			void					_TeardownFilter();
 			void					_Restart();
 

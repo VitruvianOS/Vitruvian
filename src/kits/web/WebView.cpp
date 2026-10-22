@@ -946,10 +946,12 @@ BWebView::MessageReceived(BMessage* message)
 		}
 
 		case kMsgFrameReady:
+#ifdef HAS_WPE
 			// Drain the coalescing pipe before redrawing so the
 			// next burst posts a fresh message.
 			if (fImpl->fBridge != NULL && fImpl->fBridge->notifier != NULL)
 				fImpl->fBridge->notifier->Drain();
+#endif
 			Invalidate();
 			break;
 #ifdef HAS_WPE

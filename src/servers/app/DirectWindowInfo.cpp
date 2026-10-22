@@ -105,7 +105,7 @@ DirectWindowInfo::SetState(direct_buffer_state bufferState,
 			"NULL buffer; stopping the direct window\n");
 		fBufferInfo->buffer_state = (direct_buffer_state)
 			((bufferState & ~B_DIRECT_MODE_MASK) | B_DIRECT_STOP);
-		return _SyncronizeWithClient();
+		return _SynchronizeWithClient();
 	}
 
 	fBufferInfo->buffer_state = bufferState;

@@ -453,6 +453,9 @@ ShelfContainerViewFilter::_ObjectDropFilter(BMessage *msg, BHandler **_handler)
 	BPoint offset;
 
 	if (msg->WasDropped()) {
+		if (mouseView == NULL)
+			return B_SKIP_MESSAGE;
+
 		point = msg->DropPoint(&offset);
 		point = mouseView->ConvertFromScreen(point - offset);
 	}
@@ -465,6 +468,9 @@ ShelfContainerViewFilter::_ObjectDropFilter(BMessage *msg, BHandler **_handler)
 		if (handler)
 			dragger = dynamic_cast<BDragger*>(handler);
 		else
+			return B_SKIP_MESSAGE;
+
+		if (dragger == NULL)
 			return B_SKIP_MESSAGE;
 
 		BRect rect;

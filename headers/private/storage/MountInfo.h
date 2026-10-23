@@ -23,7 +23,8 @@ namespace BPrivate {
 
 
 struct MountEntry {
-	dev_t		dev;
+	dev_t		dev;			// /proc/self/mountinfo field 3
+	dev_t		stat_dev;		// stat(2) dev of the mount point
 	BString		mount_point;
 	BString		device_path;
 	BString		fs_type;

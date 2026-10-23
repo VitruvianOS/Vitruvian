@@ -119,6 +119,12 @@ parse_mountinfo(MountEntryList& out)
 		e.dev = makedev(major, minor);
 		e.mount_point = mnt;
 		unescape_mountinfo(e.mount_point);
+		// mountinfo prints the superblock dev, but stat(2) does not always
+		// agree: btrfs hands every subvolume its own anon dev in getattr().
+		// Keep both so FindByDev() answers for either flavour.
+		struct stat st;
+		e.stat_dev = stat(e.mount_point.String(), &st) == 0
+			? st.st_dev : e.dev;
 		e.device_path = source;
 		unescape_mountinfo(e.device_path);
 		e.fs_type = fstype;
@@ -174,6 +180,7 @@ parse_mounts_fallback(MountEntryList& out)
 
 		MountEntry e;
 		e.dev = st.st_dev;
+		e.stat_dev = st.st_dev;
 		e.mount_point = m->mnt_dir;
 		e.device_path = m->mnt_fsname;
 		e.fs_type = m->mnt_type;
@@ -231,26 +238,38 @@ MountInfo::Invalidate()
 }
 
 
+static const MountEntry*
+find_by_dev(const MountEntryList& list, dev_t dev, bool statDev)
+{
+	const MountEntry* fallback = NULL;
+	for (const auto& e : list) {
+		if ((statDev ? e.stat_dev : e.dev) != dev)
+			continue;
+		if (!e.is_bind)
+			return &e;
+		if (fallback == NULL)
+			fallback = &e;
+	}
+	return fallback;
+}
+
+
 bool
 MountInfo::FindByDev(dev_t dev, MountEntry* out)
 {
 	auto snap = Snapshot();
-	const MountEntry* fallback = NULL;
-	for (const auto& e : *snap) {
-		if (e.dev != dev)
-			continue;
-		if (!e.is_bind) {
-			if (out) *out = e;
-			return true;
-		}
-		if (fallback == NULL)
-			fallback = &e;
-	}
-	if (fallback) {
-		if (out) *out = *fallback;
-		return true;
-	}
-	return false;
+	// Exact mountinfo dev first, so a lookup that already worked returns the
+	// same entry; stat(2) devs are only consulted when that found nothing.
+	// btrfs subvolumes carry a per-subvolume anon dev from stat(2) that
+	// never shows up in mountinfo.
+	const MountEntry* entry = find_by_dev(*snap, dev, false);
+	if (entry == NULL)
+		entry = find_by_dev(*snap, dev, true);
+	if (entry == NULL)
+		return false;
+	if (out)
+		*out = *entry;
+	return true;
 }
 
 

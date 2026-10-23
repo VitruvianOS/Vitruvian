@@ -178,8 +178,51 @@ else()
 	set(_vos_runtime_version "${PROJECT_VERSION}")
 endif()
 
+# Depend on a kernel image nexus builds for: floor from the dkms
+# BUILD_EXCLUSIVE_KERNEL_MIN, no ceiling, names from packages.sh.
+set(_vos_kern_min "")
+set(_vos_kern_dkms
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/system/kernel/nexus/debian/nexus-dkms.dkms")
+if(EXISTS "${_vos_kern_dkms}")
+	file(STRINGS "${_vos_kern_dkms}" _vos_kern_line
+		REGEX "^BUILD_EXCLUSIVE_KERNEL_MIN=")
+	if(_vos_kern_line)
+		string(REGEX REPLACE "^BUILD_EXCLUSIVE_KERNEL_MIN=\"([0-9.]+)\".*$" "\\1"
+			_vos_kern_min "${_vos_kern_line}")
+	endif()
+endif()
+if(NOT _vos_kern_min)
+	message(WARNING
+		"no BUILD_EXCLUSIVE_KERNEL_MIN in ${_vos_kern_dkms} - vos ships no kernel floor")
+endif()
+
+set(_vos_kern_cmd
+	". '${CMAKE_CURRENT_SOURCE_DIR}/build/scripts/lib/common.sh' && . '${CMAKE_CURRENT_SOURCE_DIR}/build/scripts/lib/packages.sh' && get_kernel_packages '${VITRUVIAN_TARGET_ARCH}'")
+execute_process(
+	COMMAND sh -c "${_vos_kern_cmd}"
+	OUTPUT_VARIABLE _vos_kern_pkgs
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_VARIABLE _vos_kern_err
+	RESULT_VARIABLE _vos_kern_rc)
+if(NOT _vos_kern_rc EQUAL 0 OR _vos_kern_pkgs STREQUAL "")
+	message(FATAL_ERROR
+		"no kernel image package for ${VITRUVIAN_TARGET_ARCH}: ${_vos_kern_err}")
+endif()
+
+string(REPLACE " " ";" _vos_kern_list "${_vos_kern_pkgs}")
+set(_vos_kern_alts "")
+foreach(_vos_pkg IN LISTS _vos_kern_list)
+	if(_vos_kern_min)
+		list(APPEND _vos_kern_alts "${_vos_pkg} (>= ${_vos_kern_min})")
+	else()
+		list(APPEND _vos_kern_alts "${_vos_pkg}")
+	endif()
+endforeach()
+string(JOIN " | " _vos_kernel_dep ${_vos_kern_alts})
+message(STATUS "VOS kernel dependency: ${_vos_kernel_dep}")
+
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS
-	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version}), vos-archive")
+	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version}), vos-archive, ${_vos_kernel_dep}")
 
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")

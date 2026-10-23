@@ -213,6 +213,15 @@ if [ -n "$root_hash" ]; then
     printf '%s:%s\n' "root" "$root_hash" | $IN chpasswd -e
 fi
 
+# Greeter-off janus logs into VOS_DEFAULT_USER; the unit's vos-live is the
+# live ISO's. Same drop-in the Installer writes.
+mkdir -p "$ROOT/etc/systemd/system/janus.service.d"
+cat > "$ROOT/etc/systemd/system/janus.service.d/50-install-user.conf" <<EOF
+[Service]
+Environment=VOS_DEFAULT_USER=$username
+EOF
+$IN systemctl daemon-reload 2>/dev/null || true
+
 trap - EXIT
 mkdir -p "$(dirname "$SENTINEL")"
 touch "$SENTINEL"

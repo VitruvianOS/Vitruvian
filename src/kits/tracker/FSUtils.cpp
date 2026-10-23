@@ -468,6 +468,15 @@ CheckDevicesEqual(const entry_ref* srcRef, const Model* targetModel)
 }
 
 
+// /system/data is user content; only the rest of /system is boot-critical
+static bool
+IsProtectedSystemEntry(const BEntry* entry)
+{
+	return DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)
+		&& !DirectoryMatchesOrContains(entry, B_SYSTEM_DATA_DIRECTORY);
+}
+
+
 bool
 IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 	const Model* targetModel)
@@ -692,7 +701,7 @@ ConfirmChangeIfWellKnownDirectory(const BEntry* entry, DestructiveAction action,
 	if (FSIsDeskDir(entry) || FSIsPrintersDir(entry) || FSIsRootDir(entry) || FSIsTrashDir(entry))
 		return false;
 
-	if ((!DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)
+	if ((!IsProtectedSystemEntry(entry)
 		&& !DirectoryMatchesOrContains(entry, B_USER_DIRECTORY))
 		|| DirectoryMatchesOrContains(entry, B_SYSTEM_TEMP_DIRECTORY))
 		// quick way out
@@ -701,7 +710,7 @@ ConfirmChangeIfWellKnownDirectory(const BEntry* entry, DestructiveAction action,
 	BString warning;
 	bool requireOverride = true;
 
-	if (DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)) {
+	if (IsProtectedSystemEntry(entry)) {
 		if (action == kRename) {
 			warning.SetTo(
 				B_TRANSLATE("If you rename the system folder or its "

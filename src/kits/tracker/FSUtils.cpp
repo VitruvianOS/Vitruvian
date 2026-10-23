@@ -1994,7 +1994,8 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 				CopyFile(entry, &statbuf, destDir, loopControl, loc,
 					makeOriginalName, undo);
 				if (moveMode == kMoveSelectionTo)
-					entry->Remove();
+					// a dropped status leaves source and copy both
+					MoveError::FailOnError(entry->Remove());
 			}
 		}
 	} catch (status_t error) {

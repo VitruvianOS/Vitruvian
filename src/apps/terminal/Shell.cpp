@@ -142,10 +142,13 @@ Shell::Close()
 	fTermParse = NULL;
 
 	if (fFd >= 0) {
+		pid_t processID = fShellInfo.ProcessID();
 		close(fFd);
 		fShellInfo.SetProcessID(-1);
 		int status;
-		wait(&status);
+		if (processID > 0)
+			waitpid(processID, &status, 0);
+			// wait() would reap some other tab's shell
 		fFd = -1;
 	}
 }
@@ -592,6 +595,10 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 
 	if (done <= 0) {
 		close(master);
+		int status;
+		waitpid(fShellInfo.ProcessID(), &status, 0);
+			// the child exits after the failed handshake; reap it
+		fShellInfo.SetProcessID(-1);
 		return B_ERROR;
 	}
 

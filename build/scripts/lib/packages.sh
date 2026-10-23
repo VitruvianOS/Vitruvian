@@ -46,7 +46,7 @@ get_base_packages() {
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
-                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
+                " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers libgl1-mesa-dri" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
@@ -239,7 +239,7 @@ _board_extra_packages() {
         allwinner)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 linux-headers-arm64 u-boot-sunxi dosfstools rsync"
+                " linux-image-arm64 linux-headers-arm64 u-boot-sunxi dosfstools rsync libgl1-mesa-dri"
             ;;
         allwinner-h3)
             printf '%s' \

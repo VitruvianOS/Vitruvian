@@ -68,6 +68,7 @@
 #include "PrefHandler.h"
 #include "SetTitleDialog.h"
 #include "ShellParameters.h"
+#include "TermApp.h"
 #include "TermConst.h"
 #include "TermScrollView.h"
 #include "ThemeWindow.h"
@@ -274,6 +275,11 @@ TermWindow::TermWindow(const Arguments& args)
 
 TermWindow::~TermWindow()
 {
+	// before anything else: the app must stop messaging this window
+	TermApp* app = dynamic_cast<TermApp*>(be_app);
+	if (app != NULL)
+		app->NotifyWindowQuit();
+
 	fTerminalRoster.Unregister();
 
 	_FinishTitleDialog();
@@ -405,6 +411,14 @@ bool
 TermWindow::QuitRequested()
 {
 	_FinishTitleDialog();
+
+	// On system shutdown TermApp forwards the quit with _shutdown_ set;
+	// then asking about running processes would stall the shutdown.
+	BMessage* message = CurrentMessage();
+	bool shutdown;
+	if (message != NULL && message->FindBool("_shutdown_", &shutdown) == B_OK
+		&& shutdown)
+		return BWindow::QuitRequested();
 
 	if (!_CanClose(-1))
 		return false;
@@ -1075,6 +1089,11 @@ TermWindow::MessageReceived(BMessage *message)
 
 		case MENU_PRINT:
 			_DoPrint();
+			break;
+
+		case MSG_ACTIVATE_TERM:
+			// forwarded by TermApp, which must not lock this window
+			Activate();
 			break;
 
 		case MSG_CHECK_CHILDREN:

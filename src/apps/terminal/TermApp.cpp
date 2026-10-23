@@ -78,6 +78,19 @@ TermApp::~TermApp()
 
 
 void
+TermApp::NotifyWindowQuit()
+{
+	// TermWindow calls this before it starts going away, so the
+	// cleanup thread can never post to a dead window.
+	if (!fWindowLock.Lock())
+		return;
+
+	fTermWindow = NULL;
+	fWindowLock.Unlock();
+}
+
+
+void
 TermApp::ReadyToRun()
 {
 	// Prevent opeing window when option -h is given.
@@ -150,11 +163,10 @@ TermApp::QuitRequested()
 	bool shutdown;
 	if (message != NULL && message->FindBool("_shutdown_", &shutdown) == B_OK
 		&& shutdown) {
-		// The system is shutting down. Quit the window synchronously. This
-		// skips the checks for running processes and the "Are you sure..."
-		// alert.
-		if (fTermWindow->Lock())
-			fTermWindow->Quit();
+		// Forward the quit so "_shutdown_" skips the running-process
+		// alert; locking fTermWindow here races its destruction.
+		BMessenger messenger = _WindowMessenger();
+		messenger.SendMessage(message);
 	}
 
 	return BApplication::QuitRequested();
@@ -180,12 +192,20 @@ TermApp::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case B_KEY_MAP_LOADED:
-			fTermWindow->PostMessage(message);
+		{
+			BMessenger messenger = _WindowMessenger();
+			messenger.SendMessage(message);
 			break;
+		}
 
 		case MSG_ACTIVATE_TERM:
-			fTermWindow->Activate();
+		{
+			// Activate() through fTermWindow would invert the lock
+			// order; the window activates itself.
+			BMessenger messenger = _WindowMessenger();
+			messenger.SendMessage(MSG_ACTIVATE_TERM);
 			break;
+		}
 
 		default:
 			BApplication::MessageReceived(message);
@@ -247,17 +267,39 @@ TermApp::RefsReceived(BMessage* message)
 status_t
 TermApp::_MakeTermWindow()
 {
+	TermWindow* window = NULL;
 	try {
-		fTermWindow = new TermWindow(*fArgs);
+		window = new TermWindow(*fArgs);
 	} catch (int error) {
 		return (status_t)error;
 	} catch (...) {
 		return B_ERROR;
 	}
 
-	fTermWindow->Show();
+	if (!fWindowLock.Lock()) {
+		delete window;
+		return B_ERROR;
+	}
+	fTermWindow = window;
+	fWindowLock.Unlock();
+
+	window->Show();
 
 	return B_OK;
+}
+
+
+BMessenger
+TermApp::_WindowMessenger()
+{
+	BMessenger messenger;
+	if (fWindowLock.Lock()) {
+		if (fTermWindow != NULL)
+			messenger = BMessenger(fTermWindow);
+		fWindowLock.Unlock();
+	}
+
+	return messenger;
 }
 
 
@@ -291,8 +333,10 @@ TermApp::_ChildCleanupThread()
 		if (fTerminating)
 			break;
 
-		if (error == 0 && signal == SIGCHLD)
-			fTermWindow->PostMessage(MSG_CHECK_CHILDREN);
+		if (error == 0 && signal == SIGCHLD) {
+			BMessenger messenger = _WindowMessenger();
+			messenger.SendMessage(MSG_CHECK_CHILDREN);
+		}
 	}
 
 	return B_OK;

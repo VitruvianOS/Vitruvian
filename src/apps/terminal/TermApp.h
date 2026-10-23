@@ -19,6 +19,7 @@
 #include <Application.h>
 #include <Catalog.h>
 #include <File.h>
+#include <Locker.h>
 #include <String.h>
 
 #include "Colors.h"
@@ -35,6 +36,9 @@ public:
 
 	static const rgb_color*		DefaultPalette()
 									{ return fDefaultPalette; }
+
+			void				NotifyWindowQuit();
+
 protected:
 	virtual	void				ReadyToRun();
 	virtual bool				QuitRequested();
@@ -45,6 +49,7 @@ protected:
 
 private:
 			status_t			_MakeTermWindow();
+			BMessenger			_WindowMessenger();
 
 	static	void				_SigChildHandler(int signal, void* data);
 	static	status_t			_ChildCleanupThreadEntry(void* data);
@@ -56,6 +61,7 @@ private:
 			thread_id			fChildCleanupThread;
 			bool				fTerminating;
 
+			BLocker				fWindowLock;	// guards fTermWindow
 			BWindow*			fTermWindow;
 			Arguments*			fArgs;
 	static	rgb_color			fDefaultPalette[kTermColorCount];

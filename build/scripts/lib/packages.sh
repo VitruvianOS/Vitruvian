@@ -52,6 +52,7 @@ get_base_packages() {
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
+                " firmware-brcm80211 firmware-misc-nonfree firmware-realtek firmware-atheros firmware-libertas bluez-firmware" \
                 " grub-common grub2-common grub-efi-arm64-bin"
             ;;
         arm32)

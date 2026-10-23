@@ -13,6 +13,8 @@
 #include <Locker.h>
 #include <OS.h>
 
+#include <atomic>
+
 
 class MessageLooper : public BLocker {
 public:
@@ -49,7 +51,7 @@ protected:
 			const char*			fName;
 			thread_id			fThread;
 			BPrivate::PortLink	fLink;
-			bool				fQuitting;
+			std::atomic<bool>	fQuitting;
 			sem_id				fDeathSemaphore;
 };
 

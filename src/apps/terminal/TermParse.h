@@ -84,6 +84,8 @@ private:
 	thread_id fReaderThread;
 	sem_id fReaderSem;
 	sem_id fReaderLocker;
+	int fQuitPipe[2];
+		// wakes the reader on stop
 
 	uint fBufferPosition;
 	void _AnsiModeRequest(int value);

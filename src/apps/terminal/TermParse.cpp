@@ -18,6 +18,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -99,6 +100,8 @@ TermParse::TermParse(int fd)
 	}
 	memset(fReadBuffer, 0, READ_BUF_SIZE);
 	memset(fParserBuffer, 0, ESC_PARSER_BUFFER_SIZE);
+	fQuitPipe[0] = -1;
+	fQuitPipe[1] = -1;
 }
 
 
@@ -188,6 +191,14 @@ TermParse::_InitPtyReader()
 		return fReaderLocker;
 	}
 
+	if (pipe(fQuitPipe) != 0) {
+		delete_sem(fReaderSem);
+		fReaderSem = -1;
+		delete_sem(fReaderLocker);
+		fReaderLocker = -1;
+		return B_ERROR;
+	}
+
 	fReaderThread = spawn_thread(_ptyreader_thread, "PtyReader",
 		B_NORMAL_PRIORITY, this);
 	if (fReaderThread < 0) {
@@ -195,6 +206,10 @@ TermParse::_InitPtyReader()
 		fReaderSem = -1;
 		delete_sem(fReaderLocker);
 		fReaderLocker = -1;
+		close(fQuitPipe[0]);
+		close(fQuitPipe[1]);
+		fQuitPipe[0] = -1;
+		fQuitPipe[1] = -1;
 		return fReaderThread;
 	}
 
@@ -228,13 +243,26 @@ TermParse::_StopPtyReader()
 	}
 
 	if (fReaderThread >= 0) {
-		// Vitruvian doesn't support suspend_thread
-		// Thread will exit naturally when it checks fQuitting flag (set in StopThreads)
-		// If thread is blocked on read(), wait_for_thread will wait until it unblocks
+		// A pty read only ends once every slave holder is gone, which
+		// SIGHUP to the shell does not guarantee; wake the reader's poll.
+		if (fQuitPipe[1] >= 0) {
+			char byte = 0;
+			write(fQuitPipe[1], &byte, 1);
+		}
+
 		status_t status;
 		wait_for_thread(fReaderThread, &status);
 
 		fReaderThread = -1;
+	}
+
+	if (fQuitPipe[0] >= 0) {
+		close(fQuitPipe[0]);
+		fQuitPipe[0] = -1;
+	}
+	if (fQuitPipe[1] >= 0) {
+		close(fQuitPipe[1]);
+		fQuitPipe[1] = -1;
 	}
 }
 
@@ -257,6 +285,19 @@ TermParse::PtyReader()
 
 			bufferSize = fReadBufferSize;
 		}
+
+		struct pollfd fds[2] = {
+			{ fFd, POLLIN, 0 },
+			{ fQuitPipe[0], POLLIN, 0 }
+		};
+		if (poll(fds, 2, -1) < 0) {
+			if (errno == EINTR)
+				continue;
+			fBuffer->NotifyQuit(errno);
+			return B_OK;
+		}
+		if ((fds[1].revents & POLLIN) != 0)
+			break;
 
 		// Read PTY
 		uchar buf[READ_BUF_SIZE];

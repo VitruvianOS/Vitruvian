@@ -487,7 +487,7 @@ IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 
 	for (int32 i = 0; i < srcList->CountItems(); i++) {
 		BEntry entry(srcList->ItemAt(i));
-		if (DirectoryMatchesOrContains(&entry, B_SYSTEM_DIRECTORY))
+		if (IsProtectedSystemEntry(&entry))
 			return true;
 	}
 	return false;

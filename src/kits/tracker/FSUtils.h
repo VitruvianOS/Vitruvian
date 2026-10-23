@@ -278,7 +278,7 @@ status_t ShouldEditRefName(const entry_ref* ref, const char* name, size_t);
 
 bool CheckDevicesEqual(const entry_ref* entry, const Model* targetModel);
 
-// true if any source lives in the system directory and the target does not
+// true if a boot-critical system entry would leave the system directory
 bool IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 	const Model* targetModel);
 

@@ -1063,8 +1063,10 @@ TermView::_AttachShell(Shell *shell, const ShellParameters& shellParameters)
 Shell*
 TermView::_DetachShell()
 {
+	// shell is NULL when a previous shell restart failed to attach
 	Shell* shell = fShell;
-	fShell->DetachBuffer();
+	if (shell != NULL)
+		shell->DetachBuffer();
 	fShell = NULL;
 	return shell;
 }
@@ -1801,7 +1803,8 @@ TermView::MessageReceived(BMessage *message)
 					specifier.FindString("property", i)) == 0) {
 
 				Shell* shell = _DetachShell();
-				shell->Close();
+				if (shell != NULL)
+					shell->Close();
 
 				int32 argc = 0;
 				const char** argv = NULL;

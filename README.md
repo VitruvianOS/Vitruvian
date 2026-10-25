@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://v-os.dev/img/vitruvianos-logo.svg" width="220" alt="VitruvianOS">
+  <img src="https://v-os.dev/img/vos-mark.svg" width="120" alt="V\OS">
 </p>
 <img src="https://numerio.goatcounter.com/count?p=/vitruvian-readme" alt="" width="0" height="0">
 

@@ -12,7 +12,7 @@
 
 ---
 
-<img width="1284" height="804" alt="0 4 1-thumbnail" src="https://github.com/user-attachments/assets/3eb7a173-ef91-440a-9d0d-de194283fd89" />
+<img width="1646" height="951" alt="The V\OS desktop" src="https://v-os.dev/img/desktop-0.6.3.jpg" />
 
 ### Overview
 

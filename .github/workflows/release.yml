@@ -12,12 +12,20 @@ name: Attach release images from Factory
 on:
   release:
     types: [published]
+  # A release event runs the workflow from the tagged commit, so a fix
+  # here only reaches an existing release through this.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to attach images to
+        required: true
 
 permissions:
   contents: write
 
 env:
   FACTORY_REPO: VitruvianOS/VitruvianFactory
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
   attach:
@@ -26,7 +34,7 @@ jobs:
       - name: Checkout the tagged commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.TAG }}
           fetch-depth: 1
 
       - name: Find the Factory rev built from this commit
@@ -38,9 +46,11 @@ jobs:
           sha=$(git rev-parse HEAD)
           # Each Factory release records the commit it was built from, so
           # this is a lookup rather than a guess at build order.
+          # gh --jq takes no --arg and runs per page; slurp the pages
           tag=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" --paginate \
-                  --jq --arg sha "$sha" \
-                  'map(select(.body | contains($sha))) | .[0].tag_name // empty')
+                  | jq -rs --arg sha "$sha" \
+                  'add | map(select((.body // "") | contains($sha)))
+                   | .[0].tag_name // empty')
           if [ -z "$tag" ]; then
             echo "No Factory release records a build from $sha." >&2
             echo "Tag a commit that has been built, or run Factory release" \
@@ -67,7 +77,6 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
           REV: ${{ steps.rev.outputs.tag }}
         run: |
           set -euo pipefail

@@ -267,7 +267,6 @@ CameraWindow::_SelectDevice(media_client_id id)
 	fSelectedId = id;
 	fSelectedStableId = "";
 
-	delete fCamera;
 	fCamera = NULL;
 	fPreview->SetCamera(NULL);
 

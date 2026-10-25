@@ -6517,6 +6517,16 @@ CheckVolumeReadOnly(const entry_ref* ref)
 		return false;
 	}
 
+	if (!FSParentIsWritable(ref)) {
+		BAlert* alert = new BAlert("",
+			B_TRANSLATE("You do not have permission to move or delete files "
+			"in this folder."), B_TRANSLATE("Cancel"), NULL, NULL,
+			B_WIDTH_AS_USUAL, B_STOP_ALERT);
+		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+		alert->Go();
+		return false;
+	}
+
 	return true;
 }
 
@@ -9251,7 +9261,8 @@ BPoseView::CanMoveToTrashOrDuplicate() const
 	if (selectCount < 1)
 		return false;
 
-	if (SelectedVolumeIsReadOnly())
+	if (SelectedVolumeIsReadOnly()
+		|| !FSParentIsWritable(fSelectionList->FirstItem()->TargetModel()->EntryRef()))
 		return false;
 
 	BPose* pose;

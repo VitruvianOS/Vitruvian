@@ -478,6 +478,19 @@ IsProtectedSystemEntry(const BEntry* entry)
 
 
 bool
+FSParentIsWritable(const entry_ref* ref)
+{
+	BEntry entry(ref);
+	BEntry parent;
+	BPath path;
+	if (entry.GetParent(&parent) != B_OK || parent.GetPath(&path) != B_OK)
+		return true;
+
+	return access(path.Path(), W_OK) == 0;
+}
+
+
+bool
 IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 	const Model* targetModel)
 {
@@ -1146,6 +1159,12 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 	if (moveMode == kCopySelectionTo && destIsTrash) {
 		// cannot copy to trash
 		moveMode = kMoveSelectionTo;
+	}
+
+	// an unwritable source folder copies, like a read-only volume
+	if (moveMode == kMoveSelectionTo && !destIsTrash
+		&& !FSParentIsWritable(srcList->FirstItem())) {
+		sourceIsReadOnly = true;
 	}
 
 	if (moveMode == kMoveSelectionTo && sourceIsReadOnly)

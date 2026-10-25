@@ -213,6 +213,8 @@ bool FSInDeskDir(const entry_ref*);
 bool FSIsQueriesDir(const entry_ref*);
 bool FSInRootDir(const entry_ref*);
 bool FSInTrashDir(const entry_ref*);
+// false if the user cannot unlink entries from ref's parent directory
+bool FSParentIsWritable(const entry_ref*);
 
 // doesn't need to be exported
 bool FSGetPoseLocation(const BNode* node, BPoint* point);

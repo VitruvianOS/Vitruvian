@@ -6028,6 +6028,14 @@ BPoseView::EntryMoved(const BMessage* message)
 	} else if (oldDir.directory() == thisDirNode.node()) {
 		int32 fallbackIndex;
 		BPose* fallbackPose = fPoseList->FindPose(&itemNode, &fallbackIndex);
+		// a renaming move (trash collision) still lists the old name
+		const char* fromName;
+		if (fallbackPose == NULL
+			&& message->FindString("from name", &fromName) == B_OK
+			&& fromName[0] != '\0') {
+			fallbackPose = fPoseList->FindPoseByFileName(fromName,
+				&fallbackIndex);
+		}
 		if (fallbackPose == NULL && name != NULL && name[0] != '\0')
 			fallbackPose = fPoseList->FindPoseByFileName(name, &fallbackIndex);
 		if (fallbackPose != NULL) {

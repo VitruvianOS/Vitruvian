@@ -2,6 +2,8 @@
 #include "cppunit/TestCaller.h"
 #include <String.h>
 
+#include "AddressSpaceLimit.h"
+
 
 StringAssignTest::StringAssignTest(std::string name)
 		: BTestCase(name)
@@ -100,6 +102,7 @@ StringAssignTest::PerformTest(void)
 
 #ifndef TEST_R5
 	const int32 OUT_OF_MEM_VAL = 2 * 1000 * 1000 * 1000;
+	AddressSpaceLimit addressSpaceLimit;
 	// SetTo(char, int32) with excessive length:
 	NextSubTest();
 	str = new BString("dummy");

@@ -32,6 +32,7 @@ set(SYSTEM_APPS
 	People
 	PrintOMatic
 	ResEdit
+	SerialConnect
 	#Screenshot
 	ShowImage
 	SoundRecorder

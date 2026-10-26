@@ -13,6 +13,7 @@ AddOn(game
 	WindowScreen.cpp
 	GameSoundBuffer.cpp
 	Joystick.cpp
+	SerialPort.cpp
 
 	LIBS media2 be ${EVDEV_LIBRARIES}
 

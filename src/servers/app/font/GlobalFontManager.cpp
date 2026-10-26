@@ -80,19 +80,6 @@ GlobalFontManager::font_directory::FindStyle(const node_ref& nodeRef) const
 }
 
 
-static status_t
-set_entry(node_ref& nodeRef, const char* name, BEntry& entry)
-{
-	entry_ref ref(nodeRef.vdevice(), nodeRef.vnode(), NULL);
-
-	status_t status = ref.set_name(name);
-	if (status != B_OK)
-		return status;
-
-	return entry.SetTo(&ref);
-}
-
-
 //	#pragma mark -
 
 
@@ -154,21 +141,17 @@ GlobalFontManager::MessageReceived(BMessage* message)
 			switch (opcode) {
 				case B_ENTRY_CREATED:
 				{
-					const char* name;
-					uint64 dev, dir;
-					if (message->FindUInt64("device", &dev) != B_OK
-						|| message->FindUInt64("directory", &dir) != B_OK
-						|| message->FindString("name", &name) != B_OK)
+					entry_ref entryRef;
+					if (message->FindRef("virtual:directory", &entryRef) != B_OK)
 						break;
-					node_ref nodeRef;
-					nodeRef.set_to((dev_t)dev, (ino_t)dir);
+					node_ref nodeRef(entryRef.vdevice(), entryRef.vdirectory());
 
 					// TODO: make this better (possible under Haiku)
 					snooze(100000);
 						// let the font be written completely before trying to open it
 
 					BEntry entry;
-					if (set_entry(nodeRef, name, entry) != B_OK)
+					if (entry.SetTo(&entryRef) != B_OK)
 						break;
 
 					if (entry.IsDirectory()) {
@@ -192,30 +175,27 @@ GlobalFontManager::MessageReceived(BMessage* message)
 					// has the entry been moved into a monitored directory or has
 					// it been removed from one?
 					const char* name;
-					uint64 devVal, toDir;
-					uint64 fromNode;
-					uint64 node;
-					if (message->FindUInt64("device", &devVal) != B_OK
-						|| message->FindUInt64("to directory", &toDir) != B_OK
-						|| message->FindUInt64("from directory", &fromNode) != B_OK
-						|| message->FindUInt64("node", &node) != B_OK
+					entry_ref toEntryRef, fromEntryRef;
+					node_ref node;
+					if (message->FindRef("virtual:to directory", &toEntryRef) != B_OK
+						|| message->FindRef("virtual:from directory", &fromEntryRef) != B_OK
+						|| message->FindNodeRef("virtual:node", &node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
-					node_ref nodeRef;
-					nodeRef.set_to((dev_t)devVal, (ino_t)toDir);
+					node_ref nodeRef(toEntryRef.vdevice(), toEntryRef.vdirectory());
+					node_ref fromNode(fromEntryRef.vdevice(), fromEntryRef.vdirectory());
 
 					font_directory* directory = _FindDirectory(nodeRef);
 
 					BEntry entry;
-					if (set_entry(nodeRef, name, entry) != B_OK)
+					if (entry.SetTo(&toEntryRef) != B_OK)
 						break;
 
 					if (directory != NULL) {
 						// something has been added to our watched font directories
 
 						// test, if the source directory is one of ours as well
-						nodeRef.set_to(nodeRef.vdevice(), (ino_t)fromNode);
-						font_directory* fromDirectory = _FindDirectory(nodeRef);
+						font_directory* fromDirectory = _FindDirectory(fromNode);
 
 						if (entry.IsDirectory()) {
 							if (fromDirectory == NULL) {
@@ -227,8 +207,7 @@ GlobalFontManager::MessageReceived(BMessage* message)
 								// been renamed or moved within the watched
 								// directories - we only need to update the
 								// path names of the styles in that directory
-								nodeRef.set_to(nodeRef.vdevice(), (ino_t)node);
-								directory = _FindDirectory(nodeRef);
+								directory = _FindDirectory(node);
 								if (directory != NULL) {
 									for (int32 i = 0; i < directory->styles.CountItems(); i++) {
 										FontStyle* style = directory->styles.ItemAt(i);
@@ -240,9 +219,8 @@ GlobalFontManager::MessageReceived(BMessage* message)
 						} else {
 							if (fromDirectory != NULL) {
 								// find style in source and move it to the target
-								nodeRef.set_to(nodeRef.vdevice(), (ino_t)node);
 								FontStyle* style;
-								while ((style = fromDirectory->FindStyle(nodeRef)) != NULL) {
+								while ((style = fromDirectory->FindStyle(node)) != NULL) {
 									fromDirectory->styles.RemoveItem(style, false);
 									directory->styles.AddItem(style);
 									style->UpdatePath(directory->directory);
@@ -261,7 +239,7 @@ GlobalFontManager::MessageReceived(BMessage* message)
 								_RemoveDirectory(directory);
 						} else {
 							// remove font style from directory
-							_RemoveStyle(nodeRef.vdevice(), fromNode, node);
+							_RemoveStyle(fromNode, node);
 						}
 					}
 					break;
@@ -269,14 +247,12 @@ GlobalFontManager::MessageReceived(BMessage* message)
 
 				case B_ENTRY_REMOVED:
 				{
-					uint64 devVal, nodeVal;
-					uint64 directoryNode;
-					if (message->FindUInt64("device", &devVal) != B_OK
-						|| message->FindUInt64("directory", &directoryNode) != B_OK
-						|| message->FindUInt64("node", &nodeVal) != B_OK)
-						break;
+					entry_ref entryRef;
 					node_ref nodeRef;
-					nodeRef.set_to((dev_t)devVal, (ino_t)nodeVal);
+					if (message->FindRef("virtual:directory", &entryRef) != B_OK
+						|| message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
+						break;
+					node_ref directoryNode(entryRef.vdevice(), entryRef.vdirectory());
 
 					font_directory* directory = _FindDirectory(nodeRef);
 					if (directory != NULL) {
@@ -284,7 +260,7 @@ GlobalFontManager::MessageReceived(BMessage* message)
 						_RemoveDirectory(directory);
 					} else {
 						// remove font style from directory
-						_RemoveStyle(nodeRef.vdevice(), directoryNode, nodeRef.vnode());
+						_RemoveStyle(directoryNode, nodeRef);
 					}
 					break;
 				}
@@ -488,18 +464,14 @@ GlobalFontManager::_RemoveStyle(font_directory& directory, FontStyle* style)
 
 
 void
-GlobalFontManager::_RemoveStyle(dev_t device, uint64 directoryNode, uint64 node)
+GlobalFontManager::_RemoveStyle(node_ref& directoryNode, node_ref& node)
 {
 	// remove font style from directory
-	node_ref nodeRef;
-	nodeRef.set_to(device, (ino_t)directoryNode);
-
-	font_directory* directory = _FindDirectory(nodeRef);
+	font_directory* directory = _FindDirectory(directoryNode);
 	if (directory != NULL) {
 		// find style in directory and remove it
-		nodeRef.set_to(device, (ino_t)node);
 		FontStyle* style;
-		while ((style = directory->FindStyle(nodeRef)) != NULL)
+		while ((style = directory->FindStyle(node)) != NULL)
 			_RemoveStyle(*directory, style);
 	}
 }

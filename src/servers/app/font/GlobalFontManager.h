@@ -93,8 +93,8 @@ private:
 									BEntry& entry);
 			void 				_RemoveStyle(font_directory& directory,
 									FontStyle* style);
-			void 				_RemoveStyle(dev_t device, uint64 directory,
-									uint64 node);
+			void 				_RemoveStyle(node_ref& directoryNode,
+									node_ref& node);
 			FontStyle*			_GetDefaultStyle(const char* familyName,
 									const char* styleName,
 									const char* fallbackFamily,

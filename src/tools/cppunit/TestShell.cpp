@@ -10,6 +10,7 @@
 #include <image.h>
 #include <Locker.h>
 #include <Path.h>
+#include <String.h>
 #include <TLS.h>
 
 #include <cppunit/Exception.h>
@@ -106,24 +107,35 @@ BTestShell::LoadSuitesFrom(BDirectory *libDir) {
 	suiteFunc func;
 
 	while (libDir->GetNextEntry(&addonEntry, true) == B_OK) {
-		status_t err;
-		err = addonEntry.GetPath(&addonPath);
+		status_t addonStatus = B_ERROR;
+		status_t err = addonEntry.GetPath(&addonPath);
 		if (!err) {
-			cout << "Checking " << addonPath.Path() << "..." << endl;
+			cout << "Checking " << addonPath.Path() << "";
+			BString filename(addonPath.Leaf());
+			if (!filename.EndsWith(".so")) {
+				cout << ", wrong extension. Skipping." << endl;
+				continue;
+			}
 			addonImage = load_add_on(addonPath.Path());
-			err = (addonImage >= 0 ? B_OK : B_ERROR);
+			addonStatus = (addonImage >= 0 ? B_OK : B_ERROR);
 		}
-		if (err == B_OK) {
-			cout << "..." << endl;
+		if (addonStatus == B_OK) {
 			err = get_image_symbol(addonImage, "getTestSuite",
 				B_SYMBOL_TYPE_TEXT, reinterpret_cast<void **>(&func));
 		} else {
-//			cout << " !!! err == " << err << endl;
+			cout << ", load_add_on error == " << addonImage << endl;
+			continue;
 		}
-		if (err == B_OK)
+		if (err == B_OK) {
+			cout << ", found getTestSuite()";
 			err = AddSuite(func());
-		if (err == B_OK)
-			count++;
+			if (err == B_OK)
+				count++;
+		} else {
+			cout << ", getTestSuite error == " << err << endl;
+			continue;
+		}
+		cout << ", OK." << endl;
 	}
 	return count;
 }
@@ -473,10 +485,10 @@ BTestShell::LoadDynamicSuites() {
 		BDirectory libDir((*i).c_str());
 		if (Verbosity() >= v3)
 			cout << "Checking " << *i << endl;
-/*		int count =*/ LoadSuitesFrom(&libDir);
+		int count = LoadSuitesFrom(&libDir);
 		if (Verbosity() >= v3) {
-//			cout << "Loaded " << count << " suite" << (count == 1 ? "" : "s");
-//			cout << " from " << *i << endl;
+			cout << "Loaded " << count << " suite" << (count == 1 ? "" : "s");
+			cout << " from " << *i << endl;
 		}
 	}
 

@@ -225,6 +225,14 @@ install(DIRECTORY headers/
 	# agg, linprog: internal libs, not public API.
 	PATTERN "libs" EXCLUDE
 	PATTERN "tools" EXCLUDE
+	PATTERN "be" EXCLUDE
+)
+
+install(CODE "
+	execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink os
+		\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_vos_dev_includedir}/be)
+	"
+	COMPONENT dev
 )
 
 set(_vos_dev_pcdir "lib/${VITRUVIAN_MULTIARCH_TRIPLE}/pkgconfig")

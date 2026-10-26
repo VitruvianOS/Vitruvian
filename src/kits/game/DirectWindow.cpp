@@ -487,24 +487,21 @@ BDirectWindow::_DirectDaemon()
 					== B_DIRECT_START)
 				fConnectionEnable = true;
 
-			if (fBufferDesc->bits == NULL) {
+			if (fBufferDesc->bits == NULL && fBufferDesc->bits_area >= 0) {
 				// (re-)clone the bits area
 				BPrivate::AppServerLink linkLocker;
 					// protects ServerAllocator
 				BPrivate::ServerMemoryAllocator* allocator
 					= BApplication::Private::ServerAllocator();
 				allocator->RemoveArea(fSourceBitsArea);
+				fSourceBitsArea = -1;
 				area_id localArea;
 				uint8* bits;
-				status_t status = allocator->AddArea(fBufferDesc->bits_area,
-					localArea, bits, (size_t)-1);
-				if (status != B_OK) {
-					_UnlockDirect();
-					return -1;
+				if (allocator->AddArea(fBufferDesc->bits_area, localArea, bits,
+						(size_t)-1) == B_OK) {
+					fBufferDesc->bits = (void*)bits;
+					fSourceBitsArea = fBufferDesc->bits_area;
 				}
-
-				fBufferDesc->bits = (void*)bits;
-				fSourceBitsArea = fBufferDesc->bits_area;
 			}
 
 			fInDirectConnected = true;

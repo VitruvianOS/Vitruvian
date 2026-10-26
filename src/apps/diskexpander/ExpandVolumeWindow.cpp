@@ -51,7 +51,7 @@
 #define B_TRANSLATION_CONTEXT "ExpandVolume"
 
 
-static const char* kDiskUsageSignature = "application/x-vnd.Haiku-DiskUsage";
+static const char* kDiskUsageSignature = "application/x-vnd.vos-DiskUsage";
 
 // Cooperative busy-timeout: the plan helper blocks on pkexec plus the
 // filesystem resize tool; after this long the window declares defeat and

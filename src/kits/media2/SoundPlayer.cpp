@@ -460,6 +460,21 @@ BSoundPlayer::BSoundPlayer(const BMediaFormat* format, const char* name,
 }
 
 
+BSoundPlayer::BSoundPlayer(const media_raw_audio_format* format,
+	const char* name, BufferPlayerFunc playFunc, EventNotifierFunc notifyFunc,
+	void* cookie)
+	:
+	fImpl(NULL)
+{
+	BMediaFormat fmt;
+	if (format != NULL)
+		fmt = BMediaFormat(*format);
+	else
+		fmt.SetToDefault();
+	fImpl = new(std::nothrow) Impl(this, fmt, name, playFunc, notifyFunc, cookie);
+}
+
+
 BSoundPlayer::BSoundPlayer(const char* name, BufferPlayerFunc playFunc,
 	EventNotifierFunc notifyFunc, void* cookie)
 	:

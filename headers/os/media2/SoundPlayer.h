@@ -37,6 +37,12 @@ public:
 									BufferPlayerFunc playFunc = NULL,
 									EventNotifierFunc notifyFunc = NULL,
 									void* cookie = NULL);
+								BSoundPlayer(
+									const media_raw_audio_format* format,
+									const char* name = NULL,
+									BufferPlayerFunc playFunc = NULL,
+									EventNotifierFunc notifyFunc = NULL,
+									void* cookie = NULL);
 								BSoundPlayer(const char* name,
 									BufferPlayerFunc playFunc = NULL,
 									EventNotifierFunc notifyFunc = NULL,

@@ -15,6 +15,7 @@
 #include <fs_attr.h>
 
 #include <AutoDeleter.h>
+#include <Node.h>
 
 
 static struct option const kLongOptions[] = {
@@ -72,44 +73,47 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 		&& fs_stat_attr(toFileFD, toAttr, &toInfo) == 0)
 		return B_FILE_EXISTS;
 
-	int fromAttrFD = fs_fopen_attr(fromFileFD, fromAttr, fromInfo.type,
-		O_RDONLY | O_EXCL);
-	if (fromAttrFD < 0)
-		return -errno;
-
-	FileDescriptorCloser fromAttrFDCloser(fromAttrFD);
-
-	int toAttrFD = fs_fopen_attr(toFileFD, toAttr, fromInfo.type,
-		O_CREAT | O_WRONLY | O_TRUNC);
-	if (fromAttrFD < 0)
-		return -errno;
-
-	FileDescriptorCloser toAttrFDCloser(toAttrFD);
+	if (fromFileFD == toFileFD) {
+		status_t status = BNode(fromFile).RenameAttr(fromAttr, toAttr);
+		if (status != B_OK)
+			return status;
+		return B_OK;
+	}
 
 	size_t bytesLeft = fromInfo.size;
 	off_t offset = 0;
+	if (bytesLeft == 0) {
+		// create an empty attribute of the right type
+		ssize_t written = fs_write_attr(toFileFD, toAttr, fromInfo.type, 0,
+			kBuffer, 0);
+		if (written < 0)
+			return written;
+	}
 	while (bytesLeft > 0) {
 		size_t size = min_c(kBufferSize, bytesLeft);
-		ssize_t bytesRead = read_pos(fromAttrFD, offset, kBuffer, size);
+		ssize_t bytesRead = fs_read_attr(fromFileFD, fromAttr, fromInfo.type,
+			offset, kBuffer, size);
 		if (bytesRead < 0) {
 			fs_remove_attr(toFileFD, toAttr);
-			return -errno;
+			return bytesRead;
 		}
 
-		ssize_t bytesWritten = write_pos(toAttrFD, offset, kBuffer, bytesRead);
+		ssize_t bytesWritten = fs_write_attr(toFileFD, toAttr, fromInfo.type,
+			offset, kBuffer, bytesRead);
 		if (bytesWritten != bytesRead) {
 			fs_remove_attr(toFileFD, toAttr);
 			if (bytesWritten >= 0)
 				return B_IO_ERROR;
-			return -errno;
+			return bytesWritten;
 		}
 
 		bytesLeft -= bytesRead;
 		offset += bytesRead;
 	}
 
-	if (fs_remove_attr(fromFileFD, fromAttr) < 0)
-		return -errno;
+	status_t status = fs_remove_attr(fromFileFD, fromAttr);
+	if (status != B_OK)
+		return status;
 
 	return B_OK;
 }

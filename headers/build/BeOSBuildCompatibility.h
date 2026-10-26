@@ -55,20 +55,6 @@ extern size_t	strnlen(const char* string, size_t length);
 //#endif
 
 
-// There's no O_NOTRAVERSE under Linux and FreeBSD -- we replace it with a flag
-// that won't be used by our tools, preferrably a non-portable one; a fixed
-// constant could always lead to trouble on the host.
-// We can abuse this flag for our purposes as we filter it in libroot.
-#ifndef O_NOTRAVERSE
-#	ifdef O_NOCTTY
-#		define O_NOTRAVERSE	O_NOCTTY
-#	elif defined(O_RANDOM)
-#		define O_NOTRAVERSE O_RANDOM
-#	else
-#		error "Search for a proper replacement value for O_NOTRAVERSE"
-#	endif
-#endif
-
 #ifndef S_IUMSK
 #	define S_IUMSK ALLPERMS
 #endif

@@ -16,6 +16,13 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
+/* Open mode bit asking for the link itself instead of its target. It lives
+   outside the Linux O_* range and is consumed by libroot before the kernel
+   sees the mode. */
+#ifndef O_NOTRAVERSE
+#	define O_NOTRAVERSE	0x40000000
+#endif
+
 
 /* fixed-size integer types */
 typedef	__haiku_int8			int8;

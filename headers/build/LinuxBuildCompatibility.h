@@ -77,14 +77,6 @@ extern ssize_t	readv_pos(int fd, off_t pos, const struct iovec* vec,
 extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 					size_t count);
 
-#ifndef O_NOTRAVERSE
-#	ifdef __VOS__
-#		define O_NOTRAVERSE AT_SYMLINK_NOFOLLOW
-#	else
-#		error "Search for a proper replacement value for O_NOTRAVERSE"
-#	endif
-#endif
-
 #ifndef S_IUMSK
 #	define S_IUMSK ALLPERMS
 #endif

@@ -1612,8 +1612,6 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 	destFile.SetModificationTime(srcStat->st_mtime);
 	#ifndef __VOS__
 	destFile.SetCreationTime(srcStat->st_crtime);
-	#else
-	UNIMPLEMENTED();
 	#endif
 
 	delete[] buffer;

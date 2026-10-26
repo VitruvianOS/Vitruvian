@@ -12,10 +12,10 @@
 #include <stdio.h>
 #include <iostream>
 
-#include "sniffer/Data.h"
-#include "sniffer/Err.h"
-#include "sniffer/Parser.h"
-#include "sniffer/Rule.h"
+#include "../../../kits/storage/sniffer/Data.h"
+#include "../../../kits/storage/sniffer/Err.h"
+#include "../../../kits/storage/sniffer/Parser.h"
+#include "../../../kits/storage/sniffer/Rule.h"
 
 using std::cout;
 using std::endl;

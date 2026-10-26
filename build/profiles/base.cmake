@@ -50,6 +50,7 @@ set(SYSTEM_LIBS
 	opengl
 	printcups
 	libscan
+	prefs
 	screensaver
 	textencoding
 	tracker

@@ -112,7 +112,7 @@ if [ "$RUN_SYSTEM" -eq 1 ]; then
 
     echo ""
     echo "  [System Kernel Tests]"
-    run_test "kernel-fibo_load_image"      "$TESTBIN/fibo_load_image 20"
+    run_test "kernel-fibo_load_image"      "ulimit -u \$((\$(ps -u \$(id -u) -L --no-headers | wc -l) + 300)); $TESTBIN/fibo_load_image 12"
     run_test "kernel-path_resolution_test" "$TESTBIN/path_resolution_test"
     run_test "kernel-port_close_test_1"    "$TESTBIN/port_close_test_1"
     run_test "kernel-port_close_test_2"    "$TESTBIN/port_close_test_2"

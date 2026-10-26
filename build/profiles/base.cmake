@@ -99,6 +99,11 @@ set(TRACKER_ADDONS
 )
 ImageInclude("/system/add-ons/Tracker" ${TRACKER_ADDONS})
 
+set(CATALOG_ADDONS
+	plaintext
+)
+ImageInclude("/system/add-ons/locale/catalogs" ${CATALOG_ADDONS})
+
 # media2 units and the LV2/LADSPA plugin adapter.
 set(MEDIA_ADDONS
 	equalizer

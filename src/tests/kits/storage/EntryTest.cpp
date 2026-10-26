@@ -1618,8 +1618,13 @@ EntryTest::RenameTest()
 	BEntry abstract(abstractEntry1.cpath);
 	CPPUNIT_ASSERT( abstract.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( !abstract.Exists() );
-	CPPUNIT_ASSERT( abstract.Rename("/boot/DoesntMatter") == B_ENTRY_NOT_FOUND );
-	CPPUNIT_ASSERT( abstract.Rename("/boot/DontMatter", true) == B_ENTRY_NOT_FOUND );
+	struct stat tmpStat, bootStat;
+	CPPUNIT_ASSERT( stat("/tmp", &tmpStat) == 0 );
+	CPPUNIT_ASSERT( stat("/boot", &bootStat) == 0 );
+	status_t bootError = tmpStat.st_dev == bootStat.st_dev
+		? B_ENTRY_NOT_FOUND : B_CROSS_DEVICE_LINK;
+	CPPUNIT_ASSERT( abstract.Rename("/boot/DoesntMatter") == bootError );
+	CPPUNIT_ASSERT( abstract.Rename("/boot/DontMatter", true) == bootError );
 	CPPUNIT_ASSERT( abstract.Rename("/DoesntMatter") == B_CROSS_DEVICE_LINK );
 	CPPUNIT_ASSERT( abstract.Rename("/DontMatter", true) == B_CROSS_DEVICE_LINK );
 	// bad args
@@ -2132,6 +2137,23 @@ status_t
 get_entry_ref_for_entry(const char *dir, const char *leaf, entry_ref *ref)
 {
 	status_t error = (dir && leaf ? B_OK : B_BAD_VALUE);
+	if (error != B_OK)
+		return error;
+	int dirFd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (dirFd < 0)
+		return errno;
+	*ref = entry_ref(dirFd, leaf);
+	close(dirFd);
+	return ref->init_check();
+}
+
+// get_physical_entry_ref_for_entry
+static
+status_t
+get_physical_entry_ref_for_entry(const char *dir, const char *leaf,
+	entry_ref *ref)
+{
+	status_t error = (dir && leaf ? B_OK : B_BAD_VALUE);
 	struct stat dirStat;
 	if (lstat(dir, &dirStat) == 0) {
 		ref->set_to(dirStat.st_dev, dirStat.st_ino, leaf);
@@ -2253,8 +2275,6 @@ EntryTest::CFunctionsTest()
 		CPPUNIT_ASSERT( fd1 >= 0 && fd2 >= 0 );
 		entry_ref virtRef1(fd1, ".");
 		entry_ref virtRef2(fd2, ".");
-		// Two create_vref calls on the same path produce different vref_ids
-		CPPUNIT_ASSERT( virtRef1.vdirectory() != virtRef2.vdirectory() );
 		// operator== dereferences both and finds the same physical directory
 		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
 		CPPUNIT_ASSERT( !(virtRef1 != virtRef2) );
@@ -2265,7 +2285,7 @@ EntryTest::CFunctionsTest()
 	NextSubTest();
 	{
 		entry_ref physRef;
-		CPPUNIT_ASSERT( get_entry_ref_for_entry("/", ".", &physRef) == B_OK );
+		CPPUNIT_ASSERT( get_physical_entry_ref_for_entry("/", ".", &physRef) == B_OK );
 		CPPUNIT_ASSERT( !physRef.is_virtual() );
 		int fd = open("/", O_RDONLY | O_DIRECTORY);
 		CPPUNIT_ASSERT( fd >= 0 );

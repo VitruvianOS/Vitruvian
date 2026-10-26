@@ -20,6 +20,8 @@
 #include <UnicodeChar.h>
 
 #include <unicode/datefmt.h>
+#include <unicode/decimfmt.h>
+#include <unicode/numfmt.h>
 #include <unicode/locid.h>
 #include <unicode/smpdtfmt.h>
 #include <unicode/ulocdata.h>
@@ -538,16 +540,64 @@ BFormattingConventions::GetDateTimeFormat(BDateFormatStyle dateStyle,
 status_t
 BFormattingConventions::GetNumericFormat(BString& outFormat) const
 {
-	// TODO!
-	return B_UNSUPPORTED;
+	outFormat = fExplicitNumericFormat.Length()
+		? fExplicitNumericFormat
+		: fCachedNumericFormat;
+
+	if (outFormat.Length() > 0)
+		return B_OK;
+
+	UErrorCode error = U_ZERO_ERROR;
+	ObjectDeleter<NumberFormat> formatter(
+		NumberFormat::createInstance(*fICULocale, error));
+	if (!formatter.IsSet() || U_FAILURE(error))
+		return B_NO_MEMORY;
+
+	DecimalFormat* formatterImpl = dynamic_cast<DecimalFormat*>(formatter.Get());
+	if (formatterImpl == NULL)
+		return B_UNSUPPORTED;
+
+	UnicodeString icuString;
+	formatterImpl->toPattern(icuString);
+	outFormat.Truncate(0);
+	BStringByteSink stringConverter(&outFormat);
+	icuString.toUTF8(stringConverter);
+
+	fCachedNumericFormat = outFormat;
+
+	return B_OK;
 }
 
 
 status_t
 BFormattingConventions::GetMonetaryFormat(BString& outFormat) const
 {
-	// TODO!
-	return B_UNSUPPORTED;
+	outFormat = fExplicitMonetaryFormat.Length()
+		? fExplicitMonetaryFormat
+		: fCachedMonetaryFormat;
+
+	if (outFormat.Length() > 0)
+		return B_OK;
+
+	UErrorCode error = U_ZERO_ERROR;
+	ObjectDeleter<NumberFormat> formatter(
+		NumberFormat::createCurrencyInstance(*fICULocale, error));
+	if (!formatter.IsSet() || U_FAILURE(error))
+		return B_NO_MEMORY;
+
+	DecimalFormat* formatterImpl = dynamic_cast<DecimalFormat*>(formatter.Get());
+	if (formatterImpl == NULL)
+		return B_UNSUPPORTED;
+
+	UnicodeString icuString;
+	formatterImpl->toPattern(icuString);
+	outFormat.Truncate(0);
+	BStringByteSink stringConverter(&outFormat);
+	icuString.toUTF8(stringConverter);
+
+	fCachedMonetaryFormat = outFormat;
+
+	return B_OK;
 }
 
 

@@ -210,7 +210,7 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 		return BKernelPrivate::posixError(errno);
 
 	struct stat st;
-	if (_kern_read_stat(ret, path, false, &st, 0) != B_OK) {
+	if (_kern_read_stat(ret, NULL, false, &st, 0) != B_OK) {
 		if (!(openMode & O_CREAT)) {
 			close(ret);
 			return B_ENTRY_NOT_FOUND;

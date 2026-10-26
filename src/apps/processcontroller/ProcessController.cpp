@@ -607,6 +607,11 @@ ProcessController::MouseDown(BPoint where)
 
 	gPopupThreadID = spawn_thread(thread_popup, "Popup holder thread",
 		B_URGENT_DISPLAY_PRIORITY, param);
+	if (gPopupThreadID < 0) {
+		delete param;
+		atomic_add(&gPopupFlag, -1);
+		return;
+	}
 	resume_thread(gPopupThreadID);
 }
 

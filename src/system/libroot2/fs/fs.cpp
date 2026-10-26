@@ -96,6 +96,9 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 {
 	CALLED();
 
+	if (st == NULL)
+		return B_BAD_VALUE;
+
 	struct statx stx;
 	status_t err = _kern_read_statx(fd, path, traverseLink,
 		STATX_BASIC_STATS, &stx);

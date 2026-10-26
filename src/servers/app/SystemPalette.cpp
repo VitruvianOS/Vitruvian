@@ -103,6 +103,9 @@ FillColorMap(const rgb_color *palette, color_map *map)
 		rgbColor.red = (color & 0x7c00) >> 7;
 		rgbColor.green = (color & 0x3e0) >> 2;
 		rgbColor.blue = (color & 0x1f) << 3;
+		rgbColor.red |= rgbColor.red >> 5;
+		rgbColor.green |= rgbColor.green >> 5;
+		rgbColor.blue |= rgbColor.blue >> 5;
 
 		map->index_map[color] = FindClosestColor(rgbColor, palette);
 	}

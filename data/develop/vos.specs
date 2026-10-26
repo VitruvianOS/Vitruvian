@@ -32,6 +32,7 @@
 -I/system/develop/headers/os/midi2
 -I/system/develop/headers/os/net
 -I/system/develop/headers/os/opengl
+-I/system/develop/headers/os/web
 -I/system/develop/headers/posix
 -I/system/develop/headers/private/app
 -I/system/develop/headers/private/servers/app

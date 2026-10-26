@@ -744,6 +744,9 @@ BRoster::GetAppInfo(const char* signature, app_info* info) const
 			error = B_ERROR;
 	}
 
+	if (error != B_OK && info != NULL)
+		*info = app_info();
+
 	return error;
 }
 
@@ -769,6 +772,9 @@ BRoster::GetAppInfo(entry_ref* ref, app_info* info) const
 		else if (reply.FindInt32("error", &error) != B_OK)
 			error = B_ERROR;
 	}
+
+	if (error != B_OK && info != NULL)
+		*info = app_info();
 	return error;
 }
 
@@ -795,6 +801,9 @@ BRoster::GetRunningAppInfo(team_id team, app_info* info) const
 		else if (reply.FindInt32("error", &error) != B_OK)
 			error = B_ERROR;
 	}
+
+	if (error != B_OK && info != NULL)
+		*info = app_info();
 	return error;
 }
 
@@ -817,6 +826,9 @@ BRoster::GetActiveAppInfo(app_info* info) const
 		else if (reply.FindInt32("error", &error) != B_OK)
 			error = B_ERROR;
 	}
+
+	if (error != B_OK && info != NULL)
+		*info = app_info();
 	return error;
 }
 

@@ -106,6 +106,9 @@ get_app_ref(team_id team, entry_ref *ref, bool traverse)
 		error = entry.GetRef(ref);
 	}
 
+	if (error != B_OK && ref != NULL)
+		*ref = entry_ref();
+
 	return error;
 }
 

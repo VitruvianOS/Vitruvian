@@ -213,6 +213,8 @@ bool FSInDeskDir(const entry_ref*);
 bool FSIsQueriesDir(const entry_ref*);
 bool FSInRootDir(const entry_ref*);
 bool FSInTrashDir(const entry_ref*);
+// false if the user cannot unlink entries from ref's parent directory
+bool FSParentIsWritable(const entry_ref*);
 
 // doesn't need to be exported
 bool FSGetPoseLocation(const BNode* node, BPoint* point);
@@ -278,7 +280,7 @@ status_t ShouldEditRefName(const entry_ref* ref, const char* name, size_t);
 
 bool CheckDevicesEqual(const entry_ref* entry, const Model* targetModel);
 
-// true if any source lives in the system directory and the target does not
+// true if a boot-critical system entry would leave the system directory
 bool IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 	const Model* targetModel);
 

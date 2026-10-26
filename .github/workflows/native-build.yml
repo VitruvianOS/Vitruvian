@@ -4,6 +4,8 @@ name: Native amd64 build test
 on:
   push:
     branches-ignore: [master]
+    # Text-only pushes don't need a build.
+    paths-ignore: ['**.md', 'LICENSE*']
 
 # A newer push supersedes this run; there is no value in finishing a
 # build of code that is no longer the head. Keyed per ref so branches

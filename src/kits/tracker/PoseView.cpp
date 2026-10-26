@@ -6028,6 +6028,14 @@ BPoseView::EntryMoved(const BMessage* message)
 	} else if (oldDir.directory() == thisDirNode.node()) {
 		int32 fallbackIndex;
 		BPose* fallbackPose = fPoseList->FindPose(&itemNode, &fallbackIndex);
+		// a renaming move (trash collision) still lists the old name
+		const char* fromName;
+		if (fallbackPose == NULL
+			&& message->FindString("from name", &fromName) == B_OK
+			&& fromName[0] != '\0') {
+			fallbackPose = fPoseList->FindPoseByFileName(fromName,
+				&fallbackIndex);
+		}
 		if (fallbackPose == NULL && name != NULL && name[0] != '\0')
 			fallbackPose = fPoseList->FindPoseByFileName(name, &fallbackIndex);
 		if (fallbackPose != NULL) {
@@ -6512,6 +6520,16 @@ CheckVolumeReadOnly(const entry_ref* ref)
 			B_TRANSLATE("Files cannot be moved or deleted from a read-only "
 			"volume."), B_TRANSLATE("Cancel"), NULL, NULL, B_WIDTH_AS_USUAL,
 			B_STOP_ALERT);
+		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+		alert->Go();
+		return false;
+	}
+
+	if (!FSParentIsWritable(ref)) {
+		BAlert* alert = new BAlert("",
+			B_TRANSLATE("You do not have permission to move or delete files "
+			"in this folder."), B_TRANSLATE("Cancel"), NULL, NULL,
+			B_WIDTH_AS_USUAL, B_STOP_ALERT);
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go();
 		return false;
@@ -9251,7 +9269,8 @@ BPoseView::CanMoveToTrashOrDuplicate() const
 	if (selectCount < 1)
 		return false;
 
-	if (SelectedVolumeIsReadOnly())
+	if (SelectedVolumeIsReadOnly()
+		|| !FSParentIsWritable(fSelectionList->FirstItem()->TargetModel()->EntryRef()))
 		return false;
 
 	BPose* pose;

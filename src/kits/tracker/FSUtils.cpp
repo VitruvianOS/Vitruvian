@@ -468,6 +468,28 @@ CheckDevicesEqual(const entry_ref* srcRef, const Model* targetModel)
 }
 
 
+// /system/data is user content; only the rest of /system is boot-critical
+static bool
+IsProtectedSystemEntry(const BEntry* entry)
+{
+	return DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)
+		&& !DirectoryMatchesOrContains(entry, B_SYSTEM_DATA_DIRECTORY);
+}
+
+
+bool
+FSParentIsWritable(const entry_ref* ref)
+{
+	BEntry entry(ref);
+	BEntry parent;
+	BPath path;
+	if (entry.GetParent(&parent) != B_OK || parent.GetPath(&path) != B_OK)
+		return true;
+
+	return access(path.Path(), W_OK) == 0;
+}
+
+
 bool
 IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 	const Model* targetModel)
@@ -478,7 +500,7 @@ IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
 
 	for (int32 i = 0; i < srcList->CountItems(); i++) {
 		BEntry entry(srcList->ItemAt(i));
-		if (DirectoryMatchesOrContains(&entry, B_SYSTEM_DIRECTORY))
+		if (IsProtectedSystemEntry(&entry))
 			return true;
 	}
 	return false;
@@ -692,7 +714,7 @@ ConfirmChangeIfWellKnownDirectory(const BEntry* entry, DestructiveAction action,
 	if (FSIsDeskDir(entry) || FSIsPrintersDir(entry) || FSIsRootDir(entry) || FSIsTrashDir(entry))
 		return false;
 
-	if ((!DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)
+	if ((!IsProtectedSystemEntry(entry)
 		&& !DirectoryMatchesOrContains(entry, B_USER_DIRECTORY))
 		|| DirectoryMatchesOrContains(entry, B_SYSTEM_TEMP_DIRECTORY))
 		// quick way out
@@ -701,7 +723,7 @@ ConfirmChangeIfWellKnownDirectory(const BEntry* entry, DestructiveAction action,
 	BString warning;
 	bool requireOverride = true;
 
-	if (DirectoryMatchesOrContains(entry, B_SYSTEM_DIRECTORY)) {
+	if (IsProtectedSystemEntry(entry)) {
 		if (action == kRename) {
 			warning.SetTo(
 				B_TRANSLATE("If you rename the system folder or its "
@@ -1137,6 +1159,12 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 	if (moveMode == kCopySelectionTo && destIsTrash) {
 		// cannot copy to trash
 		moveMode = kMoveSelectionTo;
+	}
+
+	// an unwritable source folder copies, like a read-only volume
+	if (moveMode == kMoveSelectionTo && !destIsTrash
+		&& !FSParentIsWritable(srcList->FirstItem())) {
+		sourceIsReadOnly = true;
 	}
 
 	if (moveMode == kMoveSelectionTo && sourceIsReadOnly)
@@ -1985,7 +2013,8 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 				CopyFile(entry, &statbuf, destDir, loopControl, loc,
 					makeOriginalName, undo);
 				if (moveMode == kMoveSelectionTo)
-					entry->Remove();
+					// a dropped status leaves source and copy both
+					MoveError::FailOnError(entry->Remove());
 			}
 		}
 	} catch (status_t error) {

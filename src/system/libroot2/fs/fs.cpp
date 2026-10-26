@@ -37,6 +37,24 @@ join_path(const char* dir, const char* leaf, char* buffer, size_t bufferSize)
 }
 
 
+// O_NOTRAVERSE is a V\OS-private bit: open the link itself if the leaf is a
+// symlink (O_PATH, usable for stat/readlink/chown only), else open normally.
+static int
+open_at_mode(int dirFd, const char* path, int openMode, int perms)
+{
+	bool noTraverse = (openMode & O_NOTRAVERSE) != 0;
+	openMode &= ~O_NOTRAVERSE;
+
+	if (!noTraverse)
+		return openat(dirFd, path, openMode, perms);
+
+	int ret = openat(dirFd, path, openMode | O_NOFOLLOW, perms);
+	if (ret < 0 && errno == ELOOP)
+		ret = openat(dirFd, path, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+	return ret;
+}
+
+
 status_t
 _kern_read_statx(int fd, const char* path, bool traverseLink,
 	unsigned int mask, struct statx* stx)
@@ -64,7 +82,7 @@ _kern_read_statx(int fd, const char* path, bool traverseLink,
 		return -errno;
 
 	struct stat st;
-	if (fstatat(fd, path, &st, flags & ~AT_EMPTY_PATH) < 0)
+	if (fstatat(fd, path, &st, flags) < 0)
 		return -errno;
 
 	memset(stx, 0, sizeof(*stx));
@@ -152,11 +170,8 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	// especially when load_image() uses clone()+exec().
 	openMode |= O_CLOEXEC;
 
-	int ret;
-	if (openMode & O_CREAT)
-		ret = openat(fd, path, openMode, perms);
-	else
-		ret = openat(fd, path, openMode);
+	int ret = open_at_mode(fd, path, openMode,
+		(openMode & O_CREAT) != 0 ? perms : 0);
 
 	if (ret < 0)
 		return -errno;
@@ -331,7 +346,7 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
 		return fd;
 
-	int retFd = openat(fd, name, openMode, perms);
+	int retFd = open_at_mode(fd, name, openMode, perms);
 	if (retFd < 0 && errno == EISDIR)
 		retFd = openat(fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
 	close(fd);
@@ -358,7 +373,7 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 	if (ret != B_OK)
 		return ret;
 
-	int fd = open(path, openMode, perms);
+	int fd = open_at_mode(AT_FDCWD, path, openMode, perms);
 	if (fd < 0 && errno == EISDIR)
 		fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
 	return (fd < 0) ? -errno : fd;
@@ -561,10 +576,14 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		// When path is NULL we operate directly on the fd.
 		if (path == NULL) {
 			if (fchmod(fd, st->st_mode) < 0)
-				return -errno;
+				return (errno == EBADF) ? B_NOT_SUPPORTED : -errno;
 		} else {
-			if (fchmodat(fd, path, st->st_mode, 0) < 0)
+			if (fchmodat(fd, path, st->st_mode,
+					traverseLink ? 0 : AT_SYMLINK_NOFOLLOW) < 0) {
+				if (errno == EOPNOTSUPP || errno == ENOTSUP)
+					return B_NOT_SUPPORTED;
 				return -errno;
+			}
 		}
 	}
 
@@ -572,8 +591,11 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		uid_t uid = (statMask & B_STAT_UID) ? st->st_uid : (uid_t)-1;
 		gid_t gid = (statMask & B_STAT_GID) ? st->st_gid : (gid_t)-1;
 		if (path == NULL) {
-			if (fchown(fd, uid, gid) < 0)
-				return -errno;
+			if (fchown(fd, uid, gid) < 0) {
+				if (errno != EBADF || fchownat(fd, "", uid, gid,
+						AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW) < 0)
+					return -errno;
+			}
 		} else {
 			if (fchownat(fd, path, uid, gid, flags) < 0)
 				return -errno;
@@ -612,8 +634,11 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		}
 
 		if (path == NULL) {
-			if (futimens(fd, times) < 0)
-				return -errno;
+			if (futimens(fd, times) < 0) {
+				if (errno != EBADF
+					|| utimensat(fd, "", times, AT_EMPTY_PATH) < 0)
+					return -errno;
+			}
 		} else {
 			if (utimensat(fd, path, times, flags) < 0)
 				return -errno;

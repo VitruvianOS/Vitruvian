@@ -27,6 +27,18 @@
 #include "../../kernel/nexus/nexus/nexus.h"
 
 
+static bool
+is_link_fd(int fd)
+{
+	int flags = fcntl(fd, F_GETFL);
+	if (flags < 0 || (flags & O_PATH) == 0)
+		return false;
+
+	struct stat st;
+	return fstat(fd, &st) == 0 && S_ISLNK(st.st_mode);
+}
+
+
 extern "C" int
 _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 {
@@ -34,6 +46,9 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
+
+	if (fd >= 0 && is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 
 	int nmfd = BKernelPrivate::Team::GetNodeMonitorDescriptor();
 	if (nmfd < 0)
@@ -48,7 +63,7 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 			flags |= O_NOFOLLOW;
 		targetFd = open(path, flags);
 		if (targetFd < 0)
-			return B_ENTRY_NOT_FOUND;
+			return (errno == ELOOP) ? B_NOT_SUPPORTED : B_ENTRY_NOT_FOUND;
 		needClose = true;
 	}
 
@@ -79,9 +94,10 @@ _kern_open_attr(int fd, const char *path, const char *name,
 	if (path == NULL)
 		return fs_fopen_attr(fd, name, type, openMode);
 
-	int nodeFd = openat(fd < 0 ? AT_FDCWD : fd, path, O_RDONLY | O_CLOEXEC);
+	int nodeFd = openat(fd < 0 ? AT_FDCWD : fd, path,
+		O_RDONLY | O_CLOEXEC | ((openMode & O_NOTRAVERSE) ? O_NOFOLLOW : 0));
 	if (nodeFd < 0)
-		return B_ENTRY_NOT_FOUND;
+		return (errno == ELOOP) ? B_NOT_SUPPORTED : B_ENTRY_NOT_FOUND;
 
 	int result = fs_fopen_attr(nodeFd, name, type, openMode);
 	close(nodeFd);
@@ -97,6 +113,8 @@ fs_read_attr(int fd, const char *attribute, uint32 type,
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 	if (attribute == NULL || buffer == NULL)
 		return B_BAD_VALUE;
 
@@ -138,6 +156,8 @@ fs_write_attr(int fd, const char *attribute, uint32 type,
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 	if (attribute == NULL || (buffer == NULL && writeBytes > 0))
 		return B_BAD_VALUE;
 
@@ -176,6 +196,8 @@ fs_stat_attr(int fd, const char *attribute, struct attr_info *attrInfo)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 	if (attribute == NULL)
 		return B_BAD_VALUE;
 
@@ -215,6 +237,8 @@ _kern_remove_attr(int fd, const char *attribute)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 	if (attribute == NULL)
 		return B_BAD_VALUE;
 
@@ -257,6 +281,8 @@ _kern_rename_attr(int fromFile, const char *fromName,
 
 	if (fromFile < 0 || toFile < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fromFile) || is_link_fd(toFile))
+		return B_NOT_SUPPORTED;
 	if (fromName == NULL || toName == NULL)
 		return B_BAD_VALUE;
 
@@ -374,6 +400,8 @@ fs_fopen_attr(int fd, const char *attribute, uint32 type, int openMode)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+	if (is_link_fd(fd))
+		return B_NOT_SUPPORTED;
 	if (attribute == NULL || strlen(attribute) > NEXUS_ATTR_NAME_MAX)
 		return B_BAD_VALUE;
 
@@ -445,9 +473,10 @@ fs_open_attr(const char *path, const char *attribute,
 	if (path == NULL)
 		return B_BAD_VALUE;
 
-	int nodeFd = open(path, O_RDONLY | O_CLOEXEC);
+	int nodeFd = open(path,
+		O_RDONLY | O_CLOEXEC | ((openMode & O_NOTRAVERSE) ? O_NOFOLLOW : 0));
 	if (nodeFd < 0)
-		return B_ENTRY_NOT_FOUND;
+		return (errno == ELOOP) ? B_NOT_SUPPORTED : B_ENTRY_NOT_FOUND;
 
 	int result = fs_fopen_attr(nodeFd, attribute, type, openMode);
 	close(nodeFd);

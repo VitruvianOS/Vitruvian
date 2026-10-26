@@ -133,6 +133,21 @@ LinuxVolume::FillVolumeInfo(const BPrivate::MountEntry& entry, fs_info* info)
 	if (isPersistent)
 		info->flags |= B_FS_IS_PERSISTENT;
 
+	static const char* const kSharedTypes[] = {
+		"nfs", "nfs4", "cifs", "smb3", "fuse.sshfs", "sshfs", "9p", NULL
+	};
+	static const char* const kXattrTypes[] = {
+		"ext4", "xfs", "btrfs", "f2fs", NULL
+	};
+	for (int i = 0; kSharedTypes[i] != NULL; i++) {
+		if (strcmp(fsType, kSharedTypes[i]) == 0)
+			info->flags |= B_FS_IS_SHARED;
+	}
+	for (int i = 0; kXattrTypes[i] != NULL; i++) {
+		if (strcmp(fsType, kXattrTypes[i]) == 0)
+			info->flags |= B_FS_HAS_MIME;
+	}
+
 	if ((vfs.f_flag & ST_RDONLY) != 0
 			|| (entry.flags & MS_RDONLY) != 0
 			|| (caps != NULL && (caps->flags & BPrivate::FsCaps::READONLY)))

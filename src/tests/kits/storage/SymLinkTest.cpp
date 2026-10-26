@@ -20,7 +20,8 @@ SymLinkTest::Suite()
 	CppUnit::TestSuite *suite = new CppUnit::TestSuite();
 	typedef CppUnit::TestCaller<SymLinkTest> TC;
 	
-	NodeTest::AddBaseClassTests<SymLinkTest>("BSymLink::", suite);
+	StatableTest::AddBaseClassTests<SymLinkTest>("BSymLink::", suite);
+	suite->addTest( new TC("BSymLink::BNode::Dup Test", &NodeTest::DupTest) );
 
 	suite->addTest( new TC("BSymLink::Init Test 1", &SymLinkTest::InitTest1) );
 	suite->addTest( new TC("BSymLink::Init Test 2", &SymLinkTest::InitTest2) );

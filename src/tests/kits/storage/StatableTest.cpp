@@ -7,6 +7,8 @@
 #include <cppunit/TestCaller.h>
 #include <cppunit/TestSuite.h>
 
+#include <Directory.h>
+#include <File.h>
 #include <Statable.h>
 #include <Entry.h>
 #include <Node.h>
@@ -17,9 +19,11 @@
 static int
 stat_for_statable(BStatable* statable, const char* path, struct stat* st)
 {
-	if (dynamic_cast<BEntry*>(statable) != NULL)
-		return lstat(path, st);
-	return stat(path, st);
+	if (dynamic_cast<BFile*>(statable) != NULL
+		|| dynamic_cast<BDirectory*>(statable) != NULL) {
+		return stat(path, st);
+	}
+	return lstat(path, st);
 }
 
 // setUp
@@ -122,9 +126,6 @@ StatableTest::GetXYZTest()
 		time_t atime;
 #endif
 		BVolume volume;
-		// BNode follows symlinks on Linux (O_NOTRAVERSE = O_NOCTTY there),
-		// so compare against the resolved target via stat(), not lstat().
-		// BEntry never traverses, so it is compared against lstat().
 		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( statable->GetNodeRef(&ref) == B_OK );
 		CPPUNIT_ASSERT( statable->GetOwner(&owner) == B_OK );

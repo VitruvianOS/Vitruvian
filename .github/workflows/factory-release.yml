@@ -16,6 +16,8 @@ name: Factory release
 on:
   push:
     branches: [master]
+    # Text-only pushes don't need a build.
+    paths-ignore: ['**.md', 'LICENSE*']
   workflow_dispatch:
 
 # A newer push supersedes this run. Cancelling is safe for the counter:

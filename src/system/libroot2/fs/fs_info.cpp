@@ -6,8 +6,11 @@
 #include "LinuxVolume.h"
 
 #include <fs_info.h>
+#include <drivers/fs_interface.h>
 #include <syscalls.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <linux/fs.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/statvfs.h>
@@ -274,8 +277,51 @@ _kern_read_fs_info(dev_t device, fs_info* info)
 status_t
 _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 {
-	UNIMPLEMENTED();
-	return B_NOT_SUPPORTED;
+	CALLED();
+
+	if (info == NULL)
+		return B_BAD_VALUE;
+	if ((mask & ~FS_WRITE_FSINFO_NAME) != 0)
+		return B_NOT_SUPPORTED;
+	if ((mask & FS_WRITE_FSINFO_NAME) == 0)
+		return B_OK;
+
+	BPrivate::MountEntry entry;
+	if (!BPrivate::MountInfo::FindByDev(device, &entry))
+		return B_BAD_VALUE;
+
+	char label[FSLABEL_MAX];
+	memset(label, 0, sizeof(label));
+	strlcpy(label, info->volume_name, sizeof(label));
+
+	int fd = open(entry.mount_point.String(),
+		O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (fd < 0)
+		return errno == EACCES ? B_PERMISSION_DENIED : B_ENTRY_NOT_FOUND;
+
+	int result = ioctl(fd, FS_IOC_SETFSLABEL, label);
+	int error = errno;
+	close(fd);
+
+	if (result < 0) {
+		switch (error) {
+			case EPERM:
+			case EACCES:
+				return B_PERMISSION_DENIED;
+			case EINVAL:
+			case ERANGE:
+				return B_BAD_VALUE;
+			case EROFS:
+				return B_READ_ONLY_DEVICE;
+			default:
+				return B_NOT_SUPPORTED;
+		}
+	}
+
+	pthread_mutex_lock(&sInfoCache.lock);
+	sInfoCache.valid = false;
+	pthread_mutex_unlock(&sInfoCache.lock);
+	return B_OK;
 }
 
 

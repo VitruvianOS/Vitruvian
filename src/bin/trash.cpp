@@ -62,7 +62,7 @@ status_t trash(const char *f)
 	char trash_dir[B_PATH_NAME_LENGTH];
 	char trashed_file[B_PATH_NAME_LENGTH];
 	dev = dev_for_path(f);
-	err = find_directory(B_TRASH_DIRECTORY, dev, false, trash_dir, B_PATH_NAME_LENGTH);
+	err = find_directory(B_TRASH_DIRECTORY, dev, true, trash_dir, B_PATH_NAME_LENGTH);
 	if (err < 0)
 		return err;
 	BNode node(f);

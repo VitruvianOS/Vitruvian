@@ -819,10 +819,10 @@ BNode::_SetTo(const entry_ref* ref, bool traverse)
 
 		if (ref->is_virtual()) {
 			fFd = _kern_open_virtual_ref(ref->vdirectory(), ref->name,
-					O_CLOEXEC | traverseFlag, O_RDWR);
+					O_RDWR | O_CLOEXEC | traverseFlag, 0);
 			if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
 				fFd = _kern_open_virtual_ref(ref->vdirectory(), ref->name,
-					O_CLOEXEC | traverseFlag, O_RDONLY);
+					O_RDONLY | O_CLOEXEC | traverseFlag, 0);
 			}
 		} else {
 			fFd = _kern_open_entry_ref(ref->device(), ref->directory(), ref->name,

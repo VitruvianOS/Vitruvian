@@ -596,9 +596,8 @@ BEntry::GetNodeRef(node_ref* ref) const
 	// stat + re-open liveness check that was here — path refs can go stale
 	// on any rename, unlike vref (fd-backed, inode kept alive) or fh
 	// (survives rename but not unlink).
-	int tempFd = _kern_open(fDirFd, fName, O_RDONLY | O_NONBLOCK | O_NOFOLLOW, 0);
-	if (tempFd == -ELOOP)
-		tempFd = _kern_open(fDirFd, fName, O_PATH | O_NOFOLLOW, 0);
+	int tempFd = _kern_open(fDirFd, fName,
+		O_RDONLY | O_NONBLOCK | O_NOTRAVERSE, 0);
 	if (tempFd < 0)
 		return tempFd;
 

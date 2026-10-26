@@ -15,6 +15,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <Alert.h>
@@ -115,10 +116,17 @@ void
 CheckItOut::ArgvReceived(int32 argc, char** argv)
 {
 	if (argc <= 1) {
+		fprintf(stderr, "usage: %s <url>\n", argv[0]);
 		exit(1);
 		return;
 	}
-	
+
+	if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+		fprintf(stderr, "usage: %s <url>\n", argv[0]);
+		exit(0);
+		return;
+	}
+
 	BUrl url(argv[1], true);
 	fUrlString = url;
 
@@ -132,6 +140,7 @@ CheckItOut::ArgvReceived(int32 argc, char** argv)
 
 	if (!url.IsValid()) {
 		fprintf(stderr, "malformed url: '%s'\n", url.UrlString().String());
+		exit(1);
 		return;
 	}
 	

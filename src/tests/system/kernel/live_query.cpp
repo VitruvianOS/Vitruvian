@@ -182,14 +182,11 @@ LiveQuery::MessageReceived(BMessage* message)
 			int32 what;
 			message->FindInt32("opcode", &what);
 
-			// node monitor posts device/directory/node as UInt64.
-			uint64 device;
-			uint64 directory;
-			uint64 node;
+			entry_ref entryRef;
+			node_ref nodeRef;
 			const char* name;
-			message->FindUInt64("device", &device);
-			message->FindUInt64("directory", &directory);
-			message->FindUInt64("node", &node);
+			message->FindRef("virtual:directory", &entryRef);
+			message->FindNodeRef("virtual:node", &nodeRef);
 			message->FindString("name", &name);
 
 			switch (what) {

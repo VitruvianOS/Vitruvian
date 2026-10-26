@@ -337,9 +337,13 @@ static int test_entry_moved()
     ASSERT_OK(msg.FindInt32("opcode", &opcode), "Should have opcode field");
     ASSERT_EQ(opcode, B_ENTRY_MOVED, "Opcode should be B_ENTRY_MOVED");
     
-    int64 from_dir, to_dir;
-    ASSERT_OK(msg.FindInt64("from directory", &from_dir), "Should have from directory");
-    ASSERT_OK(msg.FindInt64("to directory", &to_dir), "Should have to directory");
+    dev_t from_dev, to_dev;
+    ino_t from_dir, to_dir;
+    char from_ref_name[B_FILE_NAME_LENGTH], to_ref_name[B_FILE_NAME_LENGTH];
+    ASSERT_OK(msg.FindRef("virtual:from directory", &from_dev, &from_dir,
+        from_ref_name, sizeof(from_ref_name)), "Should have from directory");
+    ASSERT_OK(msg.FindRef("virtual:to directory", &to_dev, &to_dir,
+        to_ref_name, sizeof(to_ref_name)), "Should have to directory");
     ASSERT_EQ(from_dir, to_dir, "Same directory rename");
     
     const char *name;

@@ -47,6 +47,8 @@ target_sources(be PRIVATE
 	# the tree, unlike libnetservices (used by Geolocation.cpp) -- disabled.
 )
 
+target_compile_definitions(be PRIVATE OPENSSL_ENABLED)
+
 target_include_directories(be PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/libnetapi
 	${CMAKE_SOURCE_DIR}/headers/private/net

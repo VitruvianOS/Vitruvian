@@ -146,6 +146,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	OPENSSL
+	LIBRARIES  "ssl;crypto"
+	PACKAGES  "libssl-dev"
+	RUNTIMES  "libssl3t64 (>= 3.0)"
+)
+
+DeclareDependency(
 	LIBDRM
 	LIBRARIES  "drm"
 	PACKAGES  "libdrm-dev"

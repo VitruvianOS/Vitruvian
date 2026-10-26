@@ -4,7 +4,7 @@ AddOn(
 	be
 	SHARED
 
-	LIBS root icon ${ICU_LIBRARIES} agg ${ZLIB_LIBRARIES} pthread localestub shared systemd
+	LIBS root icon ${ICU_LIBRARIES} agg ${ZLIB_LIBRARIES} ${OPENSSL_LIBRARIES} pthread localestub shared systemd
 
 	RDEF
 	CountryFlags.rdef

@@ -122,6 +122,13 @@ NodeTest::CreateRONodes(TestNodes& testEntries)
 	testEntries.add(new BNode(filename), filename);
 }
 
+static bool
+is_link_node(BNode* node)
+{
+	struct stat st;
+	return node->GetStat(&st) == B_OK && S_ISLNK(st.st_mode);
+}
+
 // CreateRWNodes
 void
 NodeTest::CreateRWNodes(TestNodes& testEntries)
@@ -670,6 +677,8 @@ NodeTest::AttrDirTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		AttrDirTest(*node);
 	}
 	testEntries.delete_all();
@@ -776,6 +785,8 @@ NodeTest::AttrTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		AttrTest(*node);
 	}
 	testEntries.delete_all();
@@ -848,6 +859,8 @@ NodeTest::AttrRenameTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		AttrRenameTest(*node);
 	}
 	testEntries.delete_all();
@@ -932,6 +945,8 @@ NodeTest::AttrInfoTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		AttrInfoTest(*node);
 	}
 	testEntries.delete_all();
@@ -1036,6 +1051,8 @@ NodeTest::AttrBStringTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		AttrBStringTest(*node);
 	}
 	testEntries.delete_all();
@@ -1062,6 +1079,8 @@ NodeTest::SyncTest() {
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		CPPUNIT_ASSERT( node->WriteAttr(attr, B_STRING_TYPE, 0, str, len)
 						== len );
 		CPPUNIT_ASSERT( node->Sync() == B_OK );
@@ -1178,6 +1197,8 @@ NodeTest::LockTest()
 	NextSubTest();
 	CreateRWNodes(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(node, nodeName); ) {
+		if (is_link_node(node))
+			continue;
 		LockTest(*node, nodeName.c_str());
 	}
 	testEntries.delete_all();

@@ -246,9 +246,10 @@ StatableTest::SetXYZTest()
 #endif
 		CPPUNIT_ASSERT( statable->SetOwner(owner) == B_OK );
 		CPPUNIT_ASSERT( statable->SetGroup(group) == B_OK );
-		struct stat targetSt;
-		bool hasTarget = stat(entryName.c_str(), &targetSt) == 0;
-		if (hasTarget)
+		struct stat nodeSt;
+		bool isLink = statable->GetStat(&nodeSt) == B_OK
+			&& S_ISLNK(nodeSt.st_mode);
+		if (!isLink)
 			CPPUNIT_ASSERT( statable->SetPermissions(perms) == B_OK );
 		else
 			CPPUNIT_ASSERT( statable->SetPermissions(perms) != B_OK );
@@ -264,10 +265,8 @@ StatableTest::SetXYZTest()
 		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( owner == st.st_uid );
 		CPPUNIT_ASSERT( group == st.st_gid );
-		if (hasTarget) {
-			CPPUNIT_ASSERT( stat(entryName.c_str(), &targetSt) == 0 );
-			CPPUNIT_ASSERT( perms == (targetSt.st_mode & S_IUMSK) );
-		}
+		if (!isLink)
+			CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );
 #ifndef __VOS__
 		CPPUNIT_ASSERT( ctime == st.st_crtime );

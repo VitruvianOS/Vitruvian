@@ -45,8 +45,6 @@ AlphaMask::AlphaMask(AlphaMask* previousMask, bool inverse)
 	fMask(),
 	fScanline(fMask)
 {
-	recursive_lock_init(&fLock, "AlphaMask");
-
 	if (previousMask != NULL)
 		atomic_add(&previousMask->fNextMaskCount, 1);
 
@@ -71,8 +69,6 @@ AlphaMask::AlphaMask(AlphaMask* previousMask, AlphaMask* other)
 	fMask(other->fMask),
 	fScanline(fMask)
 {
-	recursive_lock_init(&fLock, "AlphaMask");
-
 	fMask.attach(fBuffer);
 
 	if (previousMask != NULL)
@@ -99,8 +95,6 @@ AlphaMask::AlphaMask(uint8 backgroundOpacity)
 	fMask(),
 	fScanline(fMask)
 {
-	recursive_lock_init(&fLock, "AlphaMask");
-
 	_SetOutsideOpacity();
 }
 
@@ -109,15 +103,13 @@ AlphaMask::~AlphaMask()
 {
 	if (fPreviousMask.IsSet())
 		atomic_add(&fPreviousMask->fNextMaskCount, -1);
-
-	recursive_lock_destroy(&fLock);
 }
 
 
 IntPoint
 AlphaMask::SetCanvasGeometry(IntPoint origin, IntRect bounds)
 {
-	RecursiveLocker locker(fLock);
+	AutoLocker<BLocker> locker(fLock);
 
 	if (origin == fCanvasOrigin && bounds.Width() == fCanvasBounds.Width()
 		&& bounds.Height() == fCanvasBounds.Height())
@@ -173,8 +165,8 @@ AlphaMask::_CreateTemporaryBitmap(BRect bounds) const
 void
 AlphaMask::_Generate()
 {
-	RecursiveLocker locker(fLock);
-	RecursiveLocker previousLocker;
+	AutoLocker<BLocker> locker(fLock);
+	AutoLocker<BLocker> previousLocker;
 	if (fPreviousMask != NULL)
 		previousLocker.SetTo(fPreviousMask->fLock, false);
 
@@ -551,7 +543,7 @@ ShapeAlphaMask::Create(AlphaMask* previousMask, const shape_data& shape,
 		// of the cache entry
 		// TODO: don't make a new mask if the cache entry has no drawstate
 		// using it anymore, because then we ca just immediately reuse it
-		RecursiveLocker locker(mask->fLock);
+		AutoLocker<BLocker> locker(mask->fLock);
 		mask.SetTo(new(std::nothrow) ShapeAlphaMask(previousMask, mask), true);
 	}
 

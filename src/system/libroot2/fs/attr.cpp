@@ -13,6 +13,10 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -64,12 +68,24 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 }
 
 
+extern "C" int fs_fopen_attr(int fd, const char *attribute, uint32 type,
+	int openMode);
+
+
 extern "C" int
 _kern_open_attr(int fd, const char *path, const char *name,
 		uint32 type, int openMode)
 {
-	/* Legacy entry point — no ioctl equivalent. */
-	return B_NOT_SUPPORTED;
+	if (path == NULL)
+		return fs_fopen_attr(fd, name, type, openMode);
+
+	int nodeFd = openat(fd < 0 ? AT_FDCWD : fd, path, O_RDONLY | O_CLOEXEC);
+	if (nodeFd < 0)
+		return B_ENTRY_NOT_FOUND;
+
+	int result = fs_fopen_attr(nodeFd, name, type, openMode);
+	close(nodeFd);
+	return result;
 }
 
 
@@ -337,10 +353,88 @@ fs_close_attr_dir(DIR *dir)
 }
 
 
+struct OpenAttribute {
+	int		fd;
+	int		nodeFd;
+	char	name[NEXUS_ATTR_NAME_MAX + 1];
+	uint32	type;
+	bool	writable;
+};
+
+static const int kMaxOpenAttributes = 256;
+static OpenAttribute sOpenAttributes[kMaxOpenAttributes];
+static int sOpenAttributeCount = 0;
+static pthread_mutex_t sOpenAttributeLock = PTHREAD_MUTEX_INITIALIZER;
+
+
 extern "C" int
 fs_fopen_attr(int fd, const char *attribute, uint32 type, int openMode)
 {
-	return B_NOT_SUPPORTED;
+	CALLED();
+
+	if (fd < 0)
+		return B_FILE_ERROR;
+	if (attribute == NULL || strlen(attribute) > NEXUS_ATTR_NAME_MAX)
+		return B_BAD_VALUE;
+
+	struct attr_info info;
+	bool exists = fs_stat_attr(fd, attribute, &info) == B_OK;
+	if (!exists && (openMode & O_CREAT) == 0)
+		return B_ENTRY_NOT_FOUND;
+
+	int accMode = openMode & O_ACCMODE;
+	bool writable = accMode == O_WRONLY || accMode == O_RDWR;
+	bool truncate = exists && (openMode & O_TRUNC) != 0 && writable;
+	if (exists && type == 0)
+		type = info.type;
+
+	int memFd = memfd_create(attribute, MFD_CLOEXEC);
+	if (memFd < 0)
+		return -errno;
+
+	if (exists && !truncate && info.size > 0) {
+		char* buffer = (char*)malloc(info.size);
+		if (buffer == NULL) {
+			close(memFd);
+			return B_NO_MEMORY;
+		}
+		ssize_t got = fs_read_attr(fd, attribute, info.type, 0, buffer,
+			info.size);
+		if (got < 0 || write(memFd, buffer, got) != got) {
+			free(buffer);
+			close(memFd);
+			return got < 0 ? (int)got : B_IO_ERROR;
+		}
+		free(buffer);
+		lseek(memFd, 0, SEEK_SET);
+	}
+
+	int nodeFd = dup(fd);
+	if (nodeFd < 0) {
+		close(memFd);
+		return -errno;
+	}
+
+	pthread_mutex_lock(&sOpenAttributeLock);
+	if (sOpenAttributeCount >= kMaxOpenAttributes) {
+		pthread_mutex_unlock(&sOpenAttributeLock);
+		close(nodeFd);
+		close(memFd);
+		return B_NO_MEMORY;
+	}
+	OpenAttribute& entry = sOpenAttributes[sOpenAttributeCount++];
+	entry.fd = memFd;
+	entry.nodeFd = nodeFd;
+	strcpy(entry.name, attribute);
+	entry.type = type;
+	entry.writable = writable;
+	pthread_mutex_unlock(&sOpenAttributeLock);
+
+	if (!exists || truncate) {
+		fs_write_attr(fd, attribute, type, 0, "", 0);
+	}
+
+	return memFd;
 }
 
 
@@ -348,12 +442,67 @@ extern "C" int
 fs_open_attr(const char *path, const char *attribute,
 		uint32 type, int openMode)
 {
-	return B_NOT_SUPPORTED;
+	if (path == NULL)
+		return B_BAD_VALUE;
+
+	int nodeFd = open(path, O_RDONLY | O_CLOEXEC);
+	if (nodeFd < 0)
+		return B_ENTRY_NOT_FOUND;
+
+	int result = fs_fopen_attr(nodeFd, attribute, type, openMode);
+	close(nodeFd);
+	return result;
 }
 
 
 extern "C" int
 fs_close_attr(int fd)
 {
-	return B_NOT_SUPPORTED;
+	CALLED();
+
+	OpenAttribute entry;
+	bool found = false;
+
+	pthread_mutex_lock(&sOpenAttributeLock);
+	for (int i = 0; i < sOpenAttributeCount; i++) {
+		if (sOpenAttributes[i].fd != fd)
+			continue;
+		entry = sOpenAttributes[i];
+		sOpenAttributes[i] = sOpenAttributes[--sOpenAttributeCount];
+		found = true;
+		break;
+	}
+	pthread_mutex_unlock(&sOpenAttributeLock);
+
+	if (!found)
+		return B_FILE_ERROR;
+
+	status_t status = B_OK;
+	if (entry.writable) {
+		struct stat st;
+		if (fstat(fd, &st) != 0) {
+			status = -errno;
+		} else {
+			char* buffer = (char*)malloc(st.st_size > 0 ? st.st_size : 1);
+			if (buffer == NULL) {
+				status = B_NO_MEMORY;
+			} else {
+				ssize_t got = pread(fd, buffer, st.st_size, 0);
+				if (got < 0) {
+					status = -errno;
+				} else {
+					fs_remove_attr(entry.nodeFd, entry.name);
+					ssize_t written = fs_write_attr(entry.nodeFd, entry.name,
+						entry.type, 0, buffer, got);
+					if (written < 0)
+						status = (status_t)written;
+				}
+				free(buffer);
+			}
+		}
+	}
+
+	close(entry.nodeFd);
+	close(fd);
+	return status;
 }

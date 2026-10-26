@@ -5854,7 +5854,7 @@ BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 	// and stall on magic-link opens; /dev/disk/by-id/*, by-uuid/*, by-path/*
 	// all resolve to the same underlying device inode, causing duplicate
 	// fsnotify mark installs that trip the kernel's EEXIST race path.
-	// Skip resolution; the pose still appears with the generic symlink icon.
+	// Resolve them for the icon only, without watching the target.
 	const entry_ref* sref = symlink->EntryRef();
 	BPath symPath(sref);
 	BPath parentPath;
@@ -5865,7 +5865,12 @@ BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 				case PROC_SUPER_MAGIC:
 				case SYSFS_MAGIC:
 				case TMPFS_MAGIC:
+				{
+					BEntry entry(sref, true);
+					if (entry.InitCheck() == B_OK && entry.Exists())
+						symlink->SetLinkTo(new Model(&entry));
 					return true;
+				}
 			}
 		}
 	}

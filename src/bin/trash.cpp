@@ -4,6 +4,7 @@
  * provided under the MIT licence
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -206,7 +207,19 @@ int main(int argc, char **argv)
 	}
 	/* or trash them */
 	for (i = 1; i < argc; i++) {
-		err = trash(argv[i]);
+		// resolve relative paths against the working directory
+		char absolute[B_PATH_NAME_LENGTH];
+		const char *target = argv[i];
+		if (target[0] != '/') {
+			char cwd[B_PATH_NAME_LENGTH];
+			if (getcwd(cwd, sizeof(cwd)) == NULL) {
+				fprintf(stderr, "%s: %s\n", argv[i], strerror(errno));
+				return 1;
+			}
+			snprintf(absolute, sizeof(absolute), "%s/%s", cwd, target);
+			target = absolute;
+		}
+		err = trash(target);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", argv[i], strerror(err));
 			return 1;

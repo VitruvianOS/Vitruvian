@@ -246,23 +246,19 @@ PersonWindow::MessageReceived(BMessage* msg)
 						BString name;
 						msg->FindString("name", &name);
 
-						int64 directory;
-						msg->FindInt64("to directory", &directory);
-
-						// node monitor posts device as UInt64 (dev_t).
-						uint64 rawDevice;
-						msg->FindUInt64("device", &rawDevice);
-						dev_t device = (dev_t)rawDevice;
+						entry_ref toDir;
+						msg->FindRef("virtual:to directory", &toDir);
 
 						// Update our ref.
 						delete fRef;
-						fRef = new entry_ref(device, directory, name.String());
+						fRef = new entry_ref(toDir);
+						fRef->set_name(name.String());
 
 						// And our window title.
 						SetTitle(name);
 
 						// If moved to Trash, close window.
-						BVolume volume(device);
+						BVolume volume(fRef->device());
 						BPath trash;
 						find_directory(B_TRASH_DIRECTORY, &trash, false,
 							&volume);

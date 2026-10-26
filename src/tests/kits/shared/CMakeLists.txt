@@ -11,7 +11,7 @@ AddOn(
 
 	CalendarViewTest.cpp
 	ChecksumJsonEventListener.cpp
-	#DriverSettingsMessageAdapterTest.cpp
+	DriverSettingsMessageAdapterTest.cpp
 	FakeJsonDataGenerator.cpp
 	JsonEndToEndTest.cpp
 	JsonErrorHandlingTest.cpp

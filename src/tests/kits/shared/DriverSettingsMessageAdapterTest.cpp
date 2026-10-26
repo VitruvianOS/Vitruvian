@@ -41,7 +41,7 @@ public:
 
 	~Settings()
 	{
-		delete_driver_settings(fSettings);
+		unload_driver_settings(fSettings);
 	}
 
 private:

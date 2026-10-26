@@ -3249,13 +3249,13 @@ Desktop::_LaunchInputServer()
 	if (entryStatus == B_OK)
 		entryStatus = roster.Launch(&ref);
 	if (entryStatus == B_OK || entryStatus == B_ALREADY_RUNNING) {
-		syslog(LOG_ERR, "Failed to launch the input server by signature: %s!\n",
-			strerror(status));
+		// the registrar is not reachable yet at early boot, so the launch
+		// by signature fails; the fallback succeeded, nothing to report
 		return;
 	}
 
-	syslog(LOG_ERR, "Failed to launch the input server: %s!\n",
-		strerror(entryStatus));
+	syslog(LOG_ERR, "Failed to launch the input server by signature (%s) "
+		"and by path (%s)!\n", strerror(status), strerror(entryStatus));
 }
 
 

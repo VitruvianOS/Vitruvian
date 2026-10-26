@@ -55,7 +55,7 @@ endif()
 # TODO: Add possibility to set compiler defs for a target
 # TODO: Document macros
 
-macro( DoCatalogs signature subdir )
+function( DoCatalogs signature subdir )
 	set( _catalogs_src "${CMAKE_SOURCE_DIR}/data/catalogs/${subdir}" )
 	if( NOT EXISTS "${_catalogs_src}" )
 		return()
@@ -97,7 +97,7 @@ macro( DoCatalogs signature subdir )
 		COMPONENT data
 		FILES_MATCHING PATTERN "*.catalog"
 	)
-endmacro()
+endfunction()
 
 # Compile a single .rdef to a .rsrc file (POST_BUILD), and record the output
 # path in the target property RDEF_RSRC_FILES so LinkRdefs can embed them all

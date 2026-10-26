@@ -5857,9 +5857,10 @@ BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 	// Skip resolution; the pose still appears with the generic symlink icon.
 	const entry_ref* sref = symlink->EntryRef();
 	BPath symPath(sref);
-	if (symPath.InitCheck() == B_OK) {
+	BPath parentPath;
+	if (symPath.InitCheck() == B_OK && symPath.GetParent(&parentPath) == B_OK) {
 		struct statfs sfs;
-		if (statfs(symPath.Path(), &sfs) == 0) {
+		if (statfs(parentPath.Path(), &sfs) == 0) {
 			switch ((unsigned long)sfs.f_type) {
 				case PROC_SUPER_MAGIC:
 				case SYSFS_MAGIC:

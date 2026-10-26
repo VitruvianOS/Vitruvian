@@ -27,19 +27,19 @@
 #include <ObjectList.h>
 #include <PicturePlayer.h>
 #include <ServerProtocol.h>
-#include <locks.h>
+#include <Autolock.h>
 
 #include "PicturePrivate.h"
 
 
 static BObjectList<BPicture> sPictureList;
-static recursive_lock sPictureListLock = RECURSIVE_LOCK_INITIALIZER("BPicture list");
+static BLocker sPictureListLock("BPicture list");
 
 
 void
 reconnect_pictures_to_app_server()
 {
-	RecursiveLocker _(sPictureListLock);
+	BAutolock _(sPictureListLock);
 	for (int32 i = 0; i < sPictureList.CountItems(); i++) {
 		BPicture::Private picture(sPictureList.ItemAt(i));
 		picture.ReconnectToAppServer();
@@ -215,14 +215,14 @@ BPicture::_InitData()
 
 	fExtent = new (std::nothrow) _BPictureExtent_;
 
-	RecursiveLocker _(sPictureListLock);
+	BAutolock _(sPictureListLock);
 	sPictureList.AddItem(this);
 }
 
 
 BPicture::~BPicture()
 {
-	RecursiveLocker _(sPictureListLock);
+	BAutolock _(sPictureListLock);
 	sPictureList.RemoveItem(this, false);
 	_DisposeData();
 }

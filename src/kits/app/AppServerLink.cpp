@@ -13,7 +13,7 @@
 #include <ApplicationPrivate.h>
 #include <AppServerLink.h>
 
-#include <locks.h>
+#include <Locker.h>
 
 
 /**	AppServerLink provides proxied access to the application's
@@ -24,14 +24,14 @@
  */
 
 
-static recursive_lock sLock = RECURSIVE_LOCK_INITIALIZER("AppServerLink_sLock");
+static BLocker sLock("AppServerLink_sLock");
 
 
 namespace BPrivate {
 
 AppServerLink::AppServerLink()
 {
-	recursive_lock_lock(&sLock);
+	sLock.Lock();
 
 	// if there is no be_app, we can't do a whole lot, anyway
 	if (be_app != NULL) {
@@ -45,7 +45,7 @@ AppServerLink::AppServerLink()
 
 AppServerLink::~AppServerLink()
 {
-	recursive_lock_unlock(&sLock);
+	sLock.Unlock();
 }
 
 }	// namespace BPrivate

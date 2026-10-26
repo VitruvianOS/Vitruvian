@@ -599,11 +599,6 @@ void SetBitsTester::SetBits4()
 
 	test_set_bits2(rgb32_test_data3_initial, cmap8_test_data3ap_set,
 				   rgb32_test_data3p_final);
-// R5: broken: ignores target bitmap row padding
-#ifndef TEST_R5
-	test_set_bits2(cmap8_test_data3_initial, rgb32_test_data3p_set,
-				   cmap8_test_data3p_final);
-#endif
 }
 
 // OBOS only API

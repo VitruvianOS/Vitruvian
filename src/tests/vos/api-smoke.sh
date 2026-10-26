@@ -525,8 +525,6 @@ run_index
 run_query
 run_trash
 run_roster
-run_resources
-run_ipc
 
 echo
 echo "==================================================="

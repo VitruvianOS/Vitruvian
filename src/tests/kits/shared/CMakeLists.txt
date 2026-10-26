@@ -22,6 +22,8 @@ AddOn(
 	MemoryRingIOTest.cpp
 	NaturalCompareTest.cpp
 
+	LIBS shared be
+
 	INCLUDES
 	"${PROJECT_SOURCE_DIR}/headers/tools/cppunit/"
 )

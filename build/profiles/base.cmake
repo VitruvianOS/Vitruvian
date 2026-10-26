@@ -66,6 +66,7 @@ ImageInclude("/lib" ${SYSTEM_LIBS})
 
 
 set(SYSTEM_TRANSLATORS
+	AVIFTranslator
 	BMPTranslator
 	GIFTranslator
 	HVIFTranslator

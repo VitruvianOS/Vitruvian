@@ -205,6 +205,13 @@ DeclareDependency(
 	RUNTIMES	"libwebp7 (>= 1.2.0)"
 )
 
+DeclareDependency(
+	AVIF
+	LIBRARIES	"avif"
+	PACKAGES	"libavif-dev"
+	RUNTIMES	"libavif16 (>= 1.0)"
+)
+
 # JASPER (libjasper-dev) was removed from Debian for unfixed CVEs; the
 # jpeg2000 translator that uses it stays disabled until ported to OpenJPEG.
 

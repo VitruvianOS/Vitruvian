@@ -1,5 +1,6 @@
 add_subdirectory(shared)
 
+add_subdirectory(avif)
 add_subdirectory(bmp)
 # exr: source is OpenEXR 2.x era (uses halfFunction.h); doesn't build against
 # OpenEXR 3.x in modern Debian. Skip until ported.
@@ -23,4 +24,3 @@ add_subdirectory(tga)
 add_subdirectory(tiff)
 add_subdirectory(webp)
 add_subdirectory(wonderbrush)
-# avif: no CMakeLists.txt yet, skipped

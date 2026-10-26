@@ -91,7 +91,7 @@ LDFLAGS		+= $(DEBUG)
 
 # Binary-type-specific linker flags.
 ifeq ($(strip $(TYPE)), APP)
-	LDFLAGS += -Xlinker -soname=_APP_
+	LDFLAGS += -Xlinker -soname=_APP_ -rdynamic
 else
 ifeq ($(strip $(TYPE)), SHARED)
 	LDFLAGS += -shared -Xlinker -soname=$(NAME)

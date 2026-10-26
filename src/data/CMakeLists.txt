@@ -92,7 +92,7 @@ set(MIME_TAR ${CMAKE_BINARY_DIR}/mime_db.tar)
 add_custom_command(
 	OUTPUT ${MIME_TAR}
 	COMMAND tar --xattrs -cf ${MIME_TAR} -C ${CMAKE_BINARY_DIR} mime_db
-	DEPENDS mime_db
+	DEPENDS ${MIME_DB_OUTPUTS}
 	COMMENT "Packaging mime_db with xattrs"
 )
 add_custom_target(mime_db_tar ALL DEPENDS ${MIME_TAR})

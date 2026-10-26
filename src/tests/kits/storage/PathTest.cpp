@@ -209,8 +209,8 @@ PathTest::InitTest1()
 	NextSubTest();
 	{
 		const char *pathName = "/system";
-		const char *leafName = "home/Desktop";
-		const char *absolutePathName = "/system/home/Desktop";
+		const char *leafName = "add-ons/Tracker";
+		const char *absolutePathName = "/system/add-ons/Tracker";
 		BPath path(pathName, leafName);
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 		CPPUNIT_ASSERT( string(absolutePathName) == path.Path() );
@@ -239,7 +239,7 @@ PathTest::InitTest1()
 	NextSubTest();
 	{
 		const char *pathName = "/system";
-		const char *leafName = "home/..";
+		const char *leafName = "add-ons/..";
 		const char *absolutePathName = "/system";
 		BPath path(pathName, leafName);
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
@@ -268,8 +268,8 @@ PathTest::InitTest1()
 	NextSubTest();
 	{
 		const char *pathName = "system";
-		const char *leafName = "home";
-		const char *absolutePathName = "/system/home";
+		const char *leafName = "add-ons";
+		const char *absolutePathName = "/system/add-ons";
 		BPath path(pathName, leafName);
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 		CPPUNIT_ASSERT( string(absolutePathName) == path.Path() );
@@ -288,9 +288,9 @@ PathTest::InitTest1()
 	chdir("/system");
 	NextSubTest();
 	{
-		const char *pathName = "home";
-		const char *leafName = "Desktop//";
-		const char *normalizedPathName = "/system/home/Desktop";
+		const char *pathName = "add-ons";
+		const char *leafName = "Tracker//";
+		const char *normalizedPathName = "/system/add-ons/Tracker";
 		BPath path(pathName, leafName);
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 		CPPUNIT_ASSERT( string(normalizedPathName) == path.Path() );
@@ -371,8 +371,8 @@ PathTest::InitTest1()
 	NextSubTest();
 	{
 		const char *pathName = "/system";
-		const char *leafName = "home/Desktop";
-		const char *absolutePathName = "/system/home/Desktop";
+		const char *leafName = "add-ons/Tracker";
+		const char *absolutePathName = "/system/add-ons/Tracker";
 		BDirectory dir(pathName);
 		BPath path(&dir, leafName);
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
@@ -382,7 +382,7 @@ PathTest::InitTest1()
 	NextSubTest();
 	{
 		const char *pathName = "/system";
-		const char *leafName = "home/..";
+		const char *leafName = "add-ons/..";
 		const char *absolutePathName = "/system";
 		BDirectory dir(pathName);
 		BPath path(&dir, leafName);
@@ -671,8 +671,8 @@ PathTest::InitTest2()
 	// absolute existing path, leaf, no normalization
 	NextSubTest();
 	pathName = "/system";
-	leafName = "home/Desktop";
-	absolutePathName = "/system/home/Desktop";
+	leafName = "add-ons/Tracker";
+	absolutePathName = "/system/add-ons/Tracker";
 	CPPUNIT_ASSERT( path.SetTo(pathName, leafName) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( string(absolutePathName) == path.Path() );
@@ -698,7 +698,7 @@ PathTest::InitTest2()
 	// absolute existing path, leaf, auto normalization
 	NextSubTest();
 	pathName = "/system";
-	leafName = "home/..";
+	leafName = "add-ons/..";
 	absolutePathName = "/system";
 	CPPUNIT_ASSERT( path.SetTo(pathName, leafName) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_OK );
@@ -706,9 +706,9 @@ PathTest::InitTest2()
 	path.Unset();
 	// absolute existing path, leaf, self assignment
 	NextSubTest();
-	pathName = "/system/home";
-	leafName = "home/Desktop";
-	absolutePathName = "/system/home/Desktop";
+	pathName = "/system/add-ons";
+	leafName = "add-ons/Tracker";
+	absolutePathName = "/system/add-ons/Tracker";
 	CPPUNIT_ASSERT( path.SetTo(pathName) == B_OK );
 	CPPUNIT_ASSERT( path.SetTo(path.Path(), ".///./") == B_OK );
 	CPPUNIT_ASSERT( string(pathName) == path.Path() );
@@ -737,8 +737,8 @@ PathTest::InitTest2()
 	chdir("/");
 	NextSubTest();
 	pathName = "system";
-	leafName = "home";
-	absolutePathName = "/system/home";
+	leafName = "add-ons";
+	absolutePathName = "/system/add-ons";
 	CPPUNIT_ASSERT( path.SetTo(pathName, leafName) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( string(absolutePathName) == path.Path() );
@@ -755,9 +755,9 @@ PathTest::InitTest2()
 	// relative existing path, leaf, auto normalization
 	chdir("/system");
 	NextSubTest();
-	pathName = "home";
-	leafName = "Desktop//";
-	normalizedPathName = "/system/home/Desktop";
+	pathName = "add-ons";
+	leafName = "Tracker//";
+	normalizedPathName = "/system/add-ons/Tracker";
 	CPPUNIT_ASSERT( path.SetTo(pathName, leafName) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( string(normalizedPathName) == path.Path() );
@@ -832,8 +832,8 @@ PathTest::InitTest2()
 	// existing dir, leaf, no normalization
 	NextSubTest();
 	pathName = "/system";
-	leafName = "home/Desktop";
-	absolutePathName = "/system/home/Desktop";
+	leafName = "add-ons/Tracker";
+	absolutePathName = "/system/add-ons/Tracker";
 	CPPUNIT_ASSERT( dir.SetTo(pathName) == B_OK );
 	CPPUNIT_ASSERT( path.SetTo(&dir, leafName) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_OK );
@@ -843,7 +843,7 @@ PathTest::InitTest2()
 	// existing dir, leaf, auto normalization
 	NextSubTest();
 	pathName = "/system";
-	leafName = "home/..";
+	leafName = "add-ons/..";
 	absolutePathName = "/system";
 	CPPUNIT_ASSERT( dir.SetTo(pathName) == B_OK );
 	CPPUNIT_ASSERT( path.SetTo(&dir, leafName) == B_OK );
@@ -1006,10 +1006,10 @@ PathTest::AppendTest()
 	CPPUNIT_ASSERT( string("/") == path.Path() );
 	CPPUNIT_ASSERT( path.Append("system") == B_OK );
 	CPPUNIT_ASSERT( string("/system") == path.Path() );
-	CPPUNIT_ASSERT( path.Append("home/Desktop") == B_OK );
-	CPPUNIT_ASSERT( string("/system/home/Desktop") == path.Path() );
+	CPPUNIT_ASSERT( path.Append("add-ons/Tracker") == B_OK );
+	CPPUNIT_ASSERT( string("/system/add-ons/Tracker") == path.Path() );
 	CPPUNIT_ASSERT( path.Append("non/existing") == B_OK );
-	CPPUNIT_ASSERT( string("/system/home/Desktop/non/existing") == path.Path() );
+	CPPUNIT_ASSERT( string("/system/add-ons/Tracker/non/existing") == path.Path() );
 	// trigger normalization
 	CPPUNIT_ASSERT( path.Append("at/least/not//now") == B_ENTRY_NOT_FOUND );
 	CPPUNIT_ASSERT( path.InitCheck() == B_ENTRY_NOT_FOUND );
@@ -1019,8 +1019,8 @@ PathTest::AppendTest()
 	NextSubTest();
 	CPPUNIT_ASSERT( path.SetTo("/system") == B_OK );
 	CPPUNIT_ASSERT( string("/system") == path.Path() );
-	CPPUNIT_ASSERT( path.Append("home/non-existing", true) == B_OK );
-	CPPUNIT_ASSERT( string("/system/home/non-existing") == path.Path() );
+	CPPUNIT_ASSERT( path.Append("add-ons/non-existing", true) == B_OK );
+	CPPUNIT_ASSERT( string("/system/add-ons/non-existing") == path.Path() );
 	CPPUNIT_ASSERT( path.Append("not/now", true) == B_ENTRY_NOT_FOUND );
 	CPPUNIT_ASSERT( path.InitCheck() == B_ENTRY_NOT_FOUND );
 	CPPUNIT_ASSERT( path.Path() == NULL );
@@ -1058,10 +1058,10 @@ PathTest::LeafTest()
 	NextSubTest();
 	CPPUNIT_ASSERT( path.SetTo("/system") == B_OK );
 	CPPUNIT_ASSERT( string("system") == path.Leaf() );
-	CPPUNIT_ASSERT( path.SetTo("/system/home") == B_OK );
-	CPPUNIT_ASSERT( string("home") == path.Leaf() );
-	CPPUNIT_ASSERT( path.SetTo("/system/home/Desktop") == B_OK );
-	CPPUNIT_ASSERT( string("Desktop") == path.Leaf() );
+	CPPUNIT_ASSERT( path.SetTo("/system/add-ons") == B_OK );
+	CPPUNIT_ASSERT( string("add-ons") == path.Leaf() );
+	CPPUNIT_ASSERT( path.SetTo("/system/add-ons/Tracker") == B_OK );
+	CPPUNIT_ASSERT( string("Tracker") == path.Leaf() );
 	path.Unset();
 	// non-existing dirs
 	NextSubTest();
@@ -1098,12 +1098,12 @@ PathTest::ParentTest()
 	CPPUNIT_ASSERT( path.SetTo("/system") == B_OK );
 	CPPUNIT_ASSERT( path.GetParent(&parent) == B_OK );
 	CPPUNIT_ASSERT( string("/") == parent.Path() );
-	CPPUNIT_ASSERT( path.SetTo("/system/home") == B_OK );
+	CPPUNIT_ASSERT( path.SetTo("/system/add-ons") == B_OK );
 	CPPUNIT_ASSERT( path.GetParent(&parent) == B_OK );
 	CPPUNIT_ASSERT( string("/system") == parent.Path() );
-	CPPUNIT_ASSERT( path.SetTo("/system/home/Desktop") == B_OK );
+	CPPUNIT_ASSERT( path.SetTo("/system/add-ons/Tracker") == B_OK );
 	CPPUNIT_ASSERT( path.GetParent(&parent) == B_OK );
-	CPPUNIT_ASSERT( string("/system/home") == parent.Path() );
+	CPPUNIT_ASSERT( string("/system/add-ons") == parent.Path() );
 	path.Unset();
 	parent.Unset();
 	// non-existing dirs
@@ -1175,7 +1175,7 @@ PathTest::ComparisonTest()
 	path2.Unset();
 	// various paths
 	NextSubTest();
-	const char *paths[] = { "/", "/system", "/system/home", "/system/home/Desktop" };
+	const char *paths[] = { "/", "/system", "/system/add-ons", "/system/add-ons/Tracker" };
 	int32 pathCount = sizeof(paths) / sizeof(const char*);
 	for (int32 i = 0; i < pathCount; i++) {
 		for (int32 k = 0; k < pathCount; k++) {
@@ -1243,7 +1243,7 @@ PathTest::AssignmentTest()
 	// initialized
 	NextSubTest();
 	{
-		BPath path("/system/home/Desktop");
+		BPath path("/system/add-ons/Tracker");
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 		BPath path2(path);
 		CPPUNIT_ASSERT( path2.InitCheck() == B_OK );
@@ -1272,7 +1272,7 @@ PathTest::AssignmentTest()
 	// initialized
 	NextSubTest();
 	{
-		BPath path("/system/home");
+		BPath path("/system/add-ons");
 		CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 		BPath path2;
 		path2 = path;
@@ -1284,7 +1284,7 @@ PathTest::AssignmentTest()
 	// initialized
 	NextSubTest();
 	{
-		const char *pathName = "/system/home";
+		const char *pathName = "/system/add-ons";
 		BPath path2;
 		path2 = pathName;
 		CPPUNIT_ASSERT( path2.InitCheck() == B_OK );
@@ -1338,7 +1338,7 @@ PathTest::FlattenableTest()
 	path.Unset();
 	// some flatten/unflatten tests
 	NextSubTest();
-	const char *paths[] = { "/", "/home", "/home/Desktop" };
+	const char *paths[] = { "/", "/home", "/home/config" };
 	int32 pathCount = sizeof(paths) / sizeof(const char*);
 	for (int32 i = 0; i < pathCount; i++) {
 		const char *pathName = paths[i];
@@ -1357,7 +1357,7 @@ PathTest::FlattenableTest()
 	NextSubTest();
 // R5: crashs, when passing a NULL buffer
 // R5: doesn't check the buffer size
-	CPPUNIT_ASSERT( path.SetTo("/system/home") == B_OK );
+	CPPUNIT_ASSERT( path.SetTo("/system/add-ons") == B_OK );
 #if !TEST_R5
 	CPPUNIT_ASSERT( path.Flatten(NULL, sizeof(buffer)) == B_BAD_VALUE );
 	CPPUNIT_ASSERT( path.Flatten(buffer, path.FlattenedSize() - 2)

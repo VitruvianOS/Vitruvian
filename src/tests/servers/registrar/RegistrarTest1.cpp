@@ -36,7 +36,7 @@ public:
 	virtual void ReadyToRun()
 	{
 		printf("TestApp::ReadyToRun()\n");
-//		PostMessage(B_QUIT_REQUESTED);
+		PostMessage(B_QUIT_REQUESTED);
 	}
 
 };

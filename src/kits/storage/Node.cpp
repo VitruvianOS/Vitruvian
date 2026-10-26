@@ -527,10 +527,15 @@ BNode::GetNextAttrName(char* buffer)
 status_t
 BNode::RewindAttrs()
 {
+	if (fAttrFd >= 0) {
+		_kern_close(fAttrFd);
+		fAttrFd = -1;
+	}
+
 	if (InitAttrDir() != B_OK)
 		return B_FILE_ERROR;
 
-	return _kern_rewind_dir(fAttrFd);
+	return B_OK;
 }
 
 

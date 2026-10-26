@@ -10,6 +10,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -134,14 +135,18 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
 
+	char fdPath[64];
+	if (path == NULL || path[0] == '\0') {
+		if (fd < 0)
+			return B_ENTRY_NOT_FOUND;
+
+		snprintf(fdPath, sizeof(fdPath), "/proc/self/fd/%d", fd);
+		path = fdPath;
+		fd = AT_FDCWD;
+	}
+
 	if (fd < 0)
 		fd = AT_FDCWD;
-
-	// AT_EMPTY_PATH opens the fd itself; treat empty string same as NULL.
-	if (path == NULL || path[0] == '\0') {
-		openMode |= AT_EMPTY_PATH;
-		path = "";
-	}
 
 	// Always set O_CLOEXEC so fds don't leak across exec() boundaries,
 	// especially when load_image() uses clone()+exec().
@@ -883,8 +888,14 @@ _kern_lock_node(int fd)
 	lock.l_start = 0;
 	lock.l_len = 0;
 
-	if (fcntl(fd, F_SETLK, &lock) == -1)
-		return -errno;
+	if (fcntl(fd, F_SETLK, &lock) == -1) {
+		if (errno != EBADF)
+			return -errno;
+
+		lock.l_type = F_RDLCK;
+		if (fcntl(fd, F_SETLK, &lock) == -1)
+			return -errno;
+	}
 
 	return B_OK;
 }

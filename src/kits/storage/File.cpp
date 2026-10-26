@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include <Directory.h>
@@ -298,7 +299,14 @@ BFile::SetSize(off_t size)
 		return InitCheck();
 	if (size < 0)
 		return B_BAD_VALUE;
-	return (ftruncate(get_fd(), size) < 0) ? -errno : B_OK;
+	if (ftruncate(get_fd(), size) == 0)
+		return B_OK;
+	if (errno != EINVAL && errno != EBADF)
+		return -errno;
+
+	char fdPath[64];
+	snprintf(fdPath, sizeof(fdPath), "/proc/self/fd/%d", get_fd());
+	return (truncate(fdPath, size) < 0) ? -errno : B_OK;
 }
 
 

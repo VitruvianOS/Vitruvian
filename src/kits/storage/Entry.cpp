@@ -597,6 +597,8 @@ BEntry::GetNodeRef(node_ref* ref) const
 	// on any rename, unlike vref (fd-backed, inode kept alive) or fh
 	// (survives rename but not unlink).
 	int tempFd = _kern_open(fDirFd, fName, O_RDONLY | O_NONBLOCK | O_NOFOLLOW, 0);
+	if (tempFd == -ELOOP)
+		tempFd = _kern_open(fDirFd, fName, O_PATH | O_NOFOLLOW, 0);
 	if (tempFd < 0)
 		return tempFd;
 
@@ -1075,9 +1077,9 @@ bool
 operator<(const entry_ref& a, const entry_ref& b)
 {
 	if (a.device() != b.device())
-		return a.device() < b.device();
+		return (int64)a.device() < (int64)b.device();
 	if (a.directory() != b.directory())
-		return a.directory() < b.directory();
+		return (int64)a.directory() < (int64)b.directory();
 	if (a.name == NULL)
 		return b.name != NULL;
 	if (b.name == NULL)

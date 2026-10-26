@@ -58,7 +58,7 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 
 	if (!_supports_watches(nodeFD)) {
 		close(nodeFD);
-		return B_OK;
+		return B_NOT_SUPPORTED;
 	}
 
 	struct nexus_watch_fd req = {

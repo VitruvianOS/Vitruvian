@@ -85,7 +85,8 @@ class BDirectory : public BNode, public BEntryList {
 		int get_fd() const;
 
 	private:
-		uint32 _reservedData[7];
+		off_t fDentLastOffset;
+		uint32 _reservedData[5];
 		int fDirFd;
 		node_ref fDirRef;
 

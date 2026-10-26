@@ -189,3 +189,11 @@ ImageIncludeFile("data/bin/welcome" "/bin")
 # Build files
 install(FILES data/develop/makefile-engine DESTINATION /etc COMPONENT dev)
 install(FILES data/develop/vos.specs DESTINATION /etc COMPONENT dev)
+install(FILES
+	data/develop/linkcompat/libbnetapi.so
+	data/develop/linkcompat/libcolumnlistview.so
+	data/develop/linkcompat/libdebug.so
+	data/develop/linkcompat/libmedia.so
+	data/develop/linkcompat/libnetservices.so
+	data/develop/linkcompat/libnetwork.so
+	DESTINATION /usr/lib COMPONENT dev)

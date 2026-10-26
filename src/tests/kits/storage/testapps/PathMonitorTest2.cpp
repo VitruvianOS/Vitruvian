@@ -357,44 +357,30 @@ struct MonitoringInfo {
 			case B_ENTRY_CREATED:
 			case B_ENTRY_REMOVED:
 			{
-				NotOwningEntryRef entryRef;
+				entry_ref entryRef;
 				node_ref nodeRef;
-				int64 dev, node, dir;
-				const char* name;
 
-				if (message.FindInt64("device", &dev) != B_OK
-					|| message.FindInt64("node", &node) != B_OK
-					|| message.FindInt64("directory", &dir) != B_OK
-					|| message.FindString("name", &name) != B_OK) {
+				if (message.FindRef("virtual:directory", &entryRef) != B_OK
+					|| message.FindNodeRef("virtual:node", &nodeRef) != B_OK) {
 					return false;
 				}
-				nodeRef.set_to((dev_t)dev, (ino_t)node);
-				entryRef.SetTo((dev_t)dev, (ino_t)dir, name);
 
 				return nodeRef == fNodeRef && entryRef == fEntryRef;
 			}
 
 			case B_ENTRY_MOVED:
 			{
-				NotOwningEntryRef fromEntryRef;
-				NotOwningEntryRef toEntryRef;
+				entry_ref fromEntryRef;
+				entry_ref toEntryRef;
 				node_ref nodeRef;
-				int64 nodeDev, node, dev, fromDir, toDir;
-				const char* fromName;
-				const char* toName;
 
-				if (message.FindInt64("node device", &nodeDev) != B_OK
-					|| message.FindInt64("node", &node) != B_OK
-					|| message.FindInt64("device", &dev) != B_OK
-					|| message.FindInt64("from directory", &fromDir) != B_OK
-					|| message.FindInt64("to directory", &toDir) != B_OK
-					|| message.FindString("from name", &fromName) != B_OK
-					|| message.FindString("name", &toName) != B_OK) {
+				if (message.FindRef("virtual:from directory", &fromEntryRef)
+						!= B_OK
+					|| message.FindRef("virtual:to directory", &toEntryRef)
+						!= B_OK
+					|| message.FindNodeRef("virtual:node", &nodeRef) != B_OK) {
 					return false;
 				}
-				nodeRef.set_to((dev_t)nodeDev, (ino_t)node);
-				fromEntryRef.SetTo((dev_t)dev, (ino_t)fromDir, fromName);
-				toEntryRef.SetTo((dev_t)dev, (ino_t)toDir, toName);
 
 				return nodeRef == fNodeRef && toEntryRef == fEntryRef
 					&& fromEntryRef == fFromEntryRef;
@@ -404,13 +390,8 @@ struct MonitoringInfo {
 			case B_ATTR_CHANGED:
 			{
 				node_ref nodeRef;
-				int64 dev, node;
-
-				if (message.FindInt64("device", &dev) != B_OK
-					|| message.FindInt64("node", &node) != B_OK) {
+				if (message.FindNodeRef("virtual:node", &nodeRef) != B_OK)
 					return false;
-				}
-				nodeRef.set_to((dev_t)dev, (ino_t)node);
 
 				return nodeRef == fNodeRef;
 			}

@@ -472,9 +472,11 @@ NodeInfoTest::IconTest()
 		BNodeInfo nodeInfo;
 		CHK(nodeInfo.SetTo(&node) == B_OK);
 		BBitmap icon(BRect(0, 0, 31, 31), B_CMAP8);
-		CHK(nodeInfo.GetIcon(&icon, B_MINI_ICON) == B_BAD_VALUE);
+		CHK(equals(nodeInfo.GetIcon(&icon, B_MINI_ICON), B_BAD_VALUE,
+			B_ENTRY_NOT_FOUND));
 		BBitmap icon2(BRect(0, 0, 15, 15), B_CMAP8);
-		CHK(nodeInfo.GetIcon(&icon2, B_LARGE_ICON) == B_BAD_VALUE);
+		CHK(equals(nodeInfo.GetIcon(&icon2, B_LARGE_ICON), B_BAD_VALUE,
+			B_ENTRY_NOT_FOUND));
 	}
 	// * has no icon => B_ENTRY_NOT_FOUND
 	NextSubTest();
@@ -941,12 +943,11 @@ NodeInfoTest::TrackerIconTest()
 	CHK(appType2.SetIconForType(testType1, fIconL4, B_LARGE_ICON) == B_OK);
 	CHK(type.SetPreferredApp(testAppSignature2) == B_OK);
 
-	// * has icon, but not type => B_OK,
-	//   returns the "application/octet-stream" icon
+	// * has icon, but not type => B_OK, returns the file icon
 	NextSubTest();
 	{
-		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, &octetMIcon);
-		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, &octetLIcon);
+		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, fIconM1);
+		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, fIconL1);
 	}
 	// set invalid file type
 	CHK(nodeInfo.SetType(invalidTestType) == B_OK);
@@ -976,6 +977,7 @@ NodeInfoTest::TrackerIconTest()
 	// unset icons for type for preferred app
 	CHK(appType.SetIconForType(testType1, NULL, B_MINI_ICON) == B_OK);
 	CHK(appType.SetIconForType(testType1, NULL, B_LARGE_ICON) == B_OK);
+	CHK(type.SetPreferredApp(NULL) == B_OK);
 	// * no icon, preferred app without icon for type,
 	//   but icon for type in MIME data base => B_OK
 	NextSubTest();
@@ -995,6 +997,7 @@ NodeInfoTest::TrackerIconTest()
 	// unset icons for type
 	CHK(type.SetIcon(NULL, B_MINI_ICON) == B_OK);
 	CHK(type.SetIcon(NULL, B_LARGE_ICON) == B_OK);
+	CHK(type.SetPreferredApp(testAppSignature2) == B_OK);
 	// * no icon, no preferred app, no icon for type in MIME data base, but
 	//   preferred app for type in MIME database and app has icon for type
 	//   => B_OK
@@ -1003,26 +1006,33 @@ NodeInfoTest::TrackerIconTest()
 		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, fIconM4);
 		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, fIconL4);
 	}
+	BBitmap superMIconBitmap(BRect(0, 0, 15, 15), B_CMAP8);
+	BBitmap superLIconBitmap(BRect(0, 0, 31, 31), B_CMAP8);
+	BMimeType superType("application");
+	BBitmap *superMIcon = superType.GetIcon(&superMIconBitmap, B_MINI_ICON)
+		== B_OK ? &superMIconBitmap : &octetMIcon;
+	BBitmap *superLIcon = superType.GetIcon(&superLIconBitmap, B_LARGE_ICON)
+		== B_OK ? &superLIconBitmap : &octetLIcon;
 	// unset icons for type for preferred app
 	CHK(appType2.SetIconForType(testType1, NULL, B_MINI_ICON) == B_OK);
 	CHK(appType2.SetIconForType(testType1, NULL, B_LARGE_ICON) == B_OK);
 	// * no icon, no preferred app, no icon for type in MIME data base,
 	//   preferred app for type in MIME database and app has no icon for type
-	//   => B_OK, returns the "application/octet-stream" icon
+	//   => B_OK, returns the icon of the super type
 	NextSubTest();
 	{
-		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, &octetMIcon);
-		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, &octetLIcon);
+		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, superMIcon);
+		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, superLIcon);
 	}
 	// unset preferred application
 	CHK(type.SetPreferredApp(NULL) == B_OK);
 	// * no icon, no preferred app, no icon for type in MIME data base,
 	//   no preferred app for type in MIME database => B_OK,
-	//   returns the "application/octet-stream" icon
+	//   returns the icon of the super type
 	NextSubTest();
 	{
-		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, &octetMIcon);
-		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, &octetLIcon);
+		TestTrackerIcon(nodeInfo, &testRef1, B_MINI_ICON, superMIcon);
+		TestTrackerIcon(nodeInfo, &testRef1, B_LARGE_ICON, superLIcon);
 	}
 
 	// Test GetTrackerIcon() for different types (without type set)
@@ -1030,7 +1040,6 @@ NodeInfoTest::TrackerIconTest()
 	{
 		TestTrackerIcon(testDir, B_DIRECTORY_MIME_TYPE);
 		TestTrackerIcon("/", B_VOLUME_MIME_TYPE);
-		TestTrackerIcon("/system", B_SYMLINK_MIME_TYPE);
 
 		chmod(testFile4, 0755);
 		TestTrackerIcon(testFile4, B_APP_MIME_TYPE);

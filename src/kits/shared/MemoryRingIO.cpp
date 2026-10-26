@@ -268,10 +268,10 @@ BMemoryRingIO::_WaitForCondition(bigtime_t timeout)
 	if (timeout == B_INFINITE_TIMEOUT) {
 		autoLocker.SetTo(fLock, false);
 	} else {
-		memset(&absTimeout, 0, sizeof(absTimeout));
-		bigtime_t target = system_time() + timeout;
-		absTimeout.tv_sec = target / 100000;
-		absTimeout.tv_nsec = (target % 100000) * 1000L;
+		clock_gettime(CLOCK_REALTIME, &absTimeout);
+		bigtime_t target = absTimeout.tv_nsec / 1000 + timeout;
+		absTimeout.tv_sec += target / 1000000;
+		absTimeout.tv_nsec = (target % 1000000) * 1000L;
 		int err = pthread_mutex_timedlock(&fLock, &absTimeout);
 		if (err == ETIMEDOUT)
 			return B_TIMED_OUT;

@@ -20,7 +20,7 @@ resource app_version {
 resource app_flags B_SINGLE_LAUNCH;
 
 resource file_types message {
-	"types" = "application/x-vnd.haiku-playlist",
+	"types" = "application/x-vnd.vos-playlist",
 
 	"types" = "audio",
 	"types" = "video",

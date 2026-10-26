@@ -113,7 +113,7 @@ main(int argc, const char **argv)
 		usage();
 
 	for (int32 i = 1; i < argc; i++) {
-		int fd = open(argv[i], O_RDONLY | (resolveLinks ? 0 : O_NOTRAVERSE));
+		int fd = open(argv[i], O_RDONLY | (resolveLinks ? 0 : O_NOFOLLOW));
 		if (fd < 0) {
 			fprintf(stderr, "%s: can\'t open file %s to remove attribute: %s\n", 
 				kProgramName, argv[i], strerror(errno));

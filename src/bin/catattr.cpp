@@ -137,7 +137,7 @@ static status_t
 catAttr(const char *attribute, const char *fileName, bool keepRaw,
 	bool dataOnly, bool resolveLinks)
 {
-	int fd = open(fileName, O_RDONLY | (resolveLinks ? 0 : O_NOTRAVERSE));
+	int fd = open(fileName, O_RDONLY | (resolveLinks ? 0 : O_NOFOLLOW));
 	if (fd < 0)
 		return -errno;
 

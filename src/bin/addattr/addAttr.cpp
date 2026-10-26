@@ -151,7 +151,7 @@ status_t
 addAttr(const char* file, type_code type, const char* name,
 	const char* value, size_t length, bool resolveLinks)
 {
-	int fd = open(file, O_RDONLY | (resolveLinks ? 0 : O_NOTRAVERSE));
+	int fd = open(file, O_RDONLY | (resolveLinks ? 0 : O_NOFOLLOW));
 	if (fd < 0)
 		return -errno;
 

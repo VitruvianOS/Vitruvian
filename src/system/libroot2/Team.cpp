@@ -963,7 +963,7 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 		struct dirent* entry = _NextTeamDirent(fd);
 		if (entry == NULL) {
 			_kern_close(fd);
-			*cookie = 0;
+			*cookie = -1;
 			return B_BAD_VALUE;
 		}
 

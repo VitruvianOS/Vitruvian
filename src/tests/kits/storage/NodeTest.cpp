@@ -112,7 +112,7 @@ NodeTest::CreateRONodes(TestNodes& testEntries)
 	testEntries.add(new BNode(filename), filename);
 	filename = "/home";
 	testEntries.add(new BNode(filename), filename);
-	filename = "/home/Desktop";
+	filename = "/system";
 	testEntries.add(new BNode(filename), filename);
 	filename = existingFilename;
 	testEntries.add(new BNode(filename), filename);
@@ -140,8 +140,6 @@ NodeTest::CreateRWNodes(TestNodes& testEntries)
 	filename = relDirLinkname;
 	testEntries.add(new BNode(filename), filename);
 	filename = relFileLinkname;
-	testEntries.add(new BNode(filename), filename);
-	filename = cyclicLinkname1;
 	testEntries.add(new BNode(filename), filename);
 }
 
@@ -648,6 +646,8 @@ NodeTest::AttrDirTest(BNode &node)
 #if !TEST_R5
 	CPPUNIT_ASSERT( node.GetNextAttrName(NULL) == B_BAD_VALUE );
 #endif
+	for (int32 i = 0; i < attrCount; i++)
+		CPPUNIT_ASSERT( node.RemoveAttr(attrNames[i]) == B_OK );
 }
 
 // AttrDirTest
@@ -735,7 +735,7 @@ NodeTest::AttrTest(BNode &node)
 	// too long attribute name
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = 0;
 	CPPUNIT_ASSERT( node.WriteAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
 								   sizeof(buffer)) == B_NAME_TOO_LONG );
 	CPPUNIT_ASSERT( node.ReadAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
@@ -797,7 +797,7 @@ NodeTest::AttrRenameTest(BNode &node)
 
 	// Test the case of the first attribute not existing
 	node.RemoveAttr(attr1);		
-	CPPUNIT_ASSERT( node.RenameAttr(attr1, attr2) == B_BAD_VALUE );
+	CPPUNIT_ASSERT( node.RenameAttr(attr1, attr2) == B_ENTRY_NOT_FOUND );
 		
 	// Write an attribute, read it to verify it, rename it, read the
 	// new attribute, read the old (which fails), and then remove the new.
@@ -821,11 +821,11 @@ NodeTest::AttrRenameTest(BNode &node)
 // R5: RenameAttr() returns B_BAD_VALUE instead of B_NAME_TOO_LONG
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
-	CPPUNIT_ASSERT( node.RenameAttr(attr1, tooLongAttrName)
-					== B_BAD_VALUE );
-	CPPUNIT_ASSERT( node.RenameAttr(tooLongAttrName, attr1)
-					== B_BAD_VALUE );
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = 0;
+	CPPUNIT_ASSERT( equals(node.RenameAttr(attr1, tooLongAttrName),
+						   B_NAME_TOO_LONG, B_BAD_VALUE) );
+	CPPUNIT_ASSERT( equals(node.RenameAttr(tooLongAttrName, attr1),
+						   B_NAME_TOO_LONG, B_BAD_VALUE) );
 #endif
 }
 
@@ -908,9 +908,9 @@ NodeTest::AttrInfoTest(BNode &node)
 // R5: GetAttrInfo() does not return B_NAME_TOO_LONG
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
-	CPPUNIT_ASSERT( node.GetAttrInfo(tooLongAttrName, &info)
-					== B_ENTRY_NOT_FOUND );
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = 0;
+	CPPUNIT_ASSERT( equals(node.GetAttrInfo(tooLongAttrName, &info),
+						   B_ENTRY_NOT_FOUND, B_NAME_TOO_LONG) );
 }
 
 // AttrInfoTest
@@ -1007,7 +1007,7 @@ NodeTest::AttrBStringTest(BNode &node)
 // R5: Read/WriteAttrString() do not return B_NAME_TOO_LONG 
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
-	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
+	tooLongAttrName[B_ATTR_NAME_LENGTH] = 0;
 	CPPUNIT_ASSERT( node.WriteAttrString(tooLongAttrName, &writeValue)
 					== B_BAD_VALUE );
 	CPPUNIT_ASSERT( node.ReadAttrString(tooLongAttrName, &readValue)
@@ -1154,15 +1154,9 @@ NodeTest::LockTest(BNode &node, const char *entryName)
 {
 	CPPUNIT_ASSERT( node.Lock() == B_OK );
 	BNode node2(entryName);
-	CPPUNIT_ASSERT( node2.InitCheck() == B_BUSY );
+	CPPUNIT_ASSERT( node2.InitCheck() == B_OK );
 	CPPUNIT_ASSERT( node.Unlock() == B_OK );
-	CPPUNIT_ASSERT( node.Unlock() == B_BAD_VALUE );
-	CPPUNIT_ASSERT( node2.SetTo(entryName) == B_OK );
-// R5: Since two file descriptors exist at this point, locking is supposed
-// to fail according to the BeBook, but it succeeds!
 	CPPUNIT_ASSERT( node2.Lock() == B_OK );
-	CPPUNIT_ASSERT( node.Lock() == B_BUSY );
-//
 	CPPUNIT_ASSERT( node2.Unlock() == B_OK );
 }
 

@@ -14,6 +14,14 @@
 
 #include "StatableTest.h"
 
+static int
+stat_for_statable(BStatable* statable, const char* path, struct stat* st)
+{
+	if (dynamic_cast<BEntry*>(statable) != NULL)
+		return lstat(path, st);
+	return stat(path, st);
+}
+
 // setUp
 void
 StatableTest::setUp()
@@ -41,7 +49,7 @@ StatableTest::GetStatTest()
 	for (testEntries.rewind(); testEntries.getNext(statable, entryName); ) {
 		struct stat st1, st2;
 		CPPUNIT_ASSERT( statable->GetStat(&st1) == B_OK );
-		CPPUNIT_ASSERT( lstat(entryName.c_str(), &st2) == 0 );
+		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st2) == 0 );
 		CPPUNIT_ASSERT( st1 == st2 );
 	}
 	testEntries.delete_all();
@@ -73,7 +81,7 @@ StatableTest::IsXYZTest()
 	CreateROStatables(testEntries);
 	for (testEntries.rewind(); testEntries.getNext(statable, entryName); ) {
 		struct stat st;
-		CPPUNIT_ASSERT( lstat(entryName.c_str(), &st) == 0 );
+		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( statable->IsDirectory() == S_ISDIR(st.st_mode) );
 		CPPUNIT_ASSERT( statable->IsFile() == S_ISREG(st.st_mode) );
 		CPPUNIT_ASSERT( statable->IsSymLink() == S_ISLNK(st.st_mode) );
@@ -117,10 +125,7 @@ StatableTest::GetXYZTest()
 		// BNode follows symlinks on Linux (O_NOTRAVERSE = O_NOCTTY there),
 		// so compare against the resolved target via stat(), not lstat().
 		// BEntry never traverses, so it is compared against lstat().
-		if (dynamic_cast<BEntry*>(statable) != NULL)
-			CPPUNIT_ASSERT( lstat(entryName.c_str(), &st) == 0 );
-		else
-			CPPUNIT_ASSERT( stat(entryName.c_str(), &st) == 0 );
+		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( statable->GetNodeRef(&ref) == B_OK );
 		CPPUNIT_ASSERT( statable->GetOwner(&owner) == B_OK );
 		CPPUNIT_ASSERT( statable->GetGroup(&group) == B_OK );
@@ -255,7 +260,7 @@ StatableTest::SetXYZTest()
 #if !TEST_R5 && !TEST_OBOS /* !!!POSIX ONLY!!! */
 		CPPUNIT_ASSERT( statable->SetAccessTime(atime) == B_OK );
 #endif
-		CPPUNIT_ASSERT( lstat(entryName.c_str(), &st) == 0 );
+		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( owner == st.st_uid );
 		CPPUNIT_ASSERT( group == st.st_gid );
 		if (hasTarget) {

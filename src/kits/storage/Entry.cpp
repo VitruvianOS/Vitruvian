@@ -895,6 +895,8 @@ BEntry::_SetTo(int dirFD, const char* path, bool traverse)
 			error = _kern_read_link(dirFD, leafName, tmpPath, &bufferSize);
 			if (error < 0)
 				return error;
+			if (bufferSize >= B_PATH_NAME_LENGTH)
+				return B_NAME_TOO_LONG;
 			tmpPath[bufferSize] = '\0';
 			path = tmpPath;
 			// next round...

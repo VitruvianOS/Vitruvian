@@ -532,11 +532,14 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	if (*_bufferSize == 0)
 		return B_BAD_VALUE;
 
-	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize - 1);
+	char target[PATH_MAX];
+	ssize_t size = readlinkat(fd, path, target, sizeof(target));
 	if (size < 0)
-		return -errno;
+		return (errno == ENOENT && path[0] == '\0') ? B_BAD_VALUE : -errno;
 
-	buffer[size] = '\0';
+	memcpy(buffer, target, (size_t)size < *_bufferSize ? (size_t)size : *_bufferSize);
+	if ((size_t)size < *_bufferSize)
+		buffer[size] = '\0';
 	*_bufferSize = (size_t)size;
 	return B_OK;
 }

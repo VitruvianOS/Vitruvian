@@ -379,7 +379,7 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 
 	int statusPipe[2] = { -1, -1 };
 	if (_execStatusFd != NULL && pipe2(statusPipe, O_CLOEXEC) != 0)
-		return -errno;
+		return B_NO_MORE_FDS;
 
 	TRACE("LoadImage: about to clone(), gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 		gNexus, gNexusArea, gNexusNodeMonitor);
@@ -393,7 +393,7 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 		TRACE("load_image: clone failed: %s\n", strerror(errno));
 		fprintf(stderr, "load_image: clone failed: %s\n", strerror(errno));
 		CloseExecStatusPipe(statusPipe[0], statusPipe[1]);
-		return -errno;
+		return errno == EAGAIN ? B_NO_MORE_TEAMS : B_ERROR;
 	}
 
 	if (pid == 0) {

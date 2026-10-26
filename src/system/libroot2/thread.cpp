@@ -260,7 +260,9 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 		BKernelPrivate::thread_run, threadData);
 	if (ret != 0) {
 		delete threadData;
-		return -ret;
+		if (ret == EAGAIN)
+			return B_NO_MORE_THREADS;
+		return ret == ENOMEM ? B_NO_MEMORY : B_ERROR;
 	}
 
 	// From here the child owns threadData; it only frees it after we
@@ -721,7 +723,7 @@ resume_thread(thread_id id)
 			return B_BAD_THREAD_ID;
 
 		if (kill(id, SIGCONT) < 0)
-			return -errno;
+			return B_BAD_THREAD_ID;
 
 		return B_OK;
 	}

@@ -242,16 +242,14 @@ MasterServerDevice::_HandleNodeMonitor(BMessage* message)
 
 	switch (opcode) {
 		case B_ENTRY_CREATED:
+		{
 			// extract info to create an entry_ref structure
 			const char* name;
-			ino_t directory;
-			dev_t device;
+			entry_ref ref;
 			if (message->FindString("name", &name) >= B_OK
 				&& strcmp(name, "control") != 0
-				&& message->FindUInt64("directory", (int64*)&directory) >= B_OK
-				&& message->FindUInt64("device", (int32*)&device) >= B_OK) {
+				&& message->FindRef("virtual:directory", &ref) >= B_OK) {
 				// make a path from that info
-				entry_ref ref(device, directory, name);
 				BPath path(&ref);
 				if (path.InitCheck() >= B_OK) {
 					// add the device
@@ -259,6 +257,7 @@ MasterServerDevice::_HandleNodeMonitor(BMessage* message)
 				}
 			}
 			break;
+		}
 		case B_ENTRY_REMOVED: {
 			// I cannot figure out how to see if this is actually
 			// the directory that we're node monitoring, and even if it is,

@@ -233,12 +233,9 @@ KeyCommandMap::MessageReceived(BMessage* message)
 			// only fall through for appropriate file
 			if (!(message->FindString("path", &path) == B_OK
 					&& strcmp(path, fFileName) == 0)) {
-				dev_t device;
-				ino_t node;
-				if (message->FindUInt64("device", &device) != B_OK
-					|| message->FindUInt64("node", &node) != B_OK
-					|| device != fNodeRef.vdevice()
-					|| node != fNodeRef.vnode()) {
+				node_ref nodeRef;
+				if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK
+					|| nodeRef != fNodeRef) {
 					break;
 				}
 			}

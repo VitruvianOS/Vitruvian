@@ -471,13 +471,15 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 
 	info->state = B_THREAD_RUNNING;
 	info->priority = GetThreadPriority(id);
-	info->team = id;
+	info->team = -1;
 
 	GetThreadCpuTimes(id, &info->user_time, &info->kernel_time);
 
 	snprintf(path, sizeof(path), "/proc/%d/status", id);
 	fd = open(path, O_RDONLY);
-	if (fd >= 0) {
+	if (fd < 0)
+		return B_BAD_THREAD_ID;
+	{
 		len = read(fd, buffer, sizeof(buffer) - 1);
 		close(fd);
 
@@ -485,8 +487,9 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 			buffer[len] = '\0';
 
 			char* tgid = strstr(buffer, "Tgid:");
-			if (tgid != NULL)
-				info->team = atoi(tgid + 5);
+			if (tgid == NULL)
+				return B_ERROR;
+			info->team = atoi(tgid + 5);
 
 			char* state = strstr(buffer, "State:");
 			if (state != NULL) {
@@ -509,7 +512,8 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 						break;
 				}
 			}
-		}
+		} else
+			return B_ERROR;
 	}
 
 	return B_OK;

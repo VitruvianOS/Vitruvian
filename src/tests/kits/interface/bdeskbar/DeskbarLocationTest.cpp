@@ -134,8 +134,14 @@
 	assert(myDeskbar->SetLocation(newLocation, true) == B_OK);
 	CheckLocation(myDeskbar, newLocation, true, false);
 	
+	deskbar_location collapsedLocation = newLocation;
+	if (newLocation == B_DESKBAR_TOP)
+		collapsedLocation = B_DESKBAR_LEFT_TOP;
+	else if (newLocation == B_DESKBAR_BOTTOM)
+		collapsedLocation = B_DESKBAR_LEFT_BOTTOM;
+
 	assert(myDeskbar->Expand(false) == B_OK);
-	CheckLocation(myDeskbar, newLocation, false, true);
+	CheckLocation(myDeskbar, collapsedLocation, false, true);
 	
 	assert(myDeskbar->Expand(true) == B_OK);
 	CheckLocation(myDeskbar, newLocation, true, true);

@@ -37,13 +37,13 @@ Nexus is a set of Linux kernel modules that give V its BeOS-style primitives, po
 
 ### Installation
 
-Grab an image from [download.v-os.dev](https://download.v-os.dev/), write it to a USB stick and boot it. The [installation guide](https://docs.v-os.dev/docs/installation/) has the details. If you'd rather not touch real hardware yet, [run it in a VM](https://docs.v-os.dev/docs/getting-started/virtualization/).
+Grab an image from [download.v-os.dev](https://download.v-os.dev/), write it to a USB stick and boot it. The [installation guide](https://docs.v-os.dev/installation/) has the details. If you'd rather not touch real hardware yet, [run it in a VM](https://docs.v-os.dev/getting-started/virtualization/).
 
 ### Getting started
 
-* [Building from source](https://docs.v-os.dev/docs/getting-started/building/)
-* [Coding guidelines](https://docs.v-os.dev/docs/development/coding-guidelines/)
-* [Filesystem layout](https://docs.v-os.dev/docs/development/filesystem-layout/)
+* [Building from source](https://docs.v-os.dev/getting-started/building/)
+* [Coding guidelines](https://docs.v-os.dev/development/coding-guidelines/)
+* [Filesystem layout](https://docs.v-os.dev/development/filesystem-layout/)
 * [All the docs](https://docs.v-os.dev/)
 * [Packages](https://packages.v-os.dev/)
 

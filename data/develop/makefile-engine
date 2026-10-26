@@ -47,6 +47,10 @@ endif
 
 CFLAGS += -include LinuxBuildCompatibility.h
 
+ifneq ($(filter SHARED STATIC, $(strip $(TYPE))), )
+	CFLAGS += -fPIC
+endif
+
 # Set up optimization flags.
 ifeq ($(strip $(OPTIMIZE)), FULL)
 	OPTIMIZER	= -O3
@@ -108,10 +112,9 @@ CC_VER = $(word 1, $(subst -, , $(subst ., , $(shell $(CC) -dumpversion))))
 # Set the object directory if it isn't already.
 OBJ_DIR := objects.$(CPU)-$(CC)$(CC_VER)-$(if $(DEBUGGER),debug,release)
 
-# Output the binary alongside the objects unless another directory is specified.
-ifeq ($(TARGET_DIR), )
-	TARGET_DIR	:= $(OBJ_DIR)
-endif
+# The binary always lands in the object directory.
+NAME		:= $(notdir $(NAME))
+TARGET_DIR	:= $(OBJ_DIR)
 
 # NOTE: make doesn't find the target if its name is enclosed in quotes.
 ifeq ($(strip $(TYPE)), STATIC)
@@ -175,6 +178,9 @@ LINK_LIBS += $(foreach lib, $(filter-out %.so %.a _APP_ _KERNEL_, $(LIBS)), $(ad
 
 # Add the linkpaths and linklibs to LDFLAGS.
 LDFLAGS += $(LINK_PATHS)  $(LINK_LIBS)
+ifneq ($(strip $(TYPE)), DRIVER)
+	LDFLAGS += -lm
+endif
 
 # Add the defines to CFLAGS.
 CFLAGS += $(foreach define, $(DEFINES), $(addprefix -D, $(define)))
@@ -241,7 +247,6 @@ default: $(TARGET)
 $(TARGET):	$(OBJ_DIR) $(OBJS) $(RSRCS)
 	$(BUILD_LINE)
 	$(DO_RSRCS)
-	$(MIMESET) -f "$@"
 
 # Create OBJ_DIR if it doesn't exist.
 $(OBJ_DIR)::

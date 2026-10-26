@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-SoundRecorder";
+resource app_signature "application/x-vnd.vos-SoundRecorder";
 
-resource app_name_catalog_entry "x-vnd.Haiku-SoundRecorder:System name:SoundRecorder";
+resource app_name_catalog_entry "x-vnd.vos-SoundRecorder:System name:SoundRecorder";
 
 resource app_version {
 	major      = 1,

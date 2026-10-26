@@ -32,4 +32,4 @@ target_include_directories(MediaPlayer PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/interface
 )
 UsePrivateHeaders(MediaPlayer interface shared)
-DoCatalogs("x-vnd.Haiku-MediaPlayer" apps/mediaplayer)
+DoCatalogs("x-vnd.vos-MediaPlayer" apps/mediaplayer)

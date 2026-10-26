@@ -3,9 +3,9 @@
  * Distributed under the terms of the MIT License.
  */
 
-resource app_signature "application/x-vnd.Haiku-MediaPlayer";
+resource app_signature "application/x-vnd.vos-MediaPlayer";
 
-resource app_name_catalog_entry "x-vnd.Haiku-MediaPlayer:System name:MediaPlayer";
+resource app_name_catalog_entry "x-vnd.vos-MediaPlayer:System name:MediaPlayer";
 
 resource app_version {
 	major      = 1,

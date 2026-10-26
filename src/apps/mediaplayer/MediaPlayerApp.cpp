@@ -19,7 +19,7 @@
 #define B_TRANSLATION_CONTEXT "MediaPlayer"
 
 
-const char* kMediaPlayerSignature = "application/x-vnd.Haiku-MediaPlayer";
+const char* kMediaPlayerSignature = "application/x-vnd.vos-MediaPlayer";
 
 
 MediaPlayerApp::MediaPlayerApp()

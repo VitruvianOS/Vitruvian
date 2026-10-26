@@ -22,4 +22,4 @@ target_include_directories(SoundRecorder PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 )
 UsePrivateHeaders(SoundRecorder interface shared)
-DoCatalogs("x-vnd.Haiku-SoundRecorder" apps/soundrecorder)
+DoCatalogs("x-vnd.vos-SoundRecorder" apps/soundrecorder)

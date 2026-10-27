@@ -11,6 +11,8 @@
 	MIME sniffer rpattern implementation
 */
 
+#include <stddef.h>
+
 #include "Err.h"
 #include "RPattern.h"
 #include "Range.h"

@@ -143,9 +143,7 @@ JobRow::JobRow(const printcups_job& job)
 	fId(job.id),
 	fQueue(job.queue)
 {
-	BString id;
-	id << job.id;
-	SetField(new BStringField(id.String()), kJobIdColumn);
+	SetField(new BIntegerField(job.id), kJobIdColumn);
 	SetField(new BStringField(job.name), kJobNameColumn);
 	SetField(new BStringField(StateText(job.state)), kJobStateColumn);
 	SetField(new BStringField(job.queue), kJobQueueColumn);
@@ -637,8 +635,9 @@ PrintersWindow::_UpdateJobs()
 
 	if (gJobCount <= 0) {
 		BRow* row = new BRow();
-		row->SetField(new BStringField(B_TRANSLATE("No jobs")), kJobIdColumn);
-		row->SetField(new BStringField(""), kJobNameColumn);
+		row->SetField(new BIntegerField(0), kJobIdColumn);
+		row->SetField(new BStringField(B_TRANSLATE("No jobs")),
+			kJobNameColumn);
 		row->SetField(new BStringField(""), kJobStateColumn);
 		row->SetField(new BStringField(""), kJobQueueColumn);
 		fJobList->AddRow(row);

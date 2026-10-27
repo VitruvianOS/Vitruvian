@@ -665,6 +665,31 @@ CupsBridge::CancelJob(const char* queue, int32 jobId)
 }
 
 
+static int32
+NormalizedJobState(ipp_jstate_t state)
+{
+	// printcups_job.state is 0..6; cups_job_t carries the raw IPP enum.
+	switch (state) {
+		case IPP_JSTATE_PENDING:
+			return 0;
+		case IPP_JSTATE_HELD:
+			return 1;
+		case IPP_JSTATE_PROCESSING:
+			return 2;
+		case IPP_JSTATE_STOPPED:
+			return 3;
+		case IPP_JSTATE_CANCELED:
+			return 4;
+		case IPP_JSTATE_ABORTED:
+			return 5;
+		case IPP_JSTATE_COMPLETED:
+			return 6;
+		default:
+			return -1;
+	}
+}
+
+
 int
 CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 {
@@ -673,8 +698,8 @@ CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 
 	cups_job_t* cupJobs = NULL;
 	const char* name = (queue != NULL && queue[0] != '\0') ? queue : NULL;
-	// which=0: every job, including completed ones.
-	int count = cupsGetJobs2(NULL, &cupJobs, name, 0, 1);
+	// Active jobs too, so they can be canceled.
+	int count = cupsGetJobs2(NULL, &cupJobs, name, 0, CUPS_WHICHJOBS_ALL);
 	if (count < 0) {
 		_SetError(cupsLastErrorString());
 		return -1;
@@ -689,13 +714,13 @@ CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 		strlcpy(jobs[written].queue,
 			cupJobs[i].dest != NULL ? cupJobs[i].dest : "",
 			sizeof(jobs[written].queue));
-		jobs[written].state = (int32)cupJobs[i].state;
+		jobs[written].state = NormalizedJobState(cupJobs[i].state);
 		jobs[written].size = (int32)cupJobs[i].size;
 		jobs[written].impressions = 0;
 		written++;
 	}
 
-	free(cupJobs);
+	cupsFreeJobs(count, cupJobs);
 	return written;
 }
 

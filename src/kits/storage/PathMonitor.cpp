@@ -566,6 +566,9 @@ private:
 
 			void				_EntryCreated(BMessage* message);
 			void				_EntryRemoved(BMessage* message);
+			bool				_StoredNodeRef(
+									const NotOwningEntryRef& entryRef,
+									node_ref& nodeRef) const;
 			void				_EntryMoved(BMessage* message);
 			void				_NodeChanged(BMessage* message);
 
@@ -1099,10 +1102,11 @@ PathHandler::_EntryRemoved(BMessage* message)
 {
  	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
-	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
+	if (message->FindRef("virtual:directory", &entryRef) != B_OK)
 		return;
 
-	if (message->FindRef("virtual:directory", &entryRef) != B_OK)
+	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK
+		&& !_StoredNodeRef(entryRef, nodeRef))
 		return;
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_REMOVED, entryRef, nodeRef))
@@ -1113,6 +1117,29 @@ PathHandler::_EntryRemoved(BMessage* message)
 		entryRef.vdirectory(), entryRef.name, nodeRef.vdevice(), nodeRef.vnode());
 
 	_EntryRemoved(entryRef, nodeRef, false, true, NULL);
+}
+
+
+// A removed node nothing had pinned arrives without virtual:node. If it is
+// one of our ancestors, match it by parent and name and use the ref stored
+// while it existed.
+bool
+PathHandler::_StoredNodeRef(const NotOwningEntryRef& entryRef,
+	node_ref& nodeRef) const
+{
+	node_ref directoryRef = entryRef.DirectoryNodeRef();
+
+	for (Ancestor* ancestor = fBaseAncestor; ancestor != NULL;
+			ancestor = ancestor->Parent()) {
+		Ancestor* parent = ancestor->Parent();
+		if (parent == NULL || !ancestor->Exists()
+			|| parent->NodeRef() != directoryRef
+			|| strcmp(ancestor->Name(), entryRef.name) != 0)
+			continue;
+		nodeRef = ancestor->NodeRef();
+		return true;
+	}
+	return false;
 }
 
 

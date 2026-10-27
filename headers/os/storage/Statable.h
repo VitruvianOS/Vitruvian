@@ -60,6 +60,8 @@ public:
 
 	status_t GetCreationTime(time_t* ctime) const;
 	status_t SetCreationTime(time_t ctime);
+		// Creation time is read-only on Linux (statx btime); always
+		// returns B_NOT_SUPPORTED.
 
 	status_t GetAccessTime(time_t* atime) const;
 	status_t SetAccessTime(time_t atime);

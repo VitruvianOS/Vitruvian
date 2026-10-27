@@ -1200,12 +1200,14 @@ TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 				rowRect.right -= fClockMargin + fTime->Frame().Width();
 
 			BRect replicantRect = rowRect;
+			bool emptyRow = true;
 			for (int32 i = 0; i < index; i++) {
 				BView* view = NULL;
 				fShelf->ReplicantAt(i, &view);
 				if (view == NULL || view->Frame().top != rowRect.top)
 					continue;
 
+				emptyRow = false;
 				// push this replicant placement past the last one
 				replicantRect.left = view->Frame().right + sIconGap + 1;
 			}
@@ -1224,6 +1226,17 @@ TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 			// A replicant too wide for even an empty row fits nowhere; without
 			// this the search never terminates and freezes the window thread.
 			if (replicantRect.left == rowRect.left) {
+				loc = replicantRect.LeftTop();
+				break;
+			}
+
+			if (emptyRow) {
+				// this row is EMPTY: if it doesn't fit there it won't fit anywhere!
+				// Probably due to error in advertised max replicant width.
+				// Anyway, don't loop forever looking for a row which will NEVER
+				// be large enough.
+				// Even if it means this replicant will be clipped, it's better than
+				// a frozen Deskbar eating CPU like crazy in search for unobtainium.
 				loc = replicantRect.LeftTop();
 				break;
 			}

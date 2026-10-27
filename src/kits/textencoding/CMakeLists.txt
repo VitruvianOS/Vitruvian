@@ -6,7 +6,7 @@ AddOn(
 	CharacterSetRoster.cpp
 	character_sets.cpp
 	utf8_conversions.cpp
-	LIBS localestub
+	LIBS be localestub
 
 	RDEF libtextencoding.rdef
 )

@@ -162,6 +162,28 @@ SetStringJob::AddToPlan(PartitionPlanBuilder& plan, const BString& opID,
 			} else if (fJobType == B_DISK_DEVICE_JOB_SET_TYPE) {
 				plan.AddSetType(opID.String(), targetRef.String(), fString);
 			} else {
+				// one key; refuse the rest instead of guessing
+				BString parameters(fString);
+				int32 colon = parameters.FindFirst(':');
+				if (colon < 0) {
+					if (!parameters.IsEmpty())
+						return B_NOT_SUPPORTED;
+				} else {
+					BString key;
+					BString value;
+					parameters.CopyInto(key, 0, colon);
+					parameters.CopyInto(value, colon + 1,
+						parameters.Length() - colon - 1);
+					key.Trim();
+					value.Trim();
+					if (key != "active" || (value != "0" && value != "1"
+							&& value != "true" && value != "false"
+							&& value != "yes" && value != "no"
+							&& value != "on" && value != "off")) {
+						return B_NOT_SUPPORTED;
+					}
+				}
+
 				plan.AddSetParameters(opID.String(), targetRef.String(),
 					fString);
 			}

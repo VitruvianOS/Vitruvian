@@ -549,6 +549,7 @@ BInfoWindow::CalcSize(void* castToWindow)
 		BVolumeRoster volRoster;
 		volRoster.Rewind();
 		BVolume volume;
+		BObjectList<node_ref, true> seen(4);
 		while (volRoster.GetNextVolume(&volume) == B_OK) {
 			if (!volume.IsPersistent())
 				continue;
@@ -558,7 +559,8 @@ BInfoWindow::CalcSize(void* castToWindow)
 			currentDirCount = 0;
 
 			BDirectory trashDir;
-			if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK) {
+			if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK
+				&& FSRecordTrashDir(&seen, &trashDir)) {
 				CopyLoopControl loopControl;
 				FSRecursiveCalcSize(window, &loopControl, &trashDir,
 					&currentSize, &currentFileCount, &currentDirCount);

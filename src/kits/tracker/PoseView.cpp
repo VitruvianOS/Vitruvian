@@ -5795,10 +5795,21 @@ BPoseView::FSNotification(const BMessage* message)
 					&& ((!volume.IsShared() || settings.MountSharedVolumesOntoDesktop())))) {
 				CreateVolumePose(&volume);
 			} else if (targetModel->IsTrash()) {
-				// add trash items from newly mounted volume
+				// add trash items from newly mounted volume, unless it
+				// falls back to the home trash already shown
 				BDirectory trashDir;
+				BDirectory homeTrashDir;
+				node_ref trashNode;
+				node_ref homeTrashNode;
 				BEntry entry;
+				const char* home = getenv("HOME");
 				if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK
+					&& trashDir.GetNodeRef(&trashNode) == B_OK
+					&& (home == NULL
+						|| FSGetTrashDir(&homeTrashDir,
+							dev_for_path(home)) != B_OK
+						|| homeTrashDir.GetNodeRef(&homeTrashNode) != B_OK
+						|| trashNode != homeTrashNode)
 					&& trashDir.GetEntry(&entry) == B_OK) {
 					Model model(&entry);
 					if (model.InitCheck() == B_OK)

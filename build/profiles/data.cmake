@@ -187,6 +187,7 @@ ImageIncludeFile("data/bin/userguide" "/bin")
 ImageIncludeFile("data/bin/welcome" "/bin")
 
 # Build files
+install(FILES data/develop/makefile-engine DESTINATION /system/develop/etc COMPONENT dev)
 install(FILES data/develop/makefile-engine DESTINATION /etc COMPONENT dev)
 install(FILES data/develop/vos.specs DESTINATION /etc COMPONENT dev)
 install(FILES

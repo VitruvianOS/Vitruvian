@@ -1,4 +1,4 @@
-## Haiku Generic Makefile Engine v2.6 ##
+## Generic Makefile Engine v2.6 ##
 
 ## Does all the hard work for the Generic Makefile, which only has to specify
 ## the project parameters.
@@ -24,7 +24,7 @@ ifeq ($(TYPE), )
 endif
 
 ifeq ($(APP_MIME_SIG), )
-	APP_MIME = x.vnd-Haiku-$(NAME)
+	APP_MIME_SIG = x-vnd.vos-$(NAME)
 endif
 
 ifeq ($(DRIVER_PATH), )

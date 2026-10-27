@@ -53,8 +53,10 @@ struct DiskSystemInfo {
 #define INIT (B_DISK_SYSTEM_SUPPORTS_INITIALIZING)
 
 static DiskSystemInfo gDiskSystems[] = {
-	{ 0, "intel", "intel", "Intel Partition Map", INIT | PARTITIONING_SYSTEM_BASE, false, false },
-	{ 1, "gpt", "gpt", "GUID Partition Table", INIT | PARTITIONING_SYSTEM_NAMED, false, false },
+	// SETTING_PARAMETERS: the table owns the partition parameters the
+	// DriveSetup editor writes back (active on mbr, LegacyBIOSBootable on gpt).
+	{ 0, "intel", "intel", "Intel Partition Map", INIT | PARTITIONING_SYSTEM_BASE | B_DISK_SYSTEM_SUPPORTS_SETTING_PARAMETERS, false, false },
+	{ 1, "gpt", "gpt", "GUID Partition Table", INIT | PARTITIONING_SYSTEM_NAMED | B_DISK_SYSTEM_SUPPORTS_SETTING_PARAMETERS, false, false },
 	{ 2, "apple", "apple", "Apple Partition Map", PARTITIONING_SYSTEM_NAMED, false, false },
 
 	// "befs" is the Linux name ("bfs" is SCO's); driver read-only, no mkfs.
@@ -62,13 +64,13 @@ static DiskSystemInfo gDiskSystems[] = {
 	{ 4, "ext2", "ext2", "EXT2 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 5, "ext3", "ext3", "EXT3 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	// resize2fs grows and shrinks ext4; others have no shrink tool.
-	{ 6, "ext4", "ext4", "EXT4 File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
+	{ 6, "ext4", "ext4", "EXT4 File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED | B_DISK_SYSTEM_SUPPORTS_SETTING_CONTENT_PARAMETERS | B_DISK_SYSTEM_SUPPORTS_DEFRAGMENTING | B_DISK_SYSTEM_SUPPORTS_DEFRAGMENTING_WHILE_MOUNTED, true, false },
 	{ 7, "ntfs", "ntfs", "NTFS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 8, "fat", "fat", "FAT File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 9, "exfat", "exfat", "exFAT File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	// Online grow for ext4/xfs/btrfs; the helper refuses mounted shrinks.
 	{ 10, "xfs", "xfs", "XFS File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
-	{ 11, "btrfs", "btrfs", "Btrfs File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED, true, false },
+	{ 11, "btrfs", "btrfs", "Btrfs File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_RESIZING_WHILE_MOUNTED | B_DISK_SYSTEM_SUPPORTS_DEFRAGMENTING | B_DISK_SYSTEM_SUPPORTS_DEFRAGMENTING_WHILE_MOUNTED, true, false },
 	// f2fs.resize grows only.
 	{ 12, "f2fs", "f2fs", "F2FS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 	{ 13, "linux-swap", "swap", "Linux Swap", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
@@ -289,7 +291,6 @@ fill_partition_info(const char* devPath, const char* sysPath,
 
 	char fsType[64] = {0};
 	char mountPoint[PATH_MAX] = {0};
-	char mountOpts[256] = {0};
 	bool mounted = false;
 
 	char realDev[PATH_MAX];
@@ -317,7 +318,6 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	if (found) {
 		strlcpy(mountPoint, e.mount_point.String(), sizeof(mountPoint));
 		strlcpy(fsType, e.fs_type.String(), sizeof(fsType));
-		strlcpy(mountOpts, e.opts.String(), sizeof(mountOpts));
 		mounted = true;
 	}
 
@@ -339,8 +339,7 @@ fill_partition_info(const char* devPath, const char* sysPath,
 
 		if (fsType[0])
 			data->content_type = strdup(normalize_fs_content_type(fsType));
-		if (mountOpts[0])
-			data->parameters = strdup(mountOpts);
+		// parameters stay empty; mount options are not partition parameters
 
 		struct stat st;
 		if (stat(mountPoint, &st) == 0)

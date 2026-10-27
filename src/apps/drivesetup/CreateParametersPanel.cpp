@@ -70,8 +70,9 @@ CreateParametersPanel::Go(off_t& offset, off_t& size, BString& name,
 	// a BMessage
 
 	BMessage storage;
+	BString contentParameters;
 	status_t status = ChangeParametersPanel::Go(name, type, parameters,
-		storage);
+		contentParameters, storage);
 	if (status != B_OK)
 		return status;
 

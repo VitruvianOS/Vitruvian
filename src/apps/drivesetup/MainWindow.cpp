@@ -65,6 +65,7 @@
 #include "ResizeMoveWindow.h"
 #include "Support.h"
 
+#include "DefragmentJob.h"
 #include "DiskDeviceJobQueue.h"
 #include "MoveJob.h"
 #include "PartitionCapabilities.h"
@@ -92,6 +93,7 @@ enum {
 	MSG_RESIZE_MOVE				= 'rszm',
 	MSG_SET_FLAGS				= 'sflg',
 	MSG_CHECK					= 'chck',
+	MSG_DEFRAG					= 'dfrg',
 	MSG_ERASE					= 'eras',
 	MSG_WIPE					= 'wipe',
 	MSG_RENAME					= 'renm',
@@ -278,6 +280,9 @@ MainWindow::MainWindow()
 	fCheckMenuItem = new BMenuItem(
 		B_TRANSLATE("Check filesystem"),
 		new BMessage(MSG_CHECK));
+	fDefragMenuItem = new BMenuItem(
+		B_TRANSLATE("Defragment"),
+		new BMessage(MSG_DEFRAG));
 	fEraseMenuItem = new BMenuItem(
 		B_TRANSLATE("Erase filesystem"),
 		new BMessage(MSG_ERASE));
@@ -342,6 +347,7 @@ MainWindow::MainWindow()
 	fPartitionMenu->AddItem(fResizeMenuItem);
 	fPartitionMenu->AddItem(fRenameMenuItem);
 	fPartitionMenu->AddItem(fCheckMenuItem);
+	fPartitionMenu->AddItem(fDefragMenuItem);
 	fPartitionMenu->AddItem(fEraseMenuItem);
 	fPartitionMenu->AddItem(fWipeMenuItem);
 	fPartitionMenu->AddItem(fDeleteMenuItem);
@@ -537,6 +543,10 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case MSG_CHECK:
 			_CheckFilesystem(fCurrentDisk, fCurrentPartitionID);
+			break;
+
+		case MSG_DEFRAG:
+			_Defragment(fCurrentDisk, fCurrentPartitionID);
 			break;
 
 		case MSG_ERASE:
@@ -1444,6 +1454,9 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 				}
 			}
 			fCheckMenuItem->SetEnabled(canCheck);
+			// both defragment tools walk a mounted filesystem
+			fDefragMenuItem->SetEnabled(hasContent && writable
+				&& partition->IsMounted() && partition->CanDefragment());
 			fEraseMenuItem->SetEnabled(contentOpsPossible);
 			fWipeMenuItem->SetEnabled(notMountedAndWritable
 				&& !partition->IsDevice());
@@ -1496,6 +1509,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			fResizeMenuItem->SetEnabled(false);
 			fFlagsMenuItem->SetEnabled(false);
 			fCheckMenuItem->SetEnabled(false);
+			fDefragMenuItem->SetEnabled(false);
 			fEraseMenuItem->SetEnabled(false);
 			fWipeMenuItem->SetEnabled(false);
 			fRenameMenuItem->SetEnabled(false);
@@ -1540,7 +1554,8 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			}
 			fprintf(stderr, "[DriveSetup menus]   enabled: create=%d "
 				"format=%d delete=%d change=%d mount=%d unmount=%d "
-				"erase=%d wipe=%d check=%d rename=%d resize=%d\n",
+				"erase=%d wipe=%d check=%d defrag=%d rename=%d "
+				"resize=%d\n",
 				fCreateContextMenuItem->IsEnabled(),
 				fFormatContextMenuItem->IsEnabled(),
 				fDeleteContextMenuItem->IsEnabled(),
@@ -1549,6 +1564,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 				fUnmountContextMenuItem->IsEnabled(),
 				fEraseMenuItem->IsEnabled(), fWipeMenuItem->IsEnabled(),
 				fCheckMenuItem->IsEnabled(),
+				fDefragMenuItem->IsEnabled(),
 				fRenameMenuItem->IsEnabled(), fResizeMenuItem->IsEnabled());
 		}
 
@@ -1566,6 +1582,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 		fResizeMenuItem->SetEnabled(false);
 		fFlagsMenuItem->SetEnabled(false);
 		fCheckMenuItem->SetEnabled(false);
+		fDefragMenuItem->SetEnabled(false);
 		fEraseMenuItem->SetEnabled(false);
 		fWipeMenuItem->SetEnabled(false);
 		fRenameMenuItem->SetEnabled(false);
@@ -2199,8 +2216,8 @@ MainWindow::_ChangeParameters(BDiskDevice* disk, partition_id selectedPartition)
 
 	ChangeParametersPanel* panel = new ChangeParametersPanel(this, partition);
 
-	BString name, type, parameters;
-	status = panel->Go(name, type, parameters);
+	BString name, type, parameters, contentParameters;
+	status = panel->Go(name, type, parameters, contentParameters);
 	if (status != B_OK) {
 		if (status != B_CANCELED) {
 			_DisplayPartitionError(B_TRANSLATE("The panel experienced a "
@@ -2231,12 +2248,24 @@ MainWindow::_ChangeParameters(BDiskDevice* disk, partition_id selectedPartition)
 	if (choice == 1)
 		return;
 
+	// an untouched field must not turn into a plan op
+	BString currentParameters(
+		partition->Parameters() != NULL ? partition->Parameters() : "");
+	BString currentContentParameters(partition->ContentParameters() != NULL
+		? partition->ContentParameters() : "");
+
 	if (partition->CanSetType())
 		status = partition->SetType(type.String());
 	if (status == B_OK && partition->CanSetName())
 		status = partition->SetName(name.String());
-	if (status == B_OK && partition->CanEditParameters())
+	if (status == B_OK && partition->CanEditParameters()
+		&& parameters != currentParameters) {
 		status = partition->SetParameters(parameters.String());
+	}
+	if (status == B_OK && partition->CanEditContentParameters()
+		&& contentParameters != currentContentParameters) {
+		status = partition->SetContentParameters(contentParameters.String());
+	}
 
 	if (status != B_OK) {
 		_DisplayPartitionError(
@@ -2550,6 +2579,51 @@ MainWindow::_CheckFilesystem(BDiskDevice* disk, partition_id selectedPartition)
 		_DisplayPartitionError(B_TRANSLATE("Checking the selected "
 			"partition's filesystem failed, or found problems."), NULL,
 			status, &result);
+	}
+}
+
+
+void
+MainWindow::_Defragment(BDiskDevice* disk, partition_id selectedPartition)
+{
+	if (disk == NULL || (int64)selectedPartition < 0) {
+		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
+			"entry from the list."));
+		return;
+	}
+
+	BPartition* partition = disk->FindDescendant(selectedPartition);
+	if (partition == NULL) {
+		_DisplayPartitionError(B_TRANSLATE("Unable to find the selected "
+			"partition by ID."));
+		return;
+	}
+
+	PartitionReference* partitionRef
+		= new PartitionReference(partition->ID());
+
+	DefragmentJob* job = new DefragmentJob(partitionRef);
+
+	// without a filesystem the job maps to B_NOT_SUPPORTED, never a plan
+	BDiskSystem contentDiskSystem;
+	if (partition->GetDiskSystem(&contentDiskSystem) == B_OK
+		&& contentDiskSystem.IsFileSystem()) {
+		job->SetFileSystem(contentDiskSystem.Name());
+	}
+
+	partitionRef->ReleaseReference();
+
+	BMessage result;
+	DiskDeviceJobQueue jobQueue;
+	jobQueue.AddJob(job);
+	status_t status = jobQueue.ExecuteViaHelper(disk, &result);
+
+	ProgressWindow* progress = new ProgressWindow(this, result);
+	progress->Go();
+
+	if (status != B_OK) {
+		_DisplayPartitionError(B_TRANSLATE("Defragmenting the selected "
+			"partition failed."), NULL, status, &result);
 	}
 }
 

@@ -1499,11 +1499,9 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 		newLink.SetOwner(srcStat->st_uid);
 		newLink.SetGroup(srcStat->st_gid);
 		newLink.SetModificationTime(srcStat->st_mtime);
-		#ifndef __VOS__
-		newLink.SetCreationTime(srcStat->st_crtime);
-		#else
-		UNIMPLEMENTED();
-		#endif
+		time_t created;
+		if (srcEntry->GetCreationTime(&created) == B_OK)
+			newLink.SetCreationTime(created);
 
 		return;
 	}
@@ -1608,9 +1606,9 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 	destFile.SetOwner(srcStat->st_uid);
 	destFile.SetGroup(srcStat->st_gid);
 	destFile.SetModificationTime(srcStat->st_mtime);
-	#ifndef __VOS__
-	destFile.SetCreationTime(srcStat->st_crtime);
-	#endif
+	time_t created;
+	if (srcEntry->GetCreationTime(&created) == B_OK)
+		destFile.SetCreationTime(created);
 
 	delete[] buffer;
 
@@ -2090,16 +2088,15 @@ FSCopyAttributesAndStats(BNode* srcNode, BNode* destNode, bool copyTimes)
 	delete[] buffer;
 
 	// copy the file stats
-	struct stat srcStat;
-	srcNode->GetStat(&srcStat);
-	destNode->SetPermissions(srcStat.st_mode);
-	destNode->SetOwner(srcStat.st_uid);
-	destNode->SetGroup(srcStat.st_gid);
+	struct statx srcStat;
+	srcNode->GetStatX(&srcStat);
+	destNode->SetPermissions(srcStat.stx_mode);
+	destNode->SetOwner(srcStat.stx_uid);
+	destNode->SetGroup(srcStat.stx_gid);
 	if (copyTimes) {
-		destNode->SetModificationTime(srcStat.st_mtime);
-		#ifndef __VOS__
-		destNode->SetCreationTime(srcStat.st_crtime);
-		#endif
+		destNode->SetModificationTime(srcStat.stx_mtime.tv_sec);
+		destNode->SetCreationTime((srcStat.stx_mask & STATX_BTIME) != 0
+			? srcStat.stx_btime.tv_sec : srcStat.stx_mtime.tv_sec);
 	}
 
 	return B_OK;

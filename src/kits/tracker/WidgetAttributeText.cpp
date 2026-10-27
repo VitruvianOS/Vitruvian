@@ -399,10 +399,8 @@ WidgetAttributeText::AttrAsString(const Model* model, BString* outString,
 		case B_TIME_TYPE:
 			if (strcmp(attrName, kAttrStatModified) == 0)
 				value = model->StatBuf()->st_mtime;
-			#ifndef __VOS__
 			else if (strcmp(attrName, kAttrStatCreated) == 0)
-				value = model->StatBuf()->st_crtime;
-			#endif
+				value = model->CreationTime();
 			else {
 				TRESPASS();
 				// not yet supported
@@ -1117,11 +1115,7 @@ CreationTimeAttributeText::ReadValue()
 {
 	fValueDirty = false;
 	fValueIsDefined = true;
-	#ifndef __VOS__
-	return fModel->StatBuf()->st_crtime;
-	#endif
-	UNIMPLEMENTED();
-	return 0;
+	return fModel->CreationTime();
 }
 
 

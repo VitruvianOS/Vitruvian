@@ -44,6 +44,9 @@ Copyright 2026, Dario Casalinuovo. All rights reserved.
 #include "Model.h"
 
 #include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -131,6 +134,7 @@ Model::Model(const Model& other)
 	fLocalizedNameIsCached(other.fLocalizedNameIsCached)
 {
 	fStatBuf = other.fStatBuf;
+	fCreationTime = other.fCreationTime;
 	fNodeRef = other.fNodeRef;
 
 	if (other.IsSymLink() && other.LinkTo())
@@ -139,7 +143,7 @@ Model::Model(const Model& other)
 	fStatus = OpenNode(other.IsNodeOpenForWriting());
 	if (fStatus == B_OK) {
 		ASSERT(fNode);
-		fNode->GetStat(&fStatBuf);
+		_ReadStat(fNode);
 		fNode->GetNodeRef(&fNodeRef);
 	}
 	if (!other.IsNodeOpen())
@@ -232,6 +236,44 @@ Model::~Model()
 
 
 status_t
+Model::_ReadStat(const BStatable* node)
+{
+	struct statx stx;
+	status_t error = node->GetStatX(&stx);
+	if (error == B_OK)
+		_SetStat(stx);
+	return error;
+}
+
+
+void
+Model::_SetStat(const struct statx& stx)
+{
+	memset(&fStatBuf, 0, sizeof(fStatBuf));
+	fStatBuf.st_dev = makedev(stx.stx_dev_major, stx.stx_dev_minor);
+	fStatBuf.st_rdev = makedev(stx.stx_rdev_major, stx.stx_rdev_minor);
+	fStatBuf.st_ino = stx.stx_ino;
+	fStatBuf.st_mode = stx.stx_mode;
+	fStatBuf.st_nlink = stx.stx_nlink;
+	fStatBuf.st_uid = stx.stx_uid;
+	fStatBuf.st_gid = stx.stx_gid;
+	fStatBuf.st_size = stx.stx_size;
+	fStatBuf.st_blksize = stx.stx_blksize;
+	fStatBuf.st_blocks = stx.stx_blocks;
+	fStatBuf.st_atim.tv_sec = stx.stx_atime.tv_sec;
+	fStatBuf.st_atim.tv_nsec = stx.stx_atime.tv_nsec;
+	fStatBuf.st_mtim.tv_sec = stx.stx_mtime.tv_sec;
+	fStatBuf.st_mtim.tv_nsec = stx.stx_mtime.tv_nsec;
+	fStatBuf.st_ctim.tv_sec = stx.stx_ctime.tv_sec;
+	fStatBuf.st_ctim.tv_nsec = stx.stx_ctime.tv_nsec;
+
+	// filesystems without btime fall back to mtime
+	fCreationTime = (stx.stx_mask & STATX_BTIME) != 0
+		? stx.stx_btime.tv_sec : stx.stx_mtime.tv_sec;
+}
+
+
+status_t
 Model::SetTo(const BEntry* entry, bool open, bool writable)
 {
 	delete fNode;
@@ -245,7 +287,7 @@ Model::SetTo(const BEntry* entry, bool open, bool writable)
 	if (fStatus != B_OK)
 		return fStatus;
 
-	fStatus = entry->GetStat(&fStatBuf);
+	fStatus = _ReadStat(entry);
 	if (fStatus != B_OK)
 		return fStatus;
 
@@ -279,7 +321,7 @@ Model::SetTo(const entry_ref* newRef, bool traverse, bool open, bool writable)
 	else
 		fEntryRef = *newRef;
 
-	fStatus = tmpEntry.GetStat(&fStatBuf);
+	fStatus = _ReadStat(&tmpEntry);
 	if (fStatus != B_OK)
 		return fStatus;
 
@@ -314,14 +356,20 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 			fStatus = (status_t)dirFd;
 			return fStatus;
 		}
-		fStatus = fstatat(dirFd, name, &fStatBuf, AT_SYMLINK_NOFOLLOW) < 0
-			? (status_t)-errno : B_OK;
+		struct statx stx;
+		if (statx(dirFd, name, AT_SYMLINK_NOFOLLOW | AT_STATX_SYNC_AS_STAT,
+				STATX_BASIC_STATS | STATX_BTIME, &stx) < 0) {
+			fStatus = (status_t)-errno;
+		} else {
+			_SetStat(stx);
+			fStatus = B_OK;
+		}
 		close(dirFd);
 	} else {
 		BEntry tmpNode(&fEntryRef);
 		fStatus = tmpNode.InitCheck();
 		if (fStatus == B_OK)
-			fStatus = tmpNode.GetStat(&fStatBuf);
+			fStatus = _ReadStat(&tmpNode);
 	}
 	if (fStatus != B_OK)
 		return fStatus;
@@ -461,7 +509,7 @@ Model::UpdateStatAndOpenNode(bool writable)
 	if (fStatus != B_OK)
 		return fStatus;
 
-	fStatus = tmpEntry.GetStat(&fStatBuf);
+	fStatus = _ReadStat(&tmpEntry);
 	if (fStatus != B_OK)
 		return fStatus;
 
@@ -1036,7 +1084,7 @@ Model::StatChanged()
 
 	ASSERT(IsNodeOpen());
 	mode_t oldMode = fStatBuf.st_mode;
-	fStatus = fNode->GetStat(&fStatBuf);
+	fStatus = _ReadStat(fNode);
 
 	if (oldMode != fStatBuf.st_mode) {
 		bool forWriting = IsNodeOpenForWriting();

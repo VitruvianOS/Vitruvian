@@ -3128,6 +3128,8 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 	} else {
 		ASSERT(model->IsNodeOpen());
 
+
+		time_t now = time(NULL);
 		for (int32 count = 10; count >= 0; count--) {
 			if (model->Node() == NULL)
 				break;
@@ -3147,19 +3149,14 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 			if (ViewMode() == kListMode)
 				break;
 
-			#ifndef __VOS__
-			const StatStruct* stat = model->StatBuf();
-			if (stat->st_crtime < now - 5 || stat->st_crtime > now)
+			time_t created = model->CreationTime();
+			if (created < now - 5 || created > now)
 				break;
 
 			//PRINT(("retrying to read pose info for %s, %d\n",
 			//	model->Name(), count));
 
 			snooze(10000);
-			#else
-			// VOS doesn't have st_crtime, so don't retry
-			break;
-			#endif
 		}
 	}
 

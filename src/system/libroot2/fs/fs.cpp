@@ -666,10 +666,13 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	// linux_dirent64 header (LP64): d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) = 19 bytes
 	const size_t LINUX_DIRENT64_HEADER = 8 + 8 + 2 + 1;
 
-	if (NAME_MAX == 0)
-		return B_BAD_VALUE;
-	if (maxCount > SIZE_MAX / (LINUX_DIRENT64_HEADER + NAME_MAX))
-		return B_BAD_VALUE;
+	// Callers pass INT32_MAX for "as many as fit": clamp before sizing.
+	uint32 maxEntriesInBuffer = bufferSize / sizeof(dirent);
+	if (maxEntriesInBuffer == 0)
+		return B_BUFFER_OVERFLOW;
+	if (maxCount > maxEntriesInBuffer)
+		maxCount = maxEntriesInBuffer;
+
 	size_t bufSize = maxCount * (LINUX_DIRENT64_HEADER + NAME_MAX);
 
 	void* direntBuffer = malloc(bufSize);
@@ -690,9 +693,6 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 
 	int i = 0;
 	size_t pos = 0;
-	uint32 maxEntriesInBuffer = bufferSize / sizeof(dirent);
-	if (maxCount > maxEntriesInBuffer)
-		maxCount = maxEntriesInBuffer;
 
 	while (pos < (size_t)ret && i < (int)maxCount) {
 		if ((size_t)ret - pos < LINUX_DIRENT64_HEADER)
@@ -715,8 +715,10 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 		size_t name_len = reclen - LINUX_DIRENT64_HEADER;
 		size_t dst_size = sizeof(buffer[i].d_name);
 		size_t to_copy = name_len;
-		if (to_copy >= dst_size)
+		if (to_copy >= dst_size) {
+			free(direntBuffer);
 			return B_BUFFER_OVERFLOW;
+		}
 		memcpy(buffer[i].d_name, base + LINUX_DIRENT64_HEADER, to_copy);
 		buffer[i].d_name[to_copy] = '\0';
 

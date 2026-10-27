@@ -1374,6 +1374,16 @@ PipeWireBackend::_BindNode(uint32 id)
 }
 
 
+struct pw_port*
+PipeWireBackend::_BindPort(uint32 id)
+{
+	if (fRegistry == NULL)
+		return NULL;
+	return (struct pw_port*)pw_registry_bind(fRegistry, id,
+		PW_TYPE_INTERFACE_Port, PW_VERSION_PORT, 0);
+}
+
+
 void
 PipeWireBackend::_CoreDoneThunk(void* data, uint32 id, int seq)
 {
@@ -1602,6 +1612,16 @@ _PickFrameRate(const spa_pod* value)
 }
 
 
+// Unbounded range maxima (INT_MAX) and empty sizes are not modes.
+static bool
+_IsUsableModeSize(uint32 width, uint32 height)
+{
+	const uint32 kMaxModeEdge = 16384;
+	return width > 0 && height > 0 && width <= kMaxModeEdge
+		&& height <= kMaxModeEdge;
+}
+
+
 /* static */ void
 PipeWireBackend::_NodeVideoModeThunk(void* data, int, uint32 id, uint32,
 	uint32, const struct spa_pod* param)
@@ -1627,20 +1647,21 @@ PipeWireBackend::_NodeVideoModeThunk(void* data, int, uint32 id, uint32,
 
 	const spa_rectangle* r = (const spa_rectangle*)SPA_POD_BODY(values);
 	// A range lists default, min, max; offer the default and the maximum.
-	uint32 first = 0;
+	// An enum lists the default first; the repeats are merged later.
 	uint32 last = count;
 	if (choice == SPA_CHOICE_Range || choice == SPA_CHOICE_Step) {
-		first = 0;
 		last = 1;
 		if (count >= 3 && (r[2].width != r[0].width
-				|| r[2].height != r[0].height)) {
+				|| r[2].height != r[0].height)
+				&& _IsUsableModeSize(r[2].width, r[2].height)) {
 			NodeVideoMode mode = { r[2].width, r[2].height, rate };
 			modes->push_back(mode);
 		}
-	} else if (choice == SPA_CHOICE_Enum && count > 1)
-		first = 1;
+	}
 
-	for (uint32 i = first; i < last; i++) {
+	for (uint32 i = 0; i < last; i++) {
+		if (!_IsUsableModeSize(r[i].width, r[i].height))
+			continue;
 		NodeVideoMode mode = { r[i].width, r[i].height, rate };
 		modes->push_back(mode);
 	}
@@ -1670,26 +1691,34 @@ PipeWireBackend::QueryNodeVideoModes(const char* nodeName,
 	if (nodeId == 0)
 		return B_ENTRY_NOT_FOUND;
 
+	// EnumFormat is a port parameter; the node answers nothing for it.
+	std::vector<uint32> portIds;
+	status_t status = ResolveNodePorts(nodeId, PW_DIRECTION_OUTPUT, portIds);
+	if (status != B_OK)
+		return status;
+	if (portIds.empty())
+		return B_ENTRY_NOT_FOUND;
+
 	std::vector<NodeVideoMode> found;
 	Lock();
-	struct pw_node* node = _BindNode(nodeId);
-	if (node == NULL) {
+	struct pw_port* port = _BindPort(portIds[0]);
+	if (port == NULL) {
 		Unlock();
 		return B_DEVICE_NOT_FOUND;
 	}
 
 	spa_hook listener;
 	memset(&listener, 0, sizeof(listener));
-	static const pw_node_events kModeEvents = {
-		PW_VERSION_NODE_EVENTS,
+	static const pw_port_events kModeEvents = {
+		PW_VERSION_PORT_EVENTS,
 		NULL,
 		&PipeWireBackend::_NodeVideoModeThunk
 	};
-	pw_node_add_listener(node, &listener, &kModeEvents, &found);
-	pw_node_enum_params(node, 0, SPA_PARAM_EnumFormat, 0, UINT32_MAX, NULL);
+	pw_port_add_listener(port, &listener, &kModeEvents, &found);
+	pw_port_enum_params(port, 0, SPA_PARAM_EnumFormat, 0, UINT32_MAX, NULL);
 	RoundtripLocked();
 	spa_hook_remove(&listener);
-	pw_proxy_destroy((struct pw_proxy*)node);
+	pw_proxy_destroy((struct pw_proxy*)port);
 	Unlock();
 
 	// One entry per size, keeping the best rate any pixel format gave it.

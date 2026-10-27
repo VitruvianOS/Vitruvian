@@ -331,6 +331,7 @@ private:
 			void					_Teardown();
 
 			struct pw_node*			_BindNode(uint32 id);
+			struct pw_port*			_BindPort(uint32 id);
 
 			static void				_CoreDoneThunk(void* data, uint32 id, int seq);
 

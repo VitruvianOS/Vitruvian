@@ -1,7 +1,6 @@
 if(NOT BUILDTOOLS_MODE STREQUAL "1")
 
 add_subdirectory(addattr)
-# add_subdirectory(desklink)  # media kit not yet implemented
 add_subdirectory(keystore)
 add_subdirectory(locale)
 add_subdirectory(media_client)

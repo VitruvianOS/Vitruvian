@@ -113,6 +113,8 @@ private:
 			uint32				fHeight;
 			float				fFrameRate;
 			std::vector<camera_mode>	fModes;
+			// A size was remembered or picked, so no mode is auto-picked.
+			bool				fHasStoredSize;
 			bool				fGrid;
 			bool				fMirrorEnabled;
 			BPath				fLastPath;

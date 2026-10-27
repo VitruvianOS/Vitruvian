@@ -398,7 +398,11 @@ BMediaGraph::_ResolveDetached(BMediaClient* outClient, BMediaClient* inClient,
 		} else if (unit->IsDetachedOnly()) {
 			return B_NOT_SUPPORTED;
 		} else if (unit->IsDetached()) {
-			return B_NOT_ALLOWED;
+			// A failed in-process connect leaves an idle unit flagged
+			// detached; drop the stale flag so this graph peer takes.
+			status_t status = unit->_LeaveDetached();
+			if (status != B_OK)
+				return status;
 		}
 	}
 	return B_OK;

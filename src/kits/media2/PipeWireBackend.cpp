@@ -926,26 +926,29 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	// above is only for building the pod; the stream is not yet in the graph.
 	uint8_t buf[2048];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-	const spa_pod* params[3];
-	uint32 paramCount = 1;
+	const spa_pod* params[4];
+	uint32 paramCount = 0;
 	// Video offers YUY2/BGRx/I420 with size and rate ranges; most UVC
 	// webcams do not do BGRx only, so a single fixed format never links.
 	if (isVideo) {
-		// Exact preferred mode first, the full range as fallback.
-		params[0] = BuildVideoEnumFormat(&b, preferred, true);
-		params[1] = BuildVideoEnumFormat(&b, preferred);
-		paramCount = 2;
-		if (params[1] == NULL)
-			params[0] = NULL;
-		// Compressed fallback after raw, so raw wins when the device has it.
-		if (allowMjpeg && direction == PW_DIRECTION_INPUT) {
-			params[2] = BuildVideoEnumFormat(&b, preferred, false, true);
-			if (params[2] != NULL)
-				paramCount = 3;
+		// Exact modes first: PipeWire takes the first match, so a raw range
+		// would beat a size the device offers only as MJPEG.
+		const bool mjpeg = allowMjpeg && direction == PW_DIRECTION_INPUT;
+		const spa_pod* built[4] = {
+			BuildVideoEnumFormat(&b, preferred, true),
+			mjpeg ? BuildVideoEnumFormat(&b, preferred, true, true) : NULL,
+			BuildVideoEnumFormat(&b, preferred),
+			mjpeg ? BuildVideoEnumFormat(&b, preferred, false, true) : NULL
+		};
+		for (uint32 i = 0; i < 4; i++) {
+			if (built[i] != NULL)
+				params[paramCount++] = built[i];
 		}
-	} else
+	} else {
 		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
-	if (params[0] == NULL) {
+		paramCount = params[0] != NULL ? 1 : 0;
+	}
+	if (paramCount == 0) {
 		Lock();
 		pw_stream_destroy(stream);
 		Unlock();

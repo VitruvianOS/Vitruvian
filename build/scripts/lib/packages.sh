@@ -109,7 +109,7 @@ get_dev_packages() {
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;
@@ -124,7 +124,7 @@ get_dev_packages() {
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;
@@ -139,7 +139,7 @@ get_dev_packages() {
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;
         riscv64)
@@ -153,7 +153,7 @@ get_dev_packages() {
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;
         *)

@@ -330,6 +330,14 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	SUIL
+	LIBRARIES  "suil-0"
+	PACKAGES   "libsuil-dev"
+	RUNTIMES   "libsuil-0-0"
+	INCLUDES   "${HEADERS_PATH_BASE}/suil-0/"
+)
+
+DeclareDependency(
 	LV2
 	PACKAGES   "lv2-dev"
 	INCLUDES   "${HEADERS_PATH_BASE}/lv2/"

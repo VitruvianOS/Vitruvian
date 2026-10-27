@@ -149,7 +149,11 @@ BNetworkRoster::AddPersistentNetwork(const wireless_network& network)
 status_t
 BNetworkRoster::RemovePersistentNetwork(const char* name)
 {
-	return B_NOT_SUPPORTED;
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return B_ERROR;
+
+	return backend->ForgetWiFiNetwork(name);
 }
 
 

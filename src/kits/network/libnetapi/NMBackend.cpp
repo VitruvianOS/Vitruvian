@@ -843,6 +843,8 @@ NMBackend::_HandleDeviceAdded(void* deviceRaw)
 	BMessage message((uint32)NOTIFICATION_DEVICE_ADDED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
+	if (nm_device_get_iface(device) != NULL)
+		message.AddString(kNMFieldInterface, nm_device_get_iface(device));
 	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_ADDED, message);
 }
 
@@ -889,6 +891,8 @@ NMBackend::_HandleDeviceRemoved(void* deviceRaw)
 	BMessage message((uint32)NOTIFICATION_DEVICE_REMOVED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
+	if (nm_device_get_iface(device) != NULL)
+		message.AddString(kNMFieldInterface, nm_device_get_iface(device));
 	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_REMOVED, message);
 }
 
@@ -909,6 +913,8 @@ NMBackend::_HandleDeviceStateChanged(void* deviceRaw)
 	BMessage message((uint32)NOTIFICATION_DEVICE_STATE_CHANGED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
+	if (nm_device_get_iface(device) != NULL)
+		message.AddString(kNMFieldInterface, nm_device_get_iface(device));
 	message.AddUInt32(kNMFieldState, nm_device_get_state(device));
 	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_STATE_CHANGED, message);
 }
@@ -925,6 +931,8 @@ NMBackend::_HandleDeviceIPConfigChanged(void* deviceRaw)
 	BMessage message((uint32)NOTIFICATION_DEVICE_IP_CHANGED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
+	if (nm_device_get_iface(device) != NULL)
+		message.AddString(kNMFieldInterface, nm_device_get_iface(device));
 	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_IP_CHANGED, message);
 }
 

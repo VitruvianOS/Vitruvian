@@ -1189,7 +1189,7 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size, BBitmap** _icon)
 	// fill with transparent
 	uint8* iconBits = (uint8*)icon->Bits();
 	if (icon->ColorSpace() == B_RGBA32) {
-		int32 i = 0;
+		size_t i = 0;
 		while (i < icon->BitsLength()) {
 			iconBits[i++] = B_TRANSPARENT_32_BIT.red;
 			iconBits[i++] = B_TRANSPARENT_32_BIT.green;
@@ -1198,7 +1198,7 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size, BBitmap** _icon)
 		}
 	} else {
 		// Assume B_CMAP8
-		for (int32 i = 0; i < icon->BitsLength(); i++)
+		for (size_t i = 0; i < icon->BitsLength(); i++)
 			iconBits[i] = B_TRANSPARENT_MAGIC_CMAP8;
 	}
 

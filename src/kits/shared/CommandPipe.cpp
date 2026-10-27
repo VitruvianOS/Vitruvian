@@ -237,7 +237,9 @@ BCommandPipe::Run()
 	// to system() but uses pipes and wait_for_thread.... Synchronous.
 	int stdOut[2], stdErr[2];
 	status_t exitCode;
-	wait_for_thread(Pipe(stdOut, stdErr), &exitCode);
+	thread_id tid = Pipe(stdOut, stdErr);
+	if (tid >= 0)
+		wait_for_thread(tid, &exitCode);
 
 	close(stdOut[0]);
 	close(stdErr[0]);

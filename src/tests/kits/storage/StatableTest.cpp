@@ -244,8 +244,12 @@ StatableTest::SetXYZTest()
 #if !TEST_R5 && !TEST_OBOS /* !!!POSIX ONLY!!! */
 		time_t atime = 2345678;
 #endif
-		CPPUNIT_ASSERT( statable->SetOwner(owner) == B_OK );
-		CPPUNIT_ASSERT( statable->SetGroup(group) == B_OK );
+		// Giving a file away to another uid/gid needs root.
+		const bool canChown = geteuid() == 0;
+		if (canChown) {
+			CPPUNIT_ASSERT( statable->SetOwner(owner) == B_OK );
+			CPPUNIT_ASSERT( statable->SetGroup(group) == B_OK );
+		}
 		struct stat nodeSt;
 		bool isLink = statable->GetStat(&nodeSt) == B_OK
 			&& S_ISLNK(nodeSt.st_mode);
@@ -263,8 +267,10 @@ StatableTest::SetXYZTest()
 		CPPUNIT_ASSERT( statable->SetAccessTime(atime) == B_OK );
 #endif
 		CPPUNIT_ASSERT( stat_for_statable(statable, entryName.c_str(), &st) == 0 );
-		CPPUNIT_ASSERT( owner == st.st_uid );
-		CPPUNIT_ASSERT( group == st.st_gid );
+		if (canChown) {
+			CPPUNIT_ASSERT( owner == st.st_uid );
+			CPPUNIT_ASSERT( group == st.st_gid );
+		}
 		if (!isLink)
 			CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );

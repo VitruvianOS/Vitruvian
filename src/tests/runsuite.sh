@@ -39,6 +39,18 @@ run_test() {
         ERRORS="$ERRORS\n  FAIL: $name (exit $rc, see $logfile)"
         echo "FAIL (exit $rc)"
     else
+        case "$cmd" in
+        "$UNITTESTER"*)
+            # A UnitTester run that exits before its Results block never
+            # ran its tests (e.g. BApplication refused by the session).
+            if ! grep -q "^Results" "$logfile" 2>/dev/null; then
+                FAIL=$((FAIL + 1))
+                ERRORS="$ERRORS\n  DID NOT RUN: $name (see $logfile)"
+                echo "DID NOT RUN"
+                return
+            fi
+            ;;
+        esac
         if grep -q "^- FAIL" "$logfile" 2>/dev/null; then
             FAIL=$((FAIL + 1))
             ERRORS="$ERRORS\n  FAIL: $name (see $logfile)"

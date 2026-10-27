@@ -895,7 +895,7 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 				= BPrivate::media::GStreamerBackend::ApplyEncoderQuality(
 					self->fEncodePipeline, self->fEncodeQuality) > 0;
 		}
-		// gst_buffer_new_wrapped takes ownership — copy first.
+		// gst_buffer_new_wrapped takes ownership; copy first.
 		GstBuffer* gb = gst_buffer_new_allocate(NULL, size, NULL);
 		if (gb == NULL)
 			return;
@@ -936,7 +936,7 @@ BMediaRecorder::BMediaRecorder(const char* name, media_type type)
 }
 
 
-// Legacy override hook — default no-op.
+// Legacy override hook; default no-op.
 void
 BMediaRecorder::BufferReceived(void*, size_t, const media_raw_audio_format&)
 {

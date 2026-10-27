@@ -204,7 +204,7 @@ parameter_should_be_hidden(BParameter &parameter)
 static void
 start_watching_for_parameter_changes(BControl* /*control*/, BParameter& /*parameter*/)
 {
-	// media2 has no BMediaRoster — parameter change broadcasts are delivered
+	// media2 has no BMediaRoster; parameter change broadcasts are delivered
 	// directly via BControllable::BroadcastChangedParameter to messengers
 	// registered through StartControlPanel. UI controls are not auto-watched
 	// in this minimal port.
@@ -757,7 +757,7 @@ TextMessageFilter::Filter(BMessage *message, BHandler **target)
 
 
 DefaultMediaTheme::DefaultMediaTheme()
-	: BMediaTheme("Haiku theme", "Haiku built-in theme version 0.1")
+	: BMediaTheme("Default theme", "Built-in theme version 0.1")
 {
 	CALLED();
 }

@@ -36,7 +36,7 @@ public:
 	{
 		// MakeControlFor must return a BControl; only BContinuousParameter
 		// fits (BSlider IS-A BControl). Discrete parameters become a
-		// BMenuField (BView, not BControl) — handled inline in MakeViewFor.
+		// BMenuField (BView, not BControl); handled inline in MakeViewFor.
 		if (parameter == NULL
 				|| parameter->Type() != BParameter::B_CONTINUOUS_PARAMETER) {
 			return NULL;

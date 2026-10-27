@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * AudioMixer deskbar replicant — master volume, mute, device switch.
+ * AudioMixer Deskbar replicant: master volume, mute, device switch.
  * Distributed under the terms of the MIT License.
  */
 

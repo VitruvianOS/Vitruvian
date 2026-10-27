@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * StreamListView — list of application streams (PipeWire "Stream" nodes).
+ * StreamListView: list of application streams (PipeWire "Stream" nodes).
  * Distributed under the terms of the MIT License.
  */
 

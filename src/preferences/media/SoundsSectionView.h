@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * Sounds section — system event -> sound file assignment, absorbed from
+ * Sounds section: system event -> sound file assignment, absorbed from
  * the standalone Sounds preflet (src/preferences/sounds/HWindow) as a
  * Media preferences section. Reuses HEventList/HEventRow and
  * SoundFilePanel unchanged; only the BWindow shell became a BGroupView.

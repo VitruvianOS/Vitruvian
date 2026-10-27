@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * Media preferences — main window with sidebar (Output / Input / Streams /
+ * Media preferences: main window with sidebar (Output / Input / Streams /
  * Hardware / Sounds) and content pane.
  * Distributed under the terms of the MIT License.
  */

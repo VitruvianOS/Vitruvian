@@ -879,7 +879,7 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 		const size_t got = (size_t)gotFrames * fFrameStride;
 		if (got < size)
 			memset((uint8_t*)buffer + got, 0, size - got);
-		// Transition + notify on the RT thread is fine — BMessenger is safe.
+		// Transition + notify on the RT thread is fine; BMessenger is safe.
 		_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 		_PostNotification(BMediaPlayer::B_PLAYER_END_OF_STREAM);
 		if (fNotifyFunc != NULL)

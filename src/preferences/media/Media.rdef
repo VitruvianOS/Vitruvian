@@ -24,8 +24,7 @@ resource app_version {
 	long_info  = "Media ©2026 Vitruvian Project"
 };
 
-/* Placeholder HVIF — to be replaced with the Haiku Prefs_Media icon in
- * C.3 once the IMSG→HVIF conversion is wired. */
+/* Placeholder icon. */
 resource vector_icon {
 	$"6E63696F6E0205006601000001000000000000"
 };

@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * DeviceListView — list of devices (sinks or sources) with default marker.
+ * DeviceListView: list of devices (sinks or sources) with default marker.
  * Used by Output/Input sections.
  * Distributed under the terms of the MIT License.
  */

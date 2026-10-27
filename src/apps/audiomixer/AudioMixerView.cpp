@@ -1,7 +1,7 @@
 /*
  * Copyright 2003-2018, Haiku, Inc.
  * Copyright 2026, Vitruvian Project.
- * AudioMixer deskbar replicant — master volume, mute, device switch.
+ * AudioMixer Deskbar replicant: master volume, mute, device switch.
  * Distributed under the terms of the MIT License.
  */
 
@@ -407,7 +407,7 @@ AudioMixerView::MessageReceived(BMessage* message)
 				B_TRANSLATE_SYSTEM_NAME("AudioMixer"), kSignature);
 			about->AddCopyright(2026, "Vitruvian Project");
 			about->AddDescription(
-				B_TRANSLATE("Audio mixer — volume, mute, device switch"));
+				B_TRANSLATE("Audio mixer: volume, mute and output device"));
 			about->Show();
 			break;
 		}

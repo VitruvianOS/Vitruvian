@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * Media preferences — application entry point.
+ * Media preferences: application entry point.
  * Distributed under the terms of the MIT License.
  */
 

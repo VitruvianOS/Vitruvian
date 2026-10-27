@@ -70,6 +70,8 @@ private:
 			BMediaOutput*		fOutput;
 			BControllable*		fControllable;
 			BMediaFormat		fLastFormat;
+			void*				fCycleOut;		// graph mode: this cycle's output
+			size_t				fCycleOutSize;
 };
 
 

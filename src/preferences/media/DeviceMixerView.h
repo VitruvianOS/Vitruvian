@@ -1,7 +1,7 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * DeviceMixerView — per-device panel with master slider, mute, balance,
- * port (jack) selector, level meter, and "Set Default" — used by the
+ * DeviceMixerView: per-device panel with master slider, mute, balance,
+ * port (jack) selector, level meter, and "Set Default"; used by the
  * Output and Input sections of the Media preferences.
  * Distributed under the terms of the MIT License.
  */

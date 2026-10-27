@@ -1,7 +1,7 @@
 /*
  * Copyright 2003-2018, Haiku, Inc.
  * Copyright 2026, Vitruvian Project.
- * Speaker icon resources — Haiku HVIF data.
+ * Speaker icon resources (HVIF).
  * Distributed under the terms of the MIT License.
  *
  * AudioMixerView looks up "Speaker" and "SpeakerMuted" by name. The

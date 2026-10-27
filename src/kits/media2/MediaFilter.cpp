@@ -53,9 +53,13 @@ BMediaFilter::BMediaFilter(const char* name, const char* description,
 	fCore(NULL),
 	fInput(NULL),
 	fOutput(NULL),
-	fControllable(NULL)
+	fControllable(NULL),
+	fCycleOut(NULL),
+	fCycleOutSize(0)
 {
-	SetDetachedOnly(true);
+	// The graph cycle carries no frame layout, so video stays in-process.
+	if (type == B_MEDIA_RAW_VIDEO)
+		SetDetachedOnly(true);
 	fInput = new(std::nothrow) _Input(this);
 	fOutput = new(std::nothrow) BMediaOutput("out");
 	if (fInput == NULL || fOutput == NULL) {
@@ -67,6 +71,15 @@ BMediaFilter::BMediaFilter(const char* name, const char* description,
 	}
 
 	fOutput->SetAcceptedTypes(B_MEDIA_TYPE_BIT(type));
+	if (type == B_MEDIA_RAW_AUDIO) {
+		// Graph ports are mono float; the type lets in-process links settle.
+		BMediaFormat format;
+		format.SetToDefault();
+		format.format.type = B_MEDIA_RAW_AUDIO;
+		format.format.u.raw_audio.channel_count = 1;
+		fInput->SetAcceptedFormat(format);
+		fOutput->SetFormat(format);
+	}
 	if (RegisterInput(fInput) != B_OK || RegisterOutput(fOutput) != B_OK) {
 		delete fInput;
 		delete fOutput;
@@ -196,8 +209,28 @@ BMediaFilter::ProcessCycle(uint32 /*frameCount*/)
 {
 	size_t size = 0;
 	void* buffer = BufferFor(fInput, &size);
-	if (buffer != NULL)
-		_HandleBuffer(buffer, size, CycleFormat());
+	if (IsDetached()) {
+		if (buffer != NULL)
+			_HandleBuffer(buffer, size, CycleFormat());
+		return;
+	}
+
+	fCycleOut = BufferFor(fOutput, &fCycleOutSize);
+	if (fCycleOut == NULL)
+		return;
+	if (buffer == NULL)
+		memset(fCycleOut, 0, fCycleOutSize);
+	else {
+		BMediaFormat format;
+		format.SetToDefault();
+		format.format.type = B_MEDIA_RAW_AUDIO;
+		format.format.u.raw_audio.format
+			= media_raw_audio_format::B_AUDIO_FLOAT;
+		format.format.u.raw_audio.channel_count = 1;
+		format.format.u.raw_audio.frame_rate = SampleRate();
+		_HandleBuffer(buffer, size, format);
+	}
+	fCycleOut = NULL;
 }
 
 
@@ -266,6 +299,12 @@ BMediaFilter::_ForwardThunk(void* cookie, void* buffer, size_t size,
 	BMediaFilter* self = (BMediaFilter*)cookie;
 	if (self->fOutput == NULL)
 		return;
+	if (self->fCycleOut != NULL) {
+		size_t copy = size < self->fCycleOutSize ? size : self->fCycleOutSize;
+		memcpy(self->fCycleOut, buffer, copy);
+		memset((uint8*)self->fCycleOut + copy, 0, self->fCycleOutSize - copy);
+		return;
+	}
 	if (self->fType == B_MEDIA_RAW_VIDEO)
 		self->fOutput->SetFormat(format);
 	self->fOutput->SendBuffer(buffer, size);

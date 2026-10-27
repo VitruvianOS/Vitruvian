@@ -17,7 +17,8 @@ AddOn(
 
 	${LIBROOT_SOURCES}/KMessage.cpp
 	${LIBROOT_SOURCES}/real_time_clock.c
-	${LIBROOT_SOURCES}/system_info.c
+	${LIBROOT_SOURCES}/system_info.cpp
+	${LIBROOT_SOURCES}/proc_read.cpp
 	${LIBROOT_SOURCES}/byteorder.cpp
 	${LIBROOT_SOURCES}/fs/normalize_path.cpp
 	${LIBROOT_SOURCES}/fs/find_directory.cpp

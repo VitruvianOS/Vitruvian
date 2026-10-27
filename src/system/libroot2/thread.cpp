@@ -20,10 +20,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <new>
+
 #include <syscalls.h>
 
 #include "KernelDebug.h"
 #include "Team.h"
+#include "proc_read.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
 
@@ -118,56 +121,34 @@ namespace {
 __thread thread_id sCachedTid = 0;
 
 
-// utime/stime are /proc/<id>/stat fields 14/15; the strrchr(')') is needed
-// because a thread name can itself contain spaces and parentheses.
+// utime/stime are /proc/<id>/stat fields 14/15; proc_parse_stat finds them
+// after the last ')', because a thread name can contain parentheses.
 void
-GetThreadCpuTimes(thread_id id, bigtime_t* userTime, bigtime_t* kernelTime)
+GetThreadCpuTimes(int dirFd, const char* prefix, bigtime_t* userTime,
+	bigtime_t* kernelTime)
 {
 	*userTime = 0;
 	*kernelTime = 0;
 
-	char path[64];
-	char buf[4096];
-	snprintf(path, sizeof(path), "/proc/%d/stat", (int)id);
-
-	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	char name[48];
+	snprintf(name, sizeof(name), "%sstat", prefix);
+	int fd = proc_openat_file(dirFd, name);
 	if (fd < 0)
 		return;
 
-	ssize_t dataRead = read(fd, buf, sizeof(buf) - 1);
+	char buffer[1024];
+	ssize_t dataRead = proc_read_all(fd, buffer, sizeof(buffer));
 	close(fd);
 	if (dataRead <= 0)
 		return;
 
-	buf[dataRead] = '\0';
-
-	char* paren = strrchr(buf, ')');
-	if (paren == NULL)
+	struct proc_stat_info stat;
+	if (!proc_parse_stat(buffer, &stat))
 		return;
 
-	char* p = paren + 2;
-	unsigned long utime_ticks = 0, stime_ticks = 0;
-	int field = 3;
-	char* save = NULL;
-	char* token = strtok_r(p, " ", &save);
-
-	while (token) {
-		if (field == 14) {
-			utime_ticks = strtoul(token, NULL, 10);
-		} else if (field == 15) {
-			stime_ticks = strtoul(token, NULL, 10);
-			break;
-		}
-		field++;
-		token = strtok_r(NULL, " ", &save);
-	}
-
-	long hz = sysconf(_SC_CLK_TCK);
-	if (hz <= 0)
-		hz = 100;
-
-	*userTime = (bigtime_t)((utime_ticks * 1000000ULL) / (unsigned long)hz);
-	*kernelTime = (bigtime_t)((stime_ticks * 1000000ULL) / (unsigned long)hz);
+	long hz = proc_clk_tck();
+	*userTime = (bigtime_t)((stat.utimeTicks * 1000000ULL) / (uint64)hz);
+	*kernelTime = (bigtime_t)((stat.stimeTicks * 1000000ULL) / (uint64)hz);
 }
 
 
@@ -426,6 +407,68 @@ has_data(thread_id thread)
 }
 
 
+static status_t
+_GetThreadInfoVia(int dirFd, const char* prefix, thread_id id,
+	thread_info* info, size_t size)
+{
+	memset(info, 0, sizeof(thread_info));
+	info->thread = id;
+	info->team = -1;
+	info->state = B_THREAD_RUNNING;
+
+	char buffer[2048];
+	char name[48];
+
+	snprintf(name, sizeof(name), "%scomm", prefix);
+	int fd = proc_openat_file(dirFd, name);
+	if (fd >= 0) {
+		ssize_t length = proc_read_all(fd, buffer, sizeof(buffer));
+		close(fd);
+		if (length > 0) {
+			char* newline = strchr(buffer, '\n');
+			if (newline != NULL)
+				*newline = '\0';
+			strlcpy(info->name, buffer, sizeof(info->name));
+		} else
+			strlcpy(info->name, "unknown", sizeof(info->name));
+	} else
+		strlcpy(info->name, "unknown", sizeof(info->name));
+
+	// Line-wise parse: a comm value containing "Tgid:" or "State:" must not
+	// be mistaken for the field.
+	snprintf(name, sizeof(name), "%sstatus", prefix);
+	fd = proc_openat_file(dirFd, name);
+	if (fd < 0)
+		return B_BAD_THREAD_ID;
+
+	ssize_t length = proc_read_all(fd, buffer, sizeof(buffer));
+	close(fd);
+	struct proc_status_info status;
+	if (length <= 0 || !proc_parse_status(buffer, &status) || status.tgid <= 0)
+		return B_ERROR;
+
+	info->team = (team_id)status.tgid;
+	switch (status.state) {
+		case 'S':
+		case 'D':
+			info->state = B_THREAD_WAITING;
+			break;
+		case 'T':
+			info->state = B_THREAD_SUSPENDED;
+			break;
+		default:
+			info->state = B_THREAD_RUNNING;
+			break;
+	}
+
+	info->priority = GetThreadPriority(id);
+
+	GetThreadCpuTimes(dirFd, prefix, &info->user_time, &info->kernel_time);
+
+	return B_OK;
+}
+
+
 status_t
 _get_thread_info(thread_id id, thread_info* info, size_t size)
 {
@@ -437,87 +480,25 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 	if (info == NULL || size != sizeof(thread_info))
 		return B_BAD_VALUE;
 
-	char path[64];
-	char buffer[512];
-
-	snprintf(path, sizeof(path), "/proc/%d/comm", id);
-	int fd = open(path, O_RDONLY);
-	if (fd < 0)
+	struct proc_dir dir;
+	if (!proc_dir_open_pid(&dir, (pid_t)id))
 		return B_BAD_THREAD_ID;
 
-	memset(info, 0, sizeof(thread_info));
-	info->thread = id;
-
-	ssize_t len = read(fd, buffer, sizeof(buffer) - 1);
-	close(fd);
-
-	if (len > 0) {
-		buffer[len] = '\0';
-		char* newline = strchr(buffer, '\n');
-		if (newline != NULL)
-			*newline = '\0';
-		// Thread names deliberately truncate at B_OS_NAME_LENGTH.
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-#endif
-		snprintf(info->name, sizeof(info->name), "%s", buffer);
-	} else {
-		snprintf(info->name, sizeof(info->name), "%s", "unknown");
-	}
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-
-	info->state = B_THREAD_RUNNING;
-	info->priority = GetThreadPriority(id);
-	info->team = -1;
-
-	GetThreadCpuTimes(id, &info->user_time, &info->kernel_time);
-
-	snprintf(path, sizeof(path), "/proc/%d/status", id);
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		return B_BAD_THREAD_ID;
-	{
-		len = read(fd, buffer, sizeof(buffer) - 1);
-		close(fd);
-
-		if (len > 0) {
-			buffer[len] = '\0';
-
-			char* tgid = strstr(buffer, "Tgid:");
-			if (tgid == NULL)
-				return B_ERROR;
-			info->team = atoi(tgid + 5);
-
-			char* state = strstr(buffer, "State:");
-			if (state != NULL) {
-				state += 6;
-				while (*state == ' ' || *state == '\t')
-					state++;
-				switch (*state) {
-					case 'R':
-						info->state = B_THREAD_RUNNING;
-						break;
-					case 'S':
-					case 'D':
-						info->state = B_THREAD_WAITING;
-						break;
-					case 'T':
-						info->state = B_THREAD_SUSPENDED;
-						break;
-					default:
-						info->state = B_THREAD_RUNNING;
-						break;
-				}
-			}
-		} else
-			return B_ERROR;
-	}
-
-	return B_OK;
+	status_t result = _GetThreadInfoVia(dir.dirFd, "", id, info, size);
+	proc_dir_close(&dir);
+	return result;
 }
+
+
+namespace {
+
+
+struct ThreadEnumState {
+	ProcDirBatch	batch;
+};
+
+
+} // namespace
 
 
 status_t
@@ -531,43 +512,46 @@ _get_next_thread_info(team_id team, int32* cookie, thread_info* info, size_t siz
 	if (team == 0)
 		team = getpid();
 
-	// The cookie holds the open /proc/<team>/task fd between calls,
-	// encoded as fd+1 so that 0 still means "start fresh".
-	int fd;
+	ThreadEnumState* state;
 	if (*cookie == 0) {
 		char path[64];
-		snprintf(path, sizeof(path), "/proc/%d/task", team);
-		fd = _kern_open_dir(-1, path);
-		if (fd < 0)
+		snprintf(path, sizeof(path), "/proc/%d/task", (int)team);
+
+		state = new (std::nothrow) ThreadEnumState();
+		if (state == NULL)
+			return B_NO_MEMORY;
+
+		if (!state->batch.Open(path)) {
+			delete state;
 			return B_BAD_TEAM_ID;
-	} else
-		fd = *cookie - 1;
-
-	union {
-		struct dirent entry;
-		char buffer[sizeof(struct dirent) + NAME_MAX + 1];
-	} dirent;
-
-	while (true) {
-		ssize_t count = _kern_read_dir(fd, &dirent.entry, sizeof(dirent), 1);
-		if (count <= 0) {
-			_kern_close(fd);
-			*cookie = 0;
-			return B_BAD_VALUE;
 		}
 
-		if (dirent.entry.d_name[0] == '.')
-			continue;
+		*cookie = proc_enum_alloc(state);
+		if (*cookie == 0) {
+			delete state;
+			return B_NO_MEMORY;
+		}
+	} else {
+		state = (ThreadEnumState*)proc_enum_state(*cookie);
+		if (state == NULL)
+			return B_BAD_VALUE;
+	}
 
-		thread_id tid = atoi(dirent.entry.d_name);
-		if (tid <= 0)
-			continue;
-
-		if (_get_thread_info(tid, info, size) == B_OK) {
-			*cookie = fd + 1;
+	pid_t tid;
+	while (state->batch.NextPid(&tid)) {
+		// Files open relative to the enumeration's own /proc/<team>/task
+		// fd, with the tid as a path prefix; no per-tid directory open.
+		char prefix[32];
+		snprintf(prefix, sizeof(prefix), "%d/", (int)tid);
+		if (_GetThreadInfoVia(state->batch.Fd(), prefix, (thread_id)tid,
+				info, size) == B_OK) {
 			return B_OK;
 		}
 	}
+
+	delete (ThreadEnumState*)proc_enum_release(*cookie);
+	*cookie = 0;
+	return B_BAD_VALUE;
 }
 
 

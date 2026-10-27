@@ -7,6 +7,8 @@ target_sources(root PRIVATE
 	sem.cpp
 	area.cpp
 
+	proc_read.cpp
+
 	byteorder.cpp
 	debug.cpp
 	driver_settings.cpp
@@ -16,7 +18,7 @@ target_sources(root PRIVATE
 	parsedate.cpp
 	real_time_clock.c
 	shutdown.cpp
-	system_info.c
+	system_info.cpp
 	system_revision.c
 
 	SystemWatcher.cpp

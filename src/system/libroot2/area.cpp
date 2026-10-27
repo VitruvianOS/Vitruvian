@@ -30,6 +30,7 @@
 #include "MutexLock.h"
 #include "../kernel/nexus/nexus/nexus.h"
 #include "Team.h"
+#include "proc_read.h"
 
 
 namespace BKernelPrivate {
@@ -460,23 +461,27 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 
 	using namespace BKernelPrivate;
 
+	// Cap on the smaps slurp; over the cap the enumeration fails instead of
+	// growing an unbounded allocation.
+	static const size_t kMaxSmapsBytes = 64 * 1024 * 1024;
+
 	AreaScanState* state;
 	if (*cookie == 0) {
-		char path[64];
-		snprintf(path, sizeof(path), "/proc/%d/smaps", (int)team);
+		struct proc_dir dir;
+		if (!proc_dir_open_pid(&dir, (pid_t)team))
+			return B_BAD_TEAM_ID;
 
-		int fd = open(path, O_RDONLY | O_CLOEXEC);
+		int fd = proc_dir_open_file(&dir, "smaps");
 		if (fd < 0) {
-			if (errno != EACCES && errno != EPERM)
+			if (errno != EACCES && errno != EPERM) {
+				proc_dir_close(&dir);
 				return B_BAD_TEAM_ID;
+			}
 
 			// smaps is off-limits for this team; fall back to the
 			// world-readable statm whole-team totals.
-			char statmPath[64];
-			snprintf(statmPath, sizeof(statmPath), "/proc/%d/statm",
-				(int)team);
-
-			int statmFd = open(statmPath, O_RDONLY | O_CLOEXEC);
+			int statmFd = proc_dir_open_file(&dir, "statm");
+			proc_dir_close(&dir);
 			if (statmFd < 0) {
 				if (errno == ENOENT)
 					return B_BAD_TEAM_ID;
@@ -484,15 +489,15 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 			}
 
 			char statmBuf[256];
-			ssize_t statmLen = read(statmFd, statmBuf,
-				sizeof(statmBuf) - 1);
+			ssize_t statmLen = proc_read_all(statmFd, statmBuf,
+				sizeof(statmBuf));
 			close(statmFd);
 			if (statmLen <= 0)
 				return B_PERMISSION_DENIED;
-			statmBuf[statmLen] = '\0';
 
 			// proc(5): size resident shared text lib data dt (pages).
-			unsigned long long pages = 0, residentPages = 0, sharedPages = 0;
+			unsigned long long pages = 0, residentPages = 0;
+			unsigned long long sharedPages = 0;
 			if (sscanf(statmBuf, "%llu %llu %llu", &pages, &residentPages,
 					&sharedPages) < 3) {
 				return B_PERMISSION_DENIED;
@@ -502,9 +507,7 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 				(residentPages > sharedPages)
 					? residentPages - sharedPages : 0;
 
-			long pageSize = sysconf(_SC_PAGESIZE);
-			if (pageSize <= 0)
-				pageSize = B_PAGE_SIZE;
+			long pageSize = proc_page_size();
 
 			state = new (std::nothrow) AreaScanState();
 			if (state == NULL)
@@ -518,39 +521,16 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 			state->sharedBytes = sharedPages * (unsigned long long)pageSize;
 			state->statmNext = 0;
 		} else {
-			size_t capacity = 256 * 1024;
-			char* buffer = (char*)malloc(capacity);
-			if (buffer == NULL) {
-				close(fd);
-				return B_NO_MEMORY;
-			}
-
+			char* buffer = NULL;
 			size_t length = 0;
-			for (;;) {
-				if (length == capacity) {
-					capacity *= 2;
-					char* grown = (char*)realloc(buffer, capacity);
-					if (grown == NULL) {
-						free(buffer);
-						close(fd);
-						return B_NO_MEMORY;
-					}
-					buffer = grown;
-				}
-
-				ssize_t got = read(fd, buffer + length, capacity - length);
-				if (got < 0) {
-					if (errno == EINTR)
-						continue;
-					free(buffer);
-					close(fd);
-					return B_ERROR;
-				}
-				if (got == 0)
-					break;
-				length += (size_t)got;
+			if (!proc_slurp(fd, &buffer, &length, kMaxSmapsBytes)) {
+				int error = errno;
+				close(fd);
+				proc_dir_close(&dir);
+				return error == EOVERFLOW ? B_NO_MEMORY : B_ERROR;
 			}
 			close(fd);
+			proc_dir_close(&dir);
 
 			state = new (std::nothrow) AreaScanState();
 			if (state == NULL) {
@@ -563,8 +543,17 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 			state->offset = 0;
 			state->team = team;
 		}
+
+		*cookie = (ssize_t)proc_enum_alloc(state);
+		if (*cookie == 0) {
+			free(state->buffer);
+			delete state;
+			return B_NO_MEMORY;
+		}
 	} else {
-		state = (AreaScanState*)*cookie;
+		state = (AreaScanState*)proc_enum_state((int32)*cookie);
+		if (state == NULL)
+			return B_BAD_VALUE;
 	}
 
 	if (state->mode == kAreaScanStatm) {
@@ -588,16 +577,15 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 			areaInfo->ram_size = (uint32)bytes;
 			areaInfo->address = NULL;
 
-			*cookie = (ssize_t)state;
 			return B_OK;
 		}
 
-		delete state;
+		delete (AreaScanState*)proc_enum_release((int32)*cookie);
 		*cookie = 0;
 		return B_BAD_VALUE;
 	}
 
-	char line[1024];
+	char line[ProcLineReader::kMaxLine];
 	unsigned long long start = 0, end = 0;
 	char perms[8] = {0};
 	char pathname[PATH_MAX] = {0};
@@ -617,13 +605,9 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 		memcpy(line, state->buffer + lineStart, lineLen);
 		line[lineLen] = '\0';
 
-		unsigned long long s = 0, e = 0;
-		char p[8] = {0};
-		char rest[900] = {0};
-		int matched = sscanf(line, "%llx-%llx %7s %*s %*s %*s %899[^\n]",
-			&s, &e, p, rest);
-
-		bool isHeader = (matched >= 3 && e > s);
+		struct proc_map_line map;
+		bool isHeader = proc_parse_map_header(line, &map)
+			&& map.end > map.start;
 
 		if (isHeader && haveRecord)
 			break;
@@ -632,17 +616,18 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 
 		if (isHeader) {
 			haveRecord = true;
-			start = s;
-			end = e;
-			memcpy(perms, p, sizeof(perms));
-			if (matched >= 4) {
-				// %[^\n] does not skip the leading whitespace that pads the
-				// pathname column, so trim it by hand.
-				const char* p2 = rest;
-				while (*p2 == ' ' || *p2 == '\t')
-					p2++;
-				strncpy(pathname, p2, sizeof(pathname) - 1);
-			}
+			start = map.start;
+			end = map.end;
+			strlcpy(perms, map.perms, sizeof(perms));
+
+			if (map.pathLength > 0) {
+				size_t copyLength = map.pathLength;
+				if (copyLength >= sizeof(pathname))
+					copyLength = sizeof(pathname) - 1;
+				memcpy(pathname, map.path, copyLength);
+				pathname[copyLength] = '\0';
+			} else
+				pathname[0] = '\0';
 		} else if (haveRecord && strncmp(line, "Rss:", 4) == 0) {
 			sscanf(line + 4, "%lu", &rssKb);
 		}
@@ -650,7 +635,7 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 
 	if (!haveRecord) {
 		free(state->buffer);
-		delete state;
+		delete (AreaScanState*)proc_enum_release((int32)*cookie);
 		*cookie = 0;
 		return B_BAD_VALUE;
 	}
@@ -705,8 +690,7 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 	areaInfo->ram_size = (uint32)(rssKb * 1024);
 	areaInfo->address = (void*)(uintptr_t)start;
 
-	*cookie = (ssize_t)state;
-
+	// The cookie keeps the enumeration handle assigned at open time.
 	return B_OK;
 }
 

@@ -26,6 +26,9 @@
 #include "Team.h"
 #include "KernelDebug.h"
 #include "MutexLock.h"
+#include "proc_read.h"
+
+#include <new>
 
 #include <libroot/libroot_private.h>
 
@@ -837,47 +840,33 @@ private:
 	}
 
 	static bool
-	_ParseMapsLine(char* line, RemoteImage* out)
+	_ParseMapsLine(const char* line, RemoteImage* out)
 	{
-		unsigned long long start = 0;
-		unsigned long long end = 0;
-		char perms[8];
-		unsigned long long offset = 0;
-		unsigned int devMajor = 0;
-		unsigned int devMinor = 0;
-		unsigned long inode = 0;
-		char path[MAXPATHLEN];
-		path[0] = '\0';
-
-		int fields = sscanf(line, "%llx-%llx %7s %llx %x:%x %lu %s",
-			&start, &end, perms, &offset, &devMajor, &devMinor, &inode,
-			path);
-		if (fields < 7)
+		struct proc_map_line map;
+		if (!proc_parse_map_header(line, &map))
 			return false;
 
-		if (fields < 8 || path[0] == '\0')
-			return false;
 		// Only file-backed mappings.
-		if (path[0] != '/')
+		if (map.pathLength == 0 || map.path[0] != '/')
 			return false;
 
-		out->base = (ElfW(Addr))(start - offset);
-		_CopyPath(out->path, path);
+		out->base = (ElfW(Addr))(map.start - map.offset);
+		_CopyPath(out->path, map.path);
 		out->text = NULL;
 		out->textSize = 0;
 		out->data = NULL;
 		out->dataSize = 0;
-		out->device = makedev(devMajor, devMinor);
-		out->node = (ino_t)inode;
-		out->type = _TypeForPath(path, false);
+		out->device = makedev(map.devMajor, map.devMinor);
+		out->node = (ino_t)map.inode;
+		out->type = _TypeForPath(out->path, false);
 
-		if (perms[1] == 'x') {
-			out->text = (void*)start;
-			out->textSize = (int32)(end - start);
+		if (map.perms[1] == 'x') {
+			out->text = (void*)map.start;
+			out->textSize = (int32)(map.end - map.start);
 		}
-		if (perms[1] == 'w') {
-			out->data = (void*)start;
-			out->dataSize = (int32)(end - start);
+		if (map.perms[1] == 'w') {
+			out->data = (void*)map.start;
+			out->dataSize = (int32)(map.end - map.start);
 		}
 		return true;
 	}
@@ -914,13 +903,25 @@ private:
 		_FillLoadPhdrs(phdrs.data(), ehdr.e_phnum, base, info);
 	}
 
+	// One team's file-backed images, parsed once per enumeration.
+	struct RemoteImageScan {
+		team_id						team;
+		size_t						next;
+		std::vector<RemoteImage>	images;
+	};
+
+	// Cap on the maps slurp; over the cap the enumeration fails instead of
+	// growing an unbounded allocation.
+	static const size_t kMaxMapsBytes = 8 * 1024 * 1024;
+
+
 	static status_t
-	_NextRemoteImage(team_id team, int32* cookie, image_info* info)
+	_BuildRemoteImages(team_id team, std::vector<RemoteImage>& images)
 	{
 		char mapsPath[64];
-		snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", team);
+		snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", (int)team);
 
-		int fd = open(mapsPath, O_RDONLY);
+		int fd = open(mapsPath, O_RDONLY | O_CLOEXEC);
 		if (fd < 0) {
 			if (errno == EACCES || errno == EPERM)
 				return B_PERMISSION_DENIED;
@@ -930,30 +931,19 @@ private:
 		}
 
 		// Read once: the seq_file regenerates when seeked, which duplicates
-		// or skips records across successive calls.
-		std::vector<char> buffer(1 << 16);
+		// or skips records across successive calls. Capped allocation.
+		char* buffer = NULL;
 		size_t used = 0;
-		for (;;) {
-			if (used == buffer.size()) {
-				buffer.resize(buffer.size() * 2);
-			}
-			ssize_t n = read(fd, buffer.data() + used, buffer.size() - used);
-			if (n < 0) {
-				if (errno == EINTR)
-					continue;
-				close(fd);
-				return B_ERROR;
-			}
-			if (n == 0)
-				break;
-			used += (size_t)n;
+		if (!proc_slurp(fd, &buffer, &used, kMaxMapsBytes)) {
+			int error = errno;
+			close(fd);
+			return error == EOVERFLOW ? B_NO_MEMORY : B_ERROR;
 		}
 		close(fd);
 
-		std::vector<RemoteImage> images;
 		std::vector<char*> lines;
-		char* cursor = buffer.data();
-		char* end = buffer.data() + used;
+		char* cursor = buffer;
+		char* end = buffer + used;
 		while (cursor < end) {
 			char* nl = (char*)memchr(cursor, '\n', end - cursor);
 			if (nl == NULL) {
@@ -970,6 +960,7 @@ private:
 			memset(&image, 0, sizeof(image));
 			if (!_ParseMapsLine(lines[i], &image))
 				continue;
+
 			// Only regular files can be images. Mapped devices (an ALSA PCM
 			// buffer, a GPU node) are not, and opening a busy one blocks.
 			struct stat st;
@@ -998,14 +989,51 @@ private:
 				images.push_back(image);
 		}
 
-		if (*cookie < 0 || (size_t)*cookie >= images.size())
-			return B_ENTRY_NOT_FOUND;
+		free(buffer);
+		return B_OK;
+	}
 
-		RemoteImage& image = images[*cookie];
+
+	static status_t
+	_NextRemoteImage(team_id team, int32* cookie, image_info* info)
+	{
+		// A dead handle keeps reporting B_ENTRY_NOT_FOUND, so a retry with
+		// the same cookie cannot restart the walk.
+		RemoteImageScan* scan = (RemoteImageScan*)proc_enum_state(*cookie);
+		if (scan == NULL) {
+			if (*cookie != 0)
+				return B_ENTRY_NOT_FOUND;
+
+			scan = new (std::nothrow) RemoteImageScan();
+			if (scan == NULL)
+				return B_NO_MEMORY;
+
+			scan->team = team;
+			scan->next = 0;
+
+			status_t error = _BuildRemoteImages(team, scan->images);
+			if (error != B_OK) {
+				delete scan;
+				return error;
+			}
+
+			*cookie = proc_enum_alloc(scan);
+			if (*cookie == 0) {
+				delete scan;
+				return B_NO_MEMORY;
+			}
+		}
+
+		if (scan->next >= scan->images.size()) {
+			delete (RemoteImageScan*)proc_enum_release(*cookie);
+			return B_ENTRY_NOT_FOUND;
+		}
+
+		RemoteImage& image = scan->images[scan->next];
 		memset(info, 0, sizeof(*info));
 		info->id = _RemoteId(team, image.path, image.base);
 		info->type = image.type;
-		info->sequence = *cookie;
+		info->sequence = (int32)scan->next;
 		info->init_order = 0;
 		_CopyPath(info->name, image.path);
 		_ElfPhdrsFromFile(image.path, image.base, info);
@@ -1024,7 +1052,7 @@ private:
 			_RemoteByImage()[info->id] = info->name;
 		}
 
-		(*cookie)++;
+		scan->next++;
 		return B_OK;
 	}
 

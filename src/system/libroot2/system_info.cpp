@@ -5,8 +5,11 @@
 
 #include <syscalls.h>
 
+#include "proc_read.h"
+
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <time.h>
+#include <unistd.h>
 
 #if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
@@ -205,9 +209,10 @@ _kern_get_system_info(system_info* info)
 
 	info->abi = 0x002000000;
 
-	FILE* file = fopen("/proc/meminfo", "r");
-	if (file != NULL) {
-		char line[128];
+	// One bounded line pass over meminfo; the old seven sscanf-per-line
+	// chain re-scanned the whole line for each key.
+	ProcLineReader meminfo;
+	if (meminfo.OpenPath("/proc/meminfo")) {
 		unsigned long memTotalKB = 0;
 		unsigned long memAvailKB = 0;
 		unsigned long memFreeKB = 0;
@@ -216,24 +221,24 @@ _kern_get_system_info(system_info* info)
 		unsigned long swapTotalKB = 0;
 		unsigned long swapFreeKB = 0;
 
-		while (fgets(line, sizeof(line), file) != NULL) {
-			unsigned long value = 0;
-			if (sscanf(line, "MemTotal: %lu kB", &value) == 1)
-				memTotalKB = value;
-			else if (sscanf(line, "MemAvailable: %lu kB", &value) == 1)
-				memAvailKB = value;
-			else if (sscanf(line, "MemFree: %lu kB", &value) == 1)
-				memFreeKB = value;
-			else if (sscanf(line, "Buffers: %lu kB", &value) == 1)
-				buffersKB = value;
-			else if (sscanf(line, "Cached: %lu kB", &value) == 1)
-				cachedKB = value;
-			else if (sscanf(line, "SwapTotal: %lu kB", &value) == 1)
-				swapTotalKB = value;
-			else if (sscanf(line, "SwapFree: %lu kB", &value) == 1)
-				swapFreeKB = value;
+		const char* line;
+		while ((line = meminfo.Next()) != NULL) {
+			if (strncmp(line, "MemTotal:", 9) == 0)
+				memTotalKB = strtoul(line + 9, NULL, 10);
+			else if (strncmp(line, "MemAvailable:", 13) == 0)
+				memAvailKB = strtoul(line + 13, NULL, 10);
+			else if (strncmp(line, "MemFree:", 8) == 0)
+				memFreeKB = strtoul(line + 8, NULL, 10);
+			else if (strncmp(line, "Buffers:", 8) == 0)
+				buffersKB = strtoul(line + 8, NULL, 10);
+			else if (strncmp(line, "Cached:", 7) == 0)
+				cachedKB = strtoul(line + 7, NULL, 10);
+			else if (strncmp(line, "SwapTotal:", 10) == 0)
+				swapTotalKB = strtoul(line + 10, NULL, 10);
+			else if (strncmp(line, "SwapFree:", 9) == 0)
+				swapFreeKB = strtoul(line + 9, NULL, 10);
 		}
-		fclose(file);
+		meminfo.Close();
 
 		if (memTotalKB > 0) {
 			uint64 pageSize = B_PAGE_SIZE;
@@ -260,25 +265,25 @@ _kern_get_system_info(system_info* info)
 	info->used_teams = 0;
 	info->used_threads = 0;
 
-	FILE* loadavg = fopen("/proc/loadavg", "r");
-	if (loadavg != NULL) {
-		double load1, load5, load15;
-		unsigned int running = 0, total = 0;
-		if (fscanf(loadavg, "%lf %lf %lf %u/%u", &load1, &load5, &load15,
-				&running, &total) >= 5) {
-			info->used_threads = total;
+	int loadFd = open("/proc/loadavg", O_RDONLY | O_CLOEXEC);
+	if (loadFd >= 0) {
+		char buffer[128];
+		if (proc_read_all(loadFd, buffer, sizeof(buffer)) > 0) {
+			double load1, load5, load15;
+			unsigned int running = 0, total = 0;
+			if (sscanf(buffer, "%lf %lf %lf %u/%u", &load1, &load5, &load15,
+					&running, &total) >= 5) {
+				info->used_threads = total;
+			}
 		}
-		fclose(loadavg);
+		close(loadFd);
 	}
 
-	DIR* procDir = opendir("/proc");
-	if (procDir != NULL) {
-		struct dirent* entry;
-		while ((entry = readdir(procDir)) != NULL) {
-			if (atoi(entry->d_name) > 0)
-				info->used_teams++;
-		}
-		closedir(procDir);
+	ProcDirBatch procBatch;
+	if (procBatch.Open("/proc")) {
+		pid_t pid;
+		while (procBatch.NextPid(&pid))
+			info->used_teams++;
 	}
 
 	if (info->used_threads < info->used_teams)
@@ -296,25 +301,23 @@ _kern_get_kernel_memory_footprint(uint64* _bytes)
 	if (_bytes == NULL)
 		return B_BAD_VALUE;
 
-	FILE* file = fopen("/proc/meminfo", "r");
-	if (file == NULL)
+	ProcLineReader meminfo;
+	if (!meminfo.OpenPath("/proc/meminfo"))
 		return B_ERROR;
 
-	char line[128];
 	unsigned long slabKB = 0;
 	unsigned long kernelStackKB = 0;
 	unsigned long pageTablesKB = 0;
 
-	while (fgets(line, sizeof(line), file) != NULL) {
-		unsigned long value = 0;
-		if (sscanf(line, "Slab: %lu kB", &value) == 1)
-			slabKB = value;
-		else if (sscanf(line, "KernelStack: %lu kB", &value) == 1)
-			kernelStackKB = value;
-		else if (sscanf(line, "PageTables: %lu kB", &value) == 1)
-			pageTablesKB = value;
+	const char* line;
+	while ((line = meminfo.Next()) != NULL) {
+		if (strncmp(line, "Slab:", 5) == 0)
+			slabKB = strtoul(line + 5, NULL, 10);
+		else if (strncmp(line, "KernelStack:", 12) == 0)
+			kernelStackKB = strtoul(line + 12, NULL, 10);
+		else if (strncmp(line, "PageTables:", 11) == 0)
+			pageTablesKB = strtoul(line + 11, NULL, 10);
 	}
-	fclose(file);
 
 	// VmallocUsed is excluded: it can double-count memory already backed by
 	// Slab allocations.
@@ -331,25 +334,22 @@ _kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
 
 	memset(info, 0, sizeof(cpu_info) * cpuCount);
 
-	static long ticksPerSec = 0;
-	if (ticksPerSec == 0)
-		ticksPerSec = sysconf(_SC_CLK_TCK);
-	if (ticksPerSec <= 0)
-		ticksPerSec = 100;
+	long ticksPerSec = proc_clk_tck();
 
-	FILE* file = fopen("/proc/stat", "r");
-	if (file == NULL)
+	ProcLineReader stat;
+	if (!stat.OpenPath("/proc/stat"))
 		return B_ERROR;
 
-	char line[256];
-	while (fgets(line, sizeof(line), file) != NULL) {
+	const char* line;
+	while ((line = stat.Next()) != NULL) {
 		if (strncmp(line, "cpu", 3) != 0 || !isdigit(line[3]))
 			continue;
 
 		int cpuNum;
 		uint64 user, nice, system, idle, iowait, irq, softirq, steal = 0;
 		int fields = sscanf(line + 3, "%d %lu %lu %lu %lu %lu %lu %lu %lu",
-			&cpuNum, &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal);
+			&cpuNum, &user, &nice, &system, &idle, &iowait, &irq, &softirq,
+			&steal);
 
 		if (fields < 5)
 			continue;
@@ -361,59 +361,55 @@ _kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
 				info[idx].active_time = (bigtime_t)((activeJiffies * 1000000ULL) / ticksPerSec);
 				info[idx].enabled = true;
 
-				char path[64];
-				snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", cpuNum);
-				FILE* online = fopen(path, "r");
-				if (online) {
-					int onlineVal;
-					if (fscanf(online, "%d", &onlineVal) == 1)
-						info[idx].enabled = (onlineVal == 1);
-					fclose(online);
-				}
+				char path[128];
+				unsigned long value = 0;
+				snprintf(path, sizeof(path),
+					"/sys/devices/system/cpu/cpu%d/online", cpuNum);
+				if (proc_read_sysfs_uint(path, &value))
+					info[idx].enabled = (value == 1);
 
-				snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", cpuNum);
-				FILE* freq = fopen(path, "r");
-				if (freq) {
-					unsigned long khz;
-					if (fscanf(freq, "%lu", &khz) == 1)
-						info[idx].current_frequency = khz * 1000ULL;
-					fclose(freq);
-				}
+				snprintf(path, sizeof(path),
+					"/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq",
+					cpuNum);
+				if (proc_read_sysfs_uint(path, &value))
+					info[idx].current_frequency = value * 1000ULL;
 			}
 		}
 	}
 
-	fclose(file);
 	return B_OK;
+}
+
+
+static const char*
+_SkipKeyValueSeparator(const char* p)
+{
+	while (*p == ' ' || *p == '\t' || *p == ':')
+		p++;
+	return p;
 }
 
 
 static uint64
 read_cpu_freq(void)
 {
-	FILE* file = fopen(
-		"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
-	if (file != NULL) {
-		unsigned long khz = 0;
-		if (fscanf(file, "%lu", &khz) == 1) {
-			fclose(file);
-			return (uint64)khz * 1000ULL;
-		}
-		fclose(file);
+	unsigned long khz = 0;
+	if (proc_read_sysfs_uint(
+			"/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", &khz)
+		&& khz > 0) {
+		return (uint64)khz * 1000ULL;
 	}
 
-	file = fopen("/proc/cpuinfo", "r");
-	if (file != NULL) {
-		char line[256];
-		while (fgets(line, sizeof(line), file) != NULL) {
-			double mhz = 0;
-			if (sscanf(line, "cpu MHz : %lf", &mhz) == 1
-					|| sscanf(line, "cpu MHz\t: %lf", &mhz) == 1) {
-				fclose(file);
-				return (uint64)(mhz * 1000000.0);
+	ProcLineReader cpuinfo;
+	if (cpuinfo.OpenPath("/proc/cpuinfo")) {
+		const char* line;
+		while ((line = cpuinfo.Next()) != NULL) {
+			if (strncmp(line, "cpu MHz", 7) == 0) {
+				double mhz = strtod(_SkipKeyValueSeparator(line + 7), NULL);
+				if (mhz > 0.0)
+					return (uint64)(mhz * 1000000.0);
 			}
 		}
-		fclose(file);
 	}
 
 	return 0;
@@ -430,21 +426,32 @@ read_cpu_signature(void)
 #elif defined(__aarch64__) || defined(__arm__)
 	// MIDR layout, from the first core's /proc/cpuinfo fields:
 	// implementer[31:24] variant[23:20] part[15:4] revision[3:0].
-	FILE* file = fopen("/proc/cpuinfo", "r");
-	if (file == NULL)
+	ProcLineReader cpuinfo;
+	if (!cpuinfo.OpenPath("/proc/cpuinfo"))
 		return 0;
 
 	unsigned int implementer = 0, variant = 0, part = 0, revision = 0;
 	int found = 0;
-	char line[256];
-	while (found < 4 && fgets(line, sizeof(line), file) != NULL) {
-		if (sscanf(line, "CPU implementer : %x", &implementer) == 1
-			|| sscanf(line, "CPU variant : %x", &variant) == 1
-			|| sscanf(line, "CPU part : %x", &part) == 1
-			|| sscanf(line, "CPU revision : %u", &revision) == 1)
+	const char* line;
+	while (found < 4 && (line = cpuinfo.Next()) != NULL) {
+		if (strncmp(line, "CPU implementer", 15) == 0) {
+			implementer = (unsigned int)strtoul(
+				_SkipKeyValueSeparator(line + 15), NULL, 16);
 			found++;
+		} else if (strncmp(line, "CPU variant", 11) == 0) {
+			variant = (unsigned int)strtoul(
+				_SkipKeyValueSeparator(line + 11), NULL, 16);
+			found++;
+		} else if (strncmp(line, "CPU part", 8) == 0) {
+			part = (unsigned int)strtoul(
+				_SkipKeyValueSeparator(line + 8), NULL, 16);
+			found++;
+		} else if (strncmp(line, "CPU revision", 12) == 0) {
+			revision = (unsigned int)strtoul(
+				_SkipKeyValueSeparator(line + 12), NULL, 10);
+			found++;
+		}
 	}
-	fclose(file);
 
 	return ((uint32)(implementer & 0xff) << 24) | ((variant & 0xf) << 20)
 		| ((part & 0xfff) << 4) | (revision & 0xf);
@@ -456,25 +463,83 @@ read_cpu_signature(void)
 static enum cpu_vendor
 read_cpu_vendor(void)
 {
-	FILE* file = fopen("/proc/cpuinfo", "r");
-	if (file == NULL)
+	ProcLineReader cpuinfo;
+	if (!cpuinfo.OpenPath("/proc/cpuinfo"))
 		return B_CPU_VENDOR_UNKNOWN;
 
-	char line[256];
-	while (fgets(line, sizeof(line), file) != NULL) {
+	const char* line;
+	while ((line = cpuinfo.Next()) != NULL) {
+		if (strncmp(line, "vendor_id", 9) != 0)
+			continue;
+
+		const char* value = line + 9;
+		while (*value == ' ' || *value == '\t' || *value == ':')
+			value++;
+
 		char vid[64] = {0};
-		if (sscanf(line, "vendor_id : %63s", vid) == 1
-				|| sscanf(line, "vendor_id\t: %63s", vid) == 1) {
-			fclose(file);
-			if (strcmp(vid, "GenuineIntel") == 0)
-				return B_CPU_VENDOR_INTEL;
-			if (strcmp(vid, "AuthenticAMD") == 0)
-				return B_CPU_VENDOR_AMD;
-			return B_CPU_VENDOR_UNKNOWN;
+		size_t i = 0;
+		while (i < sizeof(vid) - 1 && value[i] != '\0'
+			&& value[i] != ' ' && value[i] != '\t' && value[i] != '\n') {
+			vid[i] = value[i];
+			i++;
 		}
+
+		if (strcmp(vid, "GenuineIntel") == 0)
+			return B_CPU_VENDOR_INTEL;
+		if (strcmp(vid, "AuthenticAMD") == 0)
+			return B_CPU_VENDOR_AMD;
+		return B_CPU_VENDOR_UNKNOWN;
 	}
-	fclose(file);
+
 	return B_CPU_VENDOR_UNKNOWN;
+}
+
+
+// Topology never changes after boot: computed once, racing benignly on
+// idempotent values, so no lock is held across fork.
+static uint64
+cached_cpu_freq()
+{
+	static volatile uint64 sValue = 0;
+
+	uint64 value = __atomic_load_n(&sValue, __ATOMIC_RELAXED);
+	if (value == 0) {
+		value = read_cpu_freq();
+		__atomic_store_n(&sValue, value, __ATOMIC_RELAXED);
+	}
+	return value;
+}
+
+
+static enum cpu_vendor
+cached_cpu_vendor()
+{
+	static volatile int sValue = (int)B_CPU_VENDOR_UNKNOWN;
+	// B_CPU_VENDOR_UNKNOWN is a legitimate result; a separate ready flag
+	// keeps that from being recomputed forever.
+	static volatile bool sReady = false;
+
+	if (!sReady) {
+		int value = (int)read_cpu_vendor();
+		__atomic_store_n(&sValue, value, __ATOMIC_RELAXED);
+		__atomic_store_n(&sReady, true, __ATOMIC_RELEASE);
+	}
+	return (enum cpu_vendor)__atomic_load_n(&sValue, __ATOMIC_RELAXED);
+}
+
+
+static uint32
+cached_cpu_signature()
+{
+	static volatile bool sReady = false;
+	static volatile uint32 sValue = 0;
+
+	if (!sReady) {
+		uint32 value = read_cpu_signature();
+		__atomic_store_n(&sValue, value, __ATOMIC_RELAXED);
+		__atomic_store_n(&sReady, true, __ATOMIC_RELEASE);
+	}
+	return __atomic_load_n(&sValue, __ATOMIC_RELAXED);
 }
 
 
@@ -502,8 +567,8 @@ _kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
 
 	memset(topologyInfos, 0, nodeCount * sizeof(cpu_topology_node_info));
 
-	uint64 freqHz = read_cpu_freq();
-	enum cpu_vendor vendor = read_cpu_vendor();
+	uint64 freqHz = cached_cpu_freq();
+	enum cpu_vendor vendor = cached_cpu_vendor();
 
 	uint32 index = 0;
 
@@ -540,7 +605,7 @@ _kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
 		index++;
 	}
 
-	uint32 cpuSignature = read_cpu_signature();
+	uint32 cpuSignature = cached_cpu_signature();
 	for (uint32 i = 0; i < coreCount && index < nodeCount; i++, index++) {
 		topologyInfos[index].id = index;
 		topologyInfos[index].type = B_TOPOLOGY_CORE;
@@ -559,16 +624,9 @@ _kern_cpu_enabled(int32 cpu)
 	char path[64];
 	snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", cpu);
 
-	FILE* file = fopen(path, "r");
-	if (file == NULL)
+	unsigned long online = 0;
+	if (!proc_read_sysfs_uint(path, &online))
 		return false;
-
-	int online;
-	if (fscanf(file, "%d", &online) != 1) {
-		fclose(file);
-		return false;
-	}
-	fclose(file);
 	return online == 1;
 }
 
@@ -579,14 +637,15 @@ _kern_set_cpu_enabled(int32 cpu, bool enabled)
 	char path[64];
 	snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", cpu);
 
-	FILE* file = fopen(path, "w");
-	if (file == NULL)
+	int fd = open(path, O_WRONLY | O_CLOEXEC);
+	if (fd < 0)
 		return B_ERROR;
 
-	int result = fprintf(file, "%d", enabled ? 1 : 0);
-	fclose(file);
+	char value = enabled ? '1' : '0';
+	ssize_t written = write(fd, &value, 1);
+	close(fd);
 
-	if (result < 0)
+	if (written != 1)
 		return B_ERROR;
 	return B_OK;
 }

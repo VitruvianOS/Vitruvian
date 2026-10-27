@@ -405,6 +405,85 @@ PartitionPlanBuilder::AddSetGptName(const char* id, const char* targetRef,
 }
 
 
+// "type" is the partition type vocabulary of create (token, GUID or
+// MBR byte), not a content type.
+void
+PartitionPlanBuilder::AddSetType(const char* id, const char* targetRef,
+	const char* type)
+{
+	if (!_CheckField(id) || !_CheckField(targetRef) || !_CheckField(type))
+		return;
+
+	fOpCount++;
+	fOps << "\n[op]\n";
+	fOps << "kind=set_type\n";
+	fOps << "id=" << id << "\n";
+	fOps << "target_ref=" << targetRef << "\n";
+	fOps << "type=" << type << "\n";
+}
+
+
+// Partition parameters are the driver-settings string the partition list
+// parses ("active: 1"); the helper knows that key only.
+void
+PartitionPlanBuilder::AddSetParameters(const char* id, const char* targetRef,
+	const char* parameters)
+{
+	if (!_CheckField(id) || !_CheckField(targetRef)
+		|| !_CheckField(parameters)) {
+		return;
+	}
+
+	fOpCount++;
+	fOps << "\n[op]\n";
+	fOps << "kind=set_parameters\n";
+	fOps << "id=" << id << "\n";
+	fOps << "target_ref=" << targetRef << "\n";
+	fOps << "parameters=" << parameters << "\n";
+}
+
+
+// parameters is a space-separated key=value list; empty only to say the
+// record carries no parameter at all (rejected at validation).
+void
+PartitionPlanBuilder::AddSetContentParameters(const char* id,
+	const char* targetRef, const char* filesystem, const char* parameters)
+{
+	const char* resolvedFs = filesystem != NULL ? filesystem : "";
+	if (!_CheckField(id) || !_CheckField(targetRef)
+		|| !_CheckField(resolvedFs) || !_CheckField(parameters)) {
+		return;
+	}
+
+	fOpCount++;
+	fOps << "\n[op]\n";
+	fOps << "kind=set_content_parameters\n";
+	fOps << "id=" << id << "\n";
+	fOps << "target_ref=" << targetRef << "\n";
+	fOps << "filesystem=" << resolvedFs << "\n";
+	fOps << "parameters=" << parameters << "\n";
+}
+
+
+void
+PartitionPlanBuilder::AddDefrag(const char* id, const char* targetRef,
+	const char* filesystem)
+{
+	const char* resolvedFs = filesystem != NULL ? filesystem : "";
+	if (!_CheckField(id) || !_CheckField(targetRef)
+		|| !_CheckField(resolvedFs)) {
+		return;
+	}
+
+	fOpCount++;
+	fOps << "\n[op]\n";
+	fOps << "kind=defrag\n";
+	fOps << "id=" << id << "\n";
+	fOps << "target_ref=" << targetRef << "\n";
+	fOps << "filesystem=" << resolvedFs << "\n";
+}
+
+
 BString
 PartitionPlanBuilder::ToPlan() const
 {

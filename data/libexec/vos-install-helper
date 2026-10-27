@@ -16,7 +16,7 @@ _do_partition_capabilities() {
         case "$_fs" in
             intel)   _tools="sfdisk";    _create_tool="sfdisk" ;;
             gpt)     _tools="sfdisk";    _create_tool="sfdisk" ;;
-            ext4)    _tools="mkfs.ext4 dumpe2fs e2fsck resize2fs tune2fs"
+            ext4)    _tools="mkfs.ext4 dumpe2fs e2fsck resize2fs tune2fs e4defrag"
                      _create_tool="mkfs.ext4" ;;
             fat)     _tools="mkfs.fat fsck.fat fatlabel"
                      _create_tool="mkfs.fat" ;;
@@ -1396,6 +1396,51 @@ _partition_first_mount() {
     return 1
 }
 
+# gpt|mbr from the plan header, else the table already on the disk.
+# Empty when neither says; the apply side re-checks that pairing anyway.
+_partition_effective_table() {
+    case "$_plan_table_type" in
+        gpt|mbr) printf '%s\n' "$_plan_table_type"; return 0 ;;
+    esac
+    case "$(_partlib_table_type "$_plan_disk" 2>/dev/null)" in
+        gpt) printf 'gpt\n' ;;
+        dos) printf 'mbr\n' ;;
+    esac
+    return 0
+}
+
+# Target checks shared by the modification ops: the ref must name a
+# partition of this plan's disk, never the whole disk itself. In-plan ids
+# have no devnode yet and are accepted as-is.
+_partition_check_child() {
+    _pcc_id="$1"
+    _pcc_ref="$2"
+
+    if [ -z "$_pcc_ref" ]; then
+        log "[$_pcc_id]: missing target_ref"
+        return 1
+    fi
+    case " $_validate_seen_ids " in
+        *" $_pcc_ref "*) ;;
+        *) _partition_check_devnode "$_pcc_ref" || {
+               log "[$_pcc_id]: target_ref resolves to neither a plan id nor a devnode: $_pcc_ref"
+               return 1
+           } ;;
+    esac
+    if _partition_check_devnode "$_pcc_ref"; then
+        if [ ! -b "$_pcc_ref" ]; then
+            log "[$_pcc_id]: not a block device: $_pcc_ref"
+            return 1
+        fi
+        if [ "$_pcc_ref" = "$_plan_disk" ] \
+                || [ "$(lsblk -dno TYPE "$_pcc_ref" 2>/dev/null)" = "disk" ]; then
+            log "[$_pcc_id]: refuses whole-disk target: $_pcc_ref"
+            return 1
+        fi
+    fi
+    return 0
+}
+
 _validate_rc=0
 _validate_seen_ids=""
 _validate_esp_warned=0
@@ -1690,6 +1735,165 @@ _validate_one_op() {
             done
             log "  [$_id] set_flags target_ref=$_tref flags=$_flags"
             ;;
+        set_type)
+            _tref="$(_partlib_rec_get target_ref)"
+            _ptype="$(_partlib_rec_get type)"
+            if ! _partition_check_child "$_id" "$_tref"; then
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ -z "$_ptype" ]; then
+                log "[$_id]: missing type"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            _ptable="$(_partition_effective_table)"
+            case "$_ptype" in
+                esp|linux|linux_swap|bios_boot) ;;
+                *-*)
+                    _guid='^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$'
+                    printf '%s' "$_ptype" | grep -Eq "$_guid" || {
+                        log "[$_id]: not a type GUID: $_ptype"
+                        _validate_rc=2; _PARTLIB_ABORT=1; return; }
+                    if [ "$_ptable" = "mbr" ]; then
+                        log "[$_id]: a GUID type needs a gpt table, this plan/disk is mbr"
+                        _validate_rc=2; _PARTLIB_ABORT=1; return
+                    fi
+                    ;;
+                *)
+                    printf '%s' "$_ptype" | grep -Eq '^(0x)?[0-9A-Fa-f]{1,2}$' || {
+                        log "[$_id]: invalid type: $_ptype (want a token, a GUID or a byte)"
+                        _validate_rc=2; _PARTLIB_ABORT=1; return; }
+                    if [ "$_ptable" = "gpt" ]; then
+                        log "[$_id]: an MBR type byte needs an mbr table, this plan/disk is gpt"
+                        _validate_rc=2; _PARTLIB_ABORT=1; return
+                    fi
+                    ;;
+            esac
+            log "  [$_id] set_type target_ref=$_tref type=$_ptype"
+            ;;
+        set_parameters)
+            _tref="$(_partlib_rec_get target_ref)"
+            if ! _partition_check_child "$_id" "$_tref"; then
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if ! printf '%s\n' "$_RECORD_RAW" | grep -q '^parameters='; then
+                log "[$_id]: missing parameters"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            _pstr="$(_partlib_rec_get parameters)"
+            if [ -n "$_pstr" ]; then
+                case "$_pstr" in
+                    *:*) ;;
+                    *) log "[$_id]: parameters must be 'key: value': $_pstr"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                esac
+                _pk="$(printf '%s' "${_pstr%%:*}" | sed 's/^ *//; s/ *$//')"
+                _pv="$(printf '%s' "${_pstr#*:}" | sed 's/^ *//; s/ *$//')"
+                case "$_pk" in
+                    active) ;;
+                    *) log "[$_id]: unknown parameter: $_pk (only active is known)"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                esac
+                case "$_pv" in
+                    0|1|true|false|yes|no|on|off) ;;
+                    *) log "[$_id]: invalid value for $_pk: $_pv"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                esac
+            fi
+            log "  [$_id] set_parameters target_ref=$_tref parameters=$_pstr"
+            ;;
+        set_content_parameters)
+            _tref="$(_partlib_rec_get target_ref)"
+            _cfs="$(_partlib_rec_get filesystem)"
+            _cparams="$(_partlib_rec_get parameters)"
+            if ! _partition_check_child "$_id" "$_tref"; then
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ -z "$_cparams" ]; then
+                log "[$_id]: no content parameters given"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            for _cp in $_cparams; do
+                case "$_cp" in
+                    *=*) _cpk="${_cp%%=*}" ;;
+                    *) log "[$_id]: malformed parameter (want key=value): $_cp"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                esac
+                _cpv="${_cp#*=}"
+                case "$_cpk" in
+                    reserved_percent)
+                        case "$_cpv" in
+                            ''|*[!0-9]*)
+                                log "[$_id]: reserved_percent must be 0-100: $_cpv"
+                                _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                        esac
+                        if [ "$_cpv" -gt 100 ]; then
+                            log "[$_id]: reserved_percent must be 0-100: $_cpv"
+                            _validate_rc=2; _PARTLIB_ABORT=1; return
+                        fi
+                        ;;
+                    max_mount_count)
+                        _partition_check_int "$_cpv" || {
+                            log "[$_id]: invalid max_mount_count: $_cpv"
+                            _validate_rc=2; _PARTLIB_ABORT=1; return; }
+                        ;;
+                    check_interval)
+                        printf '%s' "$_cpv" | grep -Eq '^[0-9]+[dwm]?$' || {
+                            log "[$_id]: invalid check_interval: $_cpv (want a count with optional d/w/m)"
+                            _validate_rc=2; _PARTLIB_ABORT=1; return; }
+                        ;;
+                    *)
+                        log "[$_id]: unknown content parameter: $_cpk"
+                        _validate_rc=2; _PARTLIB_ABORT=1; return
+                        ;;
+                esac
+            done
+            # tune2fs only; probe when the plan leaves the filesystem out
+            if [ -z "$_cfs" ] && _partition_check_devnode "$_tref"; then
+                _cfs="$(_partition_detect_fs "$_tref")"
+            fi
+            case "$_cfs" in
+                ext4|'') ;;
+                *) log "[$_id]: no in-place content parameters for filesystem: $_cfs"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            if _partition_check_devnode "$_tref" \
+                    && _pm_hit="$(_partition_first_mount "$_tref")"; then
+                log "[$_id]: $_pm_hit; unmount it first"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] set_content_parameters target_ref=$_tref filesystem=${_cfs:-probe} parameters=$_cparams"
+            ;;
+        defrag)
+            _tref="$(_partlib_rec_get target_ref)"
+            _dfs="$(_partlib_rec_get filesystem)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if ! _partition_check_devnode "$_tref" || [ ! -b "$_tref" ]; then
+                log "[$_id]: defrag needs an existing partition device: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ "$_tref" = "$_plan_disk" ] \
+                    || [ "$(lsblk -dno TYPE "$_tref" 2>/dev/null)" = "disk" ]; then
+                log "[$_id]: refuses whole-disk target: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ -z "$_dfs" ]; then
+                _dfs="$(_partition_detect_fs "$_tref")"
+            fi
+            case "$_dfs" in
+                ext4|btrfs) ;;
+                *) log "[$_id]: no defragment support for filesystem: ${_dfs:-none}"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            _dm="$(findmnt -n -o TARGET --source "$_tref" 2>/dev/null | head -n1)"
+            if [ -z "$_dm" ]; then
+                log "[$_id]: $_tref is not mounted; defragment runs on a mounted filesystem"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] defrag target_ref=$_tref filesystem=$_dfs mount=$_dm"
+            ;;
         luks_create)
             log "  [$_id] luks_create (accepted, apply defers to milestone 7)"
             ;;
@@ -1948,6 +2152,54 @@ _apply_one_op() {
                     _status="failed"; _detail="unknown set_string string_kind: $_skind"
                     ;;
             esac
+            ;;
+        set_type)
+            _tref="$(_partlib_rec_get target_ref)"
+            _ptype="$(_partlib_rec_get type)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_set_type "$_plan_disk" "$_devnode" "$_ptype"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="set_type failed for $_devnode"
+            fi
+            ;;
+        set_parameters)
+            _tref="$(_partlib_rec_get target_ref)"
+            _pstr="$(_partlib_rec_get parameters)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_set_parameters "$_plan_disk" "$_devnode" "$_pstr"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="set_parameters failed for $_devnode"
+            fi
+            ;;
+        set_content_parameters)
+            _tref="$(_partlib_rec_get target_ref)"
+            _cfs="$(_partlib_rec_get filesystem)"
+            _cparams="$(_partlib_rec_get parameters)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            [ -n "$_cfs" ] || _cfs="$(_partition_detect_fs "$_devnode")"
+            # Keep the tool's own message: the UI shows only the detail.
+            if _rerr="$(_partlib_set_content_parameters "$_devnode" "$_cfs" "$_cparams" 2>&1)"; then
+                _detail="$_devnode"
+            else
+                [ -n "$_rerr" ] && printf '%s\n' "$_rerr" >&2
+                _status="failed"
+                _detail="set_content_parameters failed for $_devnode: $(printf '%s' "$_rerr" | tail -n1)"
+            fi
+            ;;
+        defrag)
+            _tref="$(_partlib_rec_get target_ref)"
+            _dfs="$(_partlib_rec_get filesystem)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            [ -n "$_dfs" ] || _dfs="$(_partition_detect_fs "$_devnode")"
+            if _rerr="$(_partlib_defrag "$_devnode" "$_dfs" 2>&1)"; then
+                _detail="$_devnode"
+            else
+                [ -n "$_rerr" ] && printf '%s\n' "$_rerr" >&2
+                _status="failed"
+                _detail="defrag failed for $_devnode: $(printf '%s' "$_rerr" | tail -n1)"
+            fi
             ;;
         luks_create)
             _status="failed"

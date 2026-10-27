@@ -479,6 +479,205 @@ _partlib_set_gpt_name() {
     return 0
 }
 
+_partlib_set_type() {
+    _disk="$1"
+    _target="$2"
+    _type="$3"
+
+    _partno="$(_partlib_partno "$_disk" "$_target")"
+    if [ -z "$_partno" ]; then
+        log "set_type: could not find partition number for $_target on $_disk"
+        return 1
+    fi
+    if [ "$(_partlib_table_type "$_disk")" = "dos" ]; then
+        # sfdisk silently writes type 0 for a GUID on a dos label
+        case "$_type" in
+            *-*) log "set_type: refusing a GUID type on an mbr table: $_type"
+                 return 1 ;;
+        esac
+        _type="$(_partlib_mbr_type_hex "$_type")"
+    else
+        _type="$(_partlib_gpt_type_guid "$_type")"
+    fi
+    _rc=0
+    _err="$(sfdisk --part-type "$_disk" "$_partno" "$_type" 2>&1 >/dev/null)" \
+        || _rc=$?
+    if [ "$_rc" -ne 0 ]; then
+        log "set_type: sfdisk --part-type failed on $_disk#$_partno: $_err"
+        return 1
+    fi
+    _partlib_settle "$_disk"
+    return 0
+}
+
+# sfdisk --part-attrs replaces the whole attribute list, so read it back
+# and write the list with the one bit toggled.
+_partlib_gpt_attr_toggle() {
+    _disk="$1"
+    _partno="$2"
+    _attr="$3"
+    _want="$4"
+
+    _target="$(sfdisk --dump "$_disk" 2>/dev/null | awk -v n="$_partno" '
+        /^\// { c++; if (c == n) print $1 }')"
+    if [ -z "$_target" ]; then
+        log "set_parameters: could not find partition #$_partno on $_disk"
+        return 1
+    fi
+    _attrs="$(sfdisk --dump "$_disk" 2>/dev/null | awk -v want="$_target" '
+        $1 == want {
+            if (match($0, /attrs="[^"]*"/))
+                print substr($0, RSTART + 7, RLENGTH - 8)
+        }')"
+
+    if [ "$_want" -eq 1 ]; then
+        case ",$_attrs," in
+            *",$_attr,"*) _new="$_attrs" ;;
+            *) _new="${_attrs:+$_attrs,}$_attr" ;;
+        esac
+    elif [ -z "$_attrs" ]; then
+        _new=""
+    else
+        _new="$(printf '%s\n' "$_attrs" | tr ',' '\n' | grep -vx "$_attr" \
+            | paste -sd, -)"
+    fi
+
+    if ! sfdisk --part-attrs "$_disk" "$_partno" "$_new" >/dev/null 2>&1; then
+        log "set_parameters: sfdisk --part-attrs failed on $_disk#$_partno ($_new)"
+        return 1
+    fi
+    return 0
+}
+
+# Partition parameters are the driver-settings string the partition list
+# parses; "active" is the MBR boot flag, LegacyBIOSBootable on gpt.
+_partlib_set_parameters() {
+    _disk="$1"
+    _target="$2"
+    _params="$3"
+
+    _partno="$(_partlib_partno "$_disk" "$_target")"
+    if [ -z "$_partno" ]; then
+        log "set_parameters: could not find partition number for $_target on $_disk"
+        return 1
+    fi
+
+    _active=0
+    if [ -n "$_params" ]; then
+        _pk="$(printf '%s' "${_params%%:*}" | sed 's/^ *//; s/ *$//')"
+        _pv="$(printf '%s' "${_params#*:}" | sed 's/^ *//; s/ *$//')"
+        case "$_pk" in
+            active) ;;
+            *) log "set_parameters: unknown parameter: $_pk"; return 1 ;;
+        esac
+        case "$_pv" in
+            1|true|yes|on)  _active=1 ;;
+            0|false|no|off) _active=0 ;;
+            *) log "set_parameters: invalid value for $_pk: $_pv"; return 1 ;;
+        esac
+    fi
+
+    _table="$(_partlib_table_type "$_disk")"
+    case "$_table" in
+        dos)
+            _rc=0
+            if [ "$_active" -eq 1 ]; then
+                _err="$(sfdisk --activate "$_disk" "$_partno" 2>&1 >/dev/null)" \
+                    || _rc=$?
+            else
+                # "-" clears every partition; otherwise keep the others set
+                _others="$(sfdisk --dump "$_disk" 2>/dev/null | awk -v n="$_partno" '
+                    /^\// { c++; if (c != n) printf "%s ", c }')"
+                if [ -n "$_others" ]; then
+                    _err="$(sfdisk --activate "$_disk" $_others 2>&1 >/dev/null)" \
+                        || _rc=$?
+                else
+                    _err="$(sfdisk --activate "$_disk" - 2>&1 >/dev/null)" \
+                        || _rc=$?
+                fi
+            fi
+            if [ "$_rc" -ne 0 ]; then
+                log "set_parameters: sfdisk --activate failed on $_disk#$_partno: $_err"
+                return 1
+            fi
+            ;;
+        gpt)
+            _partlib_gpt_attr_toggle "$_disk" "$_partno" LegacyBIOSBootable \
+                "$_active" || return 1
+            ;;
+        *)
+            log "set_parameters: unsupported table type: ${_table:-none}"
+            return 1
+            ;;
+    esac
+    _partlib_settle "$_disk"
+    return 0
+}
+
+# Only tune2fs can change these in place; the others have no such tool.
+_partlib_set_content_parameters() {
+    _devnode="$1"
+    _fs="$2"
+    _params="$3"
+
+    if [ "$_fs" != "ext4" ]; then
+        log "set_content_parameters: unsupported filesystem: ${_fs:-none}"
+        return 1
+    fi
+
+    for _cp in $_params; do
+        _cpk="${_cp%%=*}"
+        _cpv="${_cp#*=}"
+        case "$_cpk" in
+            reserved_percent) _opt="-m" ;;
+            max_mount_count)  _opt="-c" ;;
+            check_interval)   _opt="-i" ;;
+            *) log "set_content_parameters: unknown parameter: $_cpk"
+               return 1 ;;
+        esac
+        _rc=0
+        _err="$(tune2fs $_opt "$_cpv" "$_devnode" 2>&1 >/dev/null)" || _rc=$?
+        if [ "$_rc" -ne 0 ]; then
+            log "set_content_parameters: tune2fs $_opt $_cpv failed for $_devnode: $_err"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Both tools walk a mounted filesystem, so the helper only ever runs them
+# on a mount point it resolved itself.
+_partlib_defrag() {
+    _devnode="$1"
+    _fs="$2"
+    _rc=0
+
+    case "$_fs" in
+        ext4)
+            _out="$(e4defrag "$_devnode" 2>&1)" || _rc=$?
+            ;;
+        btrfs)
+            _mnt="$(findmnt -n -o TARGET --source "$_devnode" 2>/dev/null \
+                | head -n1)"
+            if [ -z "$_mnt" ]; then
+                log "defrag: $_devnode is not mounted"
+                return 1
+            fi
+            _out="$(btrfs filesystem defragment -r "$_mnt" 2>&1)" \
+                || _rc=$?
+            ;;
+        *)
+            log "defrag: unsupported filesystem: ${_fs:-none}"
+            return 1
+            ;;
+    esac
+    if [ "$_rc" -ne 0 ]; then
+        log "defrag: failed for $_devnode (fs=$_fs): $_out"
+        return 1
+    fi
+    return 0
+}
+
 _partlib_part_size_mib() {
     _disk="$1"
     _target="$2"

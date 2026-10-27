@@ -580,6 +580,13 @@ DiskDeviceJobGenerator::_GenerateSetContentNameJob(BPartition* partition)
 status_t
 DiskDeviceJobGenerator::_GenerateSetContentParametersJob(BPartition* partition)
 {
+	// content type alone is not "is a filesystem"; ask the disk system
+	BDiskSystem contentDiskSystem;
+	if (partition->GetDiskSystem(&contentDiskSystem) != B_OK
+		|| !contentDiskSystem.IsFileSystem()) {
+		return B_NOT_SUPPORTED;
+	}
+
 	PartitionReference* reference;
 	status_t error = _GetPartitionReference(partition, reference);
 	if (error != B_OK)
@@ -596,6 +603,8 @@ DiskDeviceJobGenerator::_GenerateSetContentParametersJob(BPartition* partition)
 		return error;
 	}
 
+	job->SetFileSystem(contentDiskSystem.Name());
+
 	return _AddJob(job);
 }
 
@@ -604,12 +613,24 @@ DiskDeviceJobGenerator::_GenerateSetContentParametersJob(BPartition* partition)
 status_t
 DiskDeviceJobGenerator::_GenerateDefragmentJob(BPartition* partition)
 {
+	BDiskSystem contentDiskSystem;
+	if (partition->GetDiskSystem(&contentDiskSystem) != B_OK
+		|| !contentDiskSystem.IsFileSystem()) {
+		return B_NOT_SUPPORTED;
+	}
+
 	PartitionReference* reference;
 	status_t error = _GetPartitionReference(partition, reference);
 	if (error != B_OK)
 		return error;
 
-	return _AddJob(new(nothrow) DefragmentJob(reference));
+	DefragmentJob* job = new(nothrow) DefragmentJob(reference);
+	if (!job)
+		return B_NO_MEMORY;
+
+	job->SetFileSystem(contentDiskSystem.Name());
+
+	return _AddJob(job);
 }
 
 

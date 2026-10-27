@@ -17,10 +17,15 @@ public:
 								DefragmentJob(PartitionReference* partition);
 	virtual						~DefragmentJob();
 
+			void				SetFileSystem(const char* filesystem);
+
 	virtual	status_t			Do();
 	virtual	status_t			AddToPlan(PartitionPlanBuilder& plan,
 									const BString& opID,
 									PartitionOpIdMap& createdIds);
+
+protected:
+			BString				fFileSystem;
 };
 
 

@@ -201,7 +201,7 @@ BDecimalSpinner::Archive(BMessage* data, bool deep) const
 status_t
 BDecimalSpinner::GetSupportedSuites(BMessage* message)
 {
-	message->AddString("suites", "suite/vnd.Haiku-decimal-spinner");
+	message->AddString("suites", "suite/x-vnd.vos-decimal-spinner");
 
 	BPropertyInfo prop_info(sProperties);
 	message->AddFlat("messages", &prop_info);

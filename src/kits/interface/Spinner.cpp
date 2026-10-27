@@ -142,7 +142,7 @@ BSpinner::Archive(BMessage* data, bool deep) const
 status_t
 BSpinner::GetSupportedSuites(BMessage* message)
 {
-	message->AddString("suites", "suite/vnd.Haiku-intenger-spinner");
+	message->AddString("suites", "suite/x-vnd.vos-intenger-spinner");
 
 	BPropertyInfo prop_info(sProperties);
 	message->AddFlat("messages", &prop_info);

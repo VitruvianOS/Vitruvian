@@ -990,7 +990,7 @@ BAbstractSpinner::Archive(BMessage* data, bool deep) const
 status_t
 BAbstractSpinner::GetSupportedSuites(BMessage* message)
 {
-	message->AddString("suites", "suite/vnd.Haiku-spinner");
+	message->AddString("suites", "suite/x-vnd.vos-spinner");
 
 	BPropertyInfo prop_info(sProperties);
 	message->AddFlat("messages", &prop_info);

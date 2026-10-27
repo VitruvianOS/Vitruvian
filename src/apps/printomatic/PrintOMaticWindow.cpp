@@ -1006,8 +1006,13 @@ PrintOMaticWindow::_RunScan(bool preview)
 		done.AddPointer("bitmap", bitmap);
 		done.AddBool("preview", preview);
 	} else {
+		// Name the operation; libscan names the call that failed.
+		BString text;
+		text << (preview
+			? B_TRANSLATE("Preview failed: ")
+			: B_TRANSLATE("Scan failed: ")) << libscan_last_error();
 		BMessage failed(kMsgScanFailed);
-		failed.AddString("error", libscan_last_error());
+		failed.AddString("error", text.String());
 		PostMessage(&failed);
 		return;
 	}

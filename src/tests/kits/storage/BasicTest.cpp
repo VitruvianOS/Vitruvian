@@ -7,6 +7,8 @@
 #include <set>
 using std::set;
 
+#include <Statable.h>
+
 #include "BasicTest.h"
 
 // count_available_fds
@@ -66,7 +68,7 @@ BasicTest::execCommand(const string &cmdLine)
 
 // dumpStat
 void
-BasicTest::dumpStat(struct stat &st)
+BasicTest::dumpStat(struct stat &st, const BStatable *statable)
 {
 	printf("stat:\n");
 	printf("  st_dev    : %lx\n", st.st_dev);
@@ -80,7 +82,15 @@ BasicTest::dumpStat(struct stat &st)
 	printf("  st_atime  : %lx\n", st.st_atime);
 	printf("  st_mtime  : %lx\n", st.st_mtime);
 	printf("  st_ctime  : %lx\n", st.st_ctime);
-#ifndef __VOS__
+#ifdef __VOS__
+	if (statable != NULL) {
+		struct statx stx;
+		if (statable->GetStatX(&stx) == B_OK) {
+			printf("  st_crtime : %lx\n", (long)((stx.stx_mask & STATX_BTIME) != 0
+				? stx.stx_btime.tv_sec : stx.stx_mtime.tv_sec));
+		}
+	}
+#else
 	printf("  st_crtime : %lx\n", st.st_crtime);
 #endif
 }

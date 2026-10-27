@@ -3,6 +3,7 @@
 #ifndef __sk_basic_test_h__
 #define __sk_basic_test_h__
 
+#include <Statable.h>
 #include <SupportDefs.h>
 #include <TestCase.h>
 #include <TestShell.h>
@@ -32,7 +33,7 @@ public:
 
 	static void execCommand(const string &command);
 
-	static void dumpStat(struct stat &st);
+	static void dumpStat(struct stat &st, const BStatable *statable = NULL);
 
 	static void createVolume(string imageFile, string mountPoint, int32 megs,
 							 bool makeMountPoint = true);

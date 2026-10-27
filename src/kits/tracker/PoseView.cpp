@@ -92,6 +92,7 @@ All rights reserved.
 #include "DeskWindow.h"
 #include "DesktopPoseView.h"
 #include "FSClipboard.h"
+#include "FSUndoRedo.h"
 #include "FSUtils.h"
 #include "FilePanelPriv.h"
 #include "FunctionObject.h"
@@ -3638,8 +3639,6 @@ BPoseView::NewFileFromTemplate(const BMessage* message)
 		delete[] buffer;
 	}
 
-	// todo: create an UndoItem
-
 	// copy the attributes from the template file
 	BNode srcNode(&srcRef);
 	BNode destNode(&destDir, fileName);
@@ -3647,6 +3646,9 @@ BPoseView::NewFileFromTemplate(const BMessage* message)
 
 	BEntry entry(&destDir, fileName);
 	entry.GetRef(&destEntryRef);
+
+	if (dir.InitCheck() != B_OK)
+		NewFileTemplateUndo undo(destEntryRef, srcRef);
 
 	// try to place new item at click point or under mouse if possible
 	PlaceFolder(&destEntryRef, message);

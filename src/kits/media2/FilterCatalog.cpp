@@ -69,8 +69,6 @@ _ScanRegistry(BObjectList<BFilterCatalog::Entry, true>* out,
 		GstPluginFeature* feature = (GstPluginFeature*)item->data;
 		const char* factoryName
 			= gst_plugin_feature_get_name(feature);
-		const char* pluginName
-			= gst_plugin_feature_get_plugin_name(feature);
 
 		if (g_str_has_prefix(factoryName, "frei0r-filter-")) {
 			if (kindFilter == NULL || strcmp(kindFilter, "video") == 0) {
@@ -84,16 +82,6 @@ _ScanRegistry(BObjectList<BFilterCatalog::Entry, true>* out,
 			if (kindFilter == NULL || strcmp(kindFilter, "audio") == 0) {
 				_AddEntry(out, factoryName, factoryName, "audio", "LADSPA",
 					factoryName);
-			}
-		} else if (g_str_has_prefix(factoryName, "lv2-")
-			|| (strcmp(pluginName, "lv2") == 0
-				&& strcmp(factoryName, "lv2") != 0)) {
-			if (kindFilter == NULL || strcmp(kindFilter, "audio") == 0) {
-				const char* longName = gst_element_factory_get_longname(
-					(GstElementFactory*)feature);
-				_AddEntry(out, factoryName,
-					longName != NULL ? longName : factoryName,
-					"audio", "LV2", factoryName);
 			}
 		}
 	}

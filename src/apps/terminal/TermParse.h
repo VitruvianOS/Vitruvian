@@ -74,6 +74,7 @@ private:
 	sem_id fReaderLocker;
 
 	uint fBufferPosition;
+	void _AnsiModeRequest(int value);
 	uchar fReadBuffer[READ_BUF_SIZE];
 	int32 fReadBufferSize;
 

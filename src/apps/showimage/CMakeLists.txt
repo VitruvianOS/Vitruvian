@@ -4,7 +4,8 @@ Application(ShowImage
 	ImageCache.cpp
 	ImageFileNavigator.cpp
 	PrintOptionsWindow.cpp
-	ProgressWindow.cpp
+	InfoStatusView.cpp
+	ProgressStatusView.cpp
 	SelectionBox.cpp
 	ShowImageApp.cpp
 	ShowImageSettings.cpp

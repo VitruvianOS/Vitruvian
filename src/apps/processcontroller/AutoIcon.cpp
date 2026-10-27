@@ -80,9 +80,10 @@ AutoIcon::Bitmap()
 		}
 	} else if (fbits) {
 		fBitmap = new BBitmap(BRect(BPoint(0, 0),
-			BSize(B_MINI_ICON - 1, B_MINI_ICON - 1)), B_RGBA32);
+			be_control_look->ComposeIconSize(B_MINI_ICON)), B_RGBA32);
 
-		fBitmap->SetBits(fbits, 256, 0, B_CMAP8);
+		BIconUtils::ConvertFromCMAP8((const uint8*)fbits, B_MINI_ICON, B_MINI_ICON, B_MINI_ICON,
+			fBitmap);
 	}
 	return fBitmap;
 }

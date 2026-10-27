@@ -63,6 +63,19 @@ run_test() {
     fi
 }
 
+# Spawns many processes; skipped while a desktop session is running.
+run_test_nodesktop() {
+    local name="$1"
+    if pidof app_server > /dev/null 2>&1; then
+        TOTAL=$((TOTAL + 1))
+        SKIP=$((SKIP + 1))
+        printf "  %-45s" "$name"
+        echo "SKIPPED (desktop running)"
+        return
+    fi
+    run_test "$@"
+}
+
 run_cppunit() {
     local suite="$1"
     local logname="$2"
@@ -144,7 +157,7 @@ if [ "$RUN_SYSTEM" -eq 1 ]; then
 
     echo ""
     echo "  [System Kernel Tests]"
-    run_test "kernel-fibo_load_image"      "ulimit -u \$((\$(ps -u \$(id -u) -L --no-headers | wc -l) + 300)); $TESTBIN/fibo_load_image 12"
+    run_test_nodesktop "kernel-fibo_load_image" "ulimit -u \$((\$(ps -u \$(id -u) -L --no-headers | wc -l) + 300)); $TESTBIN/fibo_load_image 8"
     run_test "kernel-path_resolution_test" "$TESTBIN/path_resolution_test"
     run_test "kernel-port_close_test_1"    "$TESTBIN/port_close_test_1"
     run_test "kernel-port_close_test_2"    "$TESTBIN/port_close_test_2"

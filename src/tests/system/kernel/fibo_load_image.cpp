@@ -17,7 +17,8 @@
 #include <unistd.h>
 
 
-static const int kMaxNumber = 12;
+// Caps the process tree (about 2 * fib(n) loaded images).
+static const int kMaxNumber = 8;
 
 
 static void

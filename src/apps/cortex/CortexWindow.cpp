@@ -135,8 +135,7 @@ CortexVolumeWindow::CortexVolumeWindow(media_client_id id, bool isStream,
 	fIsStream(isStream),
 	fSlider(NULL)
 {
-	BView* content = new BGroupView(B_VERTICAL, 0.0f);
-	BLayoutBuilder::Group<>(content, B_VERTICAL, 10)
+	BLayoutBuilder::Group<>(this, B_VERTICAL, 10)
 		.SetInsets(10)
 		.Add(fSlider = new BSlider("volume", "Volume", NULL,
 			0, 100, B_HORIZONTAL))
@@ -144,7 +143,6 @@ CortexVolumeWindow::CortexVolumeWindow(media_client_id id, bool isStream,
 	fSlider->SetValue((int32)(value * 100.0f));
 	fSlider->SetModificationMessage(new BMessage(kMsgVolumeSlider));
 	fSlider->SetTarget(this);
-	AddChild(content);
 }
 
 
@@ -1398,14 +1396,8 @@ CortexWindow::_OpenControlPanel(int32 nodeIndex)
 		return;
 	}
 
-	BGroupView* group = new(std::nothrow) BGroupView(B_VERTICAL, 0.0f);
-	if (group == NULL) {
-		delete view;
-		delete panel;
-		return;
-	}
-	group->AddChild(view);
-	panel->AddChild(group);
+	BLayoutBuilder::Group<>(panel, B_VERTICAL, 0.0f)
+		.Add(view);
 	panel->Show();
 }
 

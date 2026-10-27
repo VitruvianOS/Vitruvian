@@ -141,7 +141,7 @@ PowerStatusView::AttachedToWindow()
 	else
 		SetLowColor(ViewColor());
 
-	Update();
+	Update(true);
 }
 
 
@@ -447,7 +447,11 @@ PowerStatusView::Update(bool force, bool notify)
 		fPercent = previousPercent;
 		fTimeLeft = previousTimeLeft;
 		fHasBattery = hadBattery;
-		return;
+
+		// If this was a forced update (some setting not related to battery status has changed),
+		// we still need to redraw everything. Otherwise, our job is done.
+		if (!force)
+			return;
 	}
 
 	if (fInDeskbar) {
@@ -712,7 +716,7 @@ PowerStatusReplicant::PowerStatusReplicant(BRect frame, int32 resizingMode,
 			B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
 		AddChild(dragger);
 	} else
-		Update(false, false);
+		Update(true, false);
 }
 
 

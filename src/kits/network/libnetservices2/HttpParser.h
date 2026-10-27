@@ -75,6 +75,7 @@ private:
 class HttpBodyParser
 {
 public:
+	virtual						~HttpBodyParser() = default;
 	virtual						BodyParseResult ParseBody(HttpBuffer& buffer,
 									HttpTransferFunction writeToBody, bool readEnd) = 0;
 
@@ -91,6 +92,7 @@ class HttpRawBodyParser : public HttpBodyParser
 {
 public:
 								HttpRawBodyParser();
+	virtual						~HttpRawBodyParser() = default;
 								HttpRawBodyParser(off_t bodyBytesTotal);
 	virtual	BodyParseResult		ParseBody(HttpBuffer& buffer, HttpTransferFunction writeToBody,
 									bool readEnd) override;

@@ -44,13 +44,36 @@ SetError(const char* text)
 }
 
 
+// "step: status", so the app can tell where a scan failed.
+static void
+SetStepError(const char* what, const char* detail)
+{
+	BString text;
+	text << what;
+	if (detail != NULL && detail[0] != '\0')
+		text << ": " << detail;
+	gLastError = text;
+}
+
+
+static void
+SetOptionError(const SANE_Option_Descriptor* desc, SANE_Status status)
+{
+	BString text;
+	text << "option \"" << desc->title << "\": " << sane_strstatus(status);
+	SetError(text.String());
+}
+
+
 static status_t
 EnsureSane()
 {
 	if (gSaneReady)
 		return B_OK;
-	if (gSaneFailed)
+	if (gSaneFailed) {
+		SetError("SANE is not available");
 		return B_ERROR;
+	}
 
 	SANE_Int version = 0;
 	SANE_Status status = sane_init(&version, NULL);
@@ -115,7 +138,10 @@ OpenDevice(const char* name, ScanSession* session)
 	SANE_Handle handle = NULL;
 	SANE_Status status = sane_open(name, &handle);
 	if (status != SANE_STATUS_GOOD) {
-		SetError(sane_strstatus(status));
+		BString text;
+		text << "could not open scanner \"" << name << "\": "
+			<< sane_strstatus(status);
+		SetError(text.String());
 		return B_ERROR;
 	}
 	session->handle = handle;
@@ -136,6 +162,55 @@ CloseDevice(ScanSession* session)
 }
 
 
+// Clamps to the option's range or the nearest word list entry, in raw
+// SANE units; backends refuse values they do not offer.
+static void
+SnapValueToConstraint(const SANE_Option_Descriptor* desc, SANE_Int* value)
+{
+	if (desc->constraint_type == SANE_CONSTRAINT_WORD_LIST) {
+		const SANE_Word* words = desc->constraint.word_list;
+		if (words == NULL || words[0] < 1)
+			return;
+
+		SANE_Int best = words[1];
+		int64 bestDelta = *value >= (SANE_Int)best
+			? (int64)*value - best : (int64)best - *value;
+		for (int i = 2; i <= words[0]; i++) {
+			int64 delta = *value >= (SANE_Int)words[i]
+				? (int64)*value - words[i] : (int64)words[i] - *value;
+			if (delta < bestDelta) {
+				bestDelta = delta;
+				best = words[i];
+			}
+		}
+		*value = best;
+		return;
+	}
+
+	if (desc->constraint_type != SANE_CONSTRAINT_RANGE)
+		return;
+
+	const SANE_Range* range = desc->constraint.range;
+	SANE_Int v = *value;
+	if (v < range->min)
+		v = range->min;
+	else if (v > range->max)
+		v = range->max;
+
+	if (range->quant > 0) {
+		SANE_Int lower = range->min
+			+ (v - range->min) / range->quant * range->quant;
+		if (range->max - lower < range->quant)
+			v = lower;
+		else {
+			SANE_Int upper = lower + range->quant;
+			v = (v - lower) * 2 < range->quant ? lower : upper;
+		}
+	}
+	*value = v;
+}
+
+
 static status_t
 SetOptionByTitle(SANE_Handle handle, const char* titleNeedle,
 	const char* stringValue, int intValue, bool useInt)
@@ -147,20 +222,20 @@ SetOptionByTitle(SANE_Handle handle, const char* titleNeedle,
 			desc = sane_get_option_descriptor(handle, ++index)) {
 		if ((desc->cap & SANE_CAP_INACTIVE) != 0)
 			continue;
+		// Group headers have titles too ("Scan Mode"); skip to the option.
+		if (desc->type == SANE_TYPE_GROUP)
+			continue;
 		if (!TitleMatches(desc->title, titleNeedle))
 			continue;
 
 		SANE_Status status;
 		if (useInt) {
-			if (desc->type == SANE_TYPE_FIXED) {
-				SANE_Fixed value = SANE_FIX(intValue);
-				status = sane_control_option(handle, index,
-					SANE_ACTION_SET_VALUE, &value, NULL);
-			} else {
-				SANE_Int value = intValue;
-				status = sane_control_option(handle, index,
-					SANE_ACTION_SET_VALUE, &value, NULL);
-			}
+			SANE_Int value = intValue;
+			if (desc->type == SANE_TYPE_FIXED)
+				value = SANE_FIX(intValue);
+			SnapValueToConstraint(desc, &value);
+			status = sane_control_option(handle, index,
+				SANE_ACTION_SET_VALUE, &value, NULL);
 		} else if (desc->type == SANE_TYPE_STRING) {
 			status = sane_control_option(handle, index,
 				SANE_ACTION_SET_VALUE,
@@ -169,7 +244,7 @@ SetOptionByTitle(SANE_Handle handle, const char* titleNeedle,
 			return B_BAD_VALUE;
 
 		if (status != SANE_STATUS_GOOD) {
-			SetError(sane_strstatus(status));
+			SetOptionError(desc, status);
 			return B_ERROR;
 		}
 		return B_OK;
@@ -211,7 +286,7 @@ PickModeWord(SANE_Handle handle, int32 format, char* out, size_t size)
 {
 	const SANE_String_Const* words = NULL;
 	if (FindStringListOption(handle, "Mode", &words) == NULL
-		|| words == NULL)
+		|| words == NULL || words[0] == NULL)
 		return false;
 
 	const char* want = format == LIBSCAN_GRAY8 ? "gray"
@@ -228,7 +303,9 @@ PickModeWord(SANE_Handle handle, int32 format, char* out, size_t size)
 			return true;
 		}
 	}
-	strncpy(out, words[1], size - 1);
+	// Single-entry lists have no second word to fall back to.
+	const char* fallback = words[1] != NULL ? words[1] : words[0];
+	strncpy(out, fallback, size - 1);
 	out[size - 1] = '\0';
 	return true;
 }
@@ -241,7 +318,7 @@ PickSourceWord(SANE_Handle handle, int32 source, char* out, size_t size)
 {
 	const SANE_String_Const* words = NULL;
 	if (FindStringListOption(handle, "Source", &words) == NULL
-		|| words == NULL)
+		|| words == NULL || words[0] == NULL)
 		return false;
 
 	const char* want = source == 2 ? "duplex" : source == 1 ? "adf"
@@ -265,7 +342,8 @@ PickSourceWord(SANE_Handle handle, int32 source, char* out, size_t size)
 			}
 		}
 	}
-	strncpy(out, words[1], size - 1);
+	const char* fallback = words[1] != NULL ? words[1] : words[0];
+	strncpy(out, fallback, size - 1);
 	out[size - 1] = '\0';
 	return true;
 }
@@ -311,11 +389,17 @@ ApplyOptions(SANE_Handle handle, const libscan_options* opts)
 			for (desc = sane_get_option_descriptor(handle, index);
 					desc != NULL;
 					desc = sane_get_option_descriptor(handle, ++index)) {
+				if (desc->type == SANE_TYPE_GROUP)
+					continue;
 				if (!TitleMatches(desc->title, areaTitles[i]))
 					continue;
 				if (desc->type == SANE_TYPE_FIXED) {
-					sane_control_option(handle, index,
-						SANE_ACTION_SET_VALUE, values[i], NULL);
+					SnapValueToConstraint(desc, values[i]);
+					SANE_Status status = sane_control_option(
+						handle, index, SANE_ACTION_SET_VALUE,
+						values[i], NULL);
+					if (status != SANE_STATUS_GOOD)
+						SetOptionError(desc, status);
 				}
 				break;
 			}
@@ -338,8 +422,15 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 	libscan_progress_cb cb, void* cookie, BBitmap** out)
 {
 	*out = NULL;
-	if (params.lines <= 0 || params.pixels_per_line <= 0)
-		return B_ERROR;
+	if (params.lines <= 0 || params.pixels_per_line <= 0
+		|| params.bytes_per_line <= 0) {
+		BString text;
+		text << "scanner reported an empty frame ("
+			<< params.pixels_per_line << "x" << params.lines << ", "
+			<< params.bytes_per_line << " bytes per line)";
+		SetError(text.String());
+		return B_BAD_VALUE;
+	}
 
 	color_space space = B_RGB32;
 	if (params.format == SANE_FRAME_GRAY && params.depth == 8)
@@ -349,6 +440,11 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 
 	BRect bounds(0, 0, params.pixels_per_line - 1, params.lines - 1);
 	BBitmap* bitmap = new BBitmap(bounds, B_BITMAP_NO_SERVER_LINK, space);
+	if (bitmap->InitCheck() == B_BAD_VALUE) {
+		delete bitmap;
+		SetError("scan image format or size is not supported");
+		return B_BAD_VALUE;
+	}
 	if (bitmap->InitCheck() != B_OK || bitmap->Bits() == NULL) {
 		delete bitmap;
 		SetError("out of memory for scan bitmap");
@@ -377,7 +473,7 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 		if (status != SANE_STATUS_GOOD) {
 			delete[] line;
 			delete bitmap;
-			SetError(sane_strstatus(status));
+			SetStepError("reading scan data", sane_strstatus(status));
 			return B_ERROR;
 		}
 
@@ -450,6 +546,9 @@ libscan_list_devices(libscan_device* out, int max)
 {
 	if (out == NULL || max <= 0)
 		return 0;
+
+	// Never report a stale error.
+	SetError("");
 	if (EnsureSane() != B_OK)
 		return -1;
 
@@ -507,6 +606,7 @@ libscan_get_options(const char* name, BMessage* options)
 	if (name == NULL || options == NULL)
 		return B_BAD_VALUE;
 
+	SetError("");
 	ScanSession session;
 	status_t status = OpenDevice(name, &session);
 	if (status != B_OK)
@@ -668,6 +768,7 @@ libscan_set_options(const char* name, const BMessage* options)
 	if (name == NULL || options == NULL)
 		return B_BAD_VALUE;
 
+	SetError("");
 	ScanSession session;
 	status_t status = OpenDevice(name, &session);
 	if (status != B_OK)
@@ -735,12 +836,23 @@ ScanEntry(void* data)
 	}
 
 	ApplyOptions(session.handle, opts);
-	sane_start(session.handle);
+
+	SANE_Status status = sane_start(session.handle);
+	if (status != SANE_STATUS_GOOD) {
+		SetStepError("could not start scan", sane_strstatus(status));
+		CloseDevice(&session);
+		free(name);
+		gScanActive = false;
+		gPreviewBitmap = NULL;
+		return 0;
+	}
 
 	SANE_Parameters params;
 	memset(&params, 0, sizeof(params));
-	if (sane_get_parameters(session.handle, &params) != SANE_STATUS_GOOD
-		|| params.lines <= 0) {
+	status = sane_get_parameters(session.handle, &params);
+	if (status != SANE_STATUS_GOOD) {
+		SetStepError("could not read scan parameters",
+			sane_strstatus(status));
 		CloseDevice(&session);
 		free(name);
 		gScanActive = false;
@@ -767,17 +879,25 @@ libscan_preview_start(const char* name, const libscan_options* opts,
 	if (name == NULL || opts == NULL)
 		return B_BAD_VALUE;
 	BAutolock lock(&gLock);
-	if (gScanActive)
+
+	SetError("");
+	if (gScanActive) {
+		SetError("another scan is still running");
 		return B_BUSY;
+	}
 
 	libscan_options preview = *opts;
 	if (preview.resolution_dpi <= 0 || preview.resolution_dpi > 150)
 		preview.resolution_dpi = 75;
+	// Grey thumbnail: without the mode word ApplyOptions picks a grey one.
 	preview.format = LIBSCAN_GRAY8;
+	preview.mode[0] = '\0';
 
 	char* payload = (char*)calloc(1, 256 + sizeof(libscan_options));
-	if (payload == NULL)
+	if (payload == NULL) {
+		SetError("out of memory for preview");
 		return B_NO_MEMORY;
+	}
 	strncpy(payload, name, 255);
 	memcpy(payload + 256, &preview, sizeof(preview));
 
@@ -831,8 +951,11 @@ libscan_scan_page(const char* name, const libscan_options* opts,
 	*out = NULL;
 
 	BAutolock lock(&gLock);
-	if (gScanActive)
+	SetError("");
+	if (gScanActive) {
+		SetError("another scan is still running");
 		return B_BUSY;
+	}
 
 	ScanSession session;
 	status_t status = OpenDevice(name, &session);
@@ -840,14 +963,20 @@ libscan_scan_page(const char* name, const libscan_options* opts,
 		return status;
 
 	ApplyOptions(session.handle, opts);
-	if (sane_start(session.handle) != SANE_STATUS_GOOD) {
+	SANE_Status saneStatus = sane_start(session.handle);
+	if (saneStatus != SANE_STATUS_GOOD) {
+		SetStepError("could not start scan",
+			sane_strstatus(saneStatus));
 		CloseDevice(&session);
 		return B_ERROR;
 	}
 
 	SANE_Parameters params;
 	memset(&params, 0, sizeof(params));
-	if (sane_get_parameters(session.handle, &params) != SANE_STATUS_GOOD) {
+	saneStatus = sane_get_parameters(session.handle, &params);
+	if (saneStatus != SANE_STATUS_GOOD) {
+		SetStepError("could not read scan parameters",
+			sane_strstatus(saneStatus));
 		CloseDevice(&session);
 		return B_ERROR;
 	}
@@ -895,8 +1024,11 @@ libscan_batch_start(const char* name, const libscan_options* opts)
 		return B_BAD_VALUE;
 
 	BAutolock lock(&gLock);
-	if (gScanActive || gBatchActive)
+	SetError("");
+	if (gScanActive || gBatchActive) {
+		SetError("another scan is still running");
 		return B_BUSY;
+	}
 
 	status_t status = OpenDevice(name, &gBatchSession);
 	if (status != B_OK)
@@ -917,8 +1049,11 @@ libscan_batch_next_page(libscan_progress_cb cb, void* cookie,
 	*out = NULL;
 
 	BAutolock lock(&gLock);
-	if (!gBatchActive)
+	SetError("");
+	if (!gBatchActive) {
+		SetError("no batch scan is running");
 		return B_NO_INIT;
+	}
 
 	SANE_Status start = sane_start(gBatchSession.handle);
 	if (start == SANE_STATUS_EOF || start == SANE_STATUS_JAMMED
@@ -927,15 +1062,17 @@ libscan_batch_next_page(libscan_progress_cb cb, void* cookie,
 		return B_ERROR;
 	}
 	if (start != SANE_STATUS_GOOD) {
-		SetError(sane_strstatus(start));
+		SetStepError("could not start scan", sane_strstatus(start));
 		return B_ERROR;
 	}
 
 	SANE_Parameters params;
 	memset(&params, 0, sizeof(params));
-	if (sane_get_parameters(gBatchSession.handle, &params)
-			!= SANE_STATUS_GOOD) {
-		SetError("could not read scan parameters");
+	SANE_Status paramsStatus = sane_get_parameters(gBatchSession.handle,
+		&params);
+	if (paramsStatus != SANE_STATUS_GOOD) {
+		SetStepError("could not read scan parameters",
+			sane_strstatus(paramsStatus));
 		return B_ERROR;
 	}
 

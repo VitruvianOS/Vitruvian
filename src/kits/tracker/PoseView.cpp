@@ -7812,7 +7812,7 @@ BPoseView::MouseUp(BPoint where)
 		// we need lastButtons for right button mouse-up tracking,
 		// because there's currently no way to know wich buttons were
 		// released in BView::MouseUp (unlike BView::KeyUp)
-		pose->MouseUp(BPoint(0, index * fListElemHeight), this, where, index);
+		pose->DoMouseUp(this, BPoint(0, index * fListElemHeight), where);
 	}
 
 	// Showing the pose context menu is done on mouse up (or long click)

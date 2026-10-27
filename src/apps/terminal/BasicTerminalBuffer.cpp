@@ -175,7 +175,7 @@ BasicTerminalBuffer::Init(int32 width, int32 height, int32 historySize)
 			return error;
 	}
 
-	error = _ResetTabStops(fWidth);
+	error = SetDefaultTabStops(fWidth);
 	if (error != B_OK)
 		return error;
 
@@ -994,6 +994,20 @@ BasicTerminalBuffer::DeleteLines(int32 numLines)
 
 
 void
+BasicTerminalBuffer::SaveAttributes()
+{
+	fSavedAttributes = fAttributes;
+}
+
+
+void
+BasicTerminalBuffer::RestoreAttributes()
+{
+	fAttributes = fSavedAttributes;
+}
+
+
+void
 BasicTerminalBuffer::SaveCursor()
 {
 	fSavedCursors.push(fCursor);
@@ -1022,11 +1036,32 @@ BasicTerminalBuffer::SetScrollRegion(int32 top, int32 bottom)
 }
 
 
+int32
+BasicTerminalBuffer::GetScrollRegionTop()
+{
+	return fScrollTop;
+}
+
+
+int32
+BasicTerminalBuffer::GetScrollRegionBottom()
+{
+	return fScrollBottom;
+}
+
+
 void
 BasicTerminalBuffer::SetOriginMode(bool enabled)
 {
 	fOriginMode = enabled;
 	_SetCursor(0, 0, false);
+}
+
+
+bool
+BasicTerminalBuffer::IsOriginMode()
+{
+	return fOriginMode;
 }
 
 
@@ -1288,7 +1323,7 @@ BasicTerminalBuffer::_ResizeSimple(int32 width, int32 height,
 	fScreen = lines;
 
 	if (fWidth != width) {
-		status_t error = _ResetTabStops(width);
+		status_t error = SetDefaultTabStops(width);
 		if (error != B_OK)
 			return error;
 	}
@@ -1488,7 +1523,7 @@ BasicTerminalBuffer::_ResizeRewrap(int32 width, int32 height,
 	fHistory = history;
 
 	if (fWidth != width) {
-		status_t error = _ResetTabStops(width);
+		status_t error = SetDefaultTabStops(width);
 		if (error != B_OK)
 			return error;
 	}
@@ -1514,7 +1549,7 @@ BasicTerminalBuffer::_ResizeRewrap(int32 width, int32 height,
 
 
 status_t
-BasicTerminalBuffer::_ResetTabStops(int32 width)
+BasicTerminalBuffer::SetDefaultTabStops(int32 width)
 {
 	if (fTabStops != NULL)
 		delete[] fTabStops;

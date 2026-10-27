@@ -142,7 +142,7 @@ void
 EventQueue::Die()
 {
 	fTerminating = true;
-	if (delete_sem(fLooperControl) == B_OK) {
+	if (delete_sem(fLooperControl) == B_OK && fEventLooper >= 0) {
 		int32 dummy;
 		wait_for_thread(fEventLooper, &dummy);
 	}

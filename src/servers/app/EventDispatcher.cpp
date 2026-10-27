@@ -303,8 +303,10 @@ EventDispatcher::_Unset()
 	fStream->SendQuit();
 
 	status_t status;
-	wait_for_thread(fThread, &status);
-	wait_for_thread(fCursorThread, &status);
+	if (fThread >= B_OK)
+		wait_for_thread(fThread, &status);
+	if (fCursorThread >= B_OK)
+		wait_for_thread(fCursorThread, &status);
 
 	fThread = fCursorThread = -1;
 

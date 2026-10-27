@@ -725,7 +725,8 @@ AuthenticationManager::~AuthenticationManager()
 {
 	// Quit the request thread and wait for it to finish
 	write_port(fRequestPort, 'quit', NULL, 0);
-	wait_for_thread(fRequestThread, NULL);
+	if (fRequestThread >= 0)
+		wait_for_thread(fRequestThread, NULL);
 
 	delete fUserDB;
 	delete fGroupDB;

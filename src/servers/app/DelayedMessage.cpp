@@ -681,7 +681,10 @@ DelayedMessageSender::~DelayedMessageSender()
 	write_port(fPort, kExitMessage, NULL, 0);
 
 	status_t status = B_OK;
-	while (wait_for_thread(fThread, &status) == B_OK);
+	if (fThread >= 0) {
+		while (wait_for_thread(fThread, &status) == B_INTERRUPTED)
+			;
+	}
 
 	// We now know the thread has exited, it is safe to cleanup
 	delete_port(fPort);

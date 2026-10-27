@@ -281,17 +281,32 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 }
 
 
+// A gone node resolves through /proc as "<path> (deleted)".
+static status_t
+_reject_deleted_path(const char* path)
+{
+	static const char kSuffix[] = " (deleted)";
+	size_t len = strlen(path);
+	if (len >= sizeof(kSuffix) - 1
+		&& strcmp(path + len - (sizeof(kSuffix) - 1), kSuffix) == 0)
+		return B_ENTRY_NOT_FOUND;
+	return B_OK;
+}
+
+
 int
 _kern_open_dir_virtual_ref(vref_id id, const char* name)
 {
 	if (id < 0)
 		return B_BAD_VALUE;
 
-	int fd = BPrivate::VRefCache::Open(id);
+	bool hasName = name != NULL && strlen(name) != 0 && strcmp(name, ".") != 0;
+	int fd = hasName ? BPrivate::VRefCache::OpenPath(id)
+		: BPrivate::VRefCache::Open(id);
 	if (fd < 0)
 		return fd;
 
-	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0)) {
+	if (!hasName) {
 		struct stat st;
 		if (fstat(fd, &st) == 0 && !S_ISDIR(st.st_mode)) {
 			close(fd);
@@ -339,11 +354,13 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 	if (id < 0)
 		return B_BAD_VALUE;
 
-	int fd = BPrivate::VRefCache::Open(id);
+	bool hasName = name != NULL && strlen(name) != 0 && strcmp(name, ".") != 0;
+	int fd = hasName ? BPrivate::VRefCache::OpenPath(id)
+		: BPrivate::VRefCache::Open(id);
 	if (fd < 0)
 		return fd;
 
-	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
+	if (!hasName)
 		return fd;
 
 	int retFd = open_at_mode(fd, name, openMode, perms);
@@ -404,7 +421,7 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		if (id < 0)
 			return B_ENTRY_NOT_FOUND;
 
-		int fd = BPrivate::VRefCache::Open(id);
+		int fd = BPrivate::VRefCache::OpenPath(id);
 		if (fd < 0)
 			return fd;
 
@@ -463,8 +480,10 @@ _kern_entry_ref_to_path_by_fd(int fd, team_id team, const char* name,
 {
 	// NULL or "." both mean "the fd itself" — "." is the sentinel used by
 	// BEntry for the filesystem root (where the directory is its own parent).
-	if (name == NULL || strcmp(name, ".") == 0)
-		return _kern_fd_to_path(fd, team, buffer, bufferSize);
+	if (name == NULL || strcmp(name, ".") == 0) {
+		status_t ret = _kern_fd_to_path(fd, team, buffer, bufferSize);
+		return ret == B_OK ? _reject_deleted_path(buffer) : ret;
+	}
 
 	if (name != NULL && name[0] == '/') {
 		if (strlcpy(buffer, name, bufferSize) >= bufferSize)
@@ -477,6 +496,10 @@ _kern_entry_ref_to_path_by_fd(int fd, team_id team, const char* name,
 	status_t ret = _kern_fd_to_path(fd, team,
 		resolvedPath, sizeof(resolvedPath));
 
+	if (ret != B_OK)
+		return ret;
+
+	ret = _reject_deleted_path(resolvedPath);
 	if (ret != B_OK)
 		return ret;
 

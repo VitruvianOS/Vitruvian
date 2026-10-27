@@ -314,6 +314,51 @@ VRefCache::Open(vref_id id)
 }
 
 
+int
+VRefCache::OpenPath(vref_id id)
+{
+	VREF_TRACK_VREF(VREF_TRACK_VREF_OPEN, id, NULL);
+
+	if (id < 0)
+		return B_BAD_VALUE;
+
+	vref_key key;
+	vref_ticket guard;
+	bool needIdentity;
+	{
+		std::unique_lock<std::mutex> g(Lock());
+		auto it = ById().find(id);
+		if (it == ById().end())
+			return B_NOT_ALLOWED;
+		key = it->second->anchor_key;
+		needIdentity = !ValidIdentity(it->second->dev, it->second->ino);
+		guard = AttachLocked(it->second);
+	}
+
+	int fd = ::open_vref_path(id, key);
+	// Module without the path flag sees mode 0 and answers EACCES.
+	if (fd == -EACCES)
+		fd = ::open_vref(id, key);
+
+	if (fd >= 0 && needIdentity) {
+		struct stat st;
+		if (fstat(fd, &st) == 0 && ValidIdentity(st.st_dev, st.st_ino)) {
+			std::unique_lock<std::mutex> g(Lock());
+			auto it = ById().find(id);
+			if (it != ById().end()
+				&& !ValidIdentity(it->second->dev, it->second->ino)) {
+				it->second->dev = st.st_dev;
+				it->second->ino = st.st_ino;
+				ByDevIno()[{ st.st_dev, st.st_ino }] = it->second;
+			}
+		}
+	}
+
+	Release(id, guard);
+	return fd;
+}
+
+
 namespace {
 
 

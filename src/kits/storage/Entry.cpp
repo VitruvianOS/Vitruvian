@@ -104,7 +104,7 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
 		return;
 
-	int fd = BPrivate::VRefCache::Open((vref_id)dir);
+	int fd = BPrivate::VRefCache::OpenPath((vref_id)dir);
 	if (fd < 0)
 		return;
 

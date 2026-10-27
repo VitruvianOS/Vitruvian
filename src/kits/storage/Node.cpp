@@ -98,7 +98,7 @@ node_ref::node_ref(dev_t device, ino_t node)
 	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
 		return;
 
-	int fd = BPrivate::VRefCache::Open((vref_id)node);
+	int fd = BPrivate::VRefCache::OpenPath((vref_id)node);
 	if (fd < 0)
 		return;
 

@@ -13,6 +13,10 @@
 #include <OS.h>
 
 
+// Identity-only (O_PATH) open of a vref; allowed on gone nodes.
+extern "C" int open_vref_path(vref_id id, vref_key key);
+
+
 namespace BPrivate {
 
 
@@ -32,6 +36,8 @@ public:
 	static vref_ticket	Acquire(vref_id id);
 	static status_t		Release(vref_id id, vref_ticket ticket);
 	static int			Open(vref_id id);
+	// Identity-only fd: fstat/openat-relative, never data I/O.
+	static int			OpenPath(vref_id id);
 
 	// Install caps from read_port_with_caps. Fills `tickets` (if
 	// non-NULL) with one entry per cap; caller owns those tickets.

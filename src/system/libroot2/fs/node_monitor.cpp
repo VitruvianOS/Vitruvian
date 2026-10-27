@@ -52,7 +52,7 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 	if (device != get_vref_dev())
 		return B_BAD_VALUE;
 
-	int nodeFD = BPrivate::VRefCache::Open(node);
+	int nodeFD = BPrivate::VRefCache::OpenPath(node);
 	if (nodeFD < 0)
 		return B_BAD_VALUE;
 

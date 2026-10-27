@@ -309,7 +309,7 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 	// Open the parent dir fd directly to fstatat the entry — avoids opening
 	// and vref-creating the child just to get its stat.
 	if (dirNode->is_virtual()) {
-		int dirFd = BPrivate::VRefCache::Open(dirNode->id());
+		int dirFd = BPrivate::VRefCache::OpenPath(dirNode->id());
 		if (dirFd < 0) {
 			fStatus = (status_t)dirFd;
 			return fStatus;

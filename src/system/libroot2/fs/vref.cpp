@@ -11,6 +11,8 @@
 
 #include "../kernel/nexus/nexus/nexus.h"
 
+#include <VRefCache.h>
+
 
 vref_id
 create_vref(int fd, vref_key* outKey)
@@ -67,6 +69,26 @@ open_vref(vref_id id, vref_key key)
 		return B_ERROR;
 
 	struct nexus_vref_open req = { id, key, 0, -1 };
+	long ret = nexus_io(nexus, NEXUS_VREF_OPEN, &req);
+	if (ret < 0)
+		return (int)ret;
+	return req.fd_out;
+}
+
+
+extern "C" int
+open_vref_path(vref_id id, vref_key key)
+{
+	CALLED();
+
+	if (id < 0)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetVRefDescriptor(nullptr);
+	if (nexus < 0)
+		return B_ERROR;
+
+	struct nexus_vref_open req = { id, key, NEXUS_VREF_OPEN_PATH, -1 };
 	long ret = nexus_io(nexus, NEXUS_VREF_OPEN, &req);
 	if (ret < 0)
 		return (int)ret;

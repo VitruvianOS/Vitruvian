@@ -742,12 +742,12 @@ snooze_until(bigtime_t time, int timeBase)
 	if (timeBase != B_SYSTEM_TIMEBASE)
 		return B_ERROR;
 
-	// system_time() is CLOCK_MONOTONIC. The suspend freezer restarts the sleep transparently,
+	// system_time() is CLOCK_BOOTTIME. The suspend freezer restarts the sleep transparently,
 	// and only a signal handler ends it early, reported as B_INTERRUPTED.
 	struct timespec deadline;
 	deadline.tv_sec = time / 1000000;
 	deadline.tv_nsec = (time % 1000000) * 1000;
-	int error = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &deadline,
+	int error = clock_nanosleep(CLOCK_BOOTTIME, TIMER_ABSTIME, &deadline,
 		NULL);
 	if (error == EINTR)
 		return B_INTERRUPTED;

@@ -41,7 +41,7 @@ bigtime_t
 system_time()
 {
 	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+	if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0)
 		return B_ERROR;
 	return (int64_t)ts.tv_sec * 1000000 + (int64_t)(ts.tv_nsec / 1000);
 }

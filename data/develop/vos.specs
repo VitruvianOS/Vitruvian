@@ -18,6 +18,8 @@
 -I/system/develop/headers/os/translation
 -I/system/develop/headers/os/drivers
 -I/system/develop/headers/os/game
+-I/system/develop/headers/os/experimental
+-I/system/develop/headers/os/experimental/package
 -I/system/develop/headers/os/package
 -I/system/develop/headers/os/add-ons/file_system
 -I/system/develop/headers/os/add-ons/input_server

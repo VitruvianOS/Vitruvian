@@ -11,5 +11,5 @@ resource app_version {
 	variety = 0,
 	internal = 0,
 	short_info = "0.7.0",
-	long_info = "Haiku RTFTranslator Add-Ons."
+	long_info = "RTFTranslator Add-Ons."
 };

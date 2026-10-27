@@ -7,6 +7,6 @@ resource app_version {
 	variety = 0,
 	internal = 0,
 	short_info = "1.0.0",
-	long_info = "Haiku libtextencoding."
+	long_info = "libtextencoding."
 };
 

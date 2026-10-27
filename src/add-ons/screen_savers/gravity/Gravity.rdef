@@ -10,5 +10,5 @@ resource app_version
     variety = 0,
     internal = 0,
     short_info = "1.0",
-    long_info = "The screensaver simulates a gravity hole effect with particles, utilizing the OpenGL interface for Haiku."
+    long_info = "The screensaver simulates a gravity hole effect with particles, utilizing the OpenGL interface for V\\OS."
 };

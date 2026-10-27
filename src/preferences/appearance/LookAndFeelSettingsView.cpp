@@ -235,7 +235,7 @@ LookAndFeelSettingsView::MessageReceived(BMessage* message)
 
 		case kMsgControlLookInfo:
 		{
-			BString infoText(B_TRANSLATE("Default Haiku ControlLook"));
+			BString infoText(B_TRANSLATE("Default ControlLook"));
 			BString path;
 			if (!BPrivate::get_control_look(path))
 				break;

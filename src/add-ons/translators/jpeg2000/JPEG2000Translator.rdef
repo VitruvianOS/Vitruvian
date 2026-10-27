@@ -11,5 +11,5 @@ resource app_version {
 	variety = 0,
 	internal = 0,
 	short_info = "1.0.0",
-	long_info = "Haiku JPEG2000Translator Add-Ons."
+	long_info = "JPEG2000Translator Add-Ons."
 };

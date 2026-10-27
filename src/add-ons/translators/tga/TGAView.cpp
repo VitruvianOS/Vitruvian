@@ -60,7 +60,7 @@ TGAView::TGAView(const char *name, uint32 flags, TranslatorSettings *settings)
  			TGA_TRANSLATOR_VERSION)), __DATE__);
  	fDetail = new BStringView("detail", detail);
  	fWrittenBy = new BStringView("writtenby",
- 		B_TRANSLATE("Written by the Haiku Translation Kit Team"));
+ 		B_TRANSLATE("Written by the Translation Kit Team"));
 
  	fpchkIgnoreAlpha = new BCheckBox(B_TRANSLATE("Ignore TGA alpha channel"),
 		new BMessage(CHANGE_IGNORE_ALPHA));

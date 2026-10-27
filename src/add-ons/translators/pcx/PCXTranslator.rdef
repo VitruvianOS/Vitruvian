@@ -11,5 +11,5 @@ resource app_version {
 	variety = 0,
 	internal = 0,
 	short_info = "0.3.0",
-	long_info = "Haiku PCXTranslator Add-Ons."
+	long_info = "PCXTranslator Add-Ons."
 };

@@ -8,7 +8,7 @@ resource app_version {
 	minor = 0,
 	variety = B_APPV_FINAL,
 	internal = 0,
-	short_info = "Haiku Fortune", 
+	short_info = "Fortune", 
     long_info  = "Haiku Fortune ©2002-2008 Haiku, Inc."
 };
 

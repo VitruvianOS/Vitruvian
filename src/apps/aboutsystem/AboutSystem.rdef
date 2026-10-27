@@ -12,7 +12,7 @@ resource app_version {
 
 	internal = 0,
 
-	short_info = "AboutHaiku",
+	short_info = "AboutSystem",
 	long_info = "AboutHaiku ©2005-2009 Haiku, Inc."
 };
 

@@ -11,5 +11,5 @@ resource app_version {
 	variety = 0,
 	internal = 0,
 	short_info = "1.5.0",
-	long_info = "Haiku GIFTranslator Add-Ons."
+	long_info = "GIFTranslator Add-Ons."
 };

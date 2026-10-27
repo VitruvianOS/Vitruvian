@@ -302,7 +302,7 @@ TermApp::_ChildCleanupThread()
 void
 TermApp::_Usage(char *name)
 {
-	fprintf(stderr, B_TRANSLATE("Haiku Terminal\n"
+	fprintf(stderr, B_TRANSLATE("Terminal\n"
 		"Copyright 2001-2019 Haiku, Inc.\n"
 		"Copyright(C) 1999 Kazuho Okui and Takashi Murai.\n"
 		"\n"

@@ -8,7 +8,7 @@ resource app_version {
 	minor = 0,
 	variety = B_APPV_FINAL,
 	internal = 0,
-	short_info = "Haiku DstConfig", 
+	short_info = "DstConfig", 
 	long_info  = "Haiku DstConfig ©2002-2011 Haiku, Inc."
 };
 

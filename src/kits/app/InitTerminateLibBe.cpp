@@ -52,8 +52,7 @@ initialize_forked_child()
 }
 
 
-// Priority below 100 is reserved, and deliberate: libroot must
-// initialise before any user constructor runs.
+// Priority <100 is reserved: libroot must init before user constructors.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wprio-ctor-dtor"
 extern "C" void __attribute__ ((constructor(99)))

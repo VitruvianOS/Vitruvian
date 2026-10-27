@@ -2472,8 +2472,7 @@ _RunDisconnectVPN(gpointer data)
 		message.AddString("reason", "VPN connection is not active");
 	} else {
 		GError* error = NULL;
-		// The sync call still works; switching to the async API is a
-		// functional change, out of scope for the warning cleanup.
+		// Deprecated sync call kept; async changes the control flow.
 		G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 		if (!nm_client_deactivate_connection(job->nmClient, target, NULL,
 				&error)) {
@@ -3008,8 +3007,7 @@ static gboolean
 _RunSetEnabled(gpointer data)
 {
 	_SetEnabledJob* job = (_SetEnabledJob*)data;
-	// Both setters still work; the async replacements change control
-	// flow and are out of scope for the warning cleanup.
+	// Deprecated setters kept; async replacements change the control flow.
 	G_GNUC_BEGIN_IGNORE_DEPRECATIONS
 	if (job->wireless)
 		nm_client_wireless_set_enabled(job->nmClient, job->enabled);

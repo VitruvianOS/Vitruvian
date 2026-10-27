@@ -120,8 +120,7 @@ fault_handler(int sig, siginfo_t* /*info*/, void* /*context*/)
 }
 
 
-// Priority below 100 is reserved, and deliberate: the team must exist
-// before any other libroot constructor runs.
+// Priority <100 is reserved: the team must exist before other constructors.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wprio-ctor-dtor"
 void __attribute__ ((constructor(1)))

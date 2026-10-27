@@ -856,7 +856,7 @@ check_pending_launches()
 				doneEntry->name, (int)doneEntry->pid,
 				(int)doneEntry->port);
 
-	// A truncated path fails the open() below; nothing else consumes it.
+	// Truncation only makes open() fail below.
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
@@ -2013,7 +2013,7 @@ apply_session_proxy_env()
 	if (sGreeterMode || sUserHome[0] == '\0')
 		return;
 
-	// A truncated path fails the open() below; nothing else consumes it.
+	// Truncation only makes open() fail below.
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"

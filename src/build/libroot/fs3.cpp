@@ -822,7 +822,8 @@ _kern_unlink(int fd, const char* path)
 		fd = AT_FDCWD;
 
 	int flags = (path == NULL ? AT_EMPTY_PATH : 0);
-	return (unlinkat(fd, path, flags | AT_SYMLINK_NOFOLLOW) < 0)
+	// unlinkat takes no AT_SYMLINK_NOFOLLOW; it is EINVAL.
+	return (unlinkat(fd, path, flags) < 0)
 		? BKernelPrivate::posixError(errno) : B_OK;
 }
 

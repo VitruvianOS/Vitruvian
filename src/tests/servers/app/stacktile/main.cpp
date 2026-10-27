@@ -41,7 +41,7 @@ public:
 
 TestApp::TestApp(uint32 numWindows)
 	:
-	BApplication("application/x.vnd-Haiku.stack-tile"),
+	BApplication("application/x-vnd.vos-stack-tile"),
 	fNumWindows(0),
 	fMaxWindows(numWindows)
 {

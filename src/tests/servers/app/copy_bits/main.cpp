@@ -263,7 +263,7 @@ show_window(BRect frame, const char* name)
 int
 main(int argc, char** argv)
 {
-	BApplication* app = new BApplication("application/x.vnd-Haiku.CopyBits");
+	BApplication* app = new BApplication("application/x-vnd.vos-CopyBits");
 
 	BRect frame(50.0, 50.0, 300.0, 250.0);
 	show_window(frame, "CopyBits Test");

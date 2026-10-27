@@ -8,7 +8,7 @@
 #include <Window.h>
 
 
-static const char* kAppSignature = "application/x.vnd-Haiku.DrawStringOffsets";
+static const char* kAppSignature = "application/x-vnd.vos-DrawStringOffsets";
 
 
 class TestView : public BView {

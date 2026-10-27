@@ -25,7 +25,7 @@
 #include <Window.h>
 
 
-static const char* kAppSignature = "application/x.vnd-Haiku.FontSpacing";
+static const char* kAppSignature = "application/x-vnd.vos-FontSpacing";
 
 
 class TestView : public BView {

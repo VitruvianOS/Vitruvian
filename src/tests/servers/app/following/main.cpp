@@ -152,7 +152,7 @@ show_window(BRect frame, const char* name)
 int
 main(int argc, char** argv)
 {
-	BApplication* app = new BApplication("application/x.vnd-Haiku.Following");
+	BApplication* app = new BApplication("application/x-vnd.vos-Following");
 
 	BRect frame(50.0, 50.0, 300.0, 250.0);
 	show_window(frame, "Following Test");

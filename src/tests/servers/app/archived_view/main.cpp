@@ -11,7 +11,7 @@
 #include <View.h>
 #include <Window.h>
 
-static const char* kAppSignature = "application/x.vnd-Haiku.ArchivedView";
+static const char* kAppSignature = "application/x-vnd.vos-ArchivedView";
 
 class TestView : public BView {
 

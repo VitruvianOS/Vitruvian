@@ -103,7 +103,7 @@ TestView::Draw(BRect updateRect)
 int
 main(int argc, char** argv)
 {
-	BApplication app("application/x.vnd-Haiku.BitmapBounds");
+	BApplication app("application/x-vnd.vos-BitmapBounds");
 
 	BRect frame(50.0, 50.0, 300.0, 250.0);
 	BWindow* window = new BWindow(frame, "Bitmap Bounds", B_TITLED_WINDOW,

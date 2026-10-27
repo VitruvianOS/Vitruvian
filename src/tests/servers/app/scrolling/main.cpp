@@ -130,7 +130,7 @@ show_window(BRect frame, const char* name)
 int
 main(int argc, char** argv)
 {
-	BApplication* app = new BApplication("application/x.vnd-Haiku.Scrolling");
+	BApplication* app = new BApplication("application/x-vnd.vos-Scrolling");
 
 	BRect frame(50.0, 50.0, 300.0, 250.0);
 	show_window(frame, "Scrolling Test");

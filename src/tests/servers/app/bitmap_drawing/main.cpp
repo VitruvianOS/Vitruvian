@@ -560,7 +560,7 @@ show_window(BRect frame, const char* name)
 int
 main(int argc, char** argv)
 {
-	BApplication* app = new BApplication("application/x.vnd-Haiku.BitmapDrawing");
+	BApplication* app = new BApplication("application/x-vnd.vos-BitmapDrawing");
 
 //	BRect frame(10.0, 30.0, 790.0, 590.0);
 	BRect frame(10.0, 30.0, 330.0, 220.0);

@@ -44,7 +44,7 @@ public:
 
 TestApp::TestApp(uint32 numWindows, bool views)
 	:
-	BApplication("application/x.vnd-Haiku.window-creation"),
+	BApplication("application/x-vnd.vos-window-creation"),
 	fScreenFrame(),
 	fNumWindows(0),
 	fMaxWindows(numWindows),

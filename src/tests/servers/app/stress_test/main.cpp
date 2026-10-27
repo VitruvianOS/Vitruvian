@@ -44,7 +44,7 @@ class TestWindow : public BWindow {
 
 
 TestApp::TestApp(uint32 testMode)
-	: BApplication("application/x.vnd-Haiku.stress-test"),
+	: BApplication("application/x-vnd.vos-stress-test"),
 	  fPulse(NULL),
 	  fFrame(10.0, 30.0, 150.0, 100.0),
 	  fScreenFrame(0.0, 0.0, 640.0, 480.0),

@@ -446,7 +446,7 @@ int main(int argc, char** argv)
 status_t
 SerialApp::GetSupportedSuites(BMessage* message)
 {
-	message->AddString("suites", "suite/vnd.Haiku-SerialPort");
+	message->AddString("suites", "suite/x-vnd.vos-SerialPort");
 	message->AddFlat("messages", &kScriptingProperties);
 	return BApplication::GetSupportedSuites(message);
 }

@@ -236,6 +236,8 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 			return;
 		const char* portIdStr = spa_dict_lookup(props, PW_KEY_PORT_ID);
 		const char* nameStr = spa_dict_lookup(props, PW_KEY_PORT_NAME);
+		const char* channelStr = spa_dict_lookup(props,
+			PW_KEY_AUDIO_CHANNEL);
 
 		PortRegistryEntry entry;
 		entry.nodeId = (uint32)strtoul(nodeIdStr, NULL, 10);
@@ -243,6 +245,7 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		entry.portOrdinal = portIdStr != NULL
 			? (uint32)strtoul(portIdStr, NULL, 10) : 0;
 		entry.name = nameStr != NULL ? nameStr : "";
+		entry.channel = channelStr != NULL ? channelStr : "";
 
 		{
 			std::lock_guard<std::mutex> _(fPortsLock);
@@ -3086,6 +3089,7 @@ PipeWireBackend::ForeignPorts(uint32 nodeId)
 		port.nodeId = kv.second.nodeId;
 		port.name = kv.second.name;
 		port.direction = kv.second.isOutput ? "out" : "in";
+		port.channel = kv.second.channel;
 		port.format = "";
 		ports.push_back(port);
 	}

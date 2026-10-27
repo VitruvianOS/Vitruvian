@@ -1340,6 +1340,7 @@ BMediaGraph::GetForeignPorts(uint32 nodeId,
 		foreignPort->nodeId = port.nodeId;
 		foreignPort->name.SetTo(port.name.c_str());
 		foreignPort->direction.SetTo(port.direction.c_str());
+		foreignPort->channel.SetTo(port.channel.c_str());
 		foreignPort->format.SetTo(port.format.c_str());
 
 		if (!outPorts->AddItem(foreignPort))

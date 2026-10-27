@@ -227,6 +227,7 @@ public:
 			uint32			nodeId;
 			std::string		name;
 			std::string		direction;
+			std::string		channel;
 			std::string		format;
 		};
 		std::vector<ForeignNodeInfo>	ForeignNodes();
@@ -469,6 +470,7 @@ private:
 				bool			isOutput;
 				uint32			portOrdinal;
 				std::string		name;
+				std::string		channel;
 			};
 			std::mutex				fPortsLock;
 			std::map<uint32, PortRegistryEntry>	fPorts;

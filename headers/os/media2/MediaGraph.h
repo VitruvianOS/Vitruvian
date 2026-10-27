@@ -143,6 +143,7 @@ public:
 		BString			name;
 		BString			direction;
 		BString			format;
+		BString			channel;	// audio.channel ("FL"), may be empty
 	};
 			status_t				GetForeignNodes(
 										BObjectList<ForeignNode, true>* outNodes);

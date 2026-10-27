@@ -34,7 +34,7 @@ assign_category(PackageInfo* info)
 		return;
 	}
 	if (name.StartsWith("haiku-") || name.StartsWith("libhaiku")) {
-		info->SetCategory("Haiku libs");
+		info->SetCategory("V\\OS libs");
 		return;
 	}
 	info->SetCategory(info->Section().Length() > 0

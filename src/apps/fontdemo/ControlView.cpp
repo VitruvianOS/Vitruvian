@@ -64,7 +64,7 @@ void
 ControlView::AttachedToWindow()
 {
 	fTextControl = new BTextControl("TextInput", B_TRANSLATE("Text:"),
-		B_TRANSLATE("Haiku, Inc."), NULL);
+		B_TRANSLATE("The quick brown fox"), NULL);
 	fTextControl->SetModificationMessage(new BMessage(TEXT_CHANGED_MSG));
 	AddChild(fTextControl);
 

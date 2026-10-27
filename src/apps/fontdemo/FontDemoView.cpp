@@ -40,7 +40,7 @@ FontDemoView::FontDemoView(BRect rect)
 	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 	SetHighUIColor(B_DOCUMENT_TEXT_COLOR);
 
-	BString setStr = B_TRANSLATE("Haiku, Inc.");
+	BString setStr = B_TRANSLATE("The quick brown fox");
 	SetString(setStr);
 	SetFontSize(fFontSize);
 	SetAntialiasing(true);

@@ -242,13 +242,15 @@ BMediaPluginAdapter::_TeardownPlugin()
 	fPortBuffers.clear();
 	fPortIsInput.clear();
 	fControlValues.clear();
+	// A reload registers new ports, so the old ones go here.
 	for (size_t i = 0; i < fInputs.size(); i++) {
-		// Ports are owned by BMediaClient registration; do not delete here
-		// if already unregistered. Clear pointers only.
-		fInputs[i] = NULL;
+		UnregisterInput(fInputs[i]);
+		delete fInputs[i];
 	}
-	for (size_t i = 0; i < fOutputs.size(); i++)
-		fOutputs[i] = NULL;
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		UnregisterOutput(fOutputs[i]);
+		delete fOutputs[i];
+	}
 	fInputs.clear();
 	fOutputs.clear();
 	fPluginName = "";
@@ -452,6 +454,44 @@ BMediaPluginAdapter::LoadLv2(const char* uri)
 		lilv_node_free(uriNode);
 		_Lv2DestroyState(state);
 		return B_NOT_SUPPORTED;
+	}
+
+	status_t status = B_OK;
+	for (int32 i = 0; status == B_OK && i < audioIn; i++) {
+		BString name;
+		name.SetToFormat("in_%d", i);
+		BMediaInput* input = new(std::nothrow) BMediaInput(name.String());
+		if (input == NULL) {
+			status = B_NO_MEMORY;
+			break;
+		}
+		input->SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		status = RegisterInput(input);
+		if (status != B_OK)
+			delete input;
+		else
+			fInputs.push_back(input);
+	}
+	for (int32 i = 0; status == B_OK && i < audioOut; i++) {
+		BString name;
+		name.SetToFormat("out_%d", i);
+		BMediaOutput* output = new(std::nothrow) BMediaOutput(name.String());
+		if (output == NULL) {
+			status = B_NO_MEMORY;
+			break;
+		}
+		output->SetAcceptedTypes(B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO));
+		status = RegisterOutput(output);
+		if (status != B_OK)
+			delete output;
+		else
+			fOutputs.push_back(output);
+	}
+	if (status != B_OK) {
+		lilv_node_free(uriNode);
+		_Lv2DestroyState(state);
+		_TeardownPlugin();
+		return status;
 	}
 
 	fPluginName = uri;

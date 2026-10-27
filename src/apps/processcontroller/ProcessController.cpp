@@ -332,6 +332,7 @@ ProcessController::MessageReceived(BMessage *message)
 						B_TRANSLATE("Kill this team!"), B_WIDTH_AS_USUAL,
 						B_STOP_ALERT);
 					alert->SetShortcut(0, B_ESCAPE);
+					alert->SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 					int result = alert->Go();
 					switch (result) {
 						case 1:
@@ -349,6 +350,7 @@ ProcessController::MessageReceived(BMessage *message)
 						B_TRANSLATE("Ok!"), NULL, NULL, B_WIDTH_AS_USUAL,
 						B_STOP_ALERT);
 					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					alert->SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 					alert->Go();
 				}
 			}
@@ -380,6 +382,7 @@ ProcessController::MessageReceived(BMessage *message)
 					#define KILL 1
 					#endif
 					alert->SetShortcut(0, B_ESCAPE);
+					alert->SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 					int r = alert->Go();
 					if (r == KILL)
 						kill_thread(thread);
@@ -393,6 +396,7 @@ ProcessController::MessageReceived(BMessage *message)
 						B_TRANSLATE("Ok!"),	NULL, NULL,
 						B_WIDTH_AS_USUAL, B_STOP_ALERT);
 					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					alert->SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 					alert->Go();
 				}
 			}
@@ -473,6 +477,7 @@ ProcessController::MessageReceived(BMessage *message)
 						B_TRANSLATE("That's no Fun!"), NULL, NULL,
 						B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					alert->SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 					alert->Go();
 				} else
 					_kern_set_cpu_enabled(cpu, !_kern_cpu_enabled(cpu));

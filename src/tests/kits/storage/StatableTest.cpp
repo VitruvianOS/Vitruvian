@@ -146,7 +146,14 @@ StatableTest::GetXYZTest()
 		CPPUNIT_ASSERT( (perms & S_IUMSK) == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( size == st.st_size );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );
-#ifndef __VOS__
+#ifdef __VOS__
+		{
+			struct statx stx;
+			CPPUNIT_ASSERT( statable->GetStatX(&stx) == B_OK );
+			CPPUNIT_ASSERT( ctime == ((stx.stx_mask & STATX_BTIME) != 0
+				? stx.stx_btime.tv_sec : stx.stx_mtime.tv_sec) );
+		}
+#else
 		CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( ctime == st.st_crtime );
 #endif
@@ -274,7 +281,14 @@ StatableTest::SetXYZTest()
 		if (!isLink)
 			CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );
-#ifndef __VOS__
+#ifdef __VOS__
+		{
+			struct statx stx;
+			CPPUNIT_ASSERT( statable->GetStatX(&stx) == B_OK );
+			CPPUNIT_ASSERT( ctime == ((stx.stx_mask & STATX_BTIME) != 0
+				? stx.stx_btime.tv_sec : stx.stx_mtime.tv_sec) );
+		}
+#else
 		CPPUNIT_ASSERT( ctime == st.st_crtime );
 #endif
 #if !TEST_R5 && !TEST_OBOS /* !!!POSIX ONLY!!! */

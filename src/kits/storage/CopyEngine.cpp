@@ -268,9 +268,10 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 		destNode->SetOwner(sourceStat.st_uid);
 		destNode->SetGroup(sourceStat.st_gid);
 		destNode->SetPermissions(sourceStat.st_mode);
-		#ifdef HAIKU_TARGET_PLATFORM_HAIKU
-			destNode->SetCreationTime(sourceStat.st_crtime);
-		#endif
+		time_t created;
+		if (sourceNode->GetCreationTime(&created) == B_OK)
+			destNode->SetCreationTime(created);
+			// read-only on Linux; B_NOT_SUPPORTED is ignored
 		destNode->SetModificationTime(sourceStat.st_mtime);
 	}
 

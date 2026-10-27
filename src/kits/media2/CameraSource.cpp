@@ -228,15 +228,19 @@ struct MjpegState {
 
 BCameraSource::~BCameraSource()
 {
+	// Detach the viewer before capture stops.
+	fFrameTarget = BMessenger();
+	SetControllable(NULL);
+
 	Stop();
 	_StopConnections();
 
 	if (CountOutputs() > 0)
 		UnregisterOutput(OutputAt(0));
 
+	// The controllable owns the parameter web.
 	delete fControllable;
 	fControllable = NULL;
-	delete (BParameterWeb*)fParameterWeb;
 	fParameterWeb = NULL;
 
 	_SaveControls();

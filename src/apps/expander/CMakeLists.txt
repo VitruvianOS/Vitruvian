@@ -9,7 +9,7 @@ Application(Expander
 	ExpanderWindow.cpp
 	GenericThread.cpp
 	PasswordAlert.cpp
-	LIBS tracker localestub
+	LIBS tracker shared localestub
 	RDEF Expander.rdef
 )
 UsePrivateHeaders(Expander shared)

@@ -31,6 +31,7 @@
 #include "FilterView.h"
 #include "PackageInfo.h"
 #include "PackageInfoView.h"
+#include "RepositoriesWindow.h"
 #include "PackageListView.h"
 #include "PackageWorker.h"
 #include "WorkStatusView.h"
@@ -199,6 +200,7 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgManageRepositories:
+			(new RepositoriesWindow())->Show();
 			break;
 
 		case kMsgSimulateReady:
@@ -372,7 +374,6 @@ MainWindow::_BuildMenuBar()
 	BMenuItem* manageRepositoriesItem = new BMenuItem(
 		B_TRANSLATE("Manage repositories"),
 		new BMessage(kMsgManageRepositories));
-	manageRepositoriesItem->SetEnabled(false);
 	repoMenu->AddItem(manageRepositoriesItem);
 	repoMenu->AddItem(new BMenuItem(B_TRANSLATE("Update package lists"),
 		new BMessage(kMsgAptUpdate)));

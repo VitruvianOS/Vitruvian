@@ -11,6 +11,7 @@ Application(PackageManager
 	PackageManagerApp.cpp
 	PackageRow.cpp
 	PackageWorker.cpp
+	RepositoriesWindow.cpp
 	WorkStatusView.cpp
 	LIBS shared tracker localestub vpackage apt-pkg
 	RDEF PackageManager.rdef

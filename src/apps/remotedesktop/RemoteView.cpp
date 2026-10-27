@@ -65,6 +65,7 @@ RemoteView::RemoteView(BRect frame, const char *remoteHost, uint16 remotePort)
 	fReceiver(NULL),
 	fSender(NULL),
 	fStopThread(false),
+	fDrawThread(-1),
 	fOffscreenBitmap(NULL),
 	fOffscreen(NULL),
 	fViewCursor(kCursorData),
@@ -173,7 +174,8 @@ RemoteView::~RemoteView()
 	delete fCursorBitmap;
 
 	int32 result;
-	wait_for_thread(fDrawThread, &result);
+	if (fDrawThread >= 0)
+		wait_for_thread(fDrawThread, &result);
 }
 
 

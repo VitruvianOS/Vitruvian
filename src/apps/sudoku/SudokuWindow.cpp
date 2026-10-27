@@ -104,8 +104,11 @@ GenerateSudoku::Abort()
 {
 	fQuit = true;
 
-	status_t status;
-	wait_for_thread(fThread, &status);
+	if (fThread >= 0) {
+		status_t status;
+		wait_for_thread(fThread, &status);
+		fThread = -1;
+	}
 }
 
 

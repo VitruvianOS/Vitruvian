@@ -44,6 +44,12 @@
 #endif
 
 
+using namespace BPrivate;
+
+
+namespace BPrivate {
+
+
 class TAlertView : public BView {
 public:
 								TAlertView();
@@ -77,6 +83,9 @@ public:
 private:
 			BAlert*				fAlert;
 };
+
+
+}	// namespace BPrivate
 
 
 static const unsigned int kAlertButtonMsg = 'ALTB';

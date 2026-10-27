@@ -898,8 +898,7 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 	// Apply the player volume on the decoded float samples. GStreamer
 	// negotiates F32LE interleaved into this path (MediaFile OpenUri caps).
 	if (fVolume != 1.0f) {
-		if ((format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-				== media_raw_audio_format::B_AUDIO_FLOAT) {
+		if (format.format == media_raw_audio_format::B_AUDIO_FLOAT) {
 			const size_t sampleCount = (size_t)gotFrames
 				* format.channel_count;
 			float* samples = (float*)buffer;
@@ -918,8 +917,7 @@ BMediaPlayer::Impl::_PostPeaks(const float* samples, int64 frames,
 	const media_raw_audio_format& format)
 {
 	if (!fHasTarget || frames <= 0
-		|| (format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-			!= media_raw_audio_format::B_AUDIO_FLOAT)
+		|| format.format != media_raw_audio_format::B_AUDIO_FLOAT)
 		return;
 
 	const uint32 channels = format.channel_count < 8 ? format.channel_count : 8;

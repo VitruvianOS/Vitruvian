@@ -13,4 +13,4 @@ TranslatorAddOn(
 
 	RDEF AVIFTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-AVIFTranslator" add-ons/translators/avif)
+DoCatalogs("x-vnd.vos-AVIFTranslator" add-ons/translators/avif)

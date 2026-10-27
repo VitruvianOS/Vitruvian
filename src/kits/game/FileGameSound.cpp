@@ -219,14 +219,48 @@ BFileGameSound::BFileGameSound(const char* file, bool looping,
 }
 
 
-BFileGameSound::BFileGameSound(BDataIO* /*data*/, bool /*looping*/,
+BFileGameSound::BFileGameSound(BDataIO* data, bool looping,
 	BGameSoundDevice* device)
 	:
 	BStreamingGameSound(device)
 {
-	// BDataIO-backed playback not supported in Vitruvian — apps should use
-	// entry_ref or path.
-	SetInitError(B_NOT_SUPPORTED);
+	(void)looping;
+	status_t status = Init(data);
+	if (status != B_OK)
+		SetInitError(status);
+}
+
+
+status_t
+BFileGameSound::Init(BDataIO* data)
+{
+	if (data == NULL)
+		return B_BAD_VALUE;
+
+	FileGameSoundState* s = AttachState(this);
+	if (s == NULL)
+		return B_NO_MEMORY;
+
+	s->file = new(std::nothrow) BMediaFile(data);
+	if (s->file == NULL || s->file->InitCheck() != B_OK)
+		return s->file != NULL ? s->file->InitCheck() : B_NO_MEMORY;
+
+	s->track = s->file->TrackAt(0);
+	if (s->track == NULL)
+		return B_ERROR;
+
+	BMediaFormat mfmt;
+	if (s->track->DecodedFormat(&mfmt) != B_OK || !mfmt.IsRawAudio())
+		return B_ERROR;
+	media_to_gs_format(&s->format, &mfmt.format.u.raw_audio);
+	s->frameStride = get_sample_size(s->format.format)
+		* s->format.channel_count;
+
+	gs_id sound = 0;
+	status_t err = Device()->CreateBuffer(&sound, this, &s->format);
+	if (err != B_OK)
+		return err;
+	return BGameSound::Init(sound);
 }
 
 

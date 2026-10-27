@@ -14,6 +14,7 @@
 #include <media2/MediaFormat.h>
 
 
+class BDataIO;
 class BMediaTrack;
 
 
@@ -22,6 +23,8 @@ public:
 								BMediaFile(const entry_ref* ref);
 								BMediaFile(const entry_ref* ref, int32 flags);
 								BMediaFile(const BUrl& url);
+								// 'source' must outlive the file; seekable if a BPositionIO
+								BMediaFile(BDataIO* source, int32 flags = 0);
 								BMediaFile(const entry_ref* outputRef,
 									const media_file_format* fileFormat,
 									int32 flags = 0);

@@ -13,7 +13,20 @@
 #include <List.h>
 #include <string.h>
 
+#include <mutex>
+
 #include "GSUtility.h"
+
+
+// The app thread locks and unlocks pages while the mixer thread plays them.
+static std::mutex sPageLock;
+
+
+static void
+fill_silence(const gs_audio_format& format, void* buffer, size_t bytes)
+{
+	memset(buffer, format.format == gs_audio_format::B_GS_U8 ? 0x80 : 0, bytes);
+}
 
 
 BPushGameSound::BPushGameSound(size_t inBufferFrameCount,
@@ -33,6 +46,7 @@ BPushGameSound::BPushGameSound(size_t inBufferFrameCount,
 	fBufferSize = fPageSize * fPageCount;
 
 	fBuffer = new char[fBufferSize];
+	fill_silence(*format, fBuffer, fBufferSize);
 }
 
 
@@ -59,17 +73,24 @@ BPushGameSound::~BPushGameSound()
 BPushGameSound::lock_status
 BPushGameSound::LockNextPage(void **out_pagePtr, size_t *out_pageSize)
 {
+	std::lock_guard<std::mutex> _(sPageLock);
+
+	if (fBuffer == NULL || fPageSize == 0)
+		return lock_failed;
+
 	// the user can not lock every page
-	if (fPageLocked->CountItems() > fPageCount - 1)
+	if (fPageLocked->CountItems() > (int32)fPageCount - 1)
+		return lock_failed;
+
+	char* lockPage = &fBuffer[fLockPos];
+	if (fPageLocked->HasItem(lockPage))
 		return lock_failed;
 
 	// the user can't lock a page being played
-	if (fLockPos < fPlayPos
-		&& fLockPos + fPageSize > fPlayPos)
+	if (fLockPos / fPageSize == fPlayPos / fPageSize
+		&& fPlayPos % fPageSize != 0)
 		return lock_failed;
 
-	// lock the page
-	char * lockPage = &fBuffer[fLockPos];
 	fPageLocked->AddItem(lockPage);
 
 	// move the locker to the next page
@@ -87,6 +108,7 @@ BPushGameSound::LockNextPage(void **out_pagePtr, size_t *out_pageSize)
 status_t
 BPushGameSound::UnlockPage(void *in_pagePtr)
 {
+	std::lock_guard<std::mutex> _(sPageLock);
 	return (fPageLocked->RemoveItem(in_pagePtr)) ? B_OK : B_ERROR;
 }
 
@@ -151,63 +173,34 @@ BPushGameSound::SetStreamHook(void (*hook)(void * inCookie, void * inBuffer,
 void
 BPushGameSound::FillBuffer(void *inBuffer, size_t inByteCount)
 {
-	size_t bytes = inByteCount;
+	char* out = (char*)inBuffer;
+	std::lock_guard<std::mutex> _(sPageLock);
 
-	if (!BytesReady(&bytes))
+	if (fBuffer == NULL || fPageSize == 0) {
+		fill_silence(Format(), out, inByteCount);
 		return;
-
-	if (fPlayPos + bytes > fBufferSize) {
-		size_t remainder = fBufferSize - fPlayPos;
-			// Space left in buffer
-		char * buffer = (char*)inBuffer;
-
-		// fill the buffer with the samples left at the end of our buffer
-		memcpy(buffer, &fBuffer[fPlayPos], remainder);
-		fPlayPos = 0;
-
-		// fill the remainder of the buffer by looping to the start
-		// of the buffer if it isn't locked
-		bytes -= remainder;
-		if (BytesReady(&bytes)) {
-			memcpy(&buffer[remainder], fBuffer, bytes);
-			fPlayPos += bytes;
-		}
-	} else {
-		memcpy(inBuffer, &fBuffer[fPlayPos], bytes);
-		fPlayPos += bytes;
 	}
 
-	BStreamingGameSound::FillBuffer(inBuffer, inByteCount);
-}
-
-
-bool
-BPushGameSound::BytesReady(size_t * bytes)
-{
-	if (fPageLocked->CountItems() <= 0)
-		return true;
-
-	size_t start = fPlayPos;
-	size_t ready = fPlayPos;
-	int32 page = int32(start / fPageSize);
-
-	// return if there is nothing to do
-	if (fPageLocked->HasItem(&fBuffer[page * fPageSize]))
-		return false;
-
-	while (ready < *bytes) {
-		ready += fPageSize;
-		page = int32(ready / fPageSize);
-
-		if (fPageLocked->HasItem(&fBuffer[page * fPageSize])) {
-			// we have found a locked page
-			*bytes = ready - start - (ready - page * fPageSize);
-			return true;
+	while (inByteCount > 0) {
+		// a page the app still holds is not ready: wait on it
+		char* page = &fBuffer[(fPlayPos / fPageSize) * fPageSize];
+		if (fPageLocked->HasItem(page)) {
+			fill_silence(Format(), out, inByteCount);
+			return;
 		}
-	}
 
-	// all of the bytes are ready
-	return true;
+		size_t chunk = fPageSize - fPlayPos % fPageSize;
+		if (chunk > inByteCount)
+			chunk = inByteCount;
+
+		memcpy(out, &fBuffer[fPlayPos], chunk);
+		out += chunk;
+		inByteCount -= chunk;
+
+		fPlayPos += chunk;
+		if (fPlayPos >= fBufferSize)
+			fPlayPos = 0;
+	}
 }
 
 

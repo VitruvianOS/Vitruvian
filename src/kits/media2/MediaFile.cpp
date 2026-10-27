@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include <DataIO.h>
 #include <Entry.h>
 #include <Path.h>
 
@@ -134,6 +135,79 @@ public:
 };
 
 
+// #pragma mark - BDataIO source
+
+
+struct DataIOSource {
+	BDataIO*		io;
+	BPositionIO*	position;
+	off_t			offset;
+};
+
+
+static void
+data_io_need_data(GstAppSrc* src, guint length, gpointer cookie)
+{
+	DataIOSource* source = (DataIOSource*)cookie;
+	if (length == 0 || length > 65536)
+		length = 65536;
+
+	GstBuffer* buffer = gst_buffer_new_allocate(NULL, length, NULL);
+	GstMapInfo map;
+	if (buffer == NULL || !gst_buffer_map(buffer, &map, GST_MAP_WRITE)) {
+		if (buffer != NULL)
+			gst_buffer_unref(buffer);
+		gst_app_src_end_of_stream(src);
+		return;
+	}
+
+	ssize_t got = source->position != NULL
+		? source->position->ReadAt(source->offset, map.data, length)
+		: source->io->Read(map.data, length);
+	gst_buffer_unmap(buffer, &map);
+
+	if (got <= 0) {
+		gst_buffer_unref(buffer);
+		gst_app_src_end_of_stream(src);
+		return;
+	}
+
+	source->offset += got;
+	gst_buffer_set_size(buffer, got);
+	gst_app_src_push_buffer(src, buffer);
+}
+
+
+static gboolean
+data_io_seek_data(GstAppSrc*, guint64 offset, gpointer cookie)
+{
+	DataIOSource* source = (DataIOSource*)cookie;
+	if (source->position == NULL)
+		return FALSE;
+	source->offset = offset;
+	return TRUE;
+}
+
+
+static void
+data_io_source_setup(GstElement*, GstElement* element, gpointer cookie)
+{
+	DataIOSource* source = (DataIOSource*)cookie;
+	GstAppSrcCallbacks callbacks;
+	memset(&callbacks, 0, sizeof(callbacks));
+	callbacks.need_data = data_io_need_data;
+	callbacks.seek_data = data_io_seek_data;
+	gst_app_src_set_callbacks(GST_APP_SRC(element), &callbacks, source, NULL);
+
+	off_t size = 0;
+	if (source->position != NULL && source->position->GetSize(&size) == B_OK)
+		gst_app_src_set_size(GST_APP_SRC(element), size);
+	gst_app_src_set_stream_type(GST_APP_SRC(element),
+		source->position != NULL ? GST_APP_STREAM_TYPE_RANDOM_ACCESS
+			: GST_APP_STREAM_TYPE_STREAM);
+}
+
+
 // #pragma mark - BMediaFile::Impl
 
 
@@ -147,6 +221,7 @@ public:
 		fAppSrc(NULL),
 		fInitErr(B_NO_INIT),
 		fWriteMode(false),
+		fHasSource(false),
 		fFormatInfo(NULL),
 		fCodecType(B_CODEC_TYPE_UNKNOWN),
 		fDurationNs(0)
@@ -185,6 +260,18 @@ public:
 	// Discover every demuxed stream (audio, video, subtitle) via
 	// GstDiscoverer, then build a playbin pipeline that can actually
 	// deliver decoded frames for the readable ones.
+	// The source must outlive this object.
+	status_t OpenIO(BDataIO* io)
+	{
+		if (io == NULL)
+			return B_BAD_VALUE;
+		fSource.io = io;
+		fSource.position = dynamic_cast<BPositionIO*>(io);
+		fSource.offset = 0;
+		fHasSource = true;
+		return OpenUri("appsrc://");
+	}
+
 	status_t OpenUri(const char* uri)
 	{
 		if (uri == NULL)
@@ -196,8 +283,10 @@ public:
 		std::vector<BMediaFormat> encoded;
 		std::vector<int32> kinds;
 		std::vector<int32> streamIndexes;
-		status_t discErr = _DiscoverStreams(uri, encoded, kinds,
-			streamIndexes, &fDurationNs);
+		// discovery cannot pull from a BDataIO
+		status_t discErr = fHasSource ? B_NOT_SUPPORTED
+			: _DiscoverStreams(uri, encoded, kinds, streamIndexes,
+				&fDurationNs);
 		if (discErr != B_OK) {
 			// Discovery failed; still open a playbin so single-stream
 			// files keep working. Track list is rebuilt after preroll.
@@ -259,6 +348,11 @@ public:
 		// describe a subtitle payload without inventing a type.
 		GstElement* textSink = gst_element_factory_make("fakesink",
 			"vitruvian-text");
+
+		if (fHasSource) {
+			g_signal_connect(fPipeline, "source-setup",
+				G_CALLBACK(data_io_source_setup), &fSource);
+		}
 
 		g_object_set(fPipeline,
 			"uri",         uri,
@@ -826,6 +920,8 @@ public:
 	int32			fCodecType;
 	std::string		fOutputPath;
 	gint64			fDurationNs;
+	DataIOSource	fSource;
+	bool			fHasSource;
 };
 
 
@@ -849,6 +945,16 @@ BMediaFile::BMediaFile(const entry_ref* ref, int32 /*flags*/)
 	if (fImpl == NULL)
 		return;
 	fImpl->fInitErr = fImpl->Open(ref);
+}
+
+
+BMediaFile::BMediaFile(BDataIO* source, int32 /*flags*/)
+	:
+	fImpl(new(std::nothrow) Impl())
+{
+	if (fImpl == NULL)
+		return;
+	fImpl->fInitErr = fImpl->OpenIO(source);
 }
 
 

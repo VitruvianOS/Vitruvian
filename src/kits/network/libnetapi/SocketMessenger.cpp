@@ -139,7 +139,8 @@ BSocketMessenger::Unset()
 		return;
 
 	fSocket.Disconnect();
-	wait_for_thread(fPrivateData->fReplyReader, NULL);
+	if (fPrivateData->fReplyReader > 0)
+		wait_for_thread(fPrivateData->fReplyReader, NULL);
 	fPrivateData->fReplyReader = -1;
 	fPrivateData->ClearMessages();
 

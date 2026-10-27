@@ -180,8 +180,11 @@ BInfoWindow::Quit()
 	fStopCalc = true;
 
 	// wait until CalcSize thread has terminated before closing window
-	status_t result;
-	wait_for_thread(fCalcThreadID, &result);
+	if (fCalcThreadID >= 0) {
+		status_t result;
+		wait_for_thread(fCalcThreadID, &result);
+		fCalcThreadID = -1;
+	}
 
 	_inherited::Quit();
 }
@@ -290,8 +293,11 @@ BInfoWindow::MessageReceived(BMessage* message)
 			fStopCalc = true;
 			// Wait until any current CalcSize thread has terminated before
 			// starting a new one
-			status_t result;
-			wait_for_thread(fCalcThreadID, &result);
+			if (fCalcThreadID >= 0) {
+				status_t result;
+				wait_for_thread(fCalcThreadID, &result);
+				fCalcThreadID = -1;
+			}
 
 			// Start recalculating..
 			fStopCalc = false;

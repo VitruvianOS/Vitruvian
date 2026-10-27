@@ -17,12 +17,16 @@
 #include <media2/MediaConnection.h>
 #include <media2/MediaGraph.h>
 #include <media2/MediaUnit.h>
+#include <media2/PortMatcher.h>
 #include <media2/SoundFontSynth.h>
 #include <midi/MidiStore.h>
 #include <midi/Synth.h>
 #include <midi2/MidiProducer.h>
 
 #include <midi2/MidiAccess.h>
+
+
+using namespace BPrivate::media;
 
 
 static volatile bool sMidiInterrupt = false;
@@ -48,20 +52,7 @@ link_synth_to_device(BSoundFontSynth* synth)
 	if (MediaGraph()->GetForeignPorts((uint32)deviceId, &ports) != B_OK)
 		return;
 
-	for (int32 i = 0; i < synth->CountOutputs(); i++) {
-		BMediaOutput* output = synth->OutputAt(i);
-		if (output == NULL)
-			continue;
-		for (int32 p = 0; p < ports.CountItems(); p++) {
-			const BMediaGraph::ForeignPort* port = ports.ItemAt(p);
-			if (port == NULL)
-				continue;
-			if (port->direction != "in")
-				continue;
-			if (MediaGraph()->Connect(output, port) == B_OK)
-				break;
-		}
-	}
+	LinkSynthOutputs(synth, ports);
 }
 
 

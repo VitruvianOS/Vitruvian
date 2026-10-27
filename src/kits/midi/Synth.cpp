@@ -15,11 +15,15 @@
 #include <string.h>
 
 #include <media2/MediaConnection.h>
+#include <media2/PortMatcher.h>
 
 #include <Entry.h>
 #include <List.h>
 #include <ObjectList.h>
 #include <Path.h>
+
+
+using namespace BPrivate::media;
 
 
 BSynth* be_synth = NULL;
@@ -40,23 +44,9 @@ _midi_link_synth_to_device(BSoundFontSynth* synth)
 	err = MediaGraph()->GetForeignPorts((uint32)deviceId, &ports);
 	if (err != B_OK)
 		return;
-	for (int32 i = 0; i < synth->CountOutputs(); i++) {
-		BMediaOutput* output = synth->OutputAt(i);
-		if (output == NULL)
-			continue;
-		// Output i feeds the i-th input port of the device.
-		int32 seen = 0;
-		for (int32 p = 0; p < ports.CountItems(); p++) {
-			const BMediaGraph::ForeignPort* port = ports.ItemAt(p);
-			if (port != NULL && port->direction == "in" && seen++ == i) {
-				status_t c = MediaGraph()->Connect(output, port);
-				if (c == B_OK) {
-					linked = true;
-					break;
-				}
-			}
-		}
-	}
+
+	if (LinkSynthOutputs(synth, ports))
+		linked = true;
 }
 
 

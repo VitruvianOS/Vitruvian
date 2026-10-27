@@ -1,0 +1,34 @@
+# Doxygen config for the public API in headers/os with doxygen-awesome-css.
+# Needs Doxygen 1.10.0 or newer for markdown links between pages.
+
+PROJECT_NAME           = "Vitruvian Developer Documentation"
+PROJECT_BRIEF          = "BeOS inspired OS on Linux"
+OUTPUT_DIRECTORY       = docs/out
+
+INPUT                  = docs/pages docs/kits.dox headers/os
+FILE_PATTERNS          = *.h *.md *.dox
+EXTENSION_MAPPING      = h=C++
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = docs/pages/index.md
+INPUT_FILTER           = docs/kitfilter.sh
+LAYOUT_FILE            = docs/DoxygenLayout.xml
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# doxygen-awesome-css requirements
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_COPY_CLIPBOARD    = NO
+HTML_EXTRA_STYLESHEET  = docs/doxygen-awesome/doxygen-awesome.css \
+                         docs/sidebar.css
+HTML_HEADER            = docs/header.html
+HTML_EXTRA_FILES       = docs/doxygen-awesome/doxygen-awesome-darkmode-toggle.js \
+                         docs/doxygen-awesome/doxygen-awesome-fragment-copy-button.js \
+                         docs/doxygen-awesome/doxygen-awesome-paragraph-link.js

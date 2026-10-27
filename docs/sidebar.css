@@ -1,0 +1,8 @@
+#nav-tree-contents>ul>li>div.item {
+	display: none;
+}
+
+#nav-tree-contents>ul>li>ul.children_ul {
+	display: block !important;
+	margin-left: -16px;
+}

@@ -217,7 +217,7 @@ status_t
 BDirectory::SetTo(const char* path)
 {
 	// open node
-	status_t error = _SetTo(-1, path, true);
+	status_t error = _SetTo(AT_FDCWD, path, true);
 	if (error != B_OK)
 		return error;
 
@@ -708,7 +708,7 @@ create_directory(const char* path, mode_t mode)
 				return B_NOT_A_DIRECTORY;
 		} else {
 			// it doesn't exist -- create it
-			error = _kern_create_dir(-1, dirPath.Path(), mode & ~__gUmask);
+			error = _kern_create_dir(AT_FDCWD, dirPath.Path(), mode & ~__gUmask);
 			if (error != B_OK)
 				return error;
 		}

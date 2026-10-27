@@ -1376,9 +1376,6 @@ CortexWindow::_OpenInfo(int32 nodeIndex)
 				<< (node->muted ? " (muted)" : "") << "\n";
 	}
 
-	text << "\nLatency, driver and clock role are not queryable through\n";
-	text << "BMediaGraph today; listed as kit follow-ups in REPORT.md.\n";
-
 	BAlert* alert = new(std::nothrow) BAlert("Node info", text.String(), "OK");
 	if (alert != NULL)
 		alert->Go();
@@ -1982,6 +1979,8 @@ CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
 		groupMenu->SetTargetForItems(this);
 		menu->AddItem(groupMenu);
 	}
+	// Add-on groups go next to the catalog's, LV2 right below LADSPA.
+	int32 groupsEnd = menu->CountItems();
 
 	_ScanAddOns();
 	bool separated = false;
@@ -2014,7 +2013,11 @@ CortexWindow::_PopulateAddMenu(BMenu* menu, const BPoint* at)
 			BMenu* groupMenu = groupItem != NULL ? groupItem->Submenu() : NULL;
 			if (groupMenu == NULL) {
 				groupMenu = new BMenu(group.String());
-				menu->AddItem(groupMenu);
+				int32 index = groupsEnd++;
+				BMenuItem* ladspa = menu->FindItem("LADSPA");
+				if (group == "LV2" && ladspa != NULL)
+					index = menu->IndexOf(ladspa) + 1;
+				menu->AddItem(groupMenu, index);
 			}
 			groupMenu->AddItem(item);
 		}

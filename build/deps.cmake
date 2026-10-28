@@ -365,6 +365,14 @@ DeclareDependency(
 	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
 )
 
+# IMAP4/POP3/SMTP and MIME for the WebMail app.
+DeclareDependency(
+	LIBETPAN
+	LIBRARIES  "etpan"
+	PACKAGES   "libetpan-dev"
+	RUNTIMES   "libetpan20t64"
+)
+
 DeclareDependency(
 	GLESV2
 	LIBRARIES  "GLESv2"

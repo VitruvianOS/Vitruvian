@@ -102,7 +102,7 @@ get_dev_packages() {
             printf '%s' \
                 "linux-headers-$(get_kernel_flavour) pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
@@ -117,7 +117,7 @@ get_dev_packages() {
             printf '%s' \
                 "linux-headers-arm64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
@@ -132,7 +132,7 @@ get_dev_packages() {
             printf '%s' \
                 "linux-headers-armmp pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
@@ -146,7 +146,7 @@ get_dev_packages() {
             printf '%s' \
                 "linux-headers-riscv64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \

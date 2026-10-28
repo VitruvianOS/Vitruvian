@@ -118,6 +118,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	USB
+	LIBRARIES	"usb-1.0"
+	PACKAGES	"libusb-1.0-0-dev"
+	RUNTIMES	"libusb-1.0-0 (>= 2:1.0.26)"
+)
+
+DeclareDependency(
 	HWDATA
 	RUNTIMES	"hwdata | pci.ids"
 )

@@ -13,6 +13,7 @@
 
 class BButton;
 class BListView;
+class BPopUpMenu;
 class BStringView;
 class BTextControl;
 class Phone;
@@ -23,12 +24,14 @@ enum {
 	kMsgDialReply		= 'phDR',
 	kMsgHangUpAll		= 'phHU',
 	kMsgOpReply			= 'phOP',
-	kMsgKeypadKey		= 'phKY'
+	kMsgKeypadKey		= 'phKY',
+	kMsgLineSelected	= 'phLN'
 };
 
 
-// Keypad plus call log; calls land in the in-call window owned by the
-// Phone app as soon as the modem reports the call active.
+// Keypad plus call log and a line chooser; modem and SIP lines both
+// appear there and calls land in the in-call window owned by the
+// Phone app as soon as the line reports the call active.
 class DialerWindow : public BWindow {
 public:
 								DialerWindow(const BRect& frame);
@@ -36,6 +39,11 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 
 			void				AppendKeypadKey(char key);
+			void				RefreshLines();
+
+			// Path of the line the dialer will use; empty means
+			// "first line in the roster".
+			const char*			SelectedLine();
 
 private:
 			void				_Dial();
@@ -47,6 +55,7 @@ private:
 			BListView*			fLogView;
 			BButton*			fDialButton;
 			BButton*			fHangUpButton;
+			BPopUpMenu*			fLineMenu;
 };
 
 

@@ -13,6 +13,7 @@
 
 class BButton;
 class BListView;
+class BPopUpMenu;
 class BTextControl;
 class MessageStore;
 
@@ -22,12 +23,15 @@ enum {
 	kMsgSend			= 'msSD',
 	kMsgSendReply		= 'msSR',
 	kMsgDeleteThread	= 'msDT',
-	kMsgStoreChanged	= 'msCH'
+	kMsgStoreChanged	= 'msCH',
+	kMsgLinesChanged	= 'msLC',
+	kMsgLineSelected	= 'msLN'
 };
 
 
-// SMS browser: thread list per number on the left, conversation and
-// compose line on the right.
+// SMS/SIP-message browser: thread list per number on the left,
+// conversation and compose line on the right. The line chooser picks
+// which modem or SIP account carries the outgoing message.
 class MessagesWindow : public BWindow {
 public:
 								MessagesWindow(const BRect& frame,
@@ -42,12 +46,15 @@ private:
 			void				_DeleteThread();
 			void				_SelectionChanged();
 			const char*			_SelectedNumber();
+			void				_RefreshLines();
+			const char*			_SelectedLine();
 
 			MessageStore*		fStore;
 			BListView*			fThreadList;
 			BListView*			fConversationList;
 			BTextControl*		fNumberControl;
 			BTextControl*		fComposeControl;
+			BPopUpMenu*			fLineMenu;
 };
 
 

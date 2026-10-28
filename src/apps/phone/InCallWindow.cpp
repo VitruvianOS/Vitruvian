@@ -34,6 +34,25 @@ _DtmfMessage(const char* digit)
 }
 
 
+// Finds the line that owns an active or ringing call; the in-call
+// window drives whichever line the call landed on, modem or SIP.
+static BModem*
+_ActiveLine()
+{
+	BTelephonyRoster* roster = BTelephonyRoster::Default();
+	for (int32 i = 0; i < roster->CountModems(); i++) {
+		BModem* modem = roster->ModemAt(i);
+		if (modem == NULL)
+			continue;
+		uint32 state = modem->CallState();
+		if (state != B_TELEPHONY_CALL_UNKNOWN
+				&& state != B_TELEPHONY_CALL_TERMINATED)
+			return modem;
+	}
+	return roster->ModemAt(0);
+}
+
+
 InCallWindow::InCallWindow(const char* number)
 	:
 	BWindow(BRect(80, 80, 360, 560), B_TRANSLATE("Call in progress"),
@@ -154,7 +173,7 @@ void
 InCallWindow::_AppendDtmf(const char* digit)
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	BModem* modem = _ActiveLine();
 	if (modem == NULL || digit == NULL)
 		return;
 
@@ -187,7 +206,7 @@ void
 InCallWindow::_Hold()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	BModem* modem = _ActiveLine();
 	if (modem != NULL)
 		modem->Hold(BMessenger(this), kMsgOpReply);
 }
@@ -197,7 +216,7 @@ void
 InCallWindow::_HangUp()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	BModem* modem = _ActiveLine();
 	if (modem != NULL)
 		modem->HangUp(BMessenger(this), kMsgOpReply);
 	fStatusLabel->SetText(B_TRANSLATE("Hanging up..."));
@@ -209,7 +228,7 @@ void
 InCallWindow::_Update()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	BModem* modem = _ActiveLine();
 	if (modem == NULL)
 		return;
 

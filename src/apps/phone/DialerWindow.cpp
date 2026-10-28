@@ -16,12 +16,17 @@
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <Locale.h>
+#include <Menu.h>
+#include <MenuField.h>
+#include <MenuItem.h>
 #include <Messenger.h>
+#include <PopUpMenu.h>
 #include <ScrollView.h>
 #include <StringView.h>
 #include <TextControl.h>
 
 #include <stdio.h>
+#include <string.h>
 
 #include "CallLog.h"
 #include "Phone.h"
@@ -75,6 +80,9 @@ DialerWindow::DialerWindow(const BRect& frame)
 		new BMessage(kMsgHangUpAll));
 	fHangUpButton->SetEnabled(false);
 
+	fLineMenu = new BPopUpMenu("lines");
+	RefreshLines();
+
 	BGroupView* keypad = new BGroupView(B_TRANSLATE("Keypad"),
 		B_HORIZONTAL, 4);
 	BLayoutBuilder::Group<>(keypad, B_VERTICAL, 4)
@@ -111,6 +119,7 @@ DialerWindow::DialerWindow(const BRect& frame)
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_SMALL_INSETS)
 		.Add(fNumberControl)
+		.Add(new BMenuField("line", B_TRANSLATE("Line:"), fLineMenu))
 		.Add(fStatusView)
 		.AddGrid()
 			.Add(fDialButton, 0, 0)
@@ -130,6 +139,53 @@ DialerWindow::DialerWindow(const BRect& frame)
 					_FormatLogEntry(*entry)));
 		}
 	}
+}
+
+
+void
+DialerWindow::RefreshLines()
+{
+	fLineMenu->RemoveItems(0, fLineMenu->CountItems(), true);
+
+	BTelephonyRoster* roster = BTelephonyRoster::Default();
+	int32 count = roster->CountModems();
+	if (count == 0) {
+		BMessage empty(kMsgLineSelected);
+		fLineMenu->AddItem(new BMenuItem(B_TRANSLATE("No lines"),
+			new BMessage(empty)));
+		fLineMenu->SetEnabledForItems(false);
+		return;
+	}
+
+	fLineMenu->SetEnabledForItems(true);
+	for (int32 i = 0; i < count; i++) {
+		BModem* modem = roster->ModemAt(i);
+		if (modem == NULL)
+			continue;
+
+		const char* label = modem->OperatorName();
+		if (label == NULL || label[0] == '\0')
+			label = modem->Path();
+		BMessage message(kMsgLineSelected);
+		message.AddString("line", modem->Path());
+		BMenuItem* item = new BMenuItem(label, new BMessage(message));
+		fLineMenu->AddItem(item);
+		if (i == 0)
+			item->SetMarked(true);
+	}
+}
+
+
+const char*
+DialerWindow::SelectedLine()
+{
+	BMenuItem* item = fLineMenu->FindMarked();
+	if (item == NULL)
+		return NULL;
+
+	const char* path = NULL;
+	item->Message()->FindString("line", &path);
+	return path;
 }
 
 
@@ -170,6 +226,10 @@ DialerWindow::MessageReceived(BMessage* message)
 			_UpdateStatus();
 			break;
 		}
+		case kTelephonyMsgModemAdded:
+		case kTelephonyMsgModemRemoved:
+			RefreshLines();
+			break;
 		case kTelephonyMsgCallStateChanged:
 		case kTelephonyMsgCallAdded:
 		case kTelephonyMsgCallRemoved:
@@ -195,9 +255,11 @@ void
 DialerWindow::_Dial()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	const char* line = SelectedLine();
+	BModem* modem = line != NULL ? roster->ModemForPath(line)
+		: roster->ModemAt(0);
 	if (modem == NULL) {
-		fStatusView->SetText(B_TRANSLATE("No modem"));
+		fStatusView->SetText(B_TRANSLATE("No line"));
 		return;
 	}
 
@@ -208,7 +270,7 @@ DialerWindow::_Dial()
 	}
 
 	// Contacts lookup: bind to the contacts kit when it exists; the
-	// tree has none yet, so dialing uses the raw number.
+	// tree has none yet, so dialing uses the raw number or SIP URI.
 	status_t status = modem->Dial(number, BMessenger(this), kMsgDialReply);
 	if (status != B_OK) {
 		fStatusView->SetText(B_TRANSLATE("Dial failed to dispatch"));
@@ -225,7 +287,9 @@ void
 DialerWindow::_HangUpAll()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	const char* line = SelectedLine();
+	BModem* modem = line != NULL ? roster->ModemForPath(line)
+		: roster->ModemAt(0);
 	if (modem == NULL)
 		return;
 
@@ -238,9 +302,11 @@ void
 DialerWindow::_UpdateStatus()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	const char* line = SelectedLine();
+	BModem* modem = line != NULL ? roster->ModemForPath(line)
+		: roster->ModemAt(0);
 	if (modem == NULL) {
-		fStatusView->SetText(B_TRANSLATE("No modem"));
+		fStatusView->SetText(B_TRANSLATE("No line"));
 		fDialButton->SetEnabled(false);
 		fHangUpButton->SetEnabled(false);
 		return;
@@ -254,11 +320,14 @@ DialerWindow::_UpdateStatus()
 
 	if (!inCall) {
 		if (!roster->IsServiceAvailable())
-			fStatusView->SetText(B_TRANSLATE("No modem service"));
+			fStatusView->SetText(B_TRANSLATE("No telephony service"));
 		else {
 			BString text(B_TRANSLATE("Ready"));
-			text << " (" << modem->AccessTypeString() << " "
-				<< modem->SignalBars() << "/4)";
+			// SIP lines report no sampled signal; skip the bars.
+			if (strncmp(modem->Path(), "sip:", 4) != 0) {
+				text << " (" << modem->AccessTypeString() << " "
+					<< modem->SignalBars() << "/4)";
+			}
 			fStatusView->SetText(text.String());
 		}
 		return;

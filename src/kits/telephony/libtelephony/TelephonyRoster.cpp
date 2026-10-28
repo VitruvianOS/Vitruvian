@@ -14,6 +14,7 @@
 #include "Modem.h"
 #include "ModemManagerBackend.h"
 #include "SipBackend.h"
+#include "SipAccounts.h"
 #include "TelephonyBackend.h"
 
 
@@ -63,7 +64,12 @@ BTelephonyRoster::BTelephonyRoster()
 	// Both line types ride the same seam: the ModemManager backend
 	// brings the cellular modems, the SIP backend the VoIP accounts.
 	fBackends.push_back(ModemManagerBackend::Instance());
-	fBackends.push_back(SipBackend::Instance());
+
+	SipBackend* sip = SipBackend::Instance();
+	// Stored accounts come back from the Accounts kit before any
+	// watcher attaches, so lines exist on first enumeration.
+	BSipAccounts::Default()->LoadIntoBackend(sip);
+	fBackends.push_back(sip);
 
 	_TelephonyNotifier* notifier = new _TelephonyNotifier(this);
 	BLooper* looper = new BLooper("telephony_notifier");

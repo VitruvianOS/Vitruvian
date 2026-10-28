@@ -53,6 +53,12 @@ Messages::MessageReceived(BMessage* message)
 		case kTelephonyMsgSmsStateChanged:
 			_OnSmsStateChanged(message);
 			break;
+		case kTelephonyMsgModemAdded:
+		case kTelephonyMsgModemRemoved:
+			// Lines come and go; the window rebuilds its chooser.
+			if (fWindow != NULL)
+				fWindow->PostMessage(kMsgLinesChanged);
+			break;
 		default:
 			BApplication::MessageReceived(message);
 			break;

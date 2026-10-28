@@ -11,7 +11,11 @@
 #include <ListItem.h>
 #include <Locale.h>
 #include <ListView.h>
+#include <Menu.h>
+#include <MenuField.h>
+#include <MenuItem.h>
 #include <Messenger.h>
+#include <PopUpMenu.h>
 #include <ScrollView.h>
 #include <StringView.h>
 #include <TextControl.h>
@@ -53,6 +57,7 @@ MessagesWindow::MessagesWindow(const BRect& frame, MessageStore* store)
 		"", NULL);
 	fComposeControl = new BTextControl("compose", B_TRANSLATE("Message:"),
 		"", new BMessage(kMsgSend));
+	fLineMenu = new BPopUpMenu("lines");
 
 	BButton* sendButton = new BButton("send", B_TRANSLATE("Send"),
 		new BMessage(kMsgSend));
@@ -73,6 +78,8 @@ MessagesWindow::MessagesWindow(const BRect& frame, MessageStore* store)
 		.AddGroup(B_VERTICAL, 4)
 			.Add(conversationScroll)
 			.Add(fNumberControl)
+			.Add(new BMenuField("line", B_TRANSLATE("Line:"),
+				fLineMenu))
 			.AddGroup(B_HORIZONTAL, 4)
 				.Add(fComposeControl)
 				.Add(sendButton)
@@ -82,6 +89,7 @@ MessagesWindow::MessagesWindow(const BRect& frame, MessageStore* store)
 	threadScroll->SetExplicitSize(BSize(180, B_SIZE_UNSET));
 
 	fThreadList->SetSelectionMessage(new BMessage(kMsgThreadSelected));
+	_RefreshLines();
 	Refresh();
 }
 
@@ -111,6 +119,9 @@ MessagesWindow::MessageReceived(BMessage* message)
 		}
 		case kMsgStoreChanged:
 			Refresh();
+			break;
+		case kMsgLinesChanged:
+			_RefreshLines();
 			break;
 		default:
 			BWindow::MessageReceived(message);
@@ -173,10 +184,50 @@ MessagesWindow::_SelectionChanged()
 
 
 void
+MessagesWindow::_RefreshLines()
+{
+	fLineMenu->RemoveItems(0, fLineMenu->CountItems(), true);
+
+	BTelephonyRoster* roster = BTelephonyRoster::Default();
+	int32 count = roster->CountModems();
+	for (int32 i = 0; i < count; i++) {
+		BModem* modem = roster->ModemAt(i);
+		if (modem == NULL)
+			continue;
+
+		const char* label = modem->OperatorName();
+		if (label == NULL || label[0] == '\0')
+			label = modem->Path();
+		BMessage message(kMsgLineSelected);
+		message.AddString("line", modem->Path());
+		BMenuItem* item = new BMenuItem(label, new BMessage(message));
+		fLineMenu->AddItem(item);
+		if (i == 0)
+			item->SetMarked(true);
+	}
+}
+
+
+const char*
+MessagesWindow::_SelectedLine()
+{
+	BMenuItem* item = fLineMenu->FindMarked();
+	if (item == NULL)
+		return NULL;
+
+	const char* path = NULL;
+	item->Message()->FindString("line", &path);
+	return path;
+}
+
+
+void
 MessagesWindow::_Send()
 {
 	BTelephonyRoster* roster = BTelephonyRoster::Default();
-	BModem* modem = roster->ModemAt(0);
+	const char* line = _SelectedLine();
+	BModem* modem = line != NULL ? roster->ModemForPath(line)
+		: roster->ModemAt(0);
 	if (modem == NULL)
 		return;
 
@@ -186,6 +237,8 @@ MessagesWindow::_Send()
 			|| text == NULL || text[0] == '\0')
 		return;
 
+	// A SIP line carries the body as a MESSAGE; a modem line as
+	// SMS. The BModem call is the same either way.
 	status_t status = modem->SendMessage(number, text, BMessenger(this),
 		kMsgSendReply);
 	if (status != B_OK)

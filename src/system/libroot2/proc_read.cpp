@@ -198,6 +198,8 @@ proc_parse_stat(const char* text, struct proc_stat_info* info)
 		return false;
 
 	const char* p = paren + 1;
+	while (*p == ' ')
+		p++;
 
 	// Field 3 is the single-character state; skip it.
 	if (*p == '\0')

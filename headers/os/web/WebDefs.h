@@ -58,6 +58,12 @@ enum {
 	B_WEB_SCRIPT_MESSAGE		= 'WhSm',
 	// EvaluateJavaScript() reply. Field: B_WEB_SCRIPT_RESULT_FIELD.
 	B_WEB_SCRIPT_RESULT			= 'WhSr',
+	// The extension registry changed (enable, install, remove);
+	// re-read BWebExtensions and re-apply to the view.
+	B_WEB_EXTENSIONS_CHANGED	= 'WhEx',
+	// Blocked or failed subresource count for the current page
+	// changed; B_WEB_BLOCKED_COUNT_FIELD holds the new count.
+	B_WEB_PAGE_BLOCKED_COUNT	= 'WhBc',
 	B_WEB_DOWNLOAD_STARTED		= 'WhDs',
 	B_WEB_DOWNLOAD_PROGRESS		= 'WhDp',
 	B_WEB_DOWNLOAD_FINISHED		= 'WhDf',
@@ -118,6 +124,8 @@ enum {
 #define B_WEB_BODY_FIELD		"web:body"
 // B_WEB_SCRIPT_RESULT field: expression result string.
 #define B_WEB_SCRIPT_RESULT_FIELD	"web:result"
+// B_WEB_PAGE_BLOCKED_COUNT field: int32 count.
+#define B_WEB_BLOCKED_COUNT_FIELD	"web:blocked"
 
 
 #endif // WEB_DEFS_H

@@ -7,6 +7,7 @@
 
 #include <web/WebView.h>
 #include <web/WebDefs.h>
+#include <web/WebExtensions.h>
 
 #include <Alert.h>
 #include <Application.h>
@@ -95,9 +96,69 @@ static std::string sDefaultProfileDir;
 // One app-level download sink: the default session is shared by every
 // window, so its events must not fan out once per view.
 static BMessenger sDownloadTarget;
+
+// GM.* shim for userscripts: every call answers through the
+// netplusGM script message handler's reply promise.
+static const char* kGMPreludeSource =
+	"window.__netplusGM = (function () {\n"
+	"	function post(ext, method, args) {\n"
+	"		var payload = { ext: ext, method: method };\n"
+	"		for (var k in (args || {})) payload[k] = args[k];\n"
+	"		return window.webkit.messageHandlers.netplusGM\n"
+	"			.postMessage(JSON.stringify(payload))\n"
+	"			.then(function (text) {\n"
+	"				try { return JSON.parse(text); }\n"
+	"				catch (e) { return { ok: false }; }\n"
+	"			});\n"
+	"	}\n"
+	"	function addStyle(css) {\n"
+	"		var style = document.createElement('style');\n"
+	"		style.textContent = css;\n"
+	"		(document.head || document.documentElement)\n"
+	"			.appendChild(style);\n"
+	"		return style;\n"
+	"	}\n"
+	"	function wrap(ext) {\n"
+	"		var api = {\n"
+	"			getValue: function (key, fallback) {\n"
+	"				return post(ext, 'getValue',\n"
+	"					{ key: String(key) }).then(function (r) {\n"
+	"					return (r && r.ok) ? r.value : fallback;\n"
+	"				});\n"
+	"			},\n"
+	"			setValue: function (key, value) {\n"
+	"				return post(ext, 'setValue',\n"
+	"					{ key: String(key), value: String(value) });\n"
+	"			},\n"
+	"			xmlHttpRequest: function (params) {\n"
+	"				return post(ext, 'xmlHttpRequest', params || {});\n"
+	"			},\n"
+	"			addStyle: addStyle\n"
+	"		};\n"
+	"		api.GM_getValue = api.getValue;\n"
+	"		api.GM_setValue = api.setValue;\n"
+	"		api.GM_xmlhttpRequest = api.xmlHttpRequest;\n"
+	"		api.GM_addStyle = api.addStyle;\n"
+	"		return api;\n"
+	"	}\n"
+	"	return {\n"
+	"		getValue: function (ext, key) {\n"
+	"			return post(ext, 'getValue', { key: String(key) });\n"
+	"		},\n"
+	"		setValue: function (ext, key, value) {\n"
+	"			return post(ext, 'setValue',\n"
+	"				{ key: String(key), value: String(value) });\n"
+	"		},\n"
+	"		xmlHttpRequest: function (ext, params) {\n"
+	"			return post(ext, 'xmlHttpRequest', params || {});\n"
+	"		},\n"
+	"		addStyle: addStyle,\n"
+	"		wrap: wrap\n"
+	"	};\n"
+	"})();\n";
 static std::mutex sDownloadTargetMutex;
 static bool sDownloadListenerAttached = false;
-static const char sDownloadListenerKey;
+static const char sDownloadListenerKey = 0;
 
 
 static void
@@ -264,6 +325,9 @@ struct BWebView::WebViewImpl {
 	// Queued until the bridge exists at attach time.
 	std::vector<std::string>					fScriptMessageHandlers;
 
+	// App-owned extension registry; applied per navigation.
+	BWebExtensions*								fExtensions;
+
 #ifdef HAS_WPE
 	CompositorAdapter*	fCompositor;
 	EventAdapter*		fEventAdapter;
@@ -308,7 +372,8 @@ struct BWebView::WebViewImpl {
 		:
 		fProgress(0.0),
 		fLoading(false),
-		fHostView(NULL)
+		fHostView(NULL),
+		fExtensions(NULL)
 #ifdef HAS_WPE
 		,
 		fCompositor(NULL),
@@ -370,6 +435,28 @@ struct BWebView::WebViewImpl {
 		}
 		for (DialogState* state : pending)
 			finishDialog(state, false, "");
+	}
+
+	// GLib thread (navigation handler) or window thread (settings
+	// change): sync the extension payloads for one URL.
+	void			ApplyExtensionsForURL(const std::string& url)
+	{
+		if (fBridge == NULL || fExtensions == NULL)
+			return;
+		std::vector<WebExtensionScript> scripts
+			= fExtensions->ScriptsForURL(url.c_str());
+		if (fExtensions->UsesGM(url.c_str())) {
+			WebExtensionScript prelude;
+			prelude.id = "__gm";
+			prelude.source = kGMPreludeSource;
+			prelude.atDocumentStart = true;
+			scripts.insert(scripts.begin(), prelude);
+		}
+		std::vector<WebExtensionStyle> styles
+			= fExtensions->StylesForURL(url.c_str());
+		std::vector<WebExtensionFilter> filters
+			= fExtensions->FiltersForURL(url.c_str());
+		fBridge->SetPageExtensions(scripts, styles, filters);
 	}
 #endif
 };
@@ -925,6 +1012,26 @@ BWebView::AttachedToWindow()
 				msg.AddString(B_WEB_BODY_FIELD, body.c_str());
 				fTarget.SendMessage(&msg);
 			});
+	}
+
+	// Extensions: the registry is app-owned; the bridge re-applies
+	// the matching payloads at each navigation decision.
+	if (fImpl->fExtensions != NULL) {
+		fImpl->fBridge->SetGMExtensions(fImpl->fExtensions);
+		fImpl->fBridge->SetNavigationStartingHandler(
+			[this](const std::string& url) {
+				fImpl->ApplyExtensionsForURL(url);
+			});
+		fImpl->fBridge->onBlockedCountChanged = [this](int32_t count) {
+			if (!fTarget.IsValid())
+				return;
+			BMessage msg(B_WEB_PAGE_BLOCKED_COUNT);
+			msg.AddInt32(B_WEB_BLOCKED_COUNT_FIELD, count);
+			fTarget.SendMessage(&msg);
+		};
+		fImpl->fBridge->PreloadContentFilters(
+			fImpl->fExtensions->AllFilters());
+		fImpl->ApplyExtensionsForURL(fImpl->fCurrentURL.String());
 	}
 #endif
 }
@@ -2106,6 +2213,30 @@ BWebView::SetLocalSchemeDirectory(const char* scheme, const char* path)
 
 
 void
+BWebView::SetExtensions(BWebExtensions* extensions)
+{
+	fImpl->fExtensions = extensions;
+#ifdef HAS_WPE
+	if (fImpl->fBridge != NULL && extensions != NULL) {
+		fImpl->fBridge->SetGMExtensions(extensions);
+		fImpl->ApplyExtensionsForURL(fImpl->fCurrentURL.String());
+	}
+#endif
+}
+
+
+int32
+BWebView::BlockedRequestCount() const
+{
+#ifdef HAS_WPE
+	if (fImpl->fBridge != NULL)
+		return fImpl->fBridge->BlockedCount();
+#endif
+	return 0;
+}
+
+
+void
 BWebView::NotifyFullScreen(bool entered)
 {
 	if (fImpl->fBridge == NULL)
@@ -2131,6 +2262,10 @@ void
 BWebView::ClearDefaultProfileData() {}
 void
 BWebView::SetBlockedDomains(const char*) {}
+void
+BWebView::SetExtensions(BWebExtensions*) {}
+int32
+BWebView::BlockedRequestCount() const { return 0; }
 void
 BWebView::SetJavaScriptEnabled(bool) {}
 void

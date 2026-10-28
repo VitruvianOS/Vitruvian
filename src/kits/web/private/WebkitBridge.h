@@ -9,6 +9,8 @@
 #include <glib.h>
 #include <wpe/webkit.h>
 
+#include <web/WebExtensions.h>
+
 #include <atomic>
 #include <functional>
 #include <map>
@@ -52,8 +54,29 @@ struct WebKitBridge {
 									bool atDocStart);
 			void				AddUserStyleSheet(const std::string& css);
 			void				RegisterScriptMessageHandler(
-										const std::string& name,
-										std::function<void(const std::string&)> cb);
+									const std::string& name,
+									std::function<void(const std::string&)> cb);
+
+			// Extension payloads for the current page: keyed by
+			// extension id, re-applied on every navigation. Runs
+			// synchronously on the GLib thread.
+			void				SetPageExtensions(
+									const std::vector<WebExtensionScript>& scripts,
+									const std::vector<WebExtensionStyle>& styles,
+									const std::vector<WebExtensionFilter>& filters);
+			// Compiles every enabled filter up front so the first
+			// navigation only attaches.
+			void				PreloadContentFilters(
+									const std::vector<WebExtensionFilter>& filters);
+			// GM.* storage host; not owned.
+			void				SetGMExtensions(BWebExtensions* extensions);
+			// Invoked on the GLib thread inside decide-policy,
+			// before the navigation proceeds.
+			void				SetNavigationStartingHandler(
+									std::function<void(const std::string&)> fn);
+
+			int32_t				BlockedCount() const
+									{ return fBlockedCount.load(); }
 
 			// Cached state — safe to call from any thread.
 			bool				CanGoBack() const;
@@ -139,6 +162,9 @@ struct WebKitBridge {
 			// image URI under the pointer ("" when none).
 			std::function<void(const std::string&,
 				const std::string&)>				onHoverChanged;
+			// Main-frame navigation about to start (decide-policy,
+			// GLib thread): re-apply the page extension set.
+			std::function<void(const std::string&)>	onNavigationStarting;
 			// Cursor shape id (B_CURSOR_ID_*) for the current hit target.
 			std::function<void(int32)>				onCursorChanged;
 			// Context menu request with hit URIs; runs on the GLib
@@ -153,6 +179,9 @@ struct WebKitBridge {
 									onRunFileChooser;
 			std::function<void(const std::string& title,
 				const std::string& body)>			onShowNotification;
+			// Blocked or failed subresource count for the current
+			// page; posted after every change, on the GLib thread.
+			std::function<void(int32_t)>			onBlockedCountChanged;
 			// Download fan-out from the shared per-session handler.
 			std::function<void(const struct DownloadEntry&)>
 									onDownloadStarted;
@@ -169,6 +198,13 @@ private:
 								int autoplayPolicy);
 			void				_ConnectSignals();
 			void				_UpdateCachedNavState();
+
+			// GLib thread only.
+			void				_ApplyPageExtensions(
+									const std::vector<WebExtensionScript>& scripts,
+									const std::vector<WebExtensionStyle>& styles,
+									const std::vector<WebExtensionFilter>& filters);
+			std::string			_HandleGMCall(const std::string& body);
 
 			bool				fValid;
 			// crash and terminated can both fire for one crash: the
@@ -199,7 +235,22 @@ private:
 			// by content so a re-add replaces instead of stacking.
 			std::map<std::string, WebKitUserScript*> fUserScripts;
 
-			std::function<bool(const std::string&)>
+			// Extension payloads applied for the current page; the
+			// maps are keyed "ext:<id>" and re-synced per navigation.
+			std::map<std::string, WebKitUserScript*> fPageScripts;
+			std::map<std::string, WebKitUserStyleSheet*> fPageStyles;
+			std::map<std::string, WebKitUserContentFilter*> fPageFilters;
+			// Bumped per re-sync: queued filter compiles that finish
+			// after the page moved on drop their result.
+			std::atomic<uint64_t>	fExtensionGeneration;
+			std::atomic<int32_t>	fBlockedCount;
+			// Shared with queued filter callbacks: false once the
+			// destructor started, so a late compile touches nothing.
+			std::shared_ptr<std::atomic<bool> >	fAlive;
+			// GM.* storage host; not owned.
+			BWebExtensions*		fGMExtensions;
+
+			std::function<void(const std::string&)>
 									fNotificationPermissionHandler;
 
 	// GObject signal handlers
@@ -209,6 +260,10 @@ private:
 	static void		_OnNotifyURI(WebKitWebView*, GParamSpec*, gpointer);
 	static gboolean	_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision*,
 						WebKitPolicyDecisionType, gpointer);
+	static void		_OnResourceLoadFailed(WebKitWebView*, WebKitWebResource*,
+						GError*, gpointer);
+	static void		_OnGMMessage(WebKitUserContentManager*,
+						WebKitScriptMessageReply*, JSCValue*, gpointer);
 	static gboolean	_OnScriptDialog(WebKitWebView*, WebKitScriptDialog*,
 						gpointer);
 	static gboolean	_OnPermissionRequest(WebKitWebView*,

@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "CortexDump.h"
+#include "CortexMediaUnits.h"
 #include "CortexWindow.h"
 
 
@@ -18,7 +19,8 @@ const char kCortexSignature[] = "application/x-vnd.vos-Cortex";
 CortexApp::CortexApp()
 	:
 	BApplication(kCortexSignature),
-	fDumpRequested(false)
+	fDumpRequested(false),
+	fListUnitsRequested(false)
 {
 }
 
@@ -29,6 +31,8 @@ CortexApp::ArgvReceived(int32 argc, char** argv)
 	for (int32 i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--dump") == 0)
 			fDumpRequested = true;
+		else if (strcmp(argv[i], "--list-units") == 0)
+			fListUnitsRequested = true;
 	}
 }
 
@@ -36,6 +40,16 @@ CortexApp::ArgvReceived(int32 argc, char** argv)
 void
 CortexApp::ReadyToRun()
 {
+	if (fListUnitsRequested) {
+		for (int32 i = 0; i < CortexUnitCatalog::CountUnits(); i++) {
+			const CortexUnitInfo* info = CortexUnitCatalog::UnitInfoAt(i);
+			if (info != NULL)
+				printf("%s\t%s\t%s\n", info->id, info->name, info->kind);
+		}
+		PostMessage(B_QUIT_REQUESTED);
+		return;
+	}
+
 	if (fDumpRequested) {
 		BString text;
 		status_t status = RunGraphDump(text);

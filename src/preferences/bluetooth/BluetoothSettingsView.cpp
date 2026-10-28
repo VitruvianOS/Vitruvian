@@ -88,11 +88,18 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 		? B_CONTROL_ON : B_CONTROL_OFF);
 
 	fDeviceClassView = new BStringView("deviceClass", "");
+	fDeviceClassView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fPairableCheckBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fReceiveCheckBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+
+	BLayoutItem* menuBarItem = fLocalDevicesMenuField->CreateMenuBarLayoutItem();
+	menuBarItem->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BLayoutBuilder::Grid<>(this, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
+		.SetColumnWeight(1, 1.0f)
 		.Add(fLocalDevicesMenuField->CreateLabelLayoutItem(), 0, 0)
-		.Add(fLocalDevicesMenuField->CreateMenuBarLayoutItem(), 1, 0)
+		.Add(menuBarItem, 1, 0)
 
 		.Add(fInquiryTimeControl, 0, 1, 2)
 

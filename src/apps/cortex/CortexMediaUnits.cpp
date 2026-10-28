@@ -105,13 +105,13 @@ _EncodedAudioCaps(int32 encoding)
 			return gst_caps_new_simple("audio/mpeg", "mpegversion",
 				G_TYPE_INT, 4, NULL);
 		case B_CODEC_TYPE_OGG:
-			return gst_caps_new_simple("audio/ogg", NULL);
+			return gst_caps_new_empty_simple("audio/ogg");
 		case B_CODEC_TYPE_OPUS:
-			return gst_caps_new_simple("audio/opus", NULL);
+			return gst_caps_new_empty_simple("audio/opus");
 		case B_CODEC_TYPE_FLAC:
-			return gst_caps_new_simple("audio/x-flac", NULL);
+			return gst_caps_new_empty_simple("audio/x-flac");
 		case B_CODEC_TYPE_WAV:
-			return gst_caps_new_simple("audio/x-wav", NULL);
+			return gst_caps_new_empty_simple("audio/x-wav");
 		default:
 			return NULL;
 	}
@@ -625,7 +625,7 @@ CortexEncoderUnit::_ConnectPipeline(const BMediaFormat& rawFormat)
 		gst_caps_unref(inCaps);
 	}
 
-	GstCaps* outCaps = gst_caps_new_simple("audio/x-wav", NULL);
+	GstCaps* outCaps = gst_caps_new_empty_simple("audio/x-wav");
 	if (outCaps != NULL) {
 		gst_app_sink_set_caps(GST_APP_SINK(appSink), outCaps);
 		gst_caps_unref(outCaps);

@@ -175,6 +175,17 @@ TBarMenuTitle::DrawContent()
 	float osWidth = font.StringWidth("OS");
 	float totalWidth = vWidth + midWidth + osWidth;
 
+	float maxWidth = frame.Width() - 8;
+	if (totalWidth > maxWidth && totalWidth > 0) {
+		font.SetSize(floorf(fontSize * maxWidth / totalWidth));
+		menu->SetFont(&font);
+		font.GetHeight(&fh);
+		vWidth = font.StringWidth("V");
+		midWidth = font.StringWidth("itruvian");
+		osWidth = font.StringWidth("OS");
+		totalWidth = vWidth + midWidth + osWidth;
+	}
+
 	float x = frame.left + rintf((frame.Width() - totalWidth) / 2);
 	float y = frame.top + rintf((frame.Height() + fh.ascent - fh.descent) / 2);
 

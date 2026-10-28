@@ -15,6 +15,7 @@
 
 #include <atomic>
 
+#include <Locker.h>
 #include <String.h>
 
 #include <media2/Controllable.h>
@@ -375,6 +376,7 @@ private:
 			void				_Rewind(bigtime_t performanceTime);
 
 			BMidiOutput*		fOutput;
+			BLocker				fEventLock;
 			Event*				fEvents;
 			int32				fEventCount;
 			int32				fIndex;

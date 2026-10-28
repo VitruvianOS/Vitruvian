@@ -31,6 +31,16 @@ if(PKG_CONFIG_FOUND)
 		target_link_libraries(be PRIVATE ${GIO_LIBRARIES})
 		target_compile_options(be PRIVATE ${GIO_CFLAGS_OTHER})
 	endif()
+
+	# The USB kit (src/kits/device) enumerates through libudev and moves
+	# data through libusb-1.0; libusb.h sits in its own include dir on
+	# Debian, hence pkg-config rather than a bare -l.
+	pkg_check_modules(USBKIT REQUIRED libusb-1.0 libudev)
+	if(USBKIT_FOUND)
+		target_include_directories(be PRIVATE ${USBKIT_INCLUDE_DIRS})
+		target_link_libraries(be PRIVATE ${USBKIT_LIBRARIES})
+		target_compile_options(be PRIVATE ${USBKIT_CFLAGS_OTHER})
+	endif()
 endif()
 
 AddOn(
@@ -45,6 +55,7 @@ UsePrivateHeaders(be_bootstrap interface app support)
 add_subdirectory(accounts)
 add_subdirectory(app)
 add_subdirectory(bluetooth)
+add_subdirectory(device)
 add_subdirectory(game)
 add_subdirectory(interface)
 add_subdirectory(locale)

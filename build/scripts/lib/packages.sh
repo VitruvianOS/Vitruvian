@@ -18,7 +18,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-$(get_kernel_flavour) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
@@ -40,7 +40,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 mobile-broadband-provider-info eg25-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
@@ -59,7 +59,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
@@ -76,7 +76,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \

@@ -1127,7 +1127,7 @@ BPoseView::GetLayoutInfo(uint32 mode, BPoint* grid, BPoint* offset) const
 
 	// keep the first desktop row below a Deskbar spanning the screen top
 	if (IsDesktopView() && fDeskbarFrame.IsValid() && fDeskbarFrame.top <= 0
-		&& fDeskbarFrame.Width() > fDeskbarFrame.Height()) {
+		&& fDeskbarFrame.Width() >= BScreen(Window()).Frame().Width()) {
 		offset->y += fDeskbarFrame.bottom + 1;
 	}
 }

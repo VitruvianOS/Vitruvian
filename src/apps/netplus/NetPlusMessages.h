@@ -20,17 +20,18 @@ enum {
 	MSG_SETTINGS_CHANGED = 'setc',
 	// Open a window; "url" string, "private" bool (optional).
 	MSG_OPEN_WINDOW		= 'nowi',
-	// Bookmarks menu items; "url" string.
+	// Bookmarks panel rows; "url" string.
 	MSG_BOOKMARK_GO		= 'bmgo',
 	MSG_BOOKMARK_ADD	= 'bmad',
 	MSG_BOOKMARK_REMOVE	= 'bmrm',
-	// Rebuild the Bookmarks menu after add/remove.
+	// Bookmarks changed in any window.
 	MSG_BOOKMARKS_CHANGED = 'bmcg',
 	MSG_SHOW_DOWNLOADS	= 'dlsr',
 	MSG_SHOW_SETTINGS	= 'stsw',
 	MSG_APP_MENU		= 'apmn',
 	MSG_PANEL_CLOSED	= 'pclz',
 	MSG_PANEL_NEW_WINDOW = 'pnwn',
+	MSG_PANEL_NEW_PRIVATE = 'pnpw',
 	MSG_OPEN_LOCATION	= 'oloc',
 	MSG_ZOOM_IN			= 'zmin',
 	MSG_ZOOM_OUT		= 'zmou',

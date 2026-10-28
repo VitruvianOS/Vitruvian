@@ -6,7 +6,7 @@
 
 #include "webkit_bridge.h"
 #include "compositor_adapter.h"
-#include "content_filter_store.h"
+#include "ContentFilterStore.h"
 #include "domain_filter.h"
 #include "download_handler.h"
 #include "focus_and_cursor.h"
@@ -19,6 +19,7 @@
 
 #include <Cursor.h>
 #include <DataIO.h>
+#include <OS.h>
 #include <Url.h>
 #include <UrlProtocolRoster.h>
 #include <UrlRequest.h>
@@ -33,8 +34,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <Semaphore.h>
 
 
 // Completes the binding type before the destructor tears the
@@ -1209,7 +1208,8 @@ public:
 	virtual	void				ResponseStarted(BUrlRequest* caller)
 								{
 									BHttpResult* result = dynamic_cast<
-										BHttpResult*>(&caller->Result());
+										BHttpResult*>(const_cast<BUrlResult*>(
+										&caller->Result()));
 									if (result != NULL)
 										fStatus = result->StatusCode();
 								}
@@ -1305,11 +1305,12 @@ _GMPerformFetch(const std::string& body)
 		return "{\"ok\":false,\"error\":\"no url\"}";
 	if (!data.empty())
 		return "{\"ok\":false,\"error\":\"upload unsupported\"}";
+	if (!method.empty() && method != "GET" && method != "HEAD")
+		return "{\"ok\":false,\"error\":\"method unsupported\"}";
 
 	BMallocIO output;
-	BUrl requestUrl(url.c_str());
-	if (!method.empty() && method != "GET")
-		requestUrl.SetMethod(method.c_str());
+	BUrl requestUrl;
+	requestUrl.SetUrlString(BString(url.c_str()), true);
 	_GMFetchListener listener;
 	BUrlRequest* request = BUrlProtocolRoster::MakeRequest(requestUrl,
 		&output, &listener);
@@ -1337,7 +1338,7 @@ _GMPerformFetch(const std::string& body)
 	char header[128];
 	snprintf(header, sizeof(header), "{\"ok\":%s,\"status\":%d,",
 		success ? "true" : "false", status);
-	return std::string(header) + "\"text\":\"" + _GEscapeJSON(text)
+	return std::string(header) + "\"text\":\"" + _GMEscapeJSON(text)
 		+ "\"}";
 }
 
@@ -1360,7 +1361,7 @@ WebKitBridge::_HandleGMCall(const std::string& body)
 		std::string value;
 		if (!fGMExtensions->GetValue(ext.c_str(), key.c_str(), &value))
 			return "{\"ok\":false,\"error\":\"missing\"}";
-		return "{\"ok\":true,\"value\":\"" + _GEscapeJSON(value) + "\"}";
+		return "{\"ok\":true,\"value\":\"" + _GMEscapeJSON(value) + "\"}";
 	}
 	if (method == "setValue") {
 		std::string key = _GMJsonString(body, "key");

@@ -250,7 +250,7 @@ private:
 			// GM.* storage host; not owned.
 			BWebExtensions*		fGMExtensions;
 
-			std::function<void(const std::string&)>
+			std::function<bool(const std::string&)>
 									fNotificationPermissionHandler;
 
 	// GObject signal handlers

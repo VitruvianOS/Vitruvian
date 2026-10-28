@@ -3,7 +3,7 @@
  * Distributed under the terms of the LGPL License.
  */
 
-#include "content_filter_store.h"
+#include "ContentFilterStore.h"
 
 #include "logging.h"
 #include "process_manager.h"

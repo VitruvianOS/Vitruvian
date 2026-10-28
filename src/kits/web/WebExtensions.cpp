@@ -501,7 +501,7 @@ BWebExtensions::_ScanRoot(const std::string& root, bool userOwned)
 		if (!fs::exists(manifest, ec))
 			continue;
 
-		Extension extension;
+		WebExtensionRecord extension;
 		// The directory name is the identity: state, install and
 		// remove all key on it, a manifest id cannot redirect them.
 		extension.info.id = entry.path().filename().string();
@@ -796,7 +796,7 @@ _HostOf(const std::string& url)
 
 
 bool
-BWebExtensions::_AppliesTo(const Extension& extension,
+BWebExtensions::_AppliesTo(const WebExtensionRecord& extension,
 	const std::string& url) const
 {
 	if (!extension.info.enabled)

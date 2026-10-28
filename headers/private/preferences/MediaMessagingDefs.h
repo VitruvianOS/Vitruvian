@@ -26,5 +26,6 @@ const int32 kMediaSectionInput    = 1;
 const int32 kMediaSectionStreams  = 2;
 const int32 kMediaSectionHardware = 3;
 const int32 kMediaSectionSounds   = 4;
+const int32 kMediaSectionMixer    = 5;
 
 #endif	// _MEDIA_MESSAGING_DEFS_H

@@ -20,11 +20,12 @@
 class BListView;
 class BView;
 class BStringView;
-class BPopUpMenu;
+class BMessageRunner;
 class BCardLayout;
-class BListView;
 class DeviceListView;
 class StreamListView;
+class MixerSectionView;
+class HardwareSectionView;
 
 #define kMediaSettingsFile "Media_prefs_settings"
 
@@ -42,7 +43,8 @@ private:
 				kInputSection     = kMediaSectionInput,
 				kStreamsSection   = kMediaSectionStreams,
 				kHardwareSection  = kMediaSectionHardware,
-				kSoundsSection    = kMediaSectionSounds
+				kSoundsSection    = kMediaSectionSounds,
+				kMixerSection     = kMediaSectionMixer
 			};
 
 			std::vector<int32>	fSidebarSections;
@@ -51,8 +53,7 @@ private:
 			void			_BuildSidebar();
 			void			_ShowSection(Section s);
 			void			_OnPipeWireChanged(uint32 what, uint32 deviceId);
-			void			_PopulateHardwareDeviceMenu();
-			void			_PopulateHardwareProfiles();
+			void			_TryStartWatching();
 
 			BListView*		fSidebar;
 			BView*			fContentPane;
@@ -62,23 +63,16 @@ private:
 			Section			fShownSection;
 			bool			fHasShownSection;
 
+			MixerSectionView*	fMixerView;
 			DeviceListView*	fOutputView;
 			DeviceListView*	fInputView;
 			StreamListView*	fStreamsView;
-			BView*			fHardwareView;
+			HardwareSectionView*	fHardwareView;
 			BView*			fSoundsView;
 
 			BStringView*	fStatusLabel;
 			bool			fWatchingPipeWire;
-
-			BPopUpMenu*		fHardwareDeviceMenu;
-			BListView*		fHardwareProfileList;
-			BStringView*	fHardwareStatus;
-			media_client_id	fHardwareSelectedDevice;
-			int32			fHardwareActiveProfileIndex;
-			bigtime_t		fHardwareLastLocalWrite;
-
-			std::vector<int32>	fHardwareProfileIndices;
+			BMessageRunner*	fWatchRetryRunner;
 };
 
 #endif

@@ -258,6 +258,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	ALSA
+	LIBRARIES  "asound"
+	PACKAGES   "libasound2-dev"
+	RUNTIMES   "libasound2 (>= 1.2.2)"
+)
+
+DeclareDependency(
 	SPA
 	PACKAGES   "libspa-0.2-dev"
 	INCLUDES   "${HEADERS_PATH_BASE}/spa-0.2/"

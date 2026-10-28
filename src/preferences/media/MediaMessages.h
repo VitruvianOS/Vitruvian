@@ -16,6 +16,7 @@ const uint32 kMsgSectionChanged = 'MScg';
 
 
 const uint32 kMsgRefresh        = 'MSrf';
+const uint32 kMsgRetryWatch     = 'MSrw';
 
 
 const uint32 kMsgDeviceSelected = 'MSds';

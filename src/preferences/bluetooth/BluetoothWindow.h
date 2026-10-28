@@ -20,6 +20,7 @@ class BCheckBox;
 class BListView;
 class BOutlineListView;
 class BStringView;
+class BTextView;
 class BTabView;
 class BTextControl;
 class BluetoothSettingsView;
@@ -81,7 +82,7 @@ private:
 	BOutlineListView* fDeviceList;
 	class BListItem* fPairedHeader;
 	class BListItem* fAvailableHeader;
-	BStringView* fEmptyStateView;
+	BTextView* fEmptyStateView;
 	class BScrollView* fScrollView;
 	class BCardLayout* fContentCards;
 

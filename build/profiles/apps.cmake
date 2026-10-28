@@ -26,6 +26,7 @@ set(SYSTEM_APPS
 	Magnify
 	MediaConverter
 	MediaPlayer
+	Messages
 	NetworkStatus
 	NetPlus
 	PackageManager

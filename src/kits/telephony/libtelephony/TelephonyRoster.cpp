@@ -5,6 +5,7 @@
 
 #include "TelephonyRoster.h"
 
+#include <Handler.h>
 #include <Looper.h>
 #include <Autolock.h>
 
@@ -17,14 +18,14 @@
 // #pragma mark - Notifier
 
 
-// Hidden looper that receives the backend's notification stream and
-// hands it to the roster; the roster itself is not a BHandler so apps
-// can hold the singleton without a message loop of their own.
-class _TelephonyNotifier : public BLooper {
+// Hidden handler that receives the backend's notification stream on its
+// own looper and hands it to the roster; the roster itself is not a
+// BHandler so apps can hold the singleton without a loop of their own.
+class _TelephonyNotifier : public BHandler {
 public:
 								_TelephonyNotifier(BTelephonyRoster* roster)
 									:
-									BLooper("telephony_notifier"),
+									BHandler("telephony_notifier"),
 									fRoster(roster)
 			{
 			}
@@ -34,7 +35,7 @@ public:
 				if (fRoster != NULL)
 					fRoster->_OnBackendNotification(message->what,
 						*message);
-				BLooper::MessageReceived(message);
+				BHandler::MessageReceived(message);
 			}
 
 private:
@@ -61,10 +62,12 @@ BTelephonyRoster::BTelephonyRoster()
 	fBackend = ModemManagerBackend::Instance();
 
 	_TelephonyNotifier* notifier = new _TelephonyNotifier(this);
-	notifier->Run();
+	BLooper* looper = new BLooper("telephony_notifier");
+	looper->AddHandler(notifier);
+	looper->Run();
 
 	// One watcher for everyone; roster-side masks filter per target.
-	fBackend->StartWatching(notifier->Messenger(), (uint32)~0);
+	fBackend->StartWatching(BMessenger(notifier), (uint32)~0);
 	_SyncModemList();
 }
 
@@ -251,54 +254,54 @@ BTelephonyRoster::_Dispatch(BMessage& message, uint32 watchBit)
 void
 BTelephonyRoster::_OnBackendNotification(uint32 type, BMessage& message)
 {
-	using namespace ModemManagerBackend;
+	typedef ModemManagerBackend MM;
 
-	if (type == NOTIFICATION_MODEM_ADDED
-			|| type == NOTIFICATION_MODEM_REMOVED)
+	if (type == MM::NOTIFICATION_MODEM_ADDED
+			|| type == MM::NOTIFICATION_MODEM_REMOVED)
 		_SyncModemList();
 
 	uint32 publicWhat = 0;
 	uint32 watchBit = kTelephonyWatchModems;
 
 	switch ((int32)type) {
-		case NOTIFICATION_MODEM_ADDED:
+		case MM::NOTIFICATION_MODEM_ADDED:
 			publicWhat = kTelephonyMsgModemAdded;
 			break;
-		case NOTIFICATION_MODEM_REMOVED:
+		case MM::NOTIFICATION_MODEM_REMOVED:
 			publicWhat = kTelephonyMsgModemRemoved;
 			break;
-		case NOTIFICATION_MODEM_STATE_CHANGED:
-		case NOTIFICATION_MODEM_SIGNAL_CHANGED:
-		case NOTIFICATION_REGISTRATION_CHANGED:
+		case MM::NOTIFICATION_MODEM_STATE_CHANGED:
+		case MM::NOTIFICATION_MODEM_SIGNAL_CHANGED:
+		case MM::NOTIFICATION_REGISTRATION_CHANGED:
 			publicWhat = kTelephonyMsgModemChanged;
 			break;
-		case NOTIFICATION_SERVICE_APPEARED:
+		case MM::NOTIFICATION_SERVICE_APPEARED:
 			publicWhat = kTelephonyMsgServiceAppeared;
 			break;
-		case NOTIFICATION_SERVICE_VANISHED:
+		case MM::NOTIFICATION_SERVICE_VANISHED:
 			publicWhat = kTelephonyMsgServiceVanished;
 			break;
-		case NOTIFICATION_CALL_ADDED:
+		case MM::NOTIFICATION_CALL_ADDED:
 			publicWhat = kTelephonyMsgCallAdded;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case NOTIFICATION_CALL_REMOVED:
+		case MM::NOTIFICATION_CALL_REMOVED:
 			publicWhat = kTelephonyMsgCallRemoved;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case NOTIFICATION_CALL_STATE_CHANGED:
+		case MM::NOTIFICATION_CALL_STATE_CHANGED:
 			publicWhat = kTelephonyMsgCallStateChanged;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case NOTIFICATION_SMS_ADDED:
+		case MM::NOTIFICATION_SMS_ADDED:
 			publicWhat = kTelephonyMsgSmsAdded;
 			watchBit = kTelephonyWatchMessages;
 			break;
-		case NOTIFICATION_SMS_REMOVED:
+		case MM::NOTIFICATION_SMS_REMOVED:
 			publicWhat = kTelephonyMsgSmsRemoved;
 			watchBit = kTelephonyWatchMessages;
 			break;
-		case NOTIFICATION_SMS_STATE_CHANGED:
+		case MM::NOTIFICATION_SMS_STATE_CHANGED:
 			publicWhat = kTelephonyMsgSmsStateChanged;
 			watchBit = kTelephonyWatchMessages;
 			break;

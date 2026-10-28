@@ -69,6 +69,79 @@ static const char* const kMMFieldSmsReceived = "sms_received";
 static const char* const kMMFieldSmsPartCount = "sms_part_count";
 static const char* const kMMFieldSmsCount = "sms_count";
 
+
+// ModemManager enum values (MMModemState, MMModem3gppRegistrationState,
+// MMModemAccessTechnology, MMCallState, MMCallDirection, MM_SMS_STATE),
+// numeric values as shipped by ModemManager 1.24.
+static const int32 kMMStateFailed = -1;
+static const int32 kMMStateUnknown = 0;
+static const int32 kMMStateInitializing = 1;
+static const int32 kMMStateLocked = 2;
+static const int32 kMMStateDisabled = 3;
+static const int32 kMMStateDisabling = 4;
+static const int32 kMMStateEnabling = 5;
+static const int32 kMMStateEnabled = 6;
+static const int32 kMMStateSearching = 7;
+static const int32 kMMStateRegistered = 8;
+static const int32 kMMStateDisconnecting = 9;
+static const int32 kMMStateConnecting = 10;
+static const int32 kMMStateConnected = 11;
+
+static const uint32 kMMLockUnknown = 0;
+static const uint32 kMMLockNone = 1;
+static const uint32 kMMLockSimPin = 2;
+static const uint32 kMMLockSimPin2 = 3;
+static const uint32 kMMLockSimPuk = 4;
+static const uint32 kMMLockSimPuk2 = 5;
+
+static const uint32 kMMRegIdle = 0;
+static const uint32 kMMRegHome = 1;
+static const uint32 kMMRegSearching = 2;
+static const uint32 kMMRegDenied = 3;
+static const uint32 kMMRegUnknown = 4;
+static const uint32 kMMRegRoaming = 5;
+static const uint32 kMMRegHomeSmsOnly = 6;
+static const uint32 kMMRegRoamingSmsOnly = 7;
+static const uint32 kMMRegEmergencyOnly = 8;
+static const uint32 kMMRegHomeCsfbNotPreferred = 9;
+static const uint32 kMMRegRoamingCsfbNotPreferred = 10;
+static const uint32 kMMRegAttachedRlos = 11;
+
+static const uint32 kMMAccessGsm = 1 << 0;
+static const uint32 kMMAccessGprs = 1 << 1;
+static const uint32 kMMAccessEdge = 1 << 2;
+static const uint32 kMMAccessUmts = 1 << 3;
+static const uint32 kMMAccessHsdpa = 1 << 4;
+static const uint32 kMMAccessHsupa = 1 << 5;
+static const uint32 kMMAccessHspa = 1 << 6;
+static const uint32 kMMAccessHspaPlus = 1 << 7;
+static const uint32 kMMAccessEhrpd = 1 << 8;
+static const uint32 kMMAccessLte = 1 << 9;
+static const uint32 kMMAccessNr5g = 1 << 10;
+static const uint32 kMMAccessLteCa = 1 << 11;
+
+static const uint32 kMMCallStateUnknown = 0;
+static const uint32 kMMCallStateDialing = 1;
+static const uint32 kMMCallStateRingingOut = 2;
+static const uint32 kMMCallStateRingingIn = 3;
+static const uint32 kMMCallStateActive = 4;
+static const uint32 kMMCallStateHeld = 5;
+static const uint32 kMMCallStateWaiting = 6;
+static const uint32 kMMCallStateTerminated = 7;
+
+static const uint32 kMMCallDirectionUnknown = 0;
+static const uint32 kMMCallDirectionIncoming = 1;
+static const uint32 kMMCallDirectionOutgoing = 2;
+
+static const uint32 kMMSmsStateUnknown = 0;
+static const uint32 kMMSmsStateStored = 1;
+static const uint32 kMMSmsStateReceiving = 2;
+static const uint32 kMMSmsStateReceived = 3;
+static const uint32 kMMSmsStateSending = 4;
+static const uint32 kMMSmsStateSent = 5;
+
+static const uint32 kMMSmsPduTypeDeliver = 1;
+
 // SIM lock state from the Modem UnlockRequired property (MMModemLock).
 static const char* const kMMFieldSimPinRequired = "sim_pin_required";
 static const char* const kMMFieldSimPukRequired = "sim_puk_required";

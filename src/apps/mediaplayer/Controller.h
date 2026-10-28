@@ -113,6 +113,7 @@ private:
 			void				_Notify(uint32 what);
 			void				_NotifyState();
 			void				_NotifyVideo();
+			void				_RewindIfAtEnd();
 			void				_NotifyPosition();
 			void				_NotifyFinished();
 			void				_ApplyVolume();
@@ -131,6 +132,7 @@ private:
 			int32				fAudioTrackCount;
 			int32				fVideoTrackCount;
 			bool				fHasVideo;
+			bool				fAtEnd;
 			uint32				fVideoWidth;
 			uint32				fVideoHeight;
 			uint32				fVideoParNum;

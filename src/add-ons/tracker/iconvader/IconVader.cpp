@@ -136,6 +136,9 @@ process_refs(entry_ref dir, BMessage* refs, void* /*reserved*/)
 	*/
 
 	view->HideBarberPole();
+	view->SetDragEnabled(true);
+	view->SetSelectionRectEnabled(true);
+	view->SetPoseEditing(true);
 	view->SetViewMode(poseViewModeBackup);
 	view->RestoreState(poseViewBackup);
 	view->RestoreColumnState(poseViewColumnBackup);

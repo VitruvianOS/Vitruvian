@@ -7,6 +7,7 @@
 
 #include <curl/curl.h>
 
+#include <cstddef>
 #include <cstdlib>
 #include <resolv.h>
 #include <arpa/nameser.h>

@@ -787,7 +787,8 @@ _VideoEncoderChain(int32 encoding)
 			return "openh264enc";
 		return NULL;
 	}
-	return _ElementAvailable("vp8enc") ? "vp8enc deadline=1" : NULL;
+	return _ElementAvailable("vp8enc")
+		? "vp8enc deadline=1 cpu-used=8 threads=4" : NULL;
 }
 
 
@@ -838,7 +839,7 @@ GStreamerBackend::CreateAVEncodePipeline(const char* path,
 	std::string description;
 	if (videoChain != NULL) {
 		description += "appsrc name=vsrc is-live=true format=time block=true"
-			" ! queue ! videoconvert ! video/x-raw,format=I420 ! ";
+			" ! queue ! videoconvert n-threads=4 ! video/x-raw,format=I420 ! ";
 		description += videoChain;
 		description += " ! queue ! mux. ";
 	}

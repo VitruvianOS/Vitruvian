@@ -7,12 +7,15 @@
 
 #include <new>
 #include <string.h>
+#include <strings.h>
 
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
 
 #include <Entry.h>
 #include <File.h>
+#include <Node.h>
+#include <NodeInfo.h>
 #include <ObjectList.h>
 #include <Path.h>
 #include <syscalls.h>
@@ -174,6 +177,8 @@ private:
 		size_t size, const media_raw_audio_format& format);
 	void _SetVideoCaps(const BMediaFormat& format);
 	void _SetAudioCaps(const BMediaFormat& format);
+	void _TagOutputFile();
+	void _DropAudioLeg();
 
 	static void _ProcessHook(void* cookie, void* buffer, size_t size,
 		uint32 frameCount, const BMediaFormat& format);
@@ -205,6 +210,7 @@ private:
 	GstElement*			fEncodeAudioSrc;
 	bool				fVideoCapsSet;
 	bool				fAudioCapsSet;
+	bool				fAudioEnded = false;
 	uint64				fVideoPts;	// ns
 	uint64				fAudioPts;	// ns
 	uint32				fFrameStride;
@@ -490,7 +496,7 @@ BMediaRecorder::Impl::Stop()
 		&& (fFrameStride > 0 || fEncodeVideoSrc != NULL)) {
 		if (fEncodeVideoSrc != NULL)
 			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeVideoSrc));
-		if (fEncodeAudioSrc != NULL)
+		if (fEncodeAudioSrc != NULL && !fAudioEnded)
 			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAudioSrc));
 		if (fEncodeAppSrc != NULL)
 			gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAppSrc));
@@ -515,9 +521,48 @@ BMediaRecorder::Impl::Stop()
 			gst_object_unref(bus);
 		}
 		gst_element_set_state(fEncodePipeline, GST_STATE_NULL);
+		_TagOutputFile();
 	}
 	if (fNotifyFunc != NULL)
 		fNotifyFunc(fCookie, BMediaRecorder::B_STOPPED);
+}
+
+
+void
+BMediaRecorder::Impl::_TagOutputFile()
+{
+	GstElement* sink = gst_bin_get_by_name(GST_BIN(fEncodePipeline), "sink");
+	if (sink == NULL)
+		return;
+	gchar* location = NULL;
+	g_object_get(sink, "location", &location, NULL);
+	gst_object_unref(sink);
+	if (location == NULL)
+		return;
+
+	static const struct { const char* extension; const char* type; }
+		kTypes[] = {
+		{ ".webm", "video/webm" },
+		{ ".mkv", "video/x-matroska" },
+		{ ".mp4", "video/mp4" },
+		{ ".ogg", "audio/ogg" },
+		{ ".opus", "audio/ogg" },
+		{ ".wav", "audio/x-wav" },
+		{ ".flac", "audio/flac" },
+		{ ".mp3", "audio/mpeg" }
+	};
+	const char* dot = strrchr(location, '.');
+	for (size_t i = 0; dot != NULL && i < sizeof(kTypes) / sizeof(kTypes[0]);
+			i++) {
+		if (strcasecmp(dot, kTypes[i].extension) != 0)
+			continue;
+		BNode node(location);
+		BNodeInfo info(&node);
+		if (info.InitCheck() == B_OK)
+			info.SetType(kTypes[i].type);
+		break;
+	}
+	g_free(location);
 }
 
 
@@ -628,6 +673,10 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 	fAudioCapsSet = false;
 	fVideoPts = 0;
 	fAudioPts = 0;
+	fAudioEnded = false;
+	_SetVideoCaps(fFormat);
+	if (fAudioFormat.IsRawAudio())
+		_SetAudioCaps(fAudioFormat);
 
 	if (gst_element_set_state(fEncodePipeline, GST_STATE_PLAYING)
 			== GST_STATE_CHANGE_FAILURE) {
@@ -787,10 +836,43 @@ BMediaRecorder::Impl::_DeliverVideo(void* buffer, size_t size,
 		fVideoPts += duration;
 	}
 
-	if (gst_app_src_push_buffer(GST_APP_SRC(fEncodeVideoSrc), gstBuffer)
-			!= GST_FLOW_OK) {
-		gst_buffer_unref(gstBuffer);
+	gst_app_src_push_buffer(GST_APP_SRC(fEncodeVideoSrc), gstBuffer);
+
+	if (fEncodeAudioSrc != NULL && !fAudioEnded && fAudioPts == 0
+		&& fVideoPts > GST_SECOND)
+		_DropAudioLeg();
+}
+
+
+void
+BMediaRecorder::Impl::_DropAudioLeg()
+{
+	fAudioEnded = true;
+	GstElement* mux = gst_bin_get_by_name(GST_BIN(fEncodePipeline), "mux");
+	if (mux == NULL)
+		return;
+
+	GstElement* element = GST_ELEMENT(gst_object_ref(fEncodeAudioSrc));
+	while (element != NULL) {
+		GstPad* src = gst_element_get_static_pad(element, "src");
+		gst_object_unref(element);
+		element = NULL;
+		if (src == NULL)
+			break;
+		GstPad* peer = gst_pad_get_peer(src);
+		if (peer != NULL) {
+			GstElement* next = gst_pad_get_parent_element(peer);
+			if (next == mux) {
+				gst_pad_unlink(src, peer);
+				gst_element_release_request_pad(mux, peer);
+				gst_object_unref(next);
+			} else
+				element = next;
+			gst_object_unref(peer);
+		}
+		gst_object_unref(src);
 	}
+	gst_object_unref(mux);
 }
 
 
@@ -817,7 +899,7 @@ BMediaRecorder::Impl::_PushAudio(void* buffer, size_t size,
 	uint32 frameCount, const BMediaFormat& format)
 {
 	if (fEncodePipeline == NULL || fEncodeAudioSrc == NULL || buffer == NULL
-		|| !fAudioCapsSet || !format.IsRawAudio()) {
+		|| fAudioEnded || !fAudioCapsSet || !format.IsRawAudio()) {
 		return;
 	}
 
@@ -849,10 +931,7 @@ BMediaRecorder::Impl::_PushAudio(void* buffer, size_t size,
 		fAudioPts += duration;
 	}
 
-	if (gst_app_src_push_buffer(GST_APP_SRC(fEncodeAudioSrc), gstBuffer)
-			!= GST_FLOW_OK) {
-		gst_buffer_unref(gstBuffer);
-	}
+	gst_app_src_push_buffer(GST_APP_SRC(fEncodeAudioSrc), gstBuffer);
 }
 
 

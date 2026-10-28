@@ -5,6 +5,9 @@
 
 #include "MainWin.h"
 
+#include <algorithm>
+#include <math.h>
+
 #include <Application.h>
 #include <Alert.h>
 #include <Autolock.h>
@@ -58,7 +61,7 @@ static const float kDefaultScale = 1.0f;
 MainWin::MainWin(BRect frame)
 	:
 	BWindow(frame, B_TRANSLATE("MediaPlayer"), B_TITLED_WINDOW,
-		B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS),
+		B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE),
 	fController(NULL),
 	fPlaylist(NULL),
 	fVideoView(NULL),
@@ -83,7 +86,10 @@ MainWin::MainWin(BRect frame)
 	fControlY(0),
 	fVideoParNum(0),
 	fVideoParDen(0),
-	fVideoRotation(0)
+	fVideoRotation(0),
+	fSizedWidth(0),
+	fSizedHeight(0),
+	fSizedForAudio(false)
 {
 	fController = new Controller(BMessenger(this));
 	// A separate playlist here was never seen by the controller, so opened
@@ -126,6 +132,7 @@ MainWin::_SetupWindow()
 
 	fControllerView = new ControllerView(
 		BRect(0, 200, 360, 300), fController, fPlaylist);
+	fControllerView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	fControllerView->SetVolume(fController->Volume());
 	fControllerView->SetDisabledString(B_TRANSLATE("Drop files to play"));
 	if (PeakView* peaks = fControllerView->GetPeakView())
@@ -243,10 +250,12 @@ MainWin::_UpdateTitle(const char* name)
 float
 MainWin::_ChromeHeight() const
 {
-	float menuH = fMenuBar != NULL ? fMenuBar->MinSize().height : 0;
-	float stripH = fControllerView != NULL
-		? fControllerView->GroupLayout()->MinSize().height : 0;
-	return menuH + stripH;
+	float height = 0;
+	if (fMenuBar != NULL && !fMenuBar->IsHidden(fMenuBar))
+		height += fMenuBar->MinSize().height + 1;
+	if (fControllerView != NULL && !fControllerView->IsHidden(fControllerView))
+		height += fControllerView->GroupLayout()->MinSize().height + 1;
+	return height;
 }
 
 
@@ -258,31 +267,36 @@ MainWin::_SizeForVideo(uint32 width, uint32 height)
 		return;
 	}
 
-	video_display_size display = compute_video_display_size(width, height,
-		fVideoParNum, fVideoParDen, fVideoRotation);
+	const video_display_size display = compute_video_display_size(width,
+		height, fVideoParNum, fVideoParDen, fVideoRotation);
+	if (display.width == 0 || display.height == 0)
+		return;
 
-	// HiDPI: the window works in logical units, video arrives in pixels.
-	const float backing = fVideoView->Scale();
-	if (backing > 1.0f) {
-		display.width = (uint32)(display.width / backing + 0.5f);
-		display.height = (uint32)(display.height / backing + 0.5f);
-	}
+	const BRect frame = Frame();
+	const BRect decorated = DecoratorFrame();
+	const float insetW = frame.left - decorated.left
+		+ decorated.right - frame.right;
+	const float insetH = frame.top - decorated.top
+		+ decorated.bottom - frame.bottom;
+	const float chrome = _ChromeHeight();
+	const BRect screen = BScreen(this).Frame();
+	const float availW = screen.Width() + 1 - insetW;
+	const float availH = screen.Height() + 1 - insetH - chrome;
 
-	float targetW = display.width * fVideoScale;
-	float targetH = display.height * fVideoScale;
-	if (targetW < kMinWidth)
-		targetW = kMinWidth;
-	if (targetH < 40)
-		targetH = 40;
+	float videoW = display.width * fVideoScale;
+	float videoH = display.height * fVideoScale;
+	const float fit = std::min(1.0f, std::min(availW / videoW,
+		availH / videoH));
+	videoW = floorf(videoW * fit);
+	videoH = floorf(videoH * fit);
 
-	// Clamp to the screen the window is on, reserving the chrome.
-	BRect screen = BScreen(this).Frame();
-	video_display_size target = { (uint32)targetW, (uint32)targetH };
-	const video_display_size clamped = clamp_video_display_size(target,
-		screen.Width(), screen.Height() - _ChromeHeight());
-
-	// Chrome comes from the layout, not constants, so HiDPI scaling holds.
-	ResizeTo(clamped.width, clamped.height + _ChromeHeight());
+	float minW = kMinWidth;
+	if (fControllerView != NULL)
+		minW = std::max(minW, fControllerView->MinSize().width + 1);
+	const float windowW = std::min(std::max(minW, videoW), availW);
+	const float windowH = chrome + std::max(videoH, 40.0f);
+	ResizeTo(windowW - 1, windowH - 1);
+	MoveOnScreen(B_DO_NOT_RESIZE_TO_FIT | B_MOVE_IF_PARTIALLY_OFFSCREEN);
 	fLastFrame = Frame();
 }
 
@@ -389,16 +403,33 @@ MainWin::_UpdateVideoMode()
 		return;
 
 	if (hasVideo) {
-		SetSizeLimits(kMinWidth, 4000, kMinHeight, 3000);
-		_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
-	} else {
-		SetSizeLimits(kAudioMinWidth, 4000, _ChromeHeight() + 40, 3000);
-		float audioW = kAudioMinWidth;
+		const uint32 width = fController->VideoWidth();
+		const uint32 height = fController->VideoHeight();
+		if (width != 0 && height != 0
+			&& (width != fSizedWidth || height != fSizedHeight)) {
+			fSizedWidth = width;
+			fSizedHeight = height;
+			SetSizeLimits(kMinWidth - 1, 32000,
+				_ChromeHeight() + 40 - 1, 32000);
+			_SizeForVideo(width, height);
+		}
+	} else if (fSizedWidth != 0 || !fSizedForAudio) {
+		fSizedWidth = 0;
+		fSizedHeight = 0;
+		fSizedForAudio = true;
+		const float height = _ChromeHeight()
+			+ (fLocationView != NULL ? fLocationView->MinSize().height + 1 : 0)
+			- 1;
+		float minW = kAudioMinWidth;
+		if (fControllerView != NULL)
+			minW = std::max(minW, fControllerView->MinSize().width + 1);
+		if (fMenuBar != NULL)
+			minW = std::max(minW, fMenuBar->MinSize().width + 1);
+		SetSizeLimits(minW - 1, 32000, height, height);
+		float audioW = minW - 1;
 		if (fSettings != NULL)
-			audioW = fSettings->GetValue("audio_width", (float)kAudioMinWidth);
-		if (audioW < kAudioMinWidth)
-			audioW = kAudioMinWidth;
-		ResizeTo(audioW, _ChromeHeight() + 60);
+			audioW = fSettings->GetValue("audio_width", audioW);
+		ResizeTo(std::max(audioW, minW - 1), height);
 	}
 	_UpdateLocation();
 }
@@ -653,25 +684,15 @@ MainWin::_Zoom(float factor)
 void
 MainWin::_FitToScreen()
 {
-	if (fController == NULL || !fController->HasVideo() || fVideoView == NULL)
+	if (fController == NULL || !fController->HasVideo())
 		return;
+	fVideoScale = 8.0f;
+	_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
 	const video_display_size display = compute_video_display_size(
 		fController->VideoWidth(), fController->VideoHeight(),
-		fController->VideoPixelWidthAspect(),
-		fController->VideoPixelHeightAspect(), fController->VideoRotation());
-	BRect screen = BScreen(this).Frame();
-	const video_display_size fit = clamp_video_display_size(display,
-		screen.Width(), screen.Height() - _ChromeHeight());
-	if (display.width == 0)
-		return;
-	const float backing = fVideoView->Scale();
-	fVideoScale = (float)fit.width * (backing > 1.0f ? backing : 1.0f)
-		/ (float)display.width;
-	if (fVideoScale < 0.1f)
-		fVideoScale = 0.1f;
-	if (fVideoScale > 8.0f)
-		fVideoScale = 8.0f;
-	_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
+		fVideoParNum, fVideoParDen, fVideoRotation);
+	if (display.width > 0)
+		fVideoScale = (Bounds().Width() + 1) / display.width;
 }
 
 
@@ -1152,12 +1173,6 @@ void
 MainWin::FrameResized(float newWidth, float newHeight)
 {
 	BWindow::FrameResized(newWidth, newHeight);
-	// A size we set ourselves is already aspect-correct; anything else
-	// was a user drag and gets snapped.
-	if (Frame().Width() != fLastFrame.Width()
-			|| Frame().Height() != fLastFrame.Height()) {
-		_KeepAspectOnResize();
-	}
 	fLastFrame = Frame();
 	if (fFullScreen.IsFullscreen())
 		_PositionControls();
@@ -1165,45 +1180,17 @@ MainWin::FrameResized(float newWidth, float newHeight)
 }
 
 
-// Window drags keep the video aspect; hold Shift while resizing for a
-// free aspect.
 void
-MainWin::_KeepAspectOnResize()
+MainWin::ScreenChanged(BRect frame, color_space mode)
 {
-	if (fFullScreen.IsFullscreen() || fController == NULL
-			|| !fController->HasVideo() || fVideoView == NULL) {
+	BWindow::ScreenChanged(frame, mode);
+	if (!fFullScreen.IsFullscreen())
 		return;
-	}
-	if ((modifiers() & B_SHIFT_KEY) != 0)
-		return;
-
-	const video_display_size display = compute_video_display_size(
-		fController->VideoWidth(), fController->VideoHeight(),
-		fVideoParNum, fVideoParDen, fVideoRotation);
-	if (display.width == 0 || display.height == 0)
-		return;
-
-	const float aspect = (float)display.width / (float)display.height;
-	const float chrome = _ChromeHeight();
-	const float contentW = Frame().Width();
-	const float contentH = Frame().Height() - chrome;
-	const float oldContentW = fLastFrame.Width();
-	const float oldContentH = fLastFrame.Height() - chrome;
-	if (contentW < 1 || contentH < 1)
-		return;
-
-	// Whichever edge moved furthest leads; the other follows the aspect.
-	float width = contentW;
-	float height = contentW / aspect;
-	if (fabs(contentH - oldContentH) > fabs(contentW - oldContentW)) {
-		width = contentH * aspect;
-		height = contentH;
-	}
-	if (height < 40) {
-		height = 40;
-		width = height * aspect;
-	}
-	ResizeTo(width, height + chrome);
+	SetSizeLimits(0, frame.Width(), 0, frame.Height());
+	MoveTo(frame.left, frame.top);
+	ResizeTo(frame.Width(), frame.Height());
+	fControlY = Bounds().bottom - fStripHeight + 1;
+	_PositionControls();
 }
 
 

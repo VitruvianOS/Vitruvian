@@ -237,7 +237,8 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 		if (key == kEscapeKey && (modifiers & B_COMMAND_KEY) != 0
 			&& (modifiers & B_CONTROL_KEY) != 0
 			&& (modifiers & B_SHIFT_KEY) != 0) {
-			system("screenmode --fall-back &");
+			int result = system("screenmode --fall-back &");
+			(void)result;
 			return B_SKIP_MESSAGE;
 		}
 
@@ -4338,33 +4339,45 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 				(int32)window->Feel(), window->Flags(), signature))
 			continue;
 
+		Window* topWindow = window->TopLayerStackWindow();
+		if (topWindow != NULL && topWindow != window)
+			continue;
+
 		const BRect frame = window->Frame();
 		if (RelayoutFillsScreen(frame, oldFrame))
 			continue;
 
-		// Live frame on the current workspace. Move through the stack's top
-		// window so the decorator and stacked siblings move once, with it.
-		const BPoint origin = RelayoutOrigin(frame, oldFrame, newFrame);
-		const BPoint delta = origin - frame.LeftTop();
-		Window* topWindow = window->TopLayerStackWindow();
-		if (delta != BPoint(0, 0) && (topWindow == NULL || topWindow == window))
-			window->MoveBy((int32)delta.x, (int32)delta.y);
+		BRect footprint = frame;
+		if (::Decorator* decorator = window->Decorator())
+			footprint = decorator->GetFootprint().Frame();
+		const BPoint inset = frame.LeftTop() - footprint.LeftTop();
 
-		// Other workspaces keep anchors; rewrite them so a shrink can't strand
-		// windows. The current workspace already moved its live frame.
-		for (int32 i = 0; i < kListCount; i++) {
-			if (i == window->CurrentWorkspace())
+		for (int32 i = 0; i < kMaxWorkspaces; i++) {
+			if (!window->InWorkspace(i))
 				continue;
 
 			window_anchor& anchor = window->Anchor(i);
-			if (anchor.position == kInvalidWindowPosition)
-				continue;
+			BRect placed = footprint;
+			if (i != fCurrentWorkspace) {
+				if (anchor.position == kInvalidWindowPosition
+					|| (window->Flags()
+						& B_SAME_POSITION_IN_ALL_WORKSPACES) != 0)
+					continue;
+				placed.OffsetTo(anchor.position - inset);
+			}
 
-			BRect anchorFrame(anchor.position.x, anchor.position.y,
-				anchor.position.x + frame.Width() - 1,
-				anchor.position.y + frame.Height() - 1);
-			anchor.position = RelayoutOrigin(anchorFrame, oldFrame,
-				newFrame);
+			relayout_placement& placement = anchor.placement;
+			if (!placement.valid || placement.placedAt != placed.LeftTop())
+				placement = RelayoutCapture(placed, oldFrame);
+
+			const BPoint origin = RelayoutOrigin(placement, placed, newFrame);
+			placement.placedAt = origin;
+
+			if (i == fCurrentWorkspace) {
+				window->MoveBy((int32)(origin.x - placed.left),
+					(int32)(origin.y - placed.top));
+			} else
+				anchor.position = origin + inset;
 		}
 	}
 }

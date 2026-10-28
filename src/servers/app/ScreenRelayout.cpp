@@ -5,6 +5,7 @@
 
 #include "ScreenRelayout.h"
 
+#include <algorithm>
 #include <math.h>
 #include <string.h>
 
@@ -46,65 +47,78 @@ RelayoutShouldMove(bool isNormal, int32 feel, uint32 flags,
 }
 
 
-float
-RelayoutAxis(float left, float frameSize,
-	float oldScreenLeft, float oldScreenWidth,
-	float newScreenLeft, float newScreenWidth)
+relayout_axis
+RelayoutClassify(float start, float size, float screenStart,
+	float screenSize)
 {
-	// Classification uses the old screen; the result is placed on the new.
-	// Width() is right - left; the right edge is recovered as left + size - 1.
-	const float oldScreenRight = oldScreenLeft + oldScreenWidth - 1;
-	const float oldFrameRight = left + frameSize - 1;
-	const float oldFrameCenter = left + frameSize / 2.0f;
-	const float oldScreenCenter = oldScreenLeft + oldScreenWidth / 2.0f;
-	const float newScreenRight = newScreenLeft + newScreenWidth - 1;
+	const float centre = start + size / 2.0f;
+	const float endGap = screenStart + screenSize - (start + size);
 
-	if (oldScreenWidth <= 0.0f || newScreenWidth <= 0.0f)
-		return left;
-
-	// Centred: stay centred on the new screen.
-	if (fabsf(oldFrameCenter - oldScreenCenter)
-			<= oldScreenWidth * kScreenCenterTolerance) {
-		return newScreenLeft + (newScreenWidth - frameSize) / 2.0f;
+	relayout_axis axis;
+	if (fabsf(centre - (screenStart + screenSize / 2.0f))
+			<= screenSize * kScreenCenterTolerance) {
+		axis.anchor = RELAYOUT_CENTRED;
+		axis.value = 0;
+	} else if (fabsf(start - screenStart) <= kScreenAnchorMargin) {
+		axis.anchor = RELAYOUT_START;
+		axis.value = start - screenStart;
+	} else if (fabsf(endGap) <= kScreenAnchorMargin) {
+		axis.anchor = RELAYOUT_END;
+		axis.value = endGap;
+	} else {
+		axis.anchor = RELAYOUT_RELATIVE;
+		axis.value = screenSize > 0
+			? (centre - screenStart) / screenSize : 0.5f;
 	}
+	return axis;
+}
 
-	// Anchored: keep the same distance to the edge the window was near.
-	if (fabsf(left - oldScreenLeft) <= kScreenAnchorMargin)
-		return newScreenLeft + (left - oldScreenLeft);
 
-	if (fabsf(oldFrameRight - oldScreenRight) <= kScreenAnchorMargin) {
-		const float distance = oldScreenRight - oldFrameRight;
-		return newScreenRight - distance - frameSize + 1;
+float
+RelayoutPlace(const relayout_axis& axis, float size, float screenStart,
+	float screenSize)
+{
+	switch (axis.anchor) {
+		case RELAYOUT_CENTRED:
+			return screenStart + (screenSize - size) / 2.0f;
+		case RELAYOUT_START:
+			return screenStart + axis.value;
+		case RELAYOUT_END:
+			return screenStart + screenSize - axis.value - size;
+		default:
+			return screenStart + axis.value * screenSize - size / 2.0f;
 	}
+}
 
-	// Otherwise the centre keeps its relative position; size unchanged.
-	const float relative = (oldFrameCenter - oldScreenLeft) / oldScreenWidth;
-	return newScreenLeft + relative * newScreenWidth - frameSize / 2.0f;
+
+relayout_placement
+RelayoutCapture(const BRect& footprint, const BRect& screen)
+{
+	relayout_placement placement;
+	placement.valid = true;
+	placement.x = RelayoutClassify(footprint.left, footprint.Width() + 1,
+		screen.left, screen.Width() + 1);
+	placement.y = RelayoutClassify(footprint.top, footprint.Height() + 1,
+		screen.top, screen.Height() + 1);
+	placement.placedAt = footprint.LeftTop();
+	return placement;
 }
 
 
 BPoint
-RelayoutOrigin(const BRect& frame, const BRect& oldFrame,
-	const BRect& newFrame)
+RelayoutOrigin(const relayout_placement& placement, const BRect& footprint,
+	const BRect& screen)
 {
 	BPoint origin(
-		RelayoutAxis(frame.left, frame.Width(),
-			oldFrame.left, oldFrame.Width(),
-			newFrame.left, newFrame.Width()),
-		RelayoutAxis(frame.top, frame.Height(),
-			oldFrame.top, oldFrame.Height(),
-			newFrame.top, newFrame.Height()));
+		floorf(RelayoutPlace(placement.x, footprint.Width() + 1,
+			screen.left, screen.Width() + 1)),
+		floorf(RelayoutPlace(placement.y, footprint.Height() + 1,
+			screen.top, screen.Height() + 1)));
 
-	// Title tab must stay reachable when the screen shrinks.
-	if (origin.y > newFrame.bottom - kScreenMinTitleVisible)
-		origin.y = newFrame.bottom - kScreenMinTitleVisible;
-	if (origin.y < newFrame.top)
-		origin.y = newFrame.top;
-	if (origin.x > newFrame.right - kScreenMinTitleVisible)
-		origin.x = newFrame.right - kScreenMinTitleVisible;
-	if (origin.x < newFrame.left)
-		origin.x = newFrame.left;
-
+	origin.x = std::min(origin.x, screen.right + 1 - kScreenMinTitleVisible);
+	origin.y = std::min(origin.y, screen.bottom + 1 - kScreenMinTitleVisible);
+	origin.x = std::max(origin.x, screen.left);
+	origin.y = std::max(origin.y, screen.top);
 	return origin;
 }
 

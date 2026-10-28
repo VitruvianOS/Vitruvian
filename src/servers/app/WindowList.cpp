@@ -20,6 +20,7 @@ window_anchor::window_anchor()
 	 previous(NULL),
 	 position(kInvalidWindowPosition)
 {
+	placement.valid = false;
 }
 
 

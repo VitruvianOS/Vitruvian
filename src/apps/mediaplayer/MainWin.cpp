@@ -800,6 +800,9 @@ MainWin::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_REFS_RECEIVED:
 			_OpenRefs(message);
+			if (IsMinimized())
+				Minimize(false);
+			Activate();
 			break;
 
 		case MSG_OPEN:

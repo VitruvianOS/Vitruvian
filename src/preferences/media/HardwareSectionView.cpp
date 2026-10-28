@@ -234,12 +234,9 @@ HardwareSectionView::RefreshProfiles()
 void
 HardwareSectionView::_BuildPipeWireParams()
 {
-	// Replace the old web view; BindNode unbinds the previous node.
-	if (fParamView != NULL) {
-		fParamView->RemoveSelf();
-		delete fParamView;
-		fParamView = NULL;
-	}
+	// The scroller keeps a raw target pointer, so swap the view in
+	// before deleting the old one.
+	BView* oldView = fParamView;
 
 	fParamView = new BView("device_params", B_WILL_DRAW);
 	fParamView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
@@ -254,10 +251,8 @@ HardwareSectionView::_BuildPipeWireParams()
 	}
 
 	fParamScroll->SetTarget(fParamView);
-	fParamView->SetExplicitMinSize(BSize(B_SIZE_UNSET,
-		fParamScroll->Bounds().Height()));
-	fParamScroll->Parent()->AddChild(fParamView);
-	fParamScroll->Parent()->InvalidateLayout();
+	delete oldView;
+	fParamScroll->InvalidateLayout();
 }
 
 

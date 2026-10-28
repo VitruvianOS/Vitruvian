@@ -246,10 +246,13 @@ BluetoothSettingsView::_ApplyStatus(BMessage* message)
 		none->SetEnabled(false);
 		fLocalDevicesMenu->AddItem(none);
 		none->SetMarked(true);
+		fLocalDevicesMenuField->SetEnabled(false);
 		fSelectedAdapterPath = "";
 		_UpdateAdapterDependentControls();
 		return;
 	}
+
+	fLocalDevicesMenuField->SetEnabled(true);
 
 	// Prefer the remembered adapter if it's still present; otherwise fall
 	// back to the first one, same rule BluetoothWindow uses.

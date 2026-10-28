@@ -786,7 +786,7 @@ BMediaGraph::GetStreams(BObjectList<StreamInfo, true>* outStreams)
 		info->mediaClass = s.mediaClass.c_str();
 		info->deviceId   = (media_client_id)s.deviceId;
 		info->isOutput   = s.isOutput;
-		info->volume     = s.volume;
+		info->volume     = cbrtf(s.volume);
 		info->mute       = s.mute;
 		if (!outStreams->AddItem(info))
 			delete info;
@@ -811,7 +811,8 @@ BMediaGraph::SetStreamVolume(media_client_id streamId, float volume, bool mute)
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
-	return backend->SetStreamVolume((uint32)streamId, volume, mute);
+	float cubic = volume * volume * volume;
+	return backend->SetStreamVolume((uint32)streamId, cubic, mute);
 }
 
 
@@ -825,16 +826,11 @@ BMediaGraph::SetStreamChannelVolumes(media_client_id streamId,
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
 
-	// Streams cache a single level, so the strip's channels collapse.
-	float peak = 0.0f;
-	for (size_t i = 0; i < count; i++) {
-		if (volumes[i] > peak)
-			peak = volumes[i];
-	}
-	bool mute = false;
-	float current = 1.0f;
-	backend->GetStreamVolume((uint32)streamId, &current, &mute);
-	return backend->SetStreamVolume((uint32)streamId, peak, mute);
+	std::vector<float> cubic(count);
+	for (size_t i = 0; i < count; i++)
+		cubic[i] = volumes[i] * volumes[i] * volumes[i];
+	return backend->SetStreamChannelVolumes((uint32)streamId, cubic.data(),
+		count);
 }
 
 

@@ -177,6 +177,8 @@ public:
 									float* outVolume, bool* outMute);
 		status_t				SetStreamVolume(uint32 streamId,
 									float volume, bool mute);
+		status_t				SetStreamChannelVolumes(uint32 streamId,
+									const float* volumes, size_t count);
 
 		static const char* const kPeakMeterNodeName;
 
@@ -345,6 +347,12 @@ private:
 			static void				_NodeParamThunk(void* data, int seq,
 										uint32 id, uint32 index, uint32 next,
 										const struct spa_pod* param);
+			status_t				_QueryNodeVolume(uint32 nodeId,
+										VolumeQuery& outQuery);
+			status_t				_SetStreamProps(uint32 streamId,
+										const float* volumes, size_t count,
+										bool haveMute, bool mute);
+			bool					_HasStream(uint32 streamId);
 
 			struct NodeControlQuery {
 				std::vector<NodeControlInfo>	info;

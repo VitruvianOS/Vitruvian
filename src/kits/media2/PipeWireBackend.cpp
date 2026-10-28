@@ -41,6 +41,7 @@
 #include <media2/MediaGraph.h>
 
 #include "FormatConversion.h"
+#include "MixerParams.h"
 #include <ControllablePrivate.h>
 #include <MediaGraphPrivate.h>
 
@@ -1121,23 +1122,161 @@ PipeWireBackend::GetStreamVolume(uint32 streamId, float* outVolume,
 
 
 status_t
+PipeWireBackend::_QueryNodeVolume(uint32 nodeId, VolumeQuery& outQuery)
+{
+	outQuery = { {}, false, false, false };
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kNodeParamEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeParamThunk
+	};
+	pw_node_add_listener(node, &hook, &kNodeParamEvents, &outQuery);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::_SetStreamProps(uint32 streamId, const float* volumes,
+	size_t count, bool haveMute, bool mute)
+{
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	uint8_t buffer[512];
+	const spa_pod* param = MixerBuildVolumeProps(buffer, sizeof(buffer),
+		volumes, (uint32)count, haveMute, mute);
+	if (param == NULL)
+		return B_NO_MEMORY;
+
+	Lock();
+	struct pw_node* node = _BindNode(streamId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+	pw_node_set_param(node, SPA_PARAM_Props, 0, param);
+
+	VolumeQuery verify = { {}, false, false, false };
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kVerifyEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeParamThunk
+	};
+	pw_node_add_listener(node, &hook, &kVerifyEvents, &verify);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	// A stream that never reported its props accepts the write silently;
+	// only fail when the readback contradicts it.
+	if (!verify.volumes.empty()
+			&& fabsf(verify.volumes[0] - volumes[0]) >= 0.01f) {
+		fprintf(stderr, "PipeWireBackend: stream %u props not applied "
+			"(read back %.3f, wanted %.3f)\n", streamId,
+			verify.volumes[0], volumes[0]);
+		return B_ERROR;
+	}
+	if (haveMute && verify.haveMute && verify.mute != mute)
+		return B_ERROR;
+	return B_OK;
+}
+
+
+status_t
 PipeWireBackend::SetStreamVolume(uint32 streamId, float volume, bool mute)
 {
-	bool found = false;
+	if (!_HasStream(streamId))
+		return B_BAD_VALUE;
+
+	// Replicate the master over however many channels the node has.
+	VolumeQuery current = { {}, false, false, false };
+	_QueryNodeVolume(streamId, current);
+	const size_t channels = current.volumes.empty()
+		? 2 : current.volumes.size();
+	std::vector<float> volumes(channels, volume);
+
+	status_t status = _SetStreamProps(streamId, volumes.data(), channels,
+		true, mute);
+	if (status != B_OK)
+		return status;
+
 	{
 		std::lock_guard<std::mutex> _(fStreamsLock);
 		for (auto& s : fStreams) {
 			if (s.id == streamId) {
 				s.volume = volume;
 				s.mute   = mute;
-				found = true;
 				break;
 			}
 		}
 	}
-	if (found)
-		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
-	return found ? B_OK : B_BAD_VALUE;
+	_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::SetStreamChannelVolumes(uint32 streamId,
+	const float* volumes, size_t count)
+{
+	if (volumes == NULL || count == 0)
+		return B_BAD_VALUE;
+	if (!_HasStream(streamId))
+		return B_BAD_VALUE;
+
+	status_t status = _SetStreamProps(streamId, volumes, count, false, false);
+	if (status != B_OK)
+		return status;
+
+	float peak = 0.0f;
+	for (size_t i = 0; i < count; i++) {
+		if (volumes[i] > peak)
+			peak = volumes[i];
+	}
+	{
+		std::lock_guard<std::mutex> _(fStreamsLock);
+		for (auto& s : fStreams) {
+			if (s.id == streamId) {
+				s.volume = peak;
+				break;
+			}
+		}
+	}
+	_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
+	return B_OK;
+}
+
+
+bool
+PipeWireBackend::_HasStream(uint32 streamId)
+{
+	std::lock_guard<std::mutex> _(fStreamsLock);
+	for (auto& s : fStreams) {
+		if (s.id == streamId)
+			return true;
+	}
+	return false;
 }
 
 

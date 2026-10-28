@@ -39,6 +39,7 @@ AddOn(media2
 	MediaSynth.cpp
 	ParameterWeb.cpp
 	PeakMeter.cpp
+	MixerParams.cpp
 	PipeWireBackend.cpp
 	PlaySound.cpp
 	SimpleMediaNode.cpp

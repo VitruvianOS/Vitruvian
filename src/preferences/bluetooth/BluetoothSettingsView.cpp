@@ -110,6 +110,7 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 		.Add(new BStringView("classLabel", B_TRANSLATE("Identify host as:")),
 			0, 4)
 		.Add(fDeviceClassView, 1, 4)
+		.AddGlue(0, 5, 2)
 	.End();
 }
 

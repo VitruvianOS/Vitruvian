@@ -402,6 +402,13 @@ MainWin::_UpdateVideoMode()
 	if (fFullScreen.IsFullscreen())
 		return;
 
+	if (hasVideo)
+		SetFlags(Flags() & ~B_NOT_ZOOMABLE);
+	else {
+		SetFlags(Flags() | B_NOT_ZOOMABLE);
+		fZoomFrame = BRect();
+	}
+
 	if (hasVideo) {
 		const uint32 width = fController->VideoWidth();
 		const uint32 height = fController->VideoHeight();
@@ -1177,6 +1184,40 @@ MainWin::FrameResized(float newWidth, float newHeight)
 	if (fFullScreen.IsFullscreen())
 		_PositionControls();
 	_UpdateTransport();
+}
+
+
+void
+MainWin::Zoom(BPoint origin, float width, float height)
+{
+	if (fController == NULL || !fController->HasVideo()
+			|| fFullScreen.IsFullscreen())
+		return;
+
+	if (fZoomFrame.IsValid()) {
+		MoveTo(fZoomFrame.LeftTop());
+		ResizeTo(fZoomFrame.Width(), fZoomFrame.Height());
+		fZoomFrame = BRect();
+		MoveOnScreen(B_DO_NOT_RESIZE_TO_FIT | B_MOVE_IF_PARTIALLY_OFFSCREEN);
+		return;
+	}
+
+	const BRect frame = Frame();
+	const float scale = fVideoScale;
+	BRect screen = BScreen(this).Frame();
+	const BRect decorated = DecoratorFrame();
+	MoveTo(screen.left + frame.left - decorated.left,
+		screen.top + frame.top - decorated.top);
+	fVideoScale = 8.0f;
+	_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
+	fVideoScale = scale;
+	fZoomFrame = frame;
+
+	const BRect zoomed = DecoratorFrame();
+	MoveBy(floorf(screen.left + (screen.Width() - zoomed.Width()) / 2
+			- zoomed.left),
+		floorf(screen.top + (screen.Height() - zoomed.Height()) / 2
+			- zoomed.top));
 }
 
 

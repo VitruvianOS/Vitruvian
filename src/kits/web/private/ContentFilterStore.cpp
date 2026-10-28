@@ -75,6 +75,7 @@ ContentFilterStore::_GetOnGLibThread(const std::string& id,
 	std::function<void(WebKitUserContentFilter*)> cb)
 {
 	WebKitUserContentFilter* compiled = NULL;
+	bool noCache = false;
 	{
 		std::lock_guard<std::mutex> lock(fMutex);
 		auto it = fCompiled.find(id);
@@ -82,27 +83,31 @@ ContentFilterStore::_GetOnGLibThread(const std::string& id,
 			compiled = it->second;
 		if (fCacheDir.empty()) {
 			// No profile yet: nothing to compile into.
-			if (cb != NULL)
-				cb(NULL);
-			return;
-		}
-		if (fStore == NULL)
-			fStore = webkit_user_content_filter_store_new(
-				fCacheDir.c_str());
-		if (compiled == NULL) {
-			Pending* pending = NULL;
-			auto pendingIt = fPending.find(id);
-			if (pendingIt != fPending.end())
-				pending = pendingIt->second;
-			else {
-				pending = new Pending;
-				fPending[id] = pending;
+			noCache = true;
+		} else {
+			if (fStore == NULL)
+				fStore = webkit_user_content_filter_store_new(
+					fCacheDir.c_str());
+			if (compiled == NULL) {
+				Pending* pending = NULL;
+				auto pendingIt = fPending.find(id);
+				if (pendingIt != fPending.end())
+					pending = pendingIt->second;
+				else {
+					pending = new Pending;
+					fPending[id] = pending;
+				}
+				if (cb != NULL)
+					pending->callbacks.push_back(cb);
+				if (pending->callbacks.size() > 1)
+					return;	// a request is already in flight
 			}
-			if (cb != NULL)
-				pending->callbacks.push_back(cb);
-			if (pending->callbacks.size() > 1)
-				return;	// a request is already in flight
 		}
+	}
+	if (noCache) {
+		if (cb != NULL)
+			cb(NULL);
+		return;
 	}
 	if (compiled != NULL) {
 		if (cb != NULL)

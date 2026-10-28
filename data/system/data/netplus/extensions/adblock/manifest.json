@@ -1,0 +1,11 @@
+{
+	"id": "adblock",
+	"name": "Adblock",
+	"version": "2026.10.28",
+	"kind": "content-blocker",
+	"licence": "GPL-3.0",
+	"description": "EasyList, EasyPrivacy and the uBlock Origin lists, compiled to content-blocker rules",
+	"match": ["<all_urls>"],
+	"default-enabled": true,
+	"rules": ["rules1.json", "rules2.json"]
+}

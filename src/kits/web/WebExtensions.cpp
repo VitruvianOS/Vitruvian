@@ -361,7 +361,9 @@ WebExtensionMatchPattern(const char* pattern, const char* url)
 struct WebExtensionRecord {
 	WebExtensionInfo			info;
 	std::vector<std::string>	match;
-	std::string					rulesPath;
+	// One compiled filter per file; split lists stay split so no
+	// single compile crosses the engine's rule-count limit.
+	std::vector<std::string>	rulesPaths;
 	// Script and style bodies are small; load them at scan time.
 	std::string					source;
 	bool						atDocumentStart = true;
@@ -530,12 +532,21 @@ BWebExtensions::_ScanRoot(const std::string& root, bool userOwned)
 			extension.info.name = extension.info.id;
 
 		if (extension.info.kind == "content-blocker") {
-			std::string rules = "rules.json";
-			reader.GetString("rules", &rules);
-			fs::path rulesPath = entry.path() / rules;
-			if (!fs::exists(rulesPath, ec))
+			std::vector<std::string> rules;
+			reader.GetStringArray("rules", &rules);
+			if (rules.empty()) {
+				std::string rulesFile = "rules.json";
+				reader.GetString("rules", &rulesFile);
+				rules.push_back(rulesFile);
+			}
+			for (const auto& rule : rules) {
+				fs::path rulesPath = entry.path() / rule;
+				if (!fs::exists(rulesPath, ec))
+					continue;
+				extension.rulesPaths.push_back(rulesPath.string());
+			}
+			if (extension.rulesPaths.empty())
 				continue;
-			extension.rulesPath = rulesPath.string();
 		} else if (extension.info.kind == "userscript") {
 			std::string script = "script.user.js";
 			reader.GetString("script", &script);
@@ -1028,10 +1039,14 @@ BWebExtensions::FiltersForURL(const char* url) const
 		if (extension.info.kind != "content-blocker"
 			|| !_AppliesTo(extension, url))
 			continue;
-		WebExtensionFilter filter;
-		filter.id = extension.info.id;
-		filter.rulesPath = extension.rulesPath;
-		result.push_back(filter);
+		for (size_t i = 0; i < extension.rulesPaths.size(); i++) {
+			WebExtensionFilter filter;
+			filter.id = i == 0
+				? extension.info.id
+				: extension.info.id + "#" + std::to_string(i);
+			filter.rulesPath = extension.rulesPaths[i];
+			result.push_back(filter);
+		}
 	}
 	return result;
 }
@@ -1046,10 +1061,14 @@ BWebExtensions::AllFilters() const
 		if (extension.info.kind != "content-blocker"
 			|| !extension.info.enabled)
 			continue;
-		WebExtensionFilter filter;
-		filter.id = extension.info.id;
-		filter.rulesPath = extension.rulesPath;
-		result.push_back(filter);
+		for (size_t i = 0; i < extension.rulesPaths.size(); i++) {
+			WebExtensionFilter filter;
+			filter.id = i == 0
+				? extension.info.id
+				: extension.info.id + "#" + std::to_string(i);
+			filter.rulesPath = extension.rulesPaths[i];
+			result.push_back(filter);
+		}
 	}
 	return result;
 }

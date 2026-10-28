@@ -163,6 +163,12 @@ ImageIncludeDir("data/system/data/samples" "/system/data/")
 ImageIncludeDir("data/system/data/KeyboardLayouts" "/system/data/")
 ImageIncludeDir("data/system/data/sounds" "/system/data/")
 
+# NetPlus starter extensions ship as their own apt package, so the
+# store can update them without an OS upgrade.
+install(DIRECTORY "data/system/data/netplus/extensions"
+	DESTINATION "/system/data/netplus"
+	COMPONENT netplus-extensions)
+
 install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork" COMPONENT data)
 
 # Profile, inputrc, and profile.d scripts for Terminal

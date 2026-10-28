@@ -1,0 +1,61 @@
+{
+  "version": "2026.10.28",
+  "generated_at": "2026-10-28T04:11:38Z",
+  "lists": {
+    "easylist": {
+      "name": "easylist",
+      "source_url": "https://easylist.to/easylist/easylist.txt",
+      "rules_count": 119824,
+      "skipped_count": 1832
+    },
+    "easyprivacy": {
+      "name": "easyprivacy",
+      "source_url": "https://easylist.to/easylist/easyprivacy.txt",
+      "rules_count": 103783,
+      "skipped_count": 103
+    },
+    "peter-lowe": {
+      "name": "peter-lowe",
+      "source_url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus\u0026mimetype=plaintext",
+      "rules_count": 7132,
+      "skipped_count": 0
+    },
+    "ublock-badware": {
+      "name": "ublock-badware",
+      "source_url": "https://ublockorigin.github.io/uAssets/filters/badware.txt",
+      "rules_count": 8410,
+      "skipped_count": 371
+    },
+    "ublock-filters": {
+      "name": "ublock-filters",
+      "source_url": "https://ublockorigin.github.io/uAssets/filters/filters.txt",
+      "rules_count": 2316,
+      "skipped_count": 4002
+    },
+    "ublock-privacy": {
+      "name": "ublock-privacy",
+      "source_url": "https://ublockorigin.github.io/uAssets/filters/privacy.txt",
+      "rules_count": 1068,
+      "skipped_count": 857
+    },
+    "ublock-quick-fixes": {
+      "name": "ublock-quick-fixes",
+      "source_url": "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt",
+      "rules_count": 202,
+      "skipped_count": 318
+    },
+    "ublock-unbreak": {
+      "name": "ublock-unbreak",
+      "source_url": "https://ublockorigin.github.io/uAssets/filters/unbreak.txt",
+      "rules_count": 1686,
+      "skipped_count": 1180
+    }
+  },
+  "combined": {
+    "total_rules": 242174,
+    "files": [
+      "combined-part2.json",
+      "combined-part1.json"
+    ]
+  }
+}

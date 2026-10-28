@@ -1,0 +1,11 @@
+{
+	"id": "dark-mode",
+	"name": "Dark Mode",
+	"version": "1.0",
+	"kind": "user-style",
+	"licence": "LGPL-2.1",
+	"description": "Forces a dark colour scheme on every page; toggle it here or per site from the panel menu",
+	"match": ["<all_urls>"],
+	"default-enabled": false,
+	"style": "style.css"
+}

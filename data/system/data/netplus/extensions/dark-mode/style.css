@@ -1,0 +1,67 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the LGPL License.
+ *
+ * NetPlus dark mode: force a dark palette on pages that only ship
+ * a light theme, and flip media back so photographs stay natural.
+ */
+
+:root {
+	color-scheme: dark !important;
+}
+
+html,
+body {
+	background-color: #171717 !important;
+	color: #e6e6e6 !important;
+}
+
+body {
+	margin: 0;
+}
+
+/* Light containers a page paints behind its text. */
+div, section, article, main, aside, header, footer, nav,
+form, fieldset, table, td, th, li, p, blockquote, pre {
+	background-color: transparent;
+}
+
+input, textarea, select, button {
+	background-color: #2a2a2a !important;
+	color: #e6e6e6 !important;
+	border-color: #444 !important;
+}
+
+a {
+	color: #8ab4f8 !important;
+}
+
+a:visited {
+	color: #c58af9 !important;
+}
+
+hr {
+	border-color: #444 !important;
+}
+
+/* Page-authored dark-on-light rules lose to the palette above;
+ * media must not double-invert with it. */
+img, video, picture, canvas, iframe, embed, object {
+	filter: none !important;
+}
+
+/* Images drawn on a white page background: flip them back when the
+ * page already inverts, keep them natural otherwise. */
+img, video {
+	mix-blend-mode: normal;
+}
+
+code, pre, kbd, samp {
+	background-color: #2a2a2a !important;
+	color: #e6e6e6 !important;
+}
+
+::selection {
+	background-color: #3a5a8c !important;
+	color: #fff !important;
+}

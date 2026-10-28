@@ -192,6 +192,23 @@ set(CPACK_DEBIAN_DATA_PACKAGE_ARCHITECTURE "all")
 set(CPACK_DEBIAN_DATA_PACKAGE_DESCRIPTION
 	"V\\\\OS data and configuration: catalogs, fonts, MIME database and system settings")
 
+# NetPlus starter extensions: separate so the store can update the
+# lists without an OS upgrade. CPackDeb looks the settings up by the
+# uppercased component name; spell it with and without the dash so
+# both lookup styles find them.
+set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_DEPENDS
+	"vos (= ${_vos_runtime_version})")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DEPENDS
+	"vos (= ${_vos_runtime_version})")
+set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_DESCRIPTION
+	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DESCRIPTION
+	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_DESCRIPTION
+	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
+
 # These files used to ship in vos itself.
 set(CPACK_DEBIAN_DATA_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")
 set(CPACK_DEBIAN_DATA_PACKAGE_BREAKS "vos (<< ${_vos_runtime_version})")
@@ -208,6 +225,7 @@ set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-runtime.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dev.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-data.deb"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-netplus-extensions.deb"
 )
 
 # vos-dev component: public headers + pkg-config. The shared libraries are

@@ -111,7 +111,7 @@ get_dev_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
             ;;
         arm64)
             printf '%s' \
@@ -126,7 +126,7 @@ get_dev_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
             ;;
         arm32)
             printf '%s' \
@@ -140,7 +140,7 @@ get_dev_packages() {
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -154,7 +154,7 @@ get_dev_packages() {
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

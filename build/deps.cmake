@@ -373,6 +373,21 @@ DeclareDependency(
 	RUNTIMES   "libetpan20t64"
 )
 
+# SIP stack and VP8 codec for the telephony kit.
+DeclareDependency(
+	LIBRE
+	LIBRARIES  "re"
+	PACKAGES   "libre-dev"
+	RUNTIMES   "libre1"
+)
+
+DeclareDependency(
+	LIBVPX
+	LIBRARIES  "vpx"
+	PACKAGES   "libvpx-dev"
+	RUNTIMES   "libvpx9"
+)
+
 # HTTPS for the WebMail OAuth2 token exchange and ISPDB autoconfig.
 DeclareDependency(
 	CURL

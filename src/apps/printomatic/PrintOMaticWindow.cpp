@@ -185,7 +185,7 @@ WriteBitmapFile(BBitmap* bitmap, const char* path, const char* mimeType,
 PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 	:
 	BWindow(frame, "PrintOMatic", B_TITLED_WINDOW,
-		B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
+		B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 	fDeviceCount(0),
 	fBusy(false),
 	fBatchActive(false),
@@ -255,6 +255,7 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 	fSaveButton = new BButton("save", B_TRANSLATE("Save to File"),
 		new BMessage(kMsgSaveFile));
 	fStatusView = new BStringView("status", B_TRANSLATE("Starting..."));
+	fStatusView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BBox* pagesBox = new BBox("pagesBox");
 	pagesBox->SetLabel(B_TRANSLATE("Pages"));
@@ -265,10 +266,12 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 			.Add(fDeletePageButton)
 			.Add(fMoveUpButton)
 			.Add(fMoveDownButton)
+			.AddGlue()
 		.End();
 
 	BBox* destinationBox = new BBox("destinationBox");
 	destinationBox->SetLabel(B_TRANSLATE("Destination"));
+	destinationBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	BLayoutBuilder::Group<>(destinationBox, B_VERTICAL)
 		.SetInsets(B_USE_DEFAULT_SPACING)
 		.Add(fPrintRadio)
@@ -276,11 +279,13 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 			.SetInsets(B_USE_DEFAULT_SPACING, 0, 0, 0)
 			.Add(fPrinterField)
 			.Add(fCopiesControl)
+			.AddGlue()
 		.End()
 		.Add(fSaveRadio)
 		.AddGroup(B_HORIZONTAL)
 			.SetInsets(B_USE_DEFAULT_SPACING, 0, 0, 0)
 			.Add(fFormatField)
+			.AddGlue()
 		.End();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
@@ -288,11 +293,13 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fDeviceField)
 			.Add(fRefreshButton)
+			.AddGlue()
 		.End()
 		.AddGroup(B_HORIZONTAL)
 			.Add(fSourceField)
 			.Add(fModeField)
 			.Add(fResolutionField)
+			.AddGlue()
 		.End()
 		.AddGroup(B_HORIZONTAL)
 			.Add(fPreviewView, 3)
@@ -312,6 +319,7 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 	// Hidden helper for print/PDF page rendering.
 	fPageDrawView = new PageDrawView();
 	AddChild(fPageDrawView);
+	fPageDrawView->Hide();
 	fPrintRadio->SetValue(B_CONTROL_ON);
 	fCancelButton->SetEnabled(false);
 

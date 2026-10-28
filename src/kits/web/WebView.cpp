@@ -34,6 +34,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
+#include <map>
 #include <mutex>
 #include <set>
 #include <string>
@@ -58,6 +59,7 @@ static const bigtime_t kResizeSettleDelay = 150000;
 #include "frame_notifier.h"
 #include "key_tables.h"
 #include "session_adapter.h"
+#include "url_scheme_adapter.h"
 #include "webkit_bridge.h"
 #include "process_manager.h"
 
@@ -194,6 +196,61 @@ escapeHtml(const std::string& in)
 	}
 	return out;
 }
+
+
+// One shared session per named profile directory, so views on the same
+// directory keep their cookies and different directories stay apart.
+struct PersistentSession {
+	SessionAdapter*	session;
+	int				refCount;
+};
+
+static std::mutex sPersistentMutex;
+static std::map<std::string, PersistentSession*> sPersistentSessions;
+
+
+static SessionAdapter*
+acquirePersistentSession(const std::string& dir)
+{
+	std::lock_guard<std::mutex> lock(sPersistentMutex);
+	PersistentSession* entry = sPersistentSessions[dir];
+	if (entry == NULL) {
+		SessionAdapter* session = NULL;
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			session = new SessionAdapter(dir, false);
+		});
+		entry = new PersistentSession{session, 0};
+		sPersistentSessions[dir] = entry;
+	}
+	entry->refCount++;
+	return entry->session;
+}
+
+
+static void
+releasePersistentSession(SessionAdapter* session)
+{
+	SessionAdapter* doomed = NULL;
+	{
+		std::lock_guard<std::mutex> lock(sPersistentMutex);
+		for (auto it = sPersistentSessions.begin();
+			it != sPersistentSessions.end(); it++) {
+			if (it->second->session != session)
+				continue;
+			if (--it->second->refCount > 0)
+				return;
+			doomed = it->second->session;
+			delete it->second;
+			sPersistentSessions.erase(it);
+			break;
+		}
+	}
+	if (doomed != NULL) {
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			delete doomed;
+		});
+	}
+}
 #endif
 
 
@@ -217,6 +274,7 @@ struct BWebView::WebViewImpl {
 	ClipboardDragDrop*	fClipboard;
 	SessionAdapter*		fSession;
 	bool				fOwnsSession;
+	bool				fOwnsPersistent;
 	BMessenger			fSelfMessenger;
 	BPoint				fLastMouse;
 	// Hover strings are written on the GLib thread and read on the
@@ -262,6 +320,7 @@ struct BWebView::WebViewImpl {
 		fClipboard(NULL),
 		fSession(NULL),
 		fOwnsSession(false),
+		fOwnsPersistent(false),
 		fCursorId(B_CURSOR_ID_SYSTEM_DEFAULT),
 		fFullScreen(false),
 		fDragPending(false),
@@ -383,7 +442,8 @@ BWebView::~BWebView()
 		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
 			delete session;
 		});
-	}
+	} else if (fImpl->fOwnsPersistent && fImpl->fSession != NULL)
+		releasePersistentSession(fImpl->fSession);
 	delete fImpl->fBridge;
 	delete fImpl->fEventAdapter;
 	delete fImpl->fClipboard;
@@ -427,9 +487,11 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
 			delete old;
 		});
-		fImpl->fSession = NULL;
-		fImpl->fOwnsSession = false;
-	}
+	} else if (fImpl->fOwnsPersistent && fImpl->fSession != NULL)
+		releasePersistentSession(fImpl->fSession);
+	fImpl->fSession = NULL;
+	fImpl->fOwnsSession = false;
+	fImpl->fOwnsPersistent = false;
 
 	if (ephemeral) {
 		SessionAdapter* session = NULL;
@@ -438,6 +500,13 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 		});
 		fImpl->fSession = session;
 		fImpl->fOwnsSession = true;
+		return;
+	}
+
+	// A named directory gets its own persistent session.
+	if (profileDir != NULL && profileDir[0] != '\0') {
+		fImpl->fSession = acquirePersistentSession(profileDir);
+		fImpl->fOwnsPersistent = true;
 		return;
 	}
 
@@ -2023,6 +2092,15 @@ BWebView::AddUserStyleSheet(const char* css)
 	if (fImpl->fBridge == NULL || css == NULL)
 		return;
 	fImpl->fBridge->AddUserStyleSheet(css);
+#endif
+}
+
+
+void
+BWebView::SetLocalSchemeDirectory(const char* scheme, const char* path)
+{
+#ifdef HAS_WPE
+	SetUriSchemeDirectory(scheme, path);
 #endif
 }
 

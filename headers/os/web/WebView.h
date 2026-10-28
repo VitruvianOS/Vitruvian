@@ -118,6 +118,11 @@ public:
 									bool atDocumentStart);
 			void				AddUserStyleSheet(const char* css);
 
+	// Serves a URI scheme from a directory of static files. Call
+	// before any view in the process is attached.
+	static	void				SetLocalSchemeDirectory(const char* scheme,
+									const char* path);
+
 	// Full-screen video: the window calls this after it entered or
 	// left full-screen; the reply tells WebKit the transition done.
 			void				NotifyFullScreen(bool entered);

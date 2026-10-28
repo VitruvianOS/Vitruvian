@@ -12,6 +12,7 @@
 #include "MainWindow.h"
 
 class BWebBookmarks;
+class BWebExtensions;
 class BWebSettings;
 
 
@@ -38,9 +39,12 @@ public:
 
 			void				BroadcastSettingsChanged();
 			void				BroadcastBookmarksChanged();
+			void				BroadcastExtensionsChanged();
 
 	static	BWebSettings*		Settings();
 	static	BWebBookmarks*		Bookmarks();
+	// The NetPlus extension registry; loaded in ReadyToRun.
+	static	BWebExtensions*		Extensions();
 	// Directory holding settings, bookmarks and the profile.
 	static	const char*			SettingsDir();
 	// DuckDuckGo, Startpage, ... or "Custom": resolves to the
@@ -54,6 +58,7 @@ private:
 
 	BWebSettings*				fSettings;
 	BWebBookmarks*				fBookmarks;
+	BWebExtensions*				fExtensions;
 			int32				fWindowCount;
 			BString				fStartupURL;
 			PwaLaunchInfo		fPwa;

@@ -99,6 +99,8 @@ ToolbarView::AttachedToWindow()
 		"Reload");
 	fToolBar->AddAction(MSG_NAV_HOME, Window(), kNetPlusHomeIcon,
 		kNetPlusHomeIconSize, "Home");
+	fToolBar->AddAction(MSG_READER_TOGGLE, Window(), kNetPlusReaderIcon,
+		kNetPlusReaderIconSize, "Reader mode");
 
 	// BToolBar hosts buttons, not arbitrary controls: the address
 	// field is embedded with AddView, so it shares the strip and the

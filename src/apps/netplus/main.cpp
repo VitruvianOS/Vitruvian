@@ -19,6 +19,7 @@
 
 #include <web/UrlNormalize.h>
 #include <web/WebDefs.h>
+#include <web/WebExtensions.h>
 #include <web/WebView.h>
 #include <web/WebBookmarks.h>
 #include <web/WebSettings.h>
@@ -32,6 +33,7 @@
 static const char* kSettingsFileName = "settings";
 static const char* kBookmarksFileName = "bookmarks.html";
 static const char* kLastURLKey = "last_session_url";
+static const char* kPackagedExtensionsDir = "/system/data/netplus/extensions";
 
 static std::string
 _SelfPath()
@@ -75,6 +77,7 @@ NetPlusApp::NetPlusApp()
 	BApplication("application/x-vnd.vos-NetPlus"),
 	fSettings(new BWebSettings()),
 	fBookmarks(new BWebBookmarks()),
+	fExtensions(new BWebExtensions()),
 	fWindowCount(0)
 {
 }
@@ -82,8 +85,17 @@ NetPlusApp::NetPlusApp()
 
 NetPlusApp::~NetPlusApp()
 {
+	delete fExtensions;
 	delete fBookmarks;
 	delete fSettings;
+}
+
+
+/* static */
+BWebExtensions*
+NetPlusApp::Extensions()
+{
+	return static_cast<NetPlusApp*>(be_app)->fExtensions;
 }
 
 
@@ -144,6 +156,7 @@ NetPlusApp::_CreateDirs()
 	namespace fs = std::filesystem;
 	std::error_code ec;
 	fs::create_directories(std::string(SettingsDir()) + "/profile", ec);
+	fs::create_directories(std::string(SettingsDir()) + "/extensions", ec);
 }
 
 
@@ -206,6 +219,10 @@ NetPlusApp::MessageReceived(BMessage* message)
 			DownloadsWindow::HandleDownloadMessage(message, NULL);
 			break;
 
+		case B_WEB_EXTENSIONS_CHANGED:
+			BroadcastExtensionsChanged();
+			break;
+
 		default:
 			BApplication::MessageReceived(message);
 			break;
@@ -257,6 +274,16 @@ NetPlusApp::ReadyToRun()
 	_CreateDirs();
 	_LoadSettings();
 	_LoadBookmarks();
+
+	// Packaged extensions first, then the user's own; the state file
+	// next to them keeps the enable and per-site settings.
+	BString extensionsDir(SettingsDir());
+	extensionsDir << "/extensions";
+	BString extensionsState(SettingsDir());
+	extensionsState << "/extensions.state";
+	fExtensions->Load(kPackagedExtensionsDir, extensionsDir.String(),
+		extensionsState.String());
+	fExtensions->SetTarget(BMessenger(this));
 
 	// Every window shares one profile session: route its download
 	// events through the app so they arrive once, not once per window.
@@ -334,6 +361,17 @@ NetPlusApp::BroadcastBookmarksChanged()
 		BWindow* window = WindowAt(i);
 		if (window != NULL)
 			window->PostMessage(MSG_BOOKMARKS_CHANGED);
+	}
+}
+
+
+void
+NetPlusApp::BroadcastExtensionsChanged()
+{
+	for (int32 i = 0; i < CountWindows(); i++) {
+		BWindow* window = WindowAt(i);
+		if (window != NULL)
+			window->PostMessage(MSG_EXTENSIONS_CHANGED);
 	}
 }
 

@@ -6,6 +6,7 @@
 
 #include "DownloadsWindow.h"
 #include "DeskbarEntry.h"
+#include "ExtensionsWindow.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
@@ -17,6 +18,7 @@
 #include "UrlInput.h"
 
 #include <WebDefs.h>
+#include <WebExtensions.h>
 #include <WebView.h>
 #include <WebBookmarks.h>
 #include <WebSettings.h>
@@ -43,6 +45,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <string>
+#include <vector>
 
 // Built-in start page until the homepage becomes a setting.
 static const char* kHomePage = "vos-about:";
@@ -92,6 +97,30 @@ static const char* kInstallScript = (
 	"  report();"
 	"})();"
 );
+
+
+static std::string
+_HostFromURL(const char* url)
+{
+	if (url == NULL)
+		return std::string();
+	std::string value(url);
+	size_t schemeEnd = value.find("://");
+	if (schemeEnd == std::string::npos)
+		return std::string();
+	size_t authStart = schemeEnd + 3;
+	size_t pathStart = value.find('/', authStart);
+	std::string authority = pathStart == std::string::npos
+		? value.substr(authStart)
+		: value.substr(authStart, pathStart - authStart);
+	size_t at = authority.rfind('@');
+	if (at != std::string::npos)
+		authority = authority.substr(at + 1);
+	size_t colon = authority.rfind(':');
+	if (colon != std::string::npos)
+		authority = authority.substr(0, colon);
+	return authority;
+}
 
 
 static std::string
@@ -159,6 +188,7 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fWebView->SetTarget(BMessenger(this));
 	fWebView->AddUserScript(kInstallScript, false);
 	fWebView->AddScriptMessageHandler(kInstallHandler);
+	fWebView->SetExtensions(NetPlusApp::Extensions());
 
 	if (!fPwaMode) {
 		_AddShortcuts();
@@ -455,6 +485,7 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 	model.AddActionRow(root, "Reload", MSG_NAV_RELOAD, "Ctrl+R");
 	model.AddActionRow(root, "Stop", MSG_NAV_STOP);
 	model.AddActionRow(root, "Home", MSG_NAV_HOME, "Ctrl+H");
+	model.AddActionRow(root, "Reader Mode", MSG_READER_TOGGLE);
 	model.AddSeparatorRow(root);
 
 	model.AddSectionLabelRow(root, "Zoom");
@@ -510,8 +541,41 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 		model.AddSeparatorRow(root);
 	}
 
+	// Extensions for the current site: each row flips the
+	// disabled-on-this-site exception for that extension.
+	BWebExtensions* extensions = NetPlusApp::Extensions();
+	std::string siteHost = _HostFromURL(fWebView != NULL
+		? fWebView->CurrentURL() : NULL);
+	if (extensions != NULL && !siteHost.empty()) {
+		int32 activeCount = 0;
+		std::vector<WebExtensionInfo> list = extensions->List();
+		for (const auto& info : list) {
+			if (!info.enabled)
+				continue;
+			activeCount++;
+			bool offHere = extensions->IsDisabledOnSite(
+				info.id.c_str(), siteHost.c_str());
+			BString label(info.name.c_str());
+			label << (offHere ? " (off on this site)"
+				: " (on for this site)");
+			model.AddActionRow(root, label.String(),
+				MSG_SITE_EXT_TOGGLE, NULL, info.id.c_str());
+		}
+		if (activeCount == 0)
+			model.AddSectionLabelRow(root, "No extensions enabled");
+		int32 blocked = fWebView->BlockedRequestCount();
+		if (blocked > 0) {
+			BString blockedLabel;
+			blockedLabel << blocked
+				<< " requests blocked or failed";
+			model.AddSectionLabelRow(root, blockedLabel.String());
+		}
+		model.AddSeparatorRow(root);
+	}
+
 	model.AddSectionLabelRow(root, "Application");
 	model.AddActionRow(root, "Downloads", MSG_SHOW_DOWNLOADS, "Ctrl+J");
+	model.AddActionRow(root, "Extensions" B_UTF8_ELLIPSIS, MSG_SHOW_EXTENSIONS);
 	model.AddActionRow(root, "Settings" B_UTF8_ELLIPSIS, MSG_SHOW_SETTINGS);
 	model.AddActionRow(root, "About NetPlus", B_ABOUT_REQUESTED);
 	model.AddActionRow(root, "Quit NetPlus", B_QUIT_REQUESTED, "Ctrl+Q");
@@ -662,6 +726,58 @@ MainWindow::MessageReceived(BMessage* message)
 		case MSG_SHOW_SETTINGS:
 			SettingsWindow::ShowWindow(Frame());
 			break;
+
+		case MSG_SHOW_EXTENSIONS:
+			ExtensionsWindow::ShowWindow(Frame());
+			break;
+
+		case MSG_EXTENSIONS_CHANGED:
+			// Same pointer, new contents: re-apply to the view.
+			if (fWebView != NULL)
+				fWebView->SetExtensions(NetPlusApp::Extensions());
+			break;
+
+		case MSG_SITE_EXT_TOGGLE:
+		{
+			const char* id = NULL;
+			BWebExtensions* extensions = NetPlusApp::Extensions();
+			if (extensions == NULL || fWebView == NULL
+				|| message->FindString("id", &id) != B_OK)
+				break;
+			std::string host = _HostFromURL(fWebView->CurrentURL());
+			if (host.empty())
+				break;
+			extensions->SetDisabledOnSite(id, host.c_str(),
+				!extensions->IsDisabledOnSite(id, host.c_str()));
+			break;
+		}
+
+		case MSG_READER_TOGGLE:
+			// The reader userscript installs the toggle; a page
+			// without it just ignores the call.
+			if (fWebView != NULL)
+				fWebView->EvaluateJavaScript(
+					"if (window.__netplusReader)"
+					" window.__netplusReader();",
+					BMessenger(), 0);
+			break;
+
+		case B_WEB_PAGE_BLOCKED_COUNT:
+		{
+			if (fStatusBar == NULL)
+				break;
+			int32 blocked = 0;
+			message->FindInt32(B_WEB_BLOCKED_COUNT_FIELD, &blocked);
+			if (blocked > 0) {
+				BString text(fStatusBase.String());
+				if (text.Length() > 0)
+					text << "  ";
+				text << blocked << " blocked or failed";
+				fStatusBar->SetStatusText(text.String());
+			} else
+				fStatusBar->SetStatusText(fStatusBase.String());
+			break;
+		}
 
 		case MSG_BOOKMARK_ADD:
 		{

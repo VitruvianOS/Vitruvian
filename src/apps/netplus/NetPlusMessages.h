@@ -42,7 +42,21 @@ enum {
 	MSG_INSTALL_APP		= 'inpa',
 	MSG_INSTALL_CONFIRM = 'incf',
 	MSG_ICON_FETCHED	= 'icfl',
-	MSG_ICON_FETCH_JS	= 'icjs'
+	MSG_ICON_FETCH_JS	= 'icjs',
+	// Extensions window and per-site toggles.
+	MSG_SHOW_EXTENSIONS = 'xtrw',
+	// The registry changed; re-apply to the view and refresh the
+	// extensions window if it is open.
+	MSG_EXTENSIONS_CHANGED = 'xtrc',
+	MSG_EXTENSION_TOGGLE = 'xttg',
+	MSG_EXTENSION_REMOVE = 'xtrm',
+	MSG_EXTENSION_INSTALL = 'xtin',
+	MSG_INSTALL_PANEL_DONE = 'xtpd',
+	// Per-site exception: "id" string; flips the disabled-on-this-
+	// site state for the window's current host.
+	MSG_SITE_EXT_TOGGLE = 'xtst',
+	// Reader mode: run the reader extension's toggle on the page.
+	MSG_READER_TOGGLE	= 'rdrm'
 };
 
 

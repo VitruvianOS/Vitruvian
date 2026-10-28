@@ -392,8 +392,8 @@ DeclareDependency(
 DeclareDependency(
 	CURL
 	LIBRARIES  "curl"
-	PACKAGES   "libcurl4-openssl-dev"
-	RUNTIMES   "libcurl4t64"
+	PACKAGES   "libcurl4-gnutls-dev"
+	RUNTIMES   "libcurl3t64-gnutls"
 )
 
 DeclareDependency(

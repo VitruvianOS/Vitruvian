@@ -33,7 +33,7 @@ get_base_packages() {
                 " firmware-intel-graphics firmware-amd-graphics firmware-nvidia-graphics firmware-mediatek bluez-firmware" \
                 " firmware-sof-signed firmware-intel-sound firmware-cirrus intel-microcode amd64-microcode" \
                 " firmware-ti-connectivity firmware-intel-misc firmware-samsung firmware-siano firmware-zd1211 firmware-ath9k-htc firmware-carl9170" \
-                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl4t64" \
+                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
             ;;
         arm64)
@@ -51,7 +51,7 @@ get_base_packages() {
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl4t64" \
+                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " firmware-brcm80211 firmware-misc-nonfree firmware-realtek firmware-atheros firmware-libertas bluez-firmware" \
                 " grub-common grub2-common grub-efi-arm64-bin"
             ;;
@@ -69,7 +69,7 @@ get_base_packages() {
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl4t64" \
+                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " grub-common"
             ;;
         riscv64)
@@ -86,7 +86,7 @@ get_base_packages() {
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl4t64" \
+                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " grub-common grub2-common grub-efi-riscv64-bin"
             ;;
         *)
@@ -111,7 +111,7 @@ get_dev_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         arm64)
             printf '%s' \
@@ -126,7 +126,7 @@ get_dev_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         arm32)
             printf '%s' \
@@ -140,7 +140,7 @@ get_dev_packages() {
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -154,7 +154,7 @@ get_dev_packages() {
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-openssl-dev libre-dev libvpx-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

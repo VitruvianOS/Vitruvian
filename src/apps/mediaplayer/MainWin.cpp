@@ -140,7 +140,7 @@ MainWin::_SetupWindow()
 
 	fController->SetVideoView(fVideoView);
 
-	SetSizeLimits(kMinWidth, kMinHeight, 4000, 3000);
+	SetSizeLimits(kMinWidth, 4000, kMinHeight, 3000);
 	if (!fSavedFrame.IsValid())
 		ResizeTo(kMinWidth + 40, kMinHeight + 140);
 	CenterOnScreen();
@@ -389,10 +389,10 @@ MainWin::_UpdateVideoMode()
 		return;
 
 	if (hasVideo) {
-		SetSizeLimits(kMinWidth, kMinHeight, 4000, 3000);
+		SetSizeLimits(kMinWidth, 4000, kMinHeight, 3000);
 		_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
 	} else {
-		SetSizeLimits(kAudioMinWidth, _ChromeHeight() + 40, 4000, 3000);
+		SetSizeLimits(kAudioMinWidth, 4000, _ChromeHeight() + 40, 3000);
 		float audioW = kAudioMinWidth;
 		if (fSettings != NULL)
 			audioW = fSettings->GetValue("audio_width", (float)kAudioMinWidth);
@@ -493,14 +493,15 @@ MainWin::_EnterFullscreen()
 	fVideoView->AddChild(fControllerView);
 	fControllerView->SetResizingMode(B_FOLLOW_NONE);
 	fControllerView->SetSymbolScale(1.5f);
-	fStripHeight = fControllerView->Bounds().Height();
+	fStripHeight = fControllerView->PreferredSize().height;
 
 	fMenuBar->Hide();
 	BRect screen = BScreen(this).Frame();
+	SetSizeLimits(0, screen.Width(), 0, screen.Height());
 	MoveTo(screen.left, screen.top);
 	ResizeTo(screen.Width(), screen.Height());
 
-	fControlY = fVideoView->Bounds().bottom - fStripHeight + 1;
+	fControlY = Bounds().bottom - fStripHeight + 1;
 	_PositionControls();
 	fVideoView->SetFullscreenMode(true);
 }
@@ -522,6 +523,7 @@ MainWin::_ExitFullscreen()
 	}
 	fStripLayoutIndex = -1;
 	fMenuBar->Show();
+	SetSizeLimits(kMinWidth, 4000, kMinHeight, 3000);
 
 	if (fSavedFrame.IsValid()) {
 		MoveTo(fSavedFrame.LeftTop());

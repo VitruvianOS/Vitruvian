@@ -284,6 +284,53 @@ AptBackend::Upgrade(bool full)
 
 
 status_t
+AptBackend::SourceAdd(const char* slug, const char* types,
+	const char* uris, const char* suites, const char* components,
+	const char* signedBy)
+{
+	if (slug == NULL || types == NULL || uris == NULL || suites == NULL
+			|| components == NULL || signedBy == NULL)
+		return B_BAD_VALUE;
+
+	const char* argv[] = {
+		kPkexec, kAptHelper, "source-add",
+		slug, types, uris, suites, components, signedBy, NULL
+	};
+	return _RunHelper(argv);
+}
+
+
+status_t
+AptBackend::SourceRemove(const char* path)
+{
+	if (path == NULL)
+		return B_BAD_VALUE;
+
+	const char* argv[] = {
+		kPkexec, kAptHelper, "source-remove", path, NULL
+	};
+	return _RunHelper(argv);
+}
+
+
+status_t
+AptBackend::SourceSetEnabled(const char* path, int32 index, bool enabled)
+{
+	if (path == NULL || index < 1)
+		return B_BAD_VALUE;
+
+	BString indexText;
+	indexText.SetToFormat("%" B_PRId32, index);
+
+	const char* argv[] = {
+		kPkexec, kAptHelper, "source-set-enabled",
+		path, indexText.String(), enabled ? "on" : "off", NULL
+	};
+	return _RunHelper(argv);
+}
+
+
+status_t
 AptBackend::SetChannel(package_channel channel)
 {
 	// TODO: rewrite the sources entry and keyring for the target channel.

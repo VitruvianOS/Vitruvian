@@ -101,6 +101,12 @@ PackageWorker::MessageReceived(BMessage* message)
 			_DoAptUpdate();
 			break;
 
+		case kMsgSourceAdd:
+		case kMsgSourceRemove:
+		case kMsgSourceSetEnabled:
+			_DoSourceOp(message);
+			break;
+
 		case kMsgCancel:
 			RequestCancel();
 			break;
@@ -684,6 +690,121 @@ int32
 PackageWorker::_AptUpdateThread(void* data)
 {
 	((PackageWorker*)data)->_RunAptUpdate();
+	return 0;
+}
+
+
+// One source mutation per transaction thread, filled by the looper and
+// consumed (and freed) by the thread, like ApplyChangesJob above.
+struct source_job {
+	PackageWorker*			worker;
+	uint32					what;
+	BString					slug;
+	BString					types;
+	BString					uris;
+	BString					suites;
+	BString					components;
+	BString					signedBy;
+	BString					path;
+	int32					index;
+	bool					enabled;
+};
+
+
+void
+PackageWorker::_DoSourceOp(BMessage* request)
+{
+	if (fTransactionRunning) {
+		_ReportError(kAptErrorUnknown, "A transaction is already running.");
+		return;
+	}
+
+	source_job* job = new(std::nothrow) source_job;
+	if (job == NULL) {
+		_ReportError(kAptErrorUnknown, "Out of memory.");
+		return;
+	}
+
+	job->worker = this;
+	job->what = request->what;
+	job->index = 1;
+	job->enabled = false;
+
+	const char* text = NULL;
+	if (request->FindString("slug", &text) == B_OK)
+		job->slug = text;
+	if (request->FindString("types", &text) == B_OK)
+		job->types = text;
+	if (request->FindString("uris", &text) == B_OK)
+		job->uris = text;
+	if (request->FindString("suites", &text) == B_OK)
+		job->suites = text;
+	if (request->FindString("components", &text) == B_OK)
+		job->components = text;
+	if (request->FindString("signed_by", &text) == B_OK)
+		job->signedBy = text;
+	if (request->FindString("path", &text) == B_OK)
+		job->path = text;
+
+	int32 index = 1;
+	if (request->FindInt32("index", &index) == B_OK)
+		job->index = index;
+	request->FindBool("enabled", &job->enabled);
+
+	fTransactionRunning = true;
+	fTransactionThread = spawn_thread(_SourceOpThread,
+		"package source op", B_NORMAL_PRIORITY, job);
+	if (fTransactionThread < 0 || resume_thread(fTransactionThread) != B_OK) {
+		fTransactionRunning = false;
+		delete job;
+		_ReportError(kAptErrorUnknown, "Could not start source thread.");
+	}
+}
+
+
+void
+PackageWorker::_RunSourceOp(source_job* job)
+{
+	status_t result = B_ERROR;
+
+	switch (job->what) {
+		case kMsgSourceAdd:
+			result = fBackend->SourceAdd(job->slug.String(),
+				job->types.String(), job->uris.String(),
+				job->suites.String(), job->components.String(),
+				job->signedBy.String());
+			break;
+		case kMsgSourceRemove:
+			result = fBackend->SourceRemove(job->path.String());
+			break;
+		case kMsgSourceSetEnabled:
+			result = fBackend->SourceSetEnabled(job->path.String(),
+				job->index, job->enabled);
+			break;
+		default:
+			break;
+	}
+
+	// Clear the busy flag first: the window chains its apt update off
+	// kMsgSourceChanged, and that request must not race this looper.
+	BMessenger(this).SendMessage(kMsgWorkerJobDone);
+
+	if (result != B_OK) {
+		_ReportError(fBackend->LastError(),
+			fBackend->LastErrorDetail().String());
+	} else {
+		BMessage done(kMsgSourceChanged);
+		fOwner.SendMessage(&done);
+	}
+}
+
+
+int32
+PackageWorker::_SourceOpThread(void* data)
+{
+	source_job* job = (source_job*)data;
+	job->worker->_RunSourceOp(job);
+	delete job;
 	return 0;
 }
 

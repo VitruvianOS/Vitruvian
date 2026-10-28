@@ -43,6 +43,24 @@ enum {
 	kMsgSummaryCancel		= 'pmSc'
 };
 
+// Repositories tab: view -> window. The window turns these into the
+// worker requests below after its own gating and confirmation.
+enum {
+	kMsgSourceAddRequested	= 'pmdA',
+	kMsgSourceEditRequested	= 'pmdE',
+	kMsgSourceRemoveRequested	= 'pmdR',
+	kMsgSourceToggleRequested	= 'pmdT',
+	kMsgSourceSelectionChanged	= 'pmdS'
+};
+
+// dialog -> window -> worker, then worker -> window on success.
+enum {
+	kMsgSourceAdd			= 'pmrA',
+	kMsgSourceRemove		= 'pmrR',
+	kMsgSourceSetEnabled	= 'pmrE',
+	kMsgSourceChanged		= 'pmrC'
+};
+
 enum {
 	kMsgFilterChanged		= 'pmfc',
 	kMsgSectionSelected		= 'pmss',

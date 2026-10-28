@@ -31,14 +31,19 @@
 #include "FilterView.h"
 #include "PackageInfo.h"
 #include "PackageInfoView.h"
-#include "RepositoriesWindow.h"
 #include "PackageListView.h"
 #include "PackageWorker.h"
+#include "RepositoriesView.h"
+#include "SourceEditDialog.h"
 #include "WorkStatusView.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "MainWindow"
+
+
+// Tab position in fMainTabView; the menu jumps straight to it.
+static const int32 kRepositoriesTab = 2;
 
 
 MainWindow::MainWindow(BRect frame)
@@ -200,7 +205,40 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgManageRepositories:
-			(new RepositoriesWindow())->Show();
+			fMainTabView->Select(kRepositoriesTab);
+			fRepositoriesView->Reload();
+			break;
+
+		case kMsgSourceSelectionChanged:
+			fRepositoriesView->UpdateButtons();
+			break;
+
+		case kMsgSourceAddRequested:
+			_OpenSourceDialog(false);
+			break;
+
+		case kMsgSourceEditRequested:
+			_OpenSourceDialog(true);
+			break;
+
+		case kMsgSourceRemoveRequested:
+			_ConfirmSourceRemove();
+			break;
+
+		case kMsgSourceToggleRequested:
+			_ToggleSource();
+			break;
+
+		case kMsgSourceAdd:
+			_DispatchSourceOp(message);
+			break;
+
+		case kMsgSourceChanged:
+			// Busy flag stays set from the source op; hand the refresh
+			// straight to the worker so no input can slip in between.
+			fRepositoriesView->Reload();
+			fStatusView->SetIdle(B_TRANSLATE("Ready"));
+			fWorker->PostMessage(kMsgAptUpdate);
 			break;
 
 		case kMsgSimulateReady:
@@ -390,6 +428,7 @@ MainWindow::_BuildLayout()
 	fListView = new PackageListView();
 	fInfoView = new PackageInfoView();
 	fLogView = new AptLogView();
+	fRepositoriesView = new RepositoriesView();
 	fStatusView = new WorkStatusView();
 
 	fStaleHintView = new TruncatingStringView("stale hint",
@@ -429,6 +468,9 @@ MainWindow::_BuildLayout()
 	fMainTabView->TabAt(0)->SetLabel(B_TRANSLATE("Packages"));
 	fMainTabView->AddTab(fLogView);
 	fMainTabView->TabAt(1)->SetLabel(B_TRANSLATE("Log"));
+	fMainTabView->AddTab(fRepositoriesView);
+	fMainTabView->TabAt(kRepositoriesTab)->SetLabel(
+		B_TRANSLATE("Repositories"));
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0.0f)
 		.Add(fMenuBar)
@@ -650,6 +692,7 @@ MainWindow::_SetTransactionActive(bool active)
 	fCancelItem->SetEnabled(active);
 	fListView->SetTransactionActive(active);
 	fInfoView->SetTransactionActive(active);
+	fRepositoriesView->SetTransactionActive(active);
 	_UpdatePendingUI();
 }
 
@@ -751,6 +794,125 @@ MainWindow::_HandleError(BMessage* message)
 	BAlert* alert = new BAlert(B_TRANSLATE("Package manager"), text.String(),
 		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
 	alert->Go();
+}
+
+
+// Shared by the three source mutation entry points; buttons are
+// already disabled during a transaction, this catches message races.
+static void
+show_sources_busy_alert()
+{
+	BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
+		B_TRANSLATE("A package operation is running as root right now. "
+			"Wait for it to finish before changing sources."),
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL,
+		B_WARNING_ALERT);
+	alert->Go();
+}
+
+
+// The slug is the file name minus the helper's prefix and suffix; the
+// dialog shows it disabled and source-add rewrites that same file.
+static BString
+source_slug(const source_entry* entry)
+{
+	BString slug(entry->name);
+	if (slug.StartsWith("vos-user-"))
+		slug.Remove(0, 9);
+	if (slug.Length() > 8)
+		slug.Truncate(slug.Length() - 8);
+	return slug;
+}
+
+
+void
+MainWindow::_OpenSourceDialog(bool edit)
+{
+	if (fTransactionActive) {
+		show_sources_busy_alert();
+		return;
+	}
+
+	BMessage prefill(kMsgSourceEditRequested);
+	if (edit) {
+		source_entry* entry = fRepositoriesView->SelectedEntry();
+		if (entry == NULL || !entry->owned || entry->oneLine)
+			return;
+
+		BString slug(source_slug(entry));
+		prefill.AddString("slug", slug);
+		prefill.AddString("types", entry->types);
+		prefill.AddString("uris", entry->uris);
+		prefill.AddString("suites", entry->suites);
+		prefill.AddString("components", entry->components);
+		prefill.AddString("signed_by", entry->signedBy);
+	}
+
+	SourceEditDialog* dialog = new SourceEditDialog(this,
+		BMessenger(this), edit, edit ? &prefill : NULL);
+	dialog->Show();
+}
+
+
+void
+MainWindow::_ConfirmSourceRemove()
+{
+	if (fTransactionActive) {
+		show_sources_busy_alert();
+		return;
+	}
+
+	source_entry* entry = fRepositoriesView->SelectedEntry();
+	if (entry == NULL || !entry->owned)
+		return;
+
+	BString text(B_TRANSLATE("Remove %name%? Only user-added sources "
+		"can be removed."));
+	text.ReplaceFirst("%name%", entry->name);
+
+	BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
+		text.String(), B_TRANSLATE("Cancel"), B_TRANSLATE("Remove"),
+		NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	alert->SetShortcut(0, B_ESCAPE);
+	if (alert->Go() != 1)
+		return;
+
+	BMessage request(kMsgSourceRemove);
+	request.AddString("path", entry->path);
+	_DispatchSourceOp(&request);
+}
+
+
+void
+MainWindow::_ToggleSource()
+{
+	if (fTransactionActive) {
+		show_sources_busy_alert();
+		return;
+	}
+
+	source_entry* entry = fRepositoriesView->SelectedEntry();
+	if (entry == NULL)
+		return;
+
+	BMessage request(kMsgSourceSetEnabled);
+	request.AddString("path", entry->path);
+	request.AddInt32("index", entry->index);
+	request.AddBool("enabled", !entry->enabled);
+	_DispatchSourceOp(&request);
+}
+
+
+void
+MainWindow::_DispatchSourceOp(BMessage* request)
+{
+	if (fTransactionActive) {
+		show_sources_busy_alert();
+		return;
+	}
+
+	_SetTransactionActive(true);
+	fWorker->PostMessage(request);
 }
 
 

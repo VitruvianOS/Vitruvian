@@ -204,7 +204,11 @@ BluetoothWindow::BluetoothWindow()
 	fTabView->AddTab(devicesPage);
 	fTabView->AddTab(fSettingsView);
 
+	fTabView->SetBorder(B_NO_BORDER);
+	fTabView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
+		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, 0)
 		.Add(fTabView)
 	.End();
 

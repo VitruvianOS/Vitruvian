@@ -371,13 +371,14 @@ void
 MainWin::_UpdateVideoMode()
 {
 	bool hasVideo = fController != NULL && fController->HasVideo();
-	if (fVideoView != NULL) {
+	if (fVideoView != NULL && fVideoView->IsHidden(fVideoView) == hasVideo) {
 		if (hasVideo)
 			fVideoView->Show();
 		else
 			fVideoView->Hide();
 	}
-	if (fLocationView != NULL) {
+	if (fLocationView != NULL
+		&& fLocationView->IsHidden(fLocationView) != hasVideo) {
 		if (hasVideo)
 			fLocationView->Hide();
 		else

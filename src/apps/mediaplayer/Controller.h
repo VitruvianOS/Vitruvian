@@ -112,6 +112,7 @@ private:
 			void				_ProbeTracks(const entry_ref* ref, const BUrl* url);
 			void				_Notify(uint32 what);
 			void				_NotifyState();
+			void				_NotifyVideo();
 			void				_NotifyPosition();
 			void				_NotifyFinished();
 			void				_ApplyVolume();

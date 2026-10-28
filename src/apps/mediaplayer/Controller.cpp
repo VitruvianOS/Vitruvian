@@ -265,17 +265,24 @@ Controller::_SetToRef(const entry_ref& ref)
 	_ApplyVolume();
 	_NotifyState();
 	_Notify(MSG_CONTROLLER_DURATION);
-	if (fTarget.IsValid()) {
-		BMessage msg(MSG_CONTROLLER_VIDEO);
-		msg.AddBool("has_video", fHasVideo);
-		msg.AddInt32("width", (int32)fVideoWidth);
-		msg.AddInt32("height", (int32)fVideoHeight);
-		msg.AddInt32("par_num", (int32)fVideoParNum);
-		msg.AddInt32("par_den", (int32)fVideoParDen);
-		msg.AddInt32("rotation", (int32)fVideoRotation);
-		fTarget.SendMessage(&msg);
-	}
+	_NotifyVideo();
 	return B_OK;
+}
+
+
+void
+Controller::_NotifyVideo()
+{
+	if (!fTarget.IsValid())
+		return;
+	BMessage msg(MSG_CONTROLLER_VIDEO);
+	msg.AddBool("has_video", fHasVideo);
+	msg.AddInt32("width", (int32)fVideoWidth);
+	msg.AddInt32("height", (int32)fVideoHeight);
+	msg.AddInt32("par_num", (int32)fVideoParNum);
+	msg.AddInt32("par_den", (int32)fVideoParDen);
+	msg.AddInt32("rotation", (int32)fVideoRotation);
+	fTarget.SendMessage(&msg);
 }
 
 
@@ -384,8 +391,12 @@ Controller::OpenMidi(const entry_ref& ref)
 	}
 	fMidi->SetFinishedTarget(fTarget);
 	fPlayer.Stop();
+	fHasVideo = false;
+	fVideoWidth = 0;
+	fVideoHeight = 0;
 	_ApplyVolume();
 	_NotifyState();
+	_NotifyVideo();
 	return fMidi->Play();
 }
 

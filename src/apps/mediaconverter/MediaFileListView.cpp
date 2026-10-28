@@ -39,7 +39,7 @@ MediaFileListItem::~MediaFileListItem()
 
 MediaFileListView::MediaFileListView()
 	:
-	BListView("MediaFileListView", B_SINGLE_SELECTION_LIST, B_WILL_DRAW
+	BListView("MediaFileListView", B_MULTIPLE_SELECTION_LIST, B_WILL_DRAW
 			| B_NAVIGABLE | B_FRAME_EVENTS)
 {
 	fEnabled = true;
@@ -97,12 +97,16 @@ MediaFileListView::KeyDown(const char *bytes, int32 numBytes)
 			if (IsEnabled()) {
 				int32 selection = CurrentSelection();
 				if (selection >= 0) {
-					delete RemoveItem(selection);
-					// select the previous item
+					int32 index = selection;
+					while ((selection = CurrentSelection()) >= 0)
+						delete RemoveItem(selection);
+					// select the item that took the first deleted place
 					int32 count = CountItems();
-					if (selection >= count)
-						selection = count - 1;
-					Select(selection);
+					if (count > 0) {
+						if (index > count - 1)
+							index = count - 1;
+						Select(index);
+					}
 					be_app_messenger.SendMessage(FILE_LIST_CHANGE_MESSAGE);
 				}
 			}

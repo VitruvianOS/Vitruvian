@@ -373,6 +373,14 @@ DeclareDependency(
 	RUNTIMES   "libetpan20t64"
 )
 
+# HTTPS for the WebMail OAuth2 token exchange and ISPDB autoconfig.
+DeclareDependency(
+	CURL
+	LIBRARIES  "curl"
+	PACKAGES   "libcurl4-openssl-dev"
+	RUNTIMES   "libcurl4t64"
+)
+
 DeclareDependency(
 	GLESV2
 	LIBRARIES  "GLESv2"

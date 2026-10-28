@@ -292,8 +292,11 @@ CameraWindow::CameraWindow(BRect frame)
 	_RefreshFilterMenu();
 	_LoadSettings();
 
-	// No frame may ever arrive (no camera): fit the saved size once shown.
-	PostMessage(kMsgCameraFrameReshaped);
+	// Open at the final size: the mode picked above decides the picture's
+	// shape, and the first layout pass must not run at the default frame.
+	fView->SetAspect((float)fWidth / fHeight);
+	Layout(true);
+	_FitToPicture();
 }
 
 
@@ -675,15 +678,17 @@ CameraWindow::_FitToPicture()
 {
 	// The layout centers the preview in whatever height the window has, so
 	// size the window to the picture, down to what the controls need.
-	float viewHeight;
-	fView->GetHeightForWidth(fView->Bounds().Width(), NULL, NULL, &viewHeight);
+	// The mode stands in for the picture: it is all there is before the
+	// first frame, and the device settles on it.
+	const float aspect = (float)fWidth / fHeight;
+	const float viewWidth = fView->Bounds().Width();
+	const float viewHeight = (viewWidth + 1) / aspect - 1;
 	// A picture shorter than the controls widens the window until its
 	// height matches them, so no band is left above or below it.
 	const float minHeight = GetLayout()->MinSize().height;
 	float width = Bounds().Width();
 	if (viewHeight < minHeight) {
-		const float aspect = (fView->Bounds().Width() + 1) / (viewHeight + 1);
-		width += (minHeight + 1) * aspect - 1 - fView->Bounds().Width();
+		width += (minHeight + 1) * aspect - 1 - viewWidth;
 	}
 	const float height = std::max(minHeight, viewHeight);
 	if (fabs(width - Bounds().Width()) >= 1

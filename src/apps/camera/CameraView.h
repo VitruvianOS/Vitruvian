@@ -36,6 +36,9 @@ public:
 			void				SetFrame(const uint8* bits, size_t size,
 									uint32 width, uint32 height);
 
+			// Gives layout the mode's shape before the first frame.
+			void				SetAspect(float aspect);
+
 			void				SetZoom(float zoom);
 			float				Zoom() const { return fZoom; }
 			void				SetMirrored(bool mirrored);

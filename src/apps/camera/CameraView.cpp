@@ -75,6 +75,22 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 }
 
 
+void
+CameraView::SetAspect(float aspect)
+{
+	if (aspect <= 0)
+		return;
+
+	BAutolock _(fLock);
+	// Once frames arrive they own the shape.
+	if (fFrame != NULL || fAspect == aspect)
+		return;
+
+	fAspect = aspect;
+	InvalidateLayout();
+}
+
+
 bool
 CameraView::HasHeightForWidth()
 {

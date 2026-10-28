@@ -373,6 +373,7 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		s.id         = id;
 		s.name       = (appName != NULL ? appName
 			: (mediaName != NULL ? mediaName : "stream"));
+		s.nodeName   = nodeName != NULL ? nodeName : "";
 		s.mediaClass = mediaClass;
 		s.isOutput   = isStreamOut;
 		s.deviceId   = 0;

@@ -163,6 +163,7 @@ public:
 		struct StreamInfo {
 			uint32			id;
 			std::string		name;
+			std::string		nodeName;
 			std::string		mediaClass;
 			uint32			deviceId;
 			bool			isOutput;

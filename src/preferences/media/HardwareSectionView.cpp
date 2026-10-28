@@ -17,7 +17,9 @@
 #include <Message.h>
 #include <ObjectList.h>
 #include <PopUpMenu.h>
+#include <GroupView.h>
 #include <ScrollView.h>
+#include <SpaceLayoutItem.h>
 #include <Slider.h>
 #include <StringItem.h>
 #include <StringView.h>
@@ -25,6 +27,9 @@
 #include <media2/MediaGraph.h>
 #include <media2/ParameterWeb.h>
 
+#include <MediaGraphPrivate.h>
+
+#include "ChannelStripView.h"
 #include "MediaMessages.h"
 
 #undef B_TRANSLATION_CONTEXT
@@ -238,15 +243,17 @@ HardwareSectionView::_BuildPipeWireParams()
 	// before deleting the old one.
 	BView* oldView = fParamView;
 
-	fParamView = new BView("device_params", B_WILL_DRAW);
-	fParamView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	BGroupView* paramGroup = new BGroupView("device_params", B_VERTICAL, 0);
+	paramGroup->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fParamView = paramGroup;
 
 	if (fSelectedDevice != 0
 			&& fDeviceControllable.BindNode((uint32)fSelectedDevice) == B_OK) {
-		BView* themeView = fDeviceControllable.MakeView();
+		BView* themeView = UnwrapThemeView(fDeviceControllable.MakeView());
 		if (themeView != NULL) {
-			fParamView->AddChild(themeView);
 			themeView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+			paramGroup->GroupLayout()->AddView(themeView);
+			paramGroup->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
 		}
 	}
 
@@ -351,7 +358,7 @@ HardwareSectionView::NotifyChanged(uint32 what, uint32 deviceId)
 		RefreshDevices();
 		return;
 	}
-	if (fSelectedDevice != 0 && deviceId != 0 && deviceId != fSelectedDevice)
+	if (fSelectedDevice != 0 && deviceId != 0 && deviceId != (uint32)fSelectedDevice)
 		return;
 
 	if (what == kMsgDeviceProfileChanged || what == kMsgDevicePortChanged) {

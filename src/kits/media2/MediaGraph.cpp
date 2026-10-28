@@ -782,6 +782,7 @@ BMediaGraph::GetStreams(BObjectList<StreamInfo, true>* outStreams)
 			break;
 		info->id         = (media_client_id)s.id;
 		info->name       = s.name.c_str();
+		info->nodeName   = s.nodeName.c_str();
 		info->mediaClass = s.mediaClass.c_str();
 		info->deviceId   = (media_client_id)s.deviceId;
 		info->isOutput   = s.isOutput;
@@ -811,6 +812,29 @@ BMediaGraph::SetStreamVolume(media_client_id streamId, float volume, bool mute)
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
 	return backend->SetStreamVolume((uint32)streamId, volume, mute);
+}
+
+
+status_t
+BMediaGraph::SetStreamChannelVolumes(media_client_id streamId,
+	const float* volumes, size_t count)
+{
+	if (volumes == NULL || count == 0)
+		return B_BAD_VALUE;
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	// Streams cache a single level, so the strip's channels collapse.
+	float peak = 0.0f;
+	for (size_t i = 0; i < count; i++) {
+		if (volumes[i] > peak)
+			peak = volumes[i];
+	}
+	bool mute = false;
+	float current = 1.0f;
+	backend->GetStreamVolume((uint32)streamId, &current, &mute);
+	return backend->SetStreamVolume((uint32)streamId, peak, mute);
 }
 
 
@@ -1017,22 +1041,32 @@ BMediaGraph::StartMeteringDevice(media_client_id id, const BMessenger& target,
 	if (PipeWireBackend::GetInstance() == NULL)
 		return B_DEVICE_NOT_FOUND;
 
+	bool isSource = false;
+	BString nodeName;
+	BMessage info;
+	if (GetClientInfo(id, &info) == B_OK) {
+		info.FindBool("is.source", &isSource);
+		info.FindString("node_name", &nodeName);
+	}
+	return StartMeteringNode(id, isSource, nodeName.String(), target,
+		interval);
+}
+
+
+status_t
+BMediaGraph::StartMeteringNode(media_client_id id, bool capture,
+	const char* nodeName, const BMessenger& target, bigtime_t interval)
+{
+	if (PipeWireBackend::GetInstance() == NULL)
+		return B_DEVICE_NOT_FOUND;
+
 	BAutolock _(sMetersLock);
 	PeakMeter* meter;
 	auto it = sMeters.find((uint32)id);
 	if (it != sMeters.end()) {
 		meter = it->second;
 	} else {
-
-		bool isSource = false;
-		BString nodeName;
-		BMessage info;
-		if (GetClientInfo(id, &info) == B_OK) {
-			info.FindBool("is.source", &isSource);
-			info.FindString("node_name", &nodeName);
-		}
-		meter = new(std::nothrow) PeakMeter((uint32)id, isSource,
-			nodeName.String());
+		meter = new(std::nothrow) PeakMeter((uint32)id, capture, nodeName);
 		if (meter == NULL || meter->InitCheck() != B_OK) {
 			delete meter;
 			return B_ERROR;
@@ -1045,7 +1079,7 @@ BMediaGraph::StartMeteringDevice(media_client_id id, const BMessenger& target,
 
 
 status_t
-BMediaGraph::StopMeteringDevice(media_client_id id)
+BMediaGraph::StopMeteringNode(media_client_id id)
 {
 	BAutolock _(sMetersLock);
 	auto it = sMeters.find((uint32)id);
@@ -1054,6 +1088,13 @@ BMediaGraph::StopMeteringDevice(media_client_id id)
 	delete it->second;
 	sMeters.erase(it);
 	return B_OK;
+}
+
+
+status_t
+BMediaGraph::StopMeteringDevice(media_client_id id)
+{
+	return StopMeteringNode(id);
 }
 
 

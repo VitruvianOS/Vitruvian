@@ -16,7 +16,7 @@ struct OAuth2Endpoints {
 	BString		authorizeUrl;
 	BString		tokenUrl;
 	BString		scope;
-	// Filled in by the agent: http://127.0.0.1:<port>/
+	// Filled in by the flow: http://127.0.0.1:<port>/
 	BString		redirectUri;
 };
 

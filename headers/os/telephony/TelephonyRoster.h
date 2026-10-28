@@ -148,6 +148,29 @@ public:
 									const BMessenger& replyTo,
 									uint32 replyWhat);
 
+	// Video over SIP: starts the camera pipeline for the first
+	// active video call and delivers I420 frames (local=true is
+	// the self view) to the hook. B_UNSUPPORTED when no SIP line
+	// owns a video call.
+	status_t				StartVideo(const char* devicePath);
+	status_t				StopVideo();
+	typedef void			(*VideoFrameHook)(void* cookie,
+									const uint8* const* data,
+									const int* stride, int width,
+									int height, bool local);
+	status_t				SetVideoFrameHook(VideoFrameHook hook,
+									void* cookie);
+
+	// SIP call audio: PCM hooks the app binds to its PipeWire
+	// streams (media kit). pull supplies mic samples to encode,
+	// push receives far-end PCM to play.
+	typedef size_t			(*AudioPullHook)(void* cookie,
+									int16* samples, size_t maxSamples);
+	typedef void			(*AudioPushHook)(void* cookie,
+									const int16* samples, size_t count);
+	status_t				SetAudioHooks(AudioPullHook pull,
+									AudioPushHook push, void* cookie);
+
 private:
 							BTelephonyRoster();
 							~BTelephonyRoster();

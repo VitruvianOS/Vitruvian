@@ -22,6 +22,7 @@
 
 #include "CallAudioRouter.h"
 #include "DialerWindow.h"
+#include "SipAudioRouter.h"
 #include <telephony/Modem.h>
 #include <telephony/TelephonyRoster.h>
 
@@ -92,7 +93,7 @@ CallVideoView::MessageReceived(BMessage* message)
 
 
 void
-CallVideoView::Draw()
+CallVideoView::Draw(BRect /*updateRect*/)
 {
 	BAutolock lock(fLock);
 	if (fBitmap == NULL) {
@@ -225,11 +226,15 @@ InCallWindow::InCallWindow(const char* number)
 		.Add(hangUpButton);
 
 	CallAudioRouter::Default()->BeginCall();
+	// SIP lines carry audio as RTP; the router pipes G.711 PCM
+	// between the backend and the media kit's PipeWire streams.
+	SipAudioRouter::Default()->BeginCall();
 }
 
 
 InCallWindow::~InCallWindow()
 {
+	SipAudioRouter::Default()->EndCall();
 	BTelephonyRoster::Default()->SetVideoFrameHook(NULL, NULL);
 	BTelephonyRoster::Default()->StopVideo();
 	sVideoView = NULL;
@@ -281,7 +286,6 @@ InCallWindow::Pulse()
 void
 InCallWindow::_AppendDtmf(const char* digit)
 {
-	BTelephonyRoster* roster = BTelephonyRoster::Default();
 	BModem* modem = _ActiveLine();
 	if (modem == NULL || digit == NULL)
 		return;
@@ -314,7 +318,6 @@ InCallWindow::_ToggleSpeaker()
 void
 InCallWindow::_Hold()
 {
-	BTelephonyRoster* roster = BTelephonyRoster::Default();
 	BModem* modem = _ActiveLine();
 	if (modem != NULL)
 		modem->Hold(BMessenger(this), kMsgOpReply);
@@ -324,7 +327,6 @@ InCallWindow::_Hold()
 void
 InCallWindow::_HangUp()
 {
-	BTelephonyRoster* roster = BTelephonyRoster::Default();
 	BModem* modem = _ActiveLine();
 	if (modem != NULL)
 		modem->HangUp(BMessenger(this), kMsgOpReply);
@@ -336,7 +338,6 @@ InCallWindow::_HangUp()
 void
 InCallWindow::_Update()
 {
-	BTelephonyRoster* roster = BTelephonyRoster::Default();
 	BModem* modem = _ActiveLine();
 	if (modem == NULL)
 		return;

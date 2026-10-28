@@ -3,10 +3,11 @@ Application(Phone
 	Phone.cpp
 	CallLog.cpp
 	CallAudioRouter.cpp
+	SipAudioRouter.cpp
 	DialerWindow.cpp
 	InCallWindow.cpp
 	IncomingCallWindow.cpp
-	LIBS be localestub
+	LIBS be localestub media2
 	RDEF Phone.rdef
 )
 

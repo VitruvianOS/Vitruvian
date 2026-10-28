@@ -29,7 +29,7 @@ public:
 									const int* stride, int width,
 									int height);
 
-	virtual	void				Draw();
+	virtual	void				Draw(BRect updateRect);
 	virtual	void				MessageReceived(BMessage* message);
 
 private:

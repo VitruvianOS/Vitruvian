@@ -265,6 +265,16 @@ BTelephonyRoster::SetVideoFrameHook(VideoFrameHook hook, void* cookie)
 }
 
 
+status_t
+BTelephonyRoster::SetAudioHooks(AudioPullHook pull, AudioPushHook push,
+	void* cookie)
+{
+	SipBackend* sip = SipBackend::Instance();
+	sip->SetAudioHooks(pull, push, cookie);
+	return B_OK;
+}
+
+
 // #pragma mark - Watching
 
 
@@ -383,7 +393,7 @@ BTelephonyRoster::_OnBackendNotification(uint32 type, BMessage& message)
 	// The backend keys already match the public kTelephonyField*
 	// strings for calls and messages; copy the whole payload.
 	for (int32 i = 0; ; i++) {
-		const char* name = NULL;
+		char* name = NULL;
 		type_code code;
 		status_t status = message.GetInfo(B_ANY_TYPE, i, &name, &code);
 		if (status != B_OK)

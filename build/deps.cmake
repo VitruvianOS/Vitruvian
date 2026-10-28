@@ -293,7 +293,7 @@ DeclareDependency(
 	GSTREAMER
 	LIBRARIES  "gstreamer-1.0;gstapp-1.0;gstaudio-1.0;gstvideo-1.0;gstpbutils-1.0;gobject-2.0;glib-2.0"
 	PACKAGES   "libgstreamer1.0-dev;libgstreamer-plugins-base1.0-dev"
-	RUNTIMES   "libgstreamer1.0-0 (>= 1.18);gstreamer1.0-plugins-base;gstreamer1.0-plugins-good;gstreamer1.0-plugins-bad;gstreamer1.0-libav"
+	RUNTIMES   "libgstreamer1.0-0 (>= 1.18);gstreamer1.0-plugins-base;gstreamer1.0-plugins-good;gstreamer1.0-plugins-bad;gstreamer1.0-plugins-ugly;gstreamer1.0-libav"
 	INCLUDES   "${HEADERS_PATH_BASE}/gstreamer-1.0/;${HEADERS_PATH_BASE}/glib-2.0/;${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}/glib-2.0/include/"
 )
 

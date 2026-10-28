@@ -671,14 +671,6 @@ CameraWindow::_SetMode(int32 mode)
 
 
 void
-CameraWindow::FrameResized(float width, float height)
-{
-	BWindow::FrameResized(width, height);
-	_FitToPicture();
-}
-
-
-void
 CameraWindow::_FitToPicture()
 {
 	// The layout centers the preview in whatever height the window has, so

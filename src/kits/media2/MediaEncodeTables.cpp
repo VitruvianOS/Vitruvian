@@ -9,6 +9,8 @@
 
 #include <gst/pbutils/encoding-profile.h>
 
+#include "GStreamerBackend.h"
+
 
 namespace BPrivate { namespace media {
 
@@ -157,6 +159,8 @@ EncodeCodecAt(int32 index)
 GstElementFactory*
 FindEncodeFactory(const EncodeCodecInfo* codec)
 {
+	// Factory lookups need the registry; GetInstance runs gst_init once.
+	GStreamerBackend::GetInstance();
 	if (codec == NULL || codec->factory == NULL)
 		return NULL;
 	GstElementFactory* factory = gst_element_factory_find(codec->factory);
@@ -171,6 +175,7 @@ FindEncodeFactory(const EncodeCodecInfo* codec)
 GstElementFactory*
 FindEncodeFactory(const EncodeFileFormat* format)
 {
+	GStreamerBackend::GetInstance();
 	if (format == NULL || format->factory == NULL)
 		return NULL;
 	GstElementFactory* factory = gst_element_factory_find(format->factory);

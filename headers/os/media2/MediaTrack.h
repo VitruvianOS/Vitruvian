@@ -89,10 +89,13 @@ private:
 								BMediaTrack(const BMediaTrack&) = delete;
 			BMediaTrack&		operator=(const BMediaTrack&) = delete;
 
+			void				_SetPollVideo(bool poll);
+
 			class Impl;
 			Impl*				fImpl;
 
 	friend class BMediaFile;
+	friend class BMediaPlayer;
 };
 
 

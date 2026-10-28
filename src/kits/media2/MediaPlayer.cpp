@@ -404,6 +404,7 @@ BMediaPlayer::Impl::_FinishSetTo()
 			audioFmt = fmt;
 		} else if (fmt.IsRawVideo() && fVideoTrack == NULL) {
 			fVideoTrack = track;
+			fVideoTrack->_SetPollVideo(true);
 			videoFmt = fmt;
 		}
 		if (fTrack != NULL && fVideoTrack != NULL)

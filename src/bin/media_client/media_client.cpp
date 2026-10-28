@@ -14,6 +14,7 @@
 #include "MediaPlay.h"
 #include "MediaTest.h"
 #include "MidiPlay.h"
+#include "MediaUnits.h"
 
 
 void print_usage()
@@ -23,6 +24,7 @@ void print_usage()
 	printf("  media_client playmidi <uri>\n");
 	printf("  media_client test\n");
 	printf("  media_client dump\n");
+	printf("  media_client units\n");
 }
 
 
@@ -70,6 +72,8 @@ int main(int argc, char *argv[])
 		media_test();
 	else if (strcmp(argv[1], "dump") == 0)
 		ret = media_dump();
+	else if (strcmp(argv[1], "units") == 0)
+		media_units();
 	else
 		print_usage();
 

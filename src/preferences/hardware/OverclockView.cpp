@@ -44,6 +44,7 @@ static const uint32 kMsgRevert = 'ocRv';
 static const uint32 kMsgHelperDone = 'ocHd';
 static const uint32 kMsgHelperOutput = 'ocHo';
 static const uint32 kMsgTick = 'ocTk';
+static const uint32 kMsgReadSpd = 'ocSp';
 
 extern char** environ;
 
@@ -154,9 +155,10 @@ OverclockView::OverclockView()
 	:
 	BView("overclocking", B_WILL_DRAW),
 	fBackend(NULL),
+	fHaveCpuControls(false),
 	fTimer(NULL),
 	fBusy(false),
-	fSpdLoaded(false),
+	fReadSpdButton(NULL),
 	fDriverString(NULL),
 	fGovernorMenu(NULL),
 	fCurrentFreqString(NULL),
@@ -227,7 +229,7 @@ OverclockView::OverclockView()
 
 	BBox* cpuBox = new BBox("cpubox");
 	cpuBox->SetLabel(B_TRANSLATE("CPU"));
-	BLayoutBuilder::Group<>(cpuBox, B_VERTICAL, B_USE_SMALL_SPACING)
+	cpuBox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, B_USE_SMALL_SPACING)
 		.Add(fDriverString)
 		.AddGrid()
 			.Add(fGovernorMenu, 0, 0)
@@ -250,26 +252,34 @@ OverclockView::OverclockView()
 			.Add(fGpuFreqMenu, 1, 6)
 		.End()
 		.Add(fCpuTempString)
-		.SetInsets(B_USE_SMALL_SPACING);
+		.SetInsets(B_USE_SMALL_SPACING)
+		.View());
 
 	BBox* memoryBox = new BBox("memorybox");
 	memoryBox->SetLabel(B_TRANSLATE("Memory"));
-	BLayoutBuilder::Group<>(memoryBox, B_VERTICAL, B_USE_SMALL_SPACING)
+	memoryBox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, B_USE_SMALL_SPACING)
 		.Add(fDimmStrings[0])
 		.Add(fDimmStrings[1])
 		.Add(fDimmStrings[2])
 		.Add(fDimmStrings[3])
 		.Add(fMemoryNote)
 		.Add(fRamTempString)
-		.SetInsets(B_USE_SMALL_SPACING);
+		.AddGroup(B_HORIZONTAL)
+			.Add(fReadSpdButton = new BButton("readspd",
+				B_TRANSLATE("Read module details"), new BMessage(kMsgReadSpd)))
+			.AddGlue()
+		.End()
+		.SetInsets(B_USE_SMALL_SPACING)
+		.View());
 
 	fGpuBox = new BBox("gpustub");
 	fGpuBox->SetLabel(B_TRANSLATE("GPU"));
-	BLayoutBuilder::Group<>(fGpuBox, B_VERTICAL, B_USE_SMALL_SPACING)
+	fGpuBox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, B_USE_SMALL_SPACING)
 		.Add(new BStringView("gpuunimplemented", B_TRANSLATE(
 			"GPU clock and power controls arrive with the GPU tab "
 			"of this preflet.")))
-		.SetInsets(B_USE_SMALL_SPACING);
+		.SetInsets(B_USE_SMALL_SPACING)
+		.View());
 	// Stubbed on purpose: the tab ships CPU and memory only for now.
 	fGpuBox->Hide();
 
@@ -290,6 +300,7 @@ OverclockView::OverclockView()
 			.Add(revert)
 		.End()
 		.Add(fStatusString)
+		.AddGlue()
 		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, B_USE_DEFAULT_SPACING);
 
 	fApplyNowButton = applyNow;
@@ -306,6 +317,30 @@ OverclockView::~OverclockView()
 
 
 void
+OverclockView::Show()
+{
+	BView::Show();
+
+	// The layout system re-shows every layout child when an ancestor
+	// becomes visible; re-apply the cpufreq state after that.
+	if (!fHaveCpuControls)
+		_HideCpuControls();
+}
+
+
+void
+OverclockView::_HideCpuControls()
+{
+	// Without cpufreq the menus have nothing to offer; empty fields
+	// would show their internal names as values.
+	fGovernorMenu->Hide();
+	fMinFreqMenu->Hide();
+	fMaxFreqMenu->Hide();
+	fBoostCheckBox->Hide();
+}
+
+
+void
 OverclockView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
@@ -315,6 +350,7 @@ OverclockView::AttachedToWindow()
 	fApplyNowButton->SetTarget(this);
 	fApplyBootButton->SetTarget(this);
 	fRevertButton->SetTarget(this);
+	fReadSpdButton->SetTarget(this);
 
 	_LoadAll();
 
@@ -361,6 +397,9 @@ OverclockView::MessageReceived(BMessage* message)
 		case kMsgTick:
 			_Tick();
 			break;
+		case kMsgReadSpd:
+			_StartHelper("spd", true);
+			break;
 		default:
 			BView::MessageReceived(message);
 			break;
@@ -377,11 +416,6 @@ OverclockView::_LoadAll()
 	_PopulateCpu();
 	_PopulateMemory();
 	_Tick();
-
-	if (!fSpdLoaded) {
-		fSpdLoaded = true;
-		_StartHelper("spd", true);
-	}
 }
 
 
@@ -422,7 +456,8 @@ OverclockView::_PopulateCpu()
 	driver << fBackend->Name();
 
 	CpufreqState cpu;
-	if (fBackend->GetCpu(cpu)) {
+	fHaveCpuControls = fBackend->GetCpu(cpu);
+	if (fHaveCpuControls) {
 		if (!cpu.driver.empty()) {
 			driver << " (" << cpu.driver.c_str() << ")";
 		}
@@ -467,12 +502,7 @@ OverclockView::_PopulateCpu()
 			}
 		}
 	} else {
-		// Without cpufreq the menus have nothing to offer; empty
-		// fields would show their internal names as values.
-		fGovernorMenu->Hide();
-		fMinFreqMenu->Hide();
-		fMaxFreqMenu->Hide();
-		fBoostCheckBox->Hide();
+		_HideCpuControls();
 		fStatusString->SetText(B_TRANSLATE(
 			"No CPU frequency controls on this system."));
 	}
@@ -604,14 +634,17 @@ void
 OverclockView::_PopulateMemory()
 {
 	fMemoryNote->SetText(B_TRANSLATE(
-		"Timings, XMP and EXPO profiles are firmware settings; V\\OS "
-		"reads them but cannot change them from here."));
+		"Memory timings and XMP or EXPO profiles are set in the "
+		"firmware. V\\OS can only read them."));
 }
 
 
 void
 OverclockView::_Tick()
 {
+	static int ticks = 0;
+	fprintf(stderr, "HWDBG tick %d govHidden=%d\n", ++ticks,
+		(int)fGovernorMenu->IsHidden());
 	CpufreqState cpu;
 	if (fBackend != NULL && !fBackend->IsBootConfig()
 		&& fBackend->GetCpu(cpu) && cpu.curKHz > 0) {
@@ -641,6 +674,7 @@ OverclockView::_Tick()
 void
 OverclockView::_SetControlsEnabled(bool enabled)
 {
+	fReadSpdButton->SetEnabled(enabled);
 	fGovernorMenu->SetEnabled(enabled);
 	fMinFreqMenu->SetEnabled(enabled);
 	fMaxFreqMenu->SetEnabled(enabled);

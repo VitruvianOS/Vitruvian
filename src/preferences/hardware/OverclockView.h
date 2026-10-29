@@ -39,11 +39,13 @@ public:
 	virtual						~OverclockView();
 
 	virtual	void				AttachedToWindow();
+	virtual	void				Show();
 	virtual	void				MessageReceived(BMessage* message);
 
 			void				HelperDone(bool spdOnly);
 
 private:
+			void				_HideCpuControls();
 			void				_LoadAll();
 			void				_PopulateCpu();
 			void				_PopulateMemory();
@@ -60,10 +62,11 @@ private:
 			status_t			_SpdDone(const BMessage& message);
 
 	OverclockBackend*			fBackend;
+	bool						fHaveCpuControls;
 	TemperatureSensorReader		fReader;
 	BMessageRunner*				fTimer;
 	bool						fBusy;
-	bool						fSpdLoaded;
+	BButton*					fReadSpdButton;
 
 	BStringView*				fDriverString;
 	BMenuField*					fGovernorMenu;

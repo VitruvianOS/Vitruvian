@@ -56,7 +56,8 @@ HardwareView::HardwareView()
 	fPlayView = new DeviceTreeView(Hardware::kTabPlugPlay, this);
 	fPlatformView = new DeviceTreeView(Hardware::kTabPlatform, this);
 
-	fTabView = new BTabView("tabs", B_WILL_DRAW | B_FRAME_EVENTS);
+	fTabView = new BTabView("tabs", B_WIDTH_FROM_WIDEST,
+		B_WILL_DRAW | B_FRAME_EVENTS);
 	BTab* playTab = new BTab();
 	fTabView->AddTab(fPlayView, playTab);
 	playTab->SetLabel(B_TRANSLATE("Plug and Play"));
@@ -167,7 +168,7 @@ HardwareView::MessageReceived(BMessage* message)
 			break;
 		}
 
-		case B_SAVE_PANEL:
+		case B_SAVE_REQUESTED:
 		{
 			entry_ref directory;
 			BString name;

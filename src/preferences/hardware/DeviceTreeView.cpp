@@ -36,7 +36,6 @@ DeviceTreeView::DeviceTreeView(Hardware::DeviceTab tab,
 	fNames(NULL)
 {
 	fList = new BOutlineListView("devices", B_SINGLE_SELECTION_LIST);
-	fList->SetTarget(this);
 	fList->SetSelectionMessage(new BMessage(kMsgListSelection));
 
 	rgb_color textColor = ui_color(B_LIST_ITEM_TEXT_COLOR);
@@ -77,6 +76,17 @@ DeviceTreeView::DeviceTreeView(Hardware::DeviceTab tab,
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.Add(mainSplit)
 		.SetInsets(0);
+}
+
+
+void
+DeviceTreeView::AttachedToWindow()
+{
+	BView::AttachedToWindow();
+
+	// The handler only has a looper once attached; a messenger built
+	// earlier would be invalid and the selection message dropped.
+	fList->SetTarget(this);
 }
 
 
@@ -229,8 +239,10 @@ DeviceTreeView::_Rebuild()
 		}
 
 		for (size_t i = 0; i < sorted.size(); i++) {
-			fList->AddItem(new DeviceItem(*sorted[i].second,
-				sorted[i].first.c_str()), -1);
+			// AddItem(item, -1) would insert at the top, where a
+			// level-1 item finds no superitem and stays invisible.
+			fList->AddUnder(new DeviceItem(*sorted[i].second,
+				sorted[i].first.c_str()), categoryItem);
 			deviceCount++;
 		}
 

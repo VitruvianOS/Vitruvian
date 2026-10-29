@@ -176,6 +176,9 @@ OverclockView::OverclockView()
 	fMemoryNote(NULL),
 	fRamTempString(NULL),
 	fGpuBox(NULL),
+	fApplyNowButton(NULL),
+	fApplyBootButton(NULL),
+	fRevertButton(NULL),
 	fStatusString(NULL)
 {
 	for (int i = 0; i < 4; i++) {
@@ -289,14 +292,15 @@ OverclockView::OverclockView()
 		.Add(fStatusString)
 		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, B_USE_DEFAULT_SPACING);
 
-	applyNow->SetTarget(this);
-	applyBoot->SetTarget(this);
-	revert->SetTarget(this);
+	fApplyNowButton = applyNow;
+	fApplyBootButton = applyBoot;
+	fRevertButton = revert;
 }
 
 
 OverclockView::~OverclockView()
 {
+	delete fTimer;
 	delete fBackend;
 }
 
@@ -305,6 +309,12 @@ void
 OverclockView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
+
+	// The handler only has a looper once attached; a messenger built
+	// earlier would be invalid and the button messages dropped.
+	fApplyNowButton->SetTarget(this);
+	fApplyBootButton->SetTarget(this);
+	fRevertButton->SetTarget(this);
 
 	_LoadAll();
 
@@ -457,6 +467,12 @@ OverclockView::_PopulateCpu()
 			}
 		}
 	} else {
+		// Without cpufreq the menus have nothing to offer; empty
+		// fields would show their internal names as values.
+		fGovernorMenu->Hide();
+		fMinFreqMenu->Hide();
+		fMaxFreqMenu->Hide();
+		fBoostCheckBox->Hide();
 		fStatusString->SetText(B_TRANSLATE(
 			"No CPU frequency controls on this system."));
 	}

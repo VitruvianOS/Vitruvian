@@ -49,6 +49,7 @@ public:
 
 			void			ShowEmptyState();
 
+	virtual	void			AttachedToWindow();
 	virtual	void			MessageReceived(BMessage* message);
 
 private:

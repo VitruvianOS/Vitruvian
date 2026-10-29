@@ -17,6 +17,7 @@
 
 
 class BBox;
+class BButton;
 class BCheckBox;
 class BMenuField;
 class BMessageRunner;
@@ -87,6 +88,10 @@ private:
 	BStringView*				fRamTempString;
 
 	BBox*						fGpuBox;
+
+	BButton*					fApplyNowButton;
+	BButton*					fApplyBootButton;
+	BButton*					fRevertButton;
 
 	BStringView*				fStatusString;
 };

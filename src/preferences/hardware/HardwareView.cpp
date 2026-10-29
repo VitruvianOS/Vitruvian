@@ -107,6 +107,13 @@ HardwareView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
+	// The handler only has a looper once attached; a messenger built
+	// earlier would be invalid and the button messages dropped.
+	fCopyButton->SetTarget(this);
+	fExportButton->SetTarget(this);
+	fRefreshButton->SetTarget(this);
+	fDetailsButton->SetTarget(this);
+
 	if (fScanner == NULL) {
 		fScanner = new UdevScanner();
 		fScanner->Start(BMessenger(this));

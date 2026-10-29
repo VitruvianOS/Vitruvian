@@ -22,7 +22,8 @@ namespace LocalSend {
 }
 
 class LocalSendManager : public LocalSend::LsDiscoveryListener,
-	public LocalSend::LsReceivePrompt {
+	public LocalSend::LsReceivePrompt,
+	public LocalSend::LsHttpServerHandler {
 public:
 						LocalSendManager(LocalSendSettings* settings);
 						~LocalSendManager();
@@ -59,6 +60,23 @@ public:
 								const std::string& pin,
 								std::vector<std::string>& acceptedFiles);
 
+			// LocalSend::LsHttpServerHandler
+	virtual	void		RegisterReceived(const LocalSend::LsDevice& device,
+								const std::string& address);
+	virtual	int			PrepareUploadReceived(
+								const LocalSend::LsDevice& sender,
+								const std::map<std::string,
+									LocalSend::LsFileItem>& files,
+								const std::string& pin,
+								const std::string& address,
+								LocalSend::LsPrepareUploadResponse& response);
+	virtual	LocalSend::LsUploadSink*	StartUpload(
+								const std::string& sessionId,
+								const std::string& fileId,
+								const std::string& token,
+								int64_t size);
+	virtual	void		CancelReceived(const std::string& sessionId);
+
 			// Called by the prompt window on the UI thread.
 			void		AnswerPrompt(bool accept, bool alwaysAllow,
 								const std::vector<BString>& fileNames);
@@ -83,6 +101,9 @@ private:
 			static	int32_t	_ScanThreadEntry(void* data);
 			void		_ScanSubnets();
 
+			static	int32_t	_AnnounceThreadEntry(void* data);
+			void		_AnnounceLoop();
+
 			LocalSendSettings*	fSettings;
 			mutable BLocker		fSendLock;
 			BMessenger	fWindowMessenger;
@@ -94,6 +115,10 @@ private:
 
 			bool		fSending;
 			SendArgs*	fPendingArgs;
+
+			volatile bool		fRunning;
+			pthread_t			fAnnounceThread;
+			bool				fAnnounceThreadStarted;
 
 			// Pending prompt handshake between server thread and UI.
 			BLocker		fPromptLock;

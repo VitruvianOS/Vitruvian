@@ -289,6 +289,18 @@ LsHttpServer::_HandleConnection(int clientSocket)
 	std::string pathAndQuery;
 	std::map<std::string, std::string> headers;
 
+	// The peer address matters to the handler: a device listed
+	// from a register must carry the address to send back to.
+	std::string peerAddress = "unknown";
+	struct sockaddr_in peer;
+	socklen_t peerLength = sizeof(peer);
+	if (getpeername(clientSocket, reinterpret_cast<struct sockaddr*>(&peer),
+			&peerLength) == 0) {
+		char text[INET_ADDRSTRLEN];
+		if (inet_ntop(AF_INET, &peer.sin_addr, text, sizeof(text)) != NULL)
+			peerAddress = text;
+	}
+
 	// Peek the route before reading any body: the upload route must
 	// stream its body instead of buffering it.
 	if (_ReadHeaders(clientSocket, method, pathAndQuery, headers)) {
@@ -302,14 +314,14 @@ LsHttpServer::_HandleConnection(int clientSocket)
 
 		if (path == std::string(kApiBase) + kEndpointUpload
 			&& method == "POST") {
-			_HandleUpload(clientSocket, query, headers);
+			_HandleUpload(clientSocket, query, headers, peerAddress);
 		} else {
 			std::string body;
 			if (!_ReadBody(clientSocket, headers, body)) {
 				_SendError(clientSocket, 400, "Bad Request");
 			} else {
 				_HandleRoute(clientSocket, method, path, query, headers,
-					body);
+					body, peerAddress);
 			}
 		}
 	} else {
@@ -387,7 +399,7 @@ void
 LsHttpServer::_HandleRoute(int socket, const std::string& method,
 	const std::string& path, const std::map<std::string, std::string>& query,
 	const std::map<std::string, std::string>& headers,
-	const std::string& body)
+	const std::string& body, const std::string& address)
 {
 	std::string basePath = kApiBase;
 	if (path.compare(0, basePath.size(), basePath) != 0) {
@@ -413,7 +425,6 @@ LsHttpServer::_HandleRoute(int socket, const std::string& method,
 			return;
 		}
 		if (fHandler != NULL) {
-			std::string address = "unknown";
 			fHandler->RegisterReceived(sender, address);
 		}
 		_SendResponse(socket, 200, "OK", device.ToResponseJson().Serialize());
@@ -442,7 +453,7 @@ LsHttpServer::_HandleRoute(int socket, const std::string& method,
 		int status = 500;
 		if (fHandler != NULL) {
 			status = fHandler->PrepareUploadReceived(request.sender,
-				request.files, pin, "unknown", response);
+				request.files, pin, address, response);
 		}
 		if (status == 200) {
 			_SendResponse(socket, 200, "OK", response.ToJson().Serialize());
@@ -484,7 +495,8 @@ LsHttpServer::_HandleRoute(int socket, const std::string& method,
 void
 LsHttpServer::_HandleUpload(int socket,
 	const std::map<std::string, std::string>& query,
-	const std::map<std::string, std::string>& headers)
+	const std::map<std::string, std::string>& headers,
+	const std::string& /*address*/)
 {
 	std::map<std::string, std::string>::const_iterator sessionIt
 		= query.find("sessionId");

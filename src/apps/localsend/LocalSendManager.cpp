@@ -36,6 +36,9 @@ LocalSendManager::LocalSendManager(LocalSendSettings* settings)
 	fSettings(settings),
 	fSending(false),
 	fPendingArgs(NULL),
+	fRunning(false),
+	fAnnounceThread(0),
+	fAnnounceThreadStarted(false),
 	fPromptSemaphore(-1),
 	fPromptPending(false),
 	fPromptAccept(false),
@@ -86,7 +89,7 @@ LocalSendManager::Start()
 	fReceiver.SetRequiredPin(fSettings->RequirePin()
 		? fSettings->Pin().String() : "");
 
-	if (fServer.Start(&fReceiver, fDevice) != 0)
+	if (fServer.Start(this, fDevice) != 0)
 		return B_ERROR;
 
 	if (fDiscovery.Init() != 0)
@@ -99,6 +102,16 @@ LocalSendManager::Start()
 	for (int i = 0; i < 3; i++) {
 		fDiscovery.Announce(fDevice, true);
 		snooze(250000);
+	}
+
+	// Keep announcing: a peer that starts later must learn about
+	// us without waiting for a manual rescan (protocol 3.1).
+	fRunning = true;
+	fAnnounceThread = spawn_thread(&LocalSendManager::_AnnounceThreadEntry,
+		"LocalSend announce", B_NORMAL_PRIORITY, this);
+	if (fAnnounceThread >= B_OK) {
+		fAnnounceThreadStarted = true;
+		resume_thread(fAnnounceThread);
 	}
 
 	// HTTP fallback discovery (protocol section 3.2): probe the
@@ -115,6 +128,12 @@ LocalSendManager::Start()
 void
 LocalSendManager::Stop()
 {
+	fRunning = false;
+	if (fAnnounceThreadStarted) {
+		wait_for_thread(fAnnounceThread, NULL);
+		fAnnounceThreadStarted = false;
+	}
+
 	fDiscovery.Stop();
 	fServer.Stop();
 
@@ -161,6 +180,42 @@ LocalSendManager::DeviceAnnounced(const ls::LsDevice& device,
 	path += ls::kEndpointRegister;
 	transport.PostJson(sourceAddress, device.port, path,
 		fDevice.ToJson().Serialize());
+}
+
+
+void
+LocalSendManager::RegisterReceived(const ls::LsDevice& device,
+	const std::string& address)
+{
+	fReceiver.RegisterReceived(device, address);
+	// Peer found via register POST: list it without replying in kind.
+	DeviceAnnounced(device, address, false);
+}
+
+
+int
+LocalSendManager::PrepareUploadReceived(const ls::LsDevice& sender,
+	const std::map<std::string, ls::LsFileItem>& files,
+	const std::string& pin, const std::string& address,
+	ls::LsPrepareUploadResponse& response)
+{
+	return fReceiver.PrepareUploadReceived(sender, files, pin, address,
+		response);
+}
+
+
+ls::LsUploadSink*
+LocalSendManager::StartUpload(const std::string& sessionId,
+	const std::string& fileId, const std::string& token, int64_t size)
+{
+	return fReceiver.StartUpload(sessionId, fileId, token, size);
+}
+
+
+void
+LocalSendManager::CancelReceived(const std::string& sessionId)
+{
+	fReceiver.CancelReceived(sessionId);
 }
 
 
@@ -284,6 +339,27 @@ LocalSendManager::_ScanThreadEntry(void* data)
 {
 	static_cast<LocalSendManager*>(data)->_ScanSubnets();
 	return 0;
+}
+
+
+int32_t
+LocalSendManager::_AnnounceThreadEntry(void* data)
+{
+	static_cast<LocalSendManager*>(data)->_AnnounceLoop();
+	return 0;
+}
+
+
+void
+LocalSendManager::_AnnounceLoop()
+{
+	// Protocol section 3.1 cadence; the slice keeps Stop() from
+	// waiting out a full period.
+	while (fRunning) {
+		fDiscovery.Announce(fDevice, true);
+		for (int i = 0; i < 10 && fRunning; i++)
+			snooze(500000);
+	}
 }
 
 

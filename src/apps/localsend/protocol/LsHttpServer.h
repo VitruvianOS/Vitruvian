@@ -101,12 +101,14 @@ private:
 										query,
 									const std::map<std::string, std::string>&
 										headers,
-									const std::string& body);
+									const std::string& body,
+									const std::string& address);
 			void			_HandleUpload(int socket,
 									const std::map<std::string, std::string>&
 										query,
 									const std::map<std::string, std::string>&
-										headers);
+										headers,
+									const std::string& address);
 			void			_SendResponse(int socket, int status,
 									const char* statusText,
 									const std::string& body,

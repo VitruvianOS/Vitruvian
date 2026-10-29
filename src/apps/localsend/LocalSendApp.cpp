@@ -244,6 +244,7 @@ LocalSendApp::ReadyToRun()
 	}
 
 	if (fManager->Start() != B_OK) {
+		fprintf(stderr, "LocalSend: network services failed to start\n");
 		BAlert* alert = new BAlert("Error",
 			"LocalSend could not start its network services.\n"
 			"Another application may be using the LocalSend port.",

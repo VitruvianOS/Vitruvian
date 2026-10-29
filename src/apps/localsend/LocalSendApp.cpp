@@ -7,7 +7,9 @@
 #include <Alert.h>
 #include <Deskbar.h>
 #include <Entry.h>
+#include <MenuItem.h>
 #include <Path.h>
+#include <PopUpMenu.h>
 #include <Roster.h>
 #include <String.h>
 
@@ -85,10 +87,63 @@ LocalSendReplicant::Draw(BRect updateRect)
 
 
 void
-LocalSendReplicant::MouseDown(BPoint /*where*/)
+LocalSendReplicant::MouseDown(BPoint where)
 {
+	int32 buttons = B_PRIMARY_MOUSE_BUTTON;
+	if (Window() != NULL && Window()->CurrentMessage() != NULL)
+		Window()->CurrentMessage()->FindInt32("buttons", &buttons);
+
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		_ShowMenu(where);
+		return;
+	}
+
 	// Single click toggles the main window in the running app.
 	_ToggleAppWindow();
+}
+
+
+void
+LocalSendReplicant::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case kMsgToggleWindow:
+			_ToggleAppWindow();
+			break;
+
+		case B_QUIT_REQUESTED:
+		{
+			// Quit must go to the app so it shuts the networking
+			// down; the replicant lives in the Deskbar's team.
+			BMessenger messenger(kSignature);
+			if (messenger.IsValid()) {
+				BMessage quit(B_QUIT_REQUESTED);
+				messenger.SendMessage(&quit);
+			}
+			break;
+		}
+
+		default:
+			BView::MessageReceived(message);
+			break;
+	}
+}
+
+
+void
+LocalSendReplicant::_ShowMenu(BPoint where)
+{
+	// Async heap menu: a synchronous Go() would block the Deskbar's
+	// window thread for as long as the menu is open.
+	BPopUpMenu* menu = new BPopUpMenu(B_EMPTY_STRING, false, false);
+	menu->SetAsyncAutoDestruct(true);
+	menu->SetFont(be_plain_font);
+	menu->AddItem(new BMenuItem("Show LocalSend",
+		new BMessage(kMsgToggleWindow)));
+	menu->AddItem(new BMenuItem("Quit", new BMessage(B_QUIT_REQUESTED)));
+	menu->SetTargetForItems(this);
+	ConvertToScreen(&where);
+	menu->Go(where, true, true, true);
 }
 
 
@@ -194,6 +249,7 @@ LocalSendApp::ReadyToRun()
 			"Another application may be using the LocalSend port.",
 			"Quit", NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
 		alert->Go();
+		Quit();
 		return;
 	}
 
@@ -250,6 +306,14 @@ LocalSendApp::QuitRequested()
 	// Stop networking before the objects go away in ~LocalSendApp.
 	if (fManager != NULL)
 		fManager->Stop();
+
+	// The tray item is installed with the session; leave the Deskbar
+	// clean when the app exits. The --deskbar helper keeps it.
+	if (!fQuitImmediately) {
+		BDeskbar deskbar;
+		if (deskbar.IsRunning())
+			deskbar.RemoveItem(kDeskbarItemName);
+	}
 	return true;
 }
 

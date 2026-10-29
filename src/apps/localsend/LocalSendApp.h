@@ -25,6 +25,7 @@ public:
 
 	virtual	void		AttachedToWindow();
 	virtual	void		MouseDown(BPoint where);
+	virtual	void		MessageReceived(BMessage* message);
 	virtual	void		Draw(BRect updateRect);
 
 	virtual	status_t	Archive(BMessage* into, bool deep = true) const;
@@ -32,6 +33,7 @@ public:
 
 private:
 			void		_ToggleAppWindow();
+			void		_ShowMenu(BPoint where);
 };
 
 

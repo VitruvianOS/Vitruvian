@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -175,6 +176,21 @@ LsDiscovery::_ReadLoop()
 	char buffer[kMaxPacketSize + 1];
 
 	while (fRunning) {
+		// Bounded wait: shutdown() alone does not reliably wake a
+		// blocked recvfrom, and Stop() joins this thread.
+		struct pollfd descriptor;
+		descriptor.fd = fSocket;
+		descriptor.events = POLLIN;
+		descriptor.revents = 0;
+		int status = poll(&descriptor, 1, 500);
+		if (status < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+		if (status == 0 || (descriptor.revents & POLLIN) == 0)
+			continue;
+
 		struct sockaddr_in source;
 		socklen_t sourceLength = sizeof(source);
 		ssize_t received = recvfrom(fSocket, buffer, kMaxPacketSize, 0,

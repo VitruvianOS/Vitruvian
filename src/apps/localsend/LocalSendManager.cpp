@@ -154,7 +154,9 @@ LocalSendManager::DeviceAnnounced(const ls::LsDevice& device,
 	if (!announceFlag)
 		return;
 
-	ls::BeHttpTransport transport;
+	// Short-timeout sockets: Stop() joins this thread.
+	ls::LsSocketTransport transport;
+	transport.SetTimeoutMs(2000);
 	std::string path = ls::kApiBase;
 	path += ls::kEndpointRegister;
 	transport.PostJson(sourceAddress, device.port, path,

@@ -5,6 +5,7 @@
 #include "LocalSendWindow.h"
 
 #include <Alert.h>
+#include <Application.h>
 #include <Button.h>
 #include <FilePanel.h>
 #include <GroupLayout.h>
@@ -47,7 +48,8 @@ static const uint32 kMsgPromptAlways = 'palw';
 LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 	LocalSendSettings* settings)
 	:
-	BWindow(frame, "LocalSend", B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS),
+	BWindow(frame, "LocalSend", B_TITLED_WINDOW | B_QUIT_ON_WINDOW_CLOSE,
+		B_ASYNCHRONOUS_CONTROLS),
 	fManager(manager),
 	fSettings(settings),
 	fFilePanel(NULL),
@@ -66,9 +68,13 @@ LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 	fileMenu->AddItem(new BMenuItem("Settings...",
 		new BMessage(kMsgShowSettings), ','));
 	fileMenu->AddSeparatorItem();
-	fileMenu->AddItem(new BMenuItem("Quit",
-		new BMessage(B_QUIT_REQUESTED), 'Q'));
+	BMenuItem* quitItem = new BMenuItem("Quit",
+		new BMessage(B_QUIT_REQUESTED), 'Q');
+	fileMenu->AddItem(quitItem);
 	fileMenu->SetTargetForItems(this);
+	// Quit must reach the app so it shuts the networking down; the
+	// window on its own would only close itself.
+	quitItem->SetTarget(be_app_messenger);
 	menuBar->AddItem(fileMenu);
 
 	BMenu* helpMenu = new BMenu("Help");
@@ -116,12 +122,9 @@ LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 bool
 LocalSendWindow::QuitRequested()
 {
-	// Keep the app running in the Deskbar; closing the window only
-	// hides it. Quit comes from the File menu or the tray.
-	Lock();
-	Hide();
-	Unlock();
-	return false;
+	// Closing the window quits the app; LocalSendApp::QuitRequested
+	// stops the networking on the way out.
+	return true;
 }
 
 

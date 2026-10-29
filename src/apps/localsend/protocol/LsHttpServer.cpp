@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -230,6 +231,20 @@ void
 LsHttpServer::_AcceptLoop()
 {
 	while (fRunning) {
+		// shutdown() does not reliably wake accept(); Stop() joins us.
+		struct pollfd descriptor;
+		descriptor.fd = fListenSocket;
+		descriptor.events = POLLIN;
+		descriptor.revents = 0;
+		int status = poll(&descriptor, 1, 500);
+		if (status < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+		if (status == 0 || (descriptor.revents & POLLIN) == 0)
+			continue;
+
 		int client = accept(fListenSocket, NULL, NULL);
 		if (client < 0) {
 			if (errno == EINTR)
@@ -242,7 +257,7 @@ LsHttpServer::_AcceptLoop()
 		// open one connection per file at most.
 		pthread_t thread;
 		void* argument = new LsConnectionRequest(this, client);
-		int status = pthread_create(&thread, NULL,
+		status = pthread_create(&thread, NULL,
 			&LsHttpServer::_ConnectionThreadEntry, argument);
 		if (status != 0) {
 			delete static_cast<LsConnectionRequest*>(argument);

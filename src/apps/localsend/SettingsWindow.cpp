@@ -35,17 +35,16 @@ SettingsWindow::SettingsWindow(BRect frame, LocalSendSettings* settings,
 	BView* top = new BView("top", B_WILL_DRAW);
 	top->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	fAliasControl = new BTextControl("Alias:", settings->Alias(),
-		new BMessage(kMsgSave));
+	// No modification message: kMsgSave closes the window.
+	fAliasControl = new BTextControl("Alias:", settings->Alias(), NULL);
 	fDestinationControl = new BTextControl("Save files to:",
-		settings->DestinationFolder(), new BMessage(kMsgSave));
+		settings->DestinationFolder(), NULL);
 
 	fPinCheck = new BCheckBox("Require a PIN for incoming transfers",
 		new BMessage(kMsgPinToggled));
 	fPinCheck->SetValue(settings->RequirePin() ? B_CONTROL_ON
 		: B_CONTROL_OFF);
-	fPinControl = new BTextControl("PIN:", settings->Pin(),
-		new BMessage(kMsgSave));
+	fPinControl = new BTextControl("PIN:", settings->Pin(), NULL);
 	fPinControl->SetEnabled(settings->RequirePin());
 
 	fHistoryView = new BTextView("history");

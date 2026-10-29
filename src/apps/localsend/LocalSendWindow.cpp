@@ -48,8 +48,8 @@ static const uint32 kMsgPromptAlways = 'palw';
 LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 	LocalSendSettings* settings)
 	:
-	BWindow(frame, "LocalSend", B_TITLED_WINDOW | B_QUIT_ON_WINDOW_CLOSE,
-		B_ASYNCHRONOUS_CONTROLS),
+	BWindow(frame, "LocalSend", B_TITLED_WINDOW,
+		B_ASYNCHRONOUS_CONTROLS | B_QUIT_ON_WINDOW_CLOSE),
 	fManager(manager),
 	fSettings(settings),
 	fFilePanel(NULL),

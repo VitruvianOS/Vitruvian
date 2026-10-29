@@ -102,7 +102,7 @@ DeviceListItem::DrawItem(BView* owner, BRect frame, bool complete)
 
 
 void
-DeviceListItem::Update(BView* owner, BFont* font)
+DeviceListItem::Update(BView* owner, const BFont* font)
 {
 	BListItem::Update(owner, font);
 

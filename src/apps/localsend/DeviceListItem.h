@@ -25,7 +25,7 @@ public:
 
 	virtual	void		DrawItem(BView* owner, BRect frame,
 							bool complete = false);
-	virtual	void		Update(BView* owner, BFont* font);
+	virtual	void		Update(BView* owner, const BFont* font);
 
 			const BString&	Alias() const { return fAlias; }
 			const BString&	Address() const { return fAddress; }

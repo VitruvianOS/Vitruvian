@@ -13,6 +13,8 @@ set(SYSTEMD_SERVICES
   data/systemd/vos-login.target
   data/systemd/vos-pdf-printer.service
   data/systemd/vos-fsck-failed.service
+  data/systemd/vos-overclock.service
+  data/systemd/vos-overclock-ok.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
@@ -89,6 +91,17 @@ install(FILES data/polkit-1/actions/org.vitruvian.privilegedguy.policy
 install(PROGRAMS data/libexec/vos-hardware-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.hardware.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+
+# Overclock helpers: pkexec target for the Hardware preflet plus the
+# boot-time applier with its shared functions.
+install(PROGRAMS data/libexec/vos-set-overclock
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-overclock-apply
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-overclock-common.sh
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.overclock.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-apt-helper

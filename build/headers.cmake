@@ -35,6 +35,7 @@ set(
 	"headers/os/add-ons/input_server"
 	"headers/os/add-ons/tracker"
 
+	"headers/os/hwaccel"
 	"headers/os/opengl"
 
 	"headers/os/media2"

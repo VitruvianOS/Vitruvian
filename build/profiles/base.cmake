@@ -54,6 +54,7 @@ set(SYSTEM_LIBS
 	be
 	web
 	game
+	hwaccel
 	media2
 	opengl
 	printcups

@@ -21,7 +21,7 @@
 #include "LocalSendWindow.h"
 
 
-const char* kSignature = "application/x-vnd.Vos-LocalSend";
+const char* kSignature = "application/x-vnd.vos-LocalSend";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 const char* kDeskbarItemName = "LocalSend";
 

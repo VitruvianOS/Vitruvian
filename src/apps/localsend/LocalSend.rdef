@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Vos-LocalSend";
+resource app_signature "application/x-vnd.vos-LocalSend";
 
-resource app_name_catalog_entry "x-vnd.Vos-LocalSend:System name:LocalSend";
+resource app_name_catalog_entry "x-vnd.vos-LocalSend:System name:LocalSend";
 
 resource app_flags B_SINGLE_LAUNCH;
 

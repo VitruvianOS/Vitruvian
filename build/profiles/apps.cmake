@@ -23,6 +23,7 @@ set(SYSTEM_APPS
 	GLTeapot
 	Installer
 	LaunchBox
+	LocalSend
 	Magnify
 	MediaConverter
 	MediaPlayer

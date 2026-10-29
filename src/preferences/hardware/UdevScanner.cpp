@@ -59,6 +59,11 @@ UdevScanner::Start(const BMessenger& listener)
 	if (pipe(fWakePipe) < 0)
 		return B_ERROR;
 
+	// The wake-up drain loop reads until failure; on a blocking pipe
+	// that second read would never return and Stop() could not join.
+	fcntl(fWakePipe[0], F_SETFL,
+		fcntl(fWakePipe[0], F_GETFL) | O_NONBLOCK);
+
 	fThread = spawn_thread(_ThreadEntry, "hardware:scanner",
 		B_NORMAL_PRIORITY, this);
 	if (fThread < 0) {
@@ -81,7 +86,8 @@ UdevScanner::Stop()
 
 	fQuitRequested = true;
 	char byte = 'q';
-	write(fWakePipe[1], &byte, 1);
+	ssize_t written = write(fWakePipe[1], &byte, 1);
+	(void)written;
 
 	int32 status = 0;
 	wait_for_thread(fThread, &status);
@@ -101,7 +107,8 @@ UdevScanner::RequestRescan()
 
 	fRescanRequested = true;
 	char byte = 'r';
-	write(fWakePipe[1], &byte, 1);
+	ssize_t written = write(fWakePipe[1], &byte, 1);
+	(void)written;
 }
 
 

@@ -254,6 +254,7 @@ LocalSendApp::ReadyToRun()
 		return;
 	}
 
+	fWindow->CenterOnScreen();
 	fWindow->Show();
 
 	// Auto-install the tray icon once; harmless if the Deskbar is

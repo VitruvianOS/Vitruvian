@@ -45,6 +45,37 @@ static const uint32 kMsgPromptDecline = 'pdec';
 static const uint32 kMsgPromptAlways = 'palw';
 
 
+// List that shows a hint while it has no rows.
+class HintListView : public BListView {
+public:
+	HintListView(const char* name, const char* hint)
+		:
+		BListView(name, B_SINGLE_SELECTION_LIST),
+		fHint(hint)
+	{
+	}
+
+	virtual void Draw(BRect updateRect)
+	{
+		BListView::Draw(updateRect);
+		if (CountItems() > 0)
+			return;
+
+		SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR),
+			B_LIGHTEN_1_TINT));
+		font_height height;
+		GetFontHeight(&height);
+		BRect bounds = Bounds();
+		float x = (bounds.Width() - StringWidth(fHint.String())) / 2;
+		DrawString(fHint.String(), BPoint(max_c(x, 4),
+			bounds.Height() / 2 + height.ascent / 2));
+	}
+
+private:
+	BString	fHint;
+};
+
+
 LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 	LocalSendSettings* settings)
 	:
@@ -84,10 +115,11 @@ LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 	helpMenu->AddItem(aboutItem);
 	menuBar->AddItem(helpMenu);
 
-	fDeviceList = new BListView("devices", B_SINGLE_SELECTION_LIST);
+	fDeviceList = new HintListView("devices",
+		"No devices found yet. Other LocalSend devices appear here.");
 	fDeviceList->SetSelectionMessage(new BMessage('sdev'));
-	BScrollView* listScroll = new BScrollView("scroll", fDeviceList, 0, true,
-		true);
+	BScrollView* listScroll = new BScrollView("scroll", fDeviceList, 0, false,
+		true, B_FANCY_BORDER);
 
 	fSendButton = new BButton("Send", new BMessage(kMsgSendSelected));
 	fSendButton->SetEnabled(false);
@@ -99,15 +131,15 @@ LocalSendWindow::LocalSendWindow(BRect frame, LocalSendManager* manager,
 
 	BLayoutBuilder::Group<>(top, B_VERTICAL, 0)
 		.Add(menuBar)
-		.AddGroup(B_VERTICAL, 5, 10)
+		.AddGroup(B_VERTICAL, B_USE_DEFAULT_SPACING)
+			.SetInsets(B_USE_WINDOW_INSETS)
 			.Add(listScroll, 1.0)
-			.AddGroup(B_HORIZONTAL, 10)
+			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 				.Add(fSendButton)
 				.Add(fProgress, 1.0)
 			.End()
 			.Add(fStatus)
-		.End()
-		.SetInsets(0, 0, 0, 5);
+		.End();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(top);
@@ -268,14 +300,22 @@ LocalSendWindow::_HandleDeviceUpdate(BMessage* message)
 	message->FindUInt16("port", &port);
 	message->FindBool("download", &download);
 
-	// Update in place when we already know this fingerprint.
+	// Refresh in place when we already know this fingerprint, so
+	// the periodic re-announces do not drop the user's selection.
 	int32 count = fDeviceList->CountItems();
 	for (int32 i = 0; i < count; i++) {
 		DeviceListItem* item
 			= static_cast<DeviceListItem*>(fDeviceList->ItemAt(i));
 		if (item->Device().fingerprint == fingerprint.String()) {
-			fDeviceList->RemoveItem(i);
-			break;
+			item->UpdateDevice(alias, typeName, model, fingerprint,
+				address, port, protocol, download, version);
+			fDeviceList->InvalidateItem(i);
+
+			char status[128];
+			snprintf(status, sizeof(status), "%d device(s) found",
+				fDeviceList->CountItems());
+			_UpdateStatus(BString(status));
+			return;
 		}
 	}
 

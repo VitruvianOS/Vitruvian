@@ -14,17 +14,31 @@ DeviceListItem::DeviceListItem(const BString& alias, const BString& typeName,
 	const BString& address, uint16 port, const BString& protocol,
 	bool download, const BString& version)
 	:
-	fAlias(alias),
-	fTypeName(typeName),
-	fModel(model),
-	fFingerprint(fingerprint),
-	fAddress(address),
-	fPort(port),
-	fProtocol(protocol),
-	fDownload(download),
-	fVersion(version),
+	fPort(0),
+	fDownload(false),
 	fMaxTextWidth(0)
 {
+	UpdateDevice(alias, typeName, model, fingerprint, address, port,
+		protocol, download, version);
+}
+
+
+void
+DeviceListItem::UpdateDevice(const BString& alias, const BString& typeName,
+	const BString& model, const BString& fingerprint,
+	const BString& address, uint16 port, const BString& protocol,
+	bool download, const BString& version)
+{
+	fAlias = alias;
+	fTypeName = typeName;
+	fModel = model;
+	fFingerprint = fingerprint;
+	fAddress = address;
+	fPort = port;
+	fProtocol = protocol;
+	fDownload = download;
+	fVersion = version;
+
 	fDevice.alias = alias.String();
 	fDevice.version = version.String();
 	fDevice.deviceModel = model.String();

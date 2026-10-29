@@ -23,6 +23,18 @@ public:
 							bool download,
 							const BString& version);
 
+			// Refresh in place on a repeat announce; replacing the
+			// item would drop the user's selection.
+			void		UpdateDevice(const BString& alias,
+							const BString& typeName,
+							const BString& model,
+							const BString& fingerprint,
+							const BString& address,
+							uint16 port,
+							const BString& protocol,
+							bool download,
+							const BString& version);
+
 	virtual	void		DrawItem(BView* owner, BRect frame,
 							bool complete = false);
 	virtual	void		Update(BView* owner, const BFont* font);

@@ -218,6 +218,9 @@ OverclockView::OverclockView()
 		new BMenu("gpufreq"));
 	fRpiNote = new BStringView("rpinote", B_TRANSLATE(
 		"These values live in config.txt and apply at the next boot."));
+	fMemoryNote = new BStringView("memorynote", "");
+	fRamTempString = new BStringView("ramtemp", "");
+	fRamTempString->Hide();
 
 	BBox* cpuBox = new BBox("cpubox");
 	cpuBox->SetLabel(B_TRANSLATE("CPU"));

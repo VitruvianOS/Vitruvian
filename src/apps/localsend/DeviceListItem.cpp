@@ -106,11 +106,9 @@ DeviceListItem::Update(BView* owner, const BFont* font)
 {
 	BListItem::Update(owner, font);
 
-	// Fixed height for the two-line layout.
-	float height = 32;
-	SetHeight(height);
+	// No SetFont() on the owner: BListView::SetFont re-runs Update().
+	SetHeight(32);
 
-	owner->SetFont(font);
 	BString widest(fAlias);
 	widest << "  (" << fAddress << ":" << fPort << ")";
 	fMaxTextWidth = font->StringWidth(widest.String()) + 32;

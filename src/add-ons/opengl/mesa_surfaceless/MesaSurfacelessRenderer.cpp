@@ -360,8 +360,19 @@ MesaSurfacelessRenderer::_Init()
 status_t
 MesaSurfacelessRenderer::_TryInit()
 {
-	if (_SelectDevice() != B_OK)
-		return B_ERROR;
+	// Selection is best-effort here: the surfaceless platform works
+	// without a DRM device, so a failed pick only loses the policy.
+	if (_SelectDevice() != B_OK) {
+		fprintf(stderr, "MesaSurfacelessRenderer: no GPU selected, "
+			"using the default device\n");
+		gl_zink_quirk quirks[GL_DEVICE_MAX_QUIRKS];
+		int quirkCount = gl_load_zink_quirk_table(quirks,
+			GL_DEVICE_MAX_QUIRKS);
+		gl_decide_zink(getenv("VOS_GL_ZINK"), quirks, quirkCount, 0, 0,
+			NULL, false, &fZinkMode, &fZinkWhy);
+		if (fZinkMode != kGlZinkNative)
+			setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
 
 	// Prefer binding the selected GPU explicitly; fall back to the
 	// platform surfaceless display when the EGL device extensions are

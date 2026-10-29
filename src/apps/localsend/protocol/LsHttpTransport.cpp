@@ -6,8 +6,10 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -109,11 +111,35 @@ LsSocketTransport::_Post(const std::string& address, uint16_t port,
 	setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
+	// SO_SNDTIMEO does not bound connect() everywhere; use poll().
+	int statusFlags = fcntl(socket, F_GETFL, 0);
+	fcntl(socket, F_SETFL, statusFlags | O_NONBLOCK);
+
 	if (connect(socket, reinterpret_cast<struct sockaddr*>(&target),
 			sizeof(target)) != 0) {
-		close(socket);
-		return result;
+		if (errno != EINPROGRESS) {
+			close(socket);
+			return result;
+		}
+
+		struct pollfd descriptor;
+		descriptor.fd = socket;
+		descriptor.events = POLLOUT;
+		descriptor.revents = 0;
+		if (poll(&descriptor, 1, fTimeoutMs) <= 0) {
+			close(socket);
+			return result;
+		}
+
+		int connectError = 0;
+		socklen_t errorLength = sizeof(connectError);
+		if (getsockopt(socket, SOL_SOCKET, SO_ERROR, &connectError,
+				&errorLength) != 0 || connectError != 0) {
+			close(socket);
+			return result;
+		}
 	}
+	fcntl(socket, F_SETFL, statusFlags);
 
 	std::string request = "POST ";
 	request += path;

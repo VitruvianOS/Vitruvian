@@ -63,9 +63,15 @@ LsDiscovery::Init(uint16_t port, const std::string& group)
 	bindAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 	if (bind(fSocket, reinterpret_cast<struct sockaddr*>(&bindAddress),
 			sizeof(bindAddress)) != 0) {
-		close(fSocket);
-		fSocket = -1;
-		return -1;
+		// Port busy (second instance): use an ephemeral port; announces
+		// still go to the well-known one.
+		bindAddress.sin_port = 0;
+		if (bind(fSocket, reinterpret_cast<struct sockaddr*>(&bindAddress),
+				sizeof(bindAddress)) != 0) {
+			close(fSocket);
+			fSocket = -1;
+			return -1;
+		}
 	}
 
 	struct ip_mreq membership;

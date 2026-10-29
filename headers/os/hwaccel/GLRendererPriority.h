@@ -9,19 +9,10 @@
 #include <StringList.h>
 
 
-// OpenGL renderer priority list, shared between the hwaccel preflet and
-// the renderer-priority block (c553 / PR !418) inside BGLView's add-on
-// loader. BGLView::_LoadRenderer() walks /system/add-ons/opengl and takes
-// the first add-on whose instantiate_gl_renderer factory yields a
-// renderer, so plain directory order decides which renderer wins. The
-// priority list overrides that order: a flattened BMessage stored at
-// ~/config/settings/opengl/render_priority with one string per renderer
-// add-on, most preferred first (key "render_priority", B_STRING_TYPE
-// array; names are the add-on file names as found in the add-on
-// directory, e.g. "mesa_surfaceless", "zink").
-//
-// Pure userland/config: this namespace only reads and writes that file
-// and enumerates the add-on directory. No kernel/IRP involvement.
+// OpenGL renderer priority list shared by the hwaccel preflet and BGLView's
+// add-on loader. Stored as a flattened BMessage at
+// ~/config/settings/opengl/render_priority: one string per add-on file name
+// (key "render_priority"), most preferred first. Overrides directory order.
 namespace GLRendererPriority {
 
 // Settings file, relative to B_USER_SETTINGS_DIRECTORY.

@@ -8,7 +8,8 @@ AddOn(opengl
 	GLRenderer.cpp
 	GlDeviceSelect.cpp
 
-	LIBS game ${GL_LIBRARIES} ${DRM_LIBRARIES}
+	# GLRendererSelect decides the renderer try order; one-way link.
+	LIBS game hwaccel ${GL_LIBRARIES} ${DRM_LIBRARIES}
 )
 
 # GlDeviceSelect.cpp reads DRM device metadata (xf86drm.h) for GPU

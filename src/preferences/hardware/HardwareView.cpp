@@ -18,6 +18,7 @@
 
 #include <time.h>
 
+#include "AccelerationView.h"
 #include "DeviceTreeView.h"
 #include "HardwareHelperClient.h"
 #include "HardwareMessages.h"
@@ -62,6 +63,9 @@ HardwareView::HardwareView()
 	BTab* platformTab = new BTab();
 	fTabView->AddTab(fPlatformView, platformTab);
 	platformTab->SetLabel(B_TRANSLATE("Platform"));
+	BTab* accelerationTab = new BTab();
+	fTabView->AddTab(new AccelerationView(), accelerationTab);
+	accelerationTab->SetLabel(B_TRANSLATE("Acceleration"));
 
 	fCopyButton = new BButton("copy", B_TRANSLATE("Copy info"),
 		new BMessage(kMsgCopy));

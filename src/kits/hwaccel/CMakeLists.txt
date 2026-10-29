@@ -1,7 +1,5 @@
-# Hardware acceleration kit: OpenGL renderer priority list
-# (~/config/settings/opengl/render_priority) and renderer selection
-# (~/config/settings/opengl/renderer_selection), shared by the Hardware
-# preflet and BGLView. Installed via build/profiles/base.cmake (SYSTEM_LIBS).
+# Hardware acceleration kit: GL renderer priority/selection and the overclock
+# backends, shared by the Hardware preflet and BGLView.
 AddOn(hwaccel
 	SHARED
 
@@ -9,6 +7,7 @@ AddOn(hwaccel
 	GLRendererPriority.cpp
 	GLRendererSelect.cpp
 	GLRendererSelectScore.cpp
+	Overclock.cpp
 
 	LIBS be
 )

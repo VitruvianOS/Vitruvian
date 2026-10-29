@@ -1,5 +1,5 @@
 /*
- * Copyright 2026, Vitruvian OS contributors. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _OVERCLOCK_H

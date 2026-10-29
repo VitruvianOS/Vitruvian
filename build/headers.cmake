@@ -56,6 +56,7 @@ set(
 	"headers/private/"
 
 	"headers/private/opengl"
+	"headers/private/hwaccel"
 	"headers/private/input"
 	"headers/private/shared"
 	"headers/private/storage"

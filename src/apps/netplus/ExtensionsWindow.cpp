@@ -96,12 +96,16 @@ ExtensionsWindow::_AddRow(const WebExtensionInfo& info)
 		new BMessage(MSG_EXTENSION_TOGGLE));
 	check->SetValue(info.enabled);
 	check->Message()->AddString("id", info.id.c_str());
+	if (!info.available)
+		check->SetEnabled(false);
 
 	BString meta(info.kind.c_str());
 	if (!info.licence.empty())
 		meta << ", " << info.licence.c_str();
 	if (info.userOwned)
 		meta << ", user";
+	if (!info.available)
+		meta << ", unavailable";
 	BStringView* details = new BStringView("details", meta.String());
 
 	BView* row = new BView("row", B_WILL_DRAW);

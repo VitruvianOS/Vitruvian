@@ -27,6 +27,9 @@ struct WebExtensionInfo {
 	std::string	path;
 	bool		enabled;
 	bool		userOwned;
+	// False when a content blocker ships without any of its compiled
+	// rule files: the UI lists it as unavailable and no payload uses it.
+	bool		available;
 };
 
 

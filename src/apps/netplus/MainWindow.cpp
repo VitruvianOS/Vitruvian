@@ -550,7 +550,7 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 		int32 activeCount = 0;
 		std::vector<WebExtensionInfo> list = extensions->List();
 		for (const auto& info : list) {
-			if (!info.enabled)
+			if (!info.enabled || !info.available)
 				continue;
 			activeCount++;
 			bool offHere = extensions->IsDisabledOnSite(

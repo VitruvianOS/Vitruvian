@@ -511,6 +511,7 @@ BWebExtensions::_ScanRoot(const std::string& root, bool userOwned)
 		extension.info.userOwned = userOwned;
 		// Default until the manifest or state says otherwise.
 		extension.info.enabled = true;
+		extension.info.available = true;
 
 		std::string json = _ReadFile(manifest);
 		JsonReader reader = {json.data(), json.data() + json.size()};
@@ -546,7 +547,9 @@ BWebExtensions::_ScanRoot(const std::string& root, bool userOwned)
 				extension.rulesPaths.push_back(rulesPath.string());
 			}
 			if (extension.rulesPaths.empty())
-				continue;
+				// Shipped without the converted lists: keep it in
+				// the registry so the UI can say it is unusable.
+				extension.info.available = false;
 		} else if (extension.info.kind == "userscript") {
 			std::string script = "script.user.js";
 			reader.GetString("script", &script);

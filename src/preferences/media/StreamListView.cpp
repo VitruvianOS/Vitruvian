@@ -101,6 +101,8 @@ StreamListView::AttachedToWindow()
 void
 StreamListView::Refresh()
 {
+	// Keep the selection across the rebuild, or the slider dies mid-drag.
+	const uint32 selectedId = fCurrentStreamId;
 
 	while (fList->CountItems() > 0) {
 		BListItem* it = fList->RemoveItem((int32)0);
@@ -125,6 +127,16 @@ StreamListView::Refresh()
 		else
 			label << "  ●  " << B_TRANSLATE("Capture");
 		fList->AddItem(new BStringItem(label.String()));
+	}
+
+	// Items were appended in stream order, so the index still maps.
+	if (selectedId != 0) {
+		for (int32 i = 0; i < streams.CountItems(); i++) {
+			if ((uint32)streams.ItemAt(i)->id == selectedId) {
+				fList->Select(i);
+				break;
+			}
+		}
 	}
 
 	bool empty = fList->CountItems() == 0;

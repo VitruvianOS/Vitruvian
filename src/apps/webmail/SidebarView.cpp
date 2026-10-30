@@ -73,7 +73,12 @@ SidebarView::SetUnread(const char* accountId, int32 unread)
 AccountItem*
 SidebarView::SelectedItem() const
 {
-	return (AccountItem*)fList->CurrentSelection();
+	// CurrentSelection() is a list index, not a pointer; with no
+	// selection it is -1, which must not be handed out as an item.
+	int32 index = fList->CurrentSelection();
+	if (index < 0)
+		return NULL;
+	return (AccountItem*)fList->ItemAt(index);
 }
 
 

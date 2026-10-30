@@ -4,6 +4,7 @@
  */
 
 #include "WebMailStrings.h"
+#include "EmptyStateView.h"
 #include "MainWindow.h"
 #include "MailView.h"
 #include "OAuth2.h"
@@ -50,6 +51,7 @@ MainWindow::MainWindow(BRect frame)
 	fMenuBar(NULL),
 	fSidebar(NULL),
 	fContent(NULL),
+	fEmptyState(NULL),
 	fAccounts(DefaultAccountsService()),
 	fSettingsWindow(NULL)
 {
@@ -58,6 +60,7 @@ MainWindow::MainWindow(BRect frame)
 
 	fSidebar = new SidebarView();
 	fContent = new BGroupLayout(B_VERTICAL);
+	fEmptyState = new EmptyStateView();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(fMenuBar)
@@ -69,11 +72,6 @@ MainWindow::MainWindow(BRect frame)
 		.End();
 
 	_ReloadAccounts();
-
-	if (fSidebar->CountAccounts() > 0) {
-		AccountItem* item = fSidebar->ItemAt(0);
-		_SelectAccount(item->GetAccount().id.String());
-	}
 }
 
 
@@ -113,6 +111,17 @@ MainWindow::_ReloadAccounts()
 	std::vector<Account> accounts;
 	fAccounts->GetAccounts(accounts);
 	fSidebar->SetAccounts(accounts);
+	if (accounts.empty()) {
+		_SwitchTo(fEmptyState);
+		return;
+	}
+
+	// The sidebar list is rebuilt, so its selection is gone; land on
+	// the first account unless the current view is still the choice.
+	AccountItem* selected = fSidebar->SelectedItem();
+	const char* accountId = selected != NULL
+		? selected->GetAccount().id.String() : accounts[0].id.String();
+	_SelectAccount(accountId);
 }
 
 
@@ -131,7 +140,7 @@ MainWindow::_CurrentView() const
 
 
 void
-MainWindow::_SwitchTo(MailView* view)
+MainWindow::_SwitchTo(BView* view)
 {
 	// Remove the current child, keep the views alive for reuse.
 	while (fContent->CountItems() > 0)

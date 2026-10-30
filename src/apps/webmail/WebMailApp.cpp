@@ -36,8 +36,8 @@ WebMailApp::UiDirectory()
 	if (directory.Length() > 0)
 		return directory.String();
 
-	// The bundled pages live in ui/ next to the executable; the
-	// installed layout is /system/apps/WebMail/ui.
+	// The bundled pages live in ui/ next to the executable when run
+	// from the build tree; the installed layout is the data directory.
 	char exePath[1024];
 	ssize_t length = readlink("/proc/self/exe", exePath,
 		sizeof(exePath) - 1);
@@ -51,7 +51,7 @@ WebMailApp::UiDirectory()
 			return directory.String();
 		}
 	}
-	directory = "/system/apps/WebMail/ui";
+	directory = "/system/data/WebMail/ui";
 	return directory.String();
 }
 

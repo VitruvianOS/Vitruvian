@@ -5,6 +5,7 @@ Application(
 	main.cpp
 	WebMailApp.cpp
 	MainWindow.cpp
+	EmptyStateView.cpp
 	MailView.cpp
 	SidebarView.cpp
 	SettingsWindow.cpp
@@ -48,8 +49,9 @@ set_target_properties(WebMail PROPERTIES
 	CXX_STANDARD_REQUIRED ON
 )
 
-# The bundled native UI, served over vos-mail: from next to the
-# executable (/system/apps/WebMail/ui in the image).
+# The bundled native UI, served over vos-mail:. Install under /system/data
+# rather than /system/apps/WebMail: the Deskbar Applications symlink points
+# at /system/apps/WebMail and a directory there shows up as a stray entry.
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/ui
-	DESTINATION /system/apps/WebMail
+	DESTINATION /system/data/WebMail
 )

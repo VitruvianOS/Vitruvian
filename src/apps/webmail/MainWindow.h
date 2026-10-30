@@ -16,6 +16,8 @@
 
 class BMenuBar;
 class BGroupLayout;
+class BView;
+class EmptyStateView;
 class MailView;
 class SidebarView;
 class SettingsWindow;
@@ -38,7 +40,7 @@ private:
 			void		_BuildMenus();
 			void		_ReloadAccounts();
 			void		_SelectAccount(const char* accountId);
-			void		_SwitchTo(MailView* view);
+			void		_SwitchTo(BView* view);
 			void		_UpdateSidebarUnread(const char* accountId,
 								int32 unread);
 			void		_NotifyNewMail(const char* accountId,
@@ -50,6 +52,7 @@ private:
 	BMenuBar*			fMenuBar;
 	SidebarView*		fSidebar;
 	BGroupLayout*		fContent;
+	EmptyStateView*		fEmptyState;
 	std::vector<MailView*>	fViews;
 	AccountsService*	fAccounts;
 	SettingsWindow*		fSettingsWindow;

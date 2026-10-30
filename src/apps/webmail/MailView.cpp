@@ -15,6 +15,8 @@
 #include <WebDefs.h>
 #include <Window.h>
 
+#include <stdio.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -41,12 +43,48 @@ const char* kBadgeScript =
 	"})();";
 
 
+
+// Mail text must never reach the page as code.
+BString
+JsString(const char* text)
+{
+	BString out("\"");
+	for (const unsigned char* c = (const unsigned char*)(text != NULL
+			? text : ""); *c != '\0'; c++) {
+		switch (*c) {
+			case '"': out << "\\\""; break;
+			case '\\': out << "\\\\"; break;
+			case '\n': out << "\\n"; break;
+			case '\r': out << "\\r"; break;
+			case '\t': out << "\\t"; break;
+			case '<': out << "\\u003c"; break;
+			default:
+				if (*c < 0x20) {
+					char escaped[8];
+					snprintf(escaped, sizeof(escaped), "\\u%04x", *c);
+					out << escaped;
+				} else if (c[0] == 0xe2 && c[1] == 0x80
+					&& (c[2] == 0xa8 || c[2] == 0xa9)) {
+					// U+2028/U+2029 end a line in older JavaScript.
+					out << (c[2] == 0xa8 ? "\\u2028" : "\\u2029");
+					c += 2;
+				} else
+					out << (char)*c;
+				break;
+		}
+	}
+	out << "\"";
+	return out;
+}
+
+
 } // namespace
 
 
 MailView::MailView(const Account& account)
 	:
-	BView("mail-view", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	BView("mail-view", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE
+		| B_FRAME_EVENTS),
 	fAccount(account),
 	fWebView(NULL),
 	fSession(NULL),
@@ -56,11 +94,6 @@ MailView::MailView(const Account& account)
 	fWebView = new BWebView(Bounds(), "mail-webview");
 	fWebView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	AddChild(fWebView);
-
-	if (fNative) {
-		fSession = new MailSession(account, BMessenger(be_app));
-		fSession->Start();
-	}
 }
 
 
@@ -79,6 +112,11 @@ MailView::AttachedToWindow()
 	fWebView->SetTarget(windowMessenger);
 	fWebView->AddScriptMessageHandler("webmail");
 
+	if (fNative && fSession == NULL) {
+		fSession = new MailSession(fAccount, windowMessenger);
+		fSession->Start();
+	}
+
 	if (fNative) {
 		// The native UI persists its state (current folder, scroll
 		// position) in the account's web profile.
@@ -87,15 +125,29 @@ MailView::AttachedToWindow()
 			accounts->WebProfilePath(fAccount.id.String()).String(),
 			false);
 		fWebView->SetJavaScriptEnabled(true);
-		fWebView->LoadURL("vos-mail:/index.html");
-		fSession->RequestFolders();
 	} else {
 		AccountsService* accounts = DefaultAccountsService();
 		fWebView->SetSession(
 			accounts->WebProfilePath(fAccount.id.String()).String(),
 			false);
 		_InjectBadgeScript();
+	}
 
+	ResizeTo(Bounds().Width(), Bounds().Height());
+}
+
+
+void
+MailView::AllAttached()
+{
+	BView::AllAttached();
+
+	// Load after the web view has created its bridge, or the URL is lost.
+	if (fNative) {
+		fWebView->MakeFocus(true);
+		fWebView->LoadURL("vos-mail:/index.html");
+		fSession->RequestFolders();
+	} else {
 		const WebProvider* provider = FindWebProvider(
 			fAccount.provider.String());
 		BString url = fAccount.url;
@@ -105,8 +157,6 @@ MailView::AttachedToWindow()
 			url = "about:blank";
 		fWebView->LoadURL(url.String());
 	}
-
-	ResizeTo(Bounds().Width(), Bounds().Height());
 }
 
 
@@ -146,9 +196,9 @@ MailView::Compose(const BString& to, const BString& subject,
 
 	BString script;
 	script << "vosMail.openCompose("
-		<< "'" << to << "',"
-		<< "'" << subject << "',"
-		<< "'" << body << "');";
+		<< JsString(to.String()) << ","
+		<< JsString(subject.String()) << ","
+		<< JsString(body.String()) << ");";
 	fWebView->EvaluateJavaScript(script.String(), BMessenger(), 0);
 }
 
@@ -176,7 +226,7 @@ MailView::AttachPath(const char* path)
 	if (fWebView == NULL || path == NULL)
 		return;
 	BString script;
-	script << "vosMail.attach('" << path << "');";
+	script << "vosMail.attach(" << JsString(path) << ");";
 	fWebView->EvaluateJavaScript(script.String(), BMessenger(), 0);
 }
 
@@ -358,8 +408,8 @@ MailView::HandleNativeEvent(BMessage* message)
 				}
 				if (i > 0)
 					json << ",";
-				json << "{\"name\":\"" << name
-					<< "\",\"display\":\"" << display << "\"}";
+				json << "{\"name\":" << JsString(name)
+					<< ",\"display\":" << JsString(display) << "}";
 			}
 			json << "]}";
 			break;
@@ -369,8 +419,8 @@ MailView::HandleNativeEvent(BMessage* message)
 			const char* folder = NULL;
 			message->FindString("webmail:folder", &folder);
 			fCurrentFolder = folder != NULL ? folder : "INBOX";
-			json = BString("{\"type\":\"headers\",\"folder\":\"")
-				<< fCurrentFolder << "\",\"messages\":[";
+			json = BString("{\"type\":\"headers\",\"folder\":")
+				<< JsString(fCurrentFolder.String()) << ",\"messages\":[";
 			int32 count = 0;
 			message->FindInt32("webmail:count", &count);
 			int32 uidIndex = 0;
@@ -392,9 +442,9 @@ MailView::HandleNativeEvent(BMessage* message)
 				if (i > 0)
 					json << ",";
 				json << "{\"uid\":" << uid
-					<< ",\"subject\":\"" << subject
-					<< "\",\"fromName\":\"" << fromName
-					<< "\",\"fromAddr\":\"" << fromAddr << "\"}";
+					<< ",\"subject\":" << JsString(subject)
+					<< ",\"fromName\":" << JsString(fromName)
+					<< ",\"fromAddr\":" << JsString(fromAddr) << "}";
 			}
 			json << "]}";
 			break;
@@ -410,9 +460,9 @@ MailView::HandleNativeEvent(BMessage* message)
 			const char* html = "";
 			message->FindString("webmail:html", &html);
 			json = BString("{\"type\":\"message\",\"uid\":") << uid
-				<< ",\"subject\":\"" << subject
-				<< "\",\"text\":\"" << text
-				<< "\",\"html\":\"" << html << "\"}";
+				<< ",\"subject\":" << JsString(subject)
+				<< ",\"text\":" << JsString(text)
+				<< ",\"html\":" << JsString(html) << "}";
 			break;
 		}
 		case kNativeEventNewMail:
@@ -425,8 +475,8 @@ MailView::HandleNativeEvent(BMessage* message)
 		{
 			const char* error = "";
 			message->FindString(WEBMAIL_ERROR_FIELD, &error);
-			json = BString("{\"type\":\"error\",\"message\":\"")
-				<< error << "\"}";
+			json = BString("{\"type\":\"error\",\"message\":")
+				<< JsString(error) << "}";
 			break;
 		}
 		default:

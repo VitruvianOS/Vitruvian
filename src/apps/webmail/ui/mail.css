@@ -12,6 +12,10 @@ html, body {
 	color: #202020;
 }
 
+[hidden] {
+	display: none !important;
+}
+
 #app {
 	display: flex;
 	flex-direction: column;

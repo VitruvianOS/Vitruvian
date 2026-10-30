@@ -234,6 +234,8 @@ MailSession::_PostEvent(uint32 what, BMessage* extra)
 bool
 MailSession::_Connect(BString& error)
 {
+	// A new connection has no folder selected.
+	fSelectedFolder = "";
 	if (fAccount.kind == IMAP_ACCOUNT) {
 		ImapClient::Settings settings;
 		settings.host = fAccount.imapHost;
@@ -294,13 +296,15 @@ void
 MailSession::_SyncFolders()
 {
 	BString error;
-	if (!_Connect(error)) {
-		BMessage extra;
-		extra.AddString(WEBMAIL_ERROR_FIELD, error.String());
-		_PostEvent(kNativeEventError, &extra);
-		return;
+	if (!fConnected) {
+		if (!_Connect(error)) {
+			BMessage extra;
+			extra.AddString(WEBMAIL_ERROR_FIELD, error.String());
+			_PostEvent(kNativeEventError, &extra);
+			return;
+		}
+		fConnected = true;
 	}
-	fConnected = true;
 
 	BMessage extra;
 	if (fAccount.kind == IMAP_ACCOUNT) {
@@ -692,13 +696,14 @@ void
 MailSession::_ThreadFunc()
 {
 	BString error;
+	bool idling = false;
 	if (_Connect(error)) {
 		fConnected = true;
 		if (fAccount.kind == IMAP_ACCOUNT && fAccount.useIDLE) {
 			uint32 exists = 0;
 			if (fImap.Select("INBOX", exists, error)) {
 				fSelectedFolder = "INBOX";
-				fImap.IdleStart(error);
+				idling = fImap.IdleStart(error);
 			}
 		}
 	} else {
@@ -720,21 +725,40 @@ MailSession::_ThreadFunc()
 				break;
 		}
 
-		_ProcessQueue();
+		bool pending;
+		{
+			std::lock_guard<std::mutex> lock(fMutex);
+			pending = !fQueue.empty();
+		}
+		if (pending) {
+			// The server rejects commands while the connection idles.
+			if (idling) {
+				BString idleError;
+				fImap.IdleDone(idleError);
+				idling = false;
+			}
+			_ProcessQueue();
+			if (fConnected && fAccount.kind == IMAP_ACCOUNT
+				&& fAccount.useIDLE && fImap.IsConnected()
+				&& fSelectedFolder.Length() > 0) {
+				BString idleError;
+				idling = fImap.IdleStart(idleError);
+			}
+		}
 
-		if (fConnected && fAccount.kind == IMAP_ACCOUNT
-			&& fAccount.useIDLE && fImap.IsConnected()) {
+		if (idling && fImap.IsConnected()) {
 			bool traffic = false;
 			if (!fImap.IdleWait(5, traffic)) {
 				// Connection died: reconnect on the next cycle.
 				_Disconnect();
+				idling = false;
 				BString reconnectError;
 				if (_Connect(reconnectError)) {
 					fConnected = true;
 					uint32 exists = 0;
 					if (fImap.Select("INBOX", exists, reconnectError)) {
 						fSelectedFolder = "INBOX";
-						fImap.IdleStart(reconnectError);
+						idling = fImap.IdleStart(reconnectError);
 					}
 				}
 			} else if (traffic) {
@@ -743,11 +767,11 @@ MailSession::_ThreadFunc()
 				BMessage extra;
 				_PostEvent(kNativeEventNewMail, &extra);
 				// Re-enter IDLE after the UI pulls what it needs.
-				fImap.IdleStart(idleError);
+				idling = fImap.IdleStart(idleError);
 				lastPoll = time(NULL);
 			}
 		} else if (fConnected && fAccount.kind == IMAP_ACCOUNT
-			&& time(NULL) - lastPoll > 300) {
+			&& !fAccount.useIDLE && time(NULL) - lastPoll > 300) {
 			// No IDLE: refresh the inbox view every five minutes and
 			// let the UI decide what changed.
 			lastPoll = time(NULL);

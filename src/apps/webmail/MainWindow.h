@@ -16,6 +16,7 @@
 
 class BMenuBar;
 class BGroupLayout;
+class BSeparatorView;
 class BView;
 class EmptyStateView;
 class MailView;
@@ -30,6 +31,7 @@ class SettingsWindow;
 class MainWindow : public BWindow {
 public:
 						MainWindow(BRect frame);
+	virtual				~MainWindow();
 
 	virtual void		MessageReceived(BMessage* message);
 	virtual bool		QuitRequested();
@@ -39,6 +41,8 @@ public:
 private:
 			void		_BuildMenus();
 			void		_ReloadAccounts();
+			void		_AddAccount();
+			void		_DropView(const char* accountId);
 			void		_SelectAccount(const char* accountId);
 			void		_SwitchTo(BView* view);
 			void		_UpdateSidebarUnread(const char* accountId,
@@ -51,6 +55,7 @@ private:
 
 	BMenuBar*			fMenuBar;
 	SidebarView*		fSidebar;
+			BSeparatorView*		fSidebarSeparator;
 	BGroupLayout*		fContent;
 	EmptyStateView*		fEmptyState;
 	std::vector<MailView*>	fViews;

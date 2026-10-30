@@ -251,9 +251,15 @@ ImapClient::Connect(const Settings& settings, BString& error)
 	if (settings.tls) {
 		result = mailimap_ssl_connect(fSession, settings.host.String(),
 			port);
+		if (result == MAILIMAP_NO_ERROR_AUTHENTICATED
+			|| result == MAILIMAP_NO_ERROR_NON_AUTHENTICATED)
+			result = MAILIMAP_NO_ERROR;
 	} else {
 		result = mailimap_socket_connect(fSession, settings.host.String(),
 			port);
+		if (result == MAILIMAP_NO_ERROR_AUTHENTICATED
+			|| result == MAILIMAP_NO_ERROR_NON_AUTHENTICATED)
+			result = MAILIMAP_NO_ERROR;
 		if (result == MAILIMAP_NO_ERROR)
 			result = mailimap_socket_starttls(fSession);
 	}
@@ -519,7 +525,8 @@ ImapClient::FetchMessage(uint32 uid, MailMessage& message, BString& error)
 	message.raw.SetTo(raw, rawLength);
 
 	mailmime* mime = NULL;
-	if (mailmime_parse(raw, rawLength, 0, &mime) == MAILIMF_NO_ERROR
+	size_t index = 0;
+	if (mailmime_parse(raw, rawLength, &index, &mime) == MAILIMF_NO_ERROR
 		&& mime != NULL) {
 		WalkMime(mime, raw, rawLength, message, 0);
 		mailmime_free(mime);
@@ -744,6 +751,10 @@ ImapClient::IdleStart(BString& error)
 {
 	if (fSession == NULL) {
 		error = "not connected";
+		return false;
+	}
+	if (fSession->imap_selection_info == NULL) {
+		error = "no folder selected";
 		return false;
 	}
 	if (!mailimap_has_idle(fSession)) {

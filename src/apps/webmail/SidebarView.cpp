@@ -5,6 +5,9 @@
 
 #include "SidebarView.h"
 
+#include <utility>
+
+#include <LayoutBuilder.h>
 #include <ScrollView.h>
 #include <String.h>
 #include <vector>
@@ -37,9 +40,14 @@ SidebarView::SidebarView()
 	BView("sidebar", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
 {
 	fList = new BListView("accounts", B_SINGLE_SELECTION_LIST);
-	fScroll = new BScrollView("accounts-scroll", fList, 0, true, true,
+	// The scroll view needs a layout to manage it, or it stays 1x1.
+	fScroll = new BScrollView("accounts-scroll", fList, 0, false, true,
 		B_NO_BORDER);
-	AddChild(fScroll);
+	SetExplicitMinSize(BSize(150, B_SIZE_UNSET));
+	SetExplicitMaxSize(BSize(220, B_SIZE_UNSET));
+	SetExplicitPreferredSize(BSize(190, B_SIZE_UNSET));
+	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+		.Add(fScroll);
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	fList->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
@@ -48,9 +56,28 @@ SidebarView::SidebarView()
 void
 SidebarView::SetAccounts(const std::vector<Account>& accounts)
 {
+	// Keep the selection and the unread counts across a rebuild.
+	BString selected;
+	std::vector<std::pair<BString, int32> > unread;
+	for (int32 i = 0; i < fList->CountItems(); i++) {
+		AccountItem* item = (AccountItem*)fList->ItemAt(i);
+		unread.push_back(std::make_pair(item->GetAccount().id,
+			item->Unread()));
+	}
+	if (SelectedItem() != NULL)
+		selected = SelectedItem()->GetAccount().id;
+
 	fList->MakeEmpty();
-	for (int32 i = 0; i < accounts.size(); i++)
-		fList->AddItem(new AccountItem(accounts[i]));
+	for (int32 i = 0; i < (int32)accounts.size(); i++) {
+		AccountItem* item = new AccountItem(accounts[i]);
+		for (size_t j = 0; j < unread.size(); j++) {
+			if (unread[j].first == accounts[i].id)
+				item->SetUnread(unread[j].second);
+		}
+		fList->AddItem(item);
+		if (accounts[i].id == selected)
+			fList->Select(i);
+	}
 }
 
 
@@ -79,6 +106,14 @@ SidebarView::SelectedItem() const
 	if (index < 0)
 		return NULL;
 	return (AccountItem*)fList->ItemAt(index);
+}
+
+
+void
+SidebarView::SelectFirst()
+{
+	if (fList->CountItems() > 0)
+		fList->Select(0);
 }
 
 

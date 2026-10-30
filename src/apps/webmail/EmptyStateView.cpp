@@ -22,6 +22,8 @@ PaneTitle(const char* name, const char* text)
 {
 	BStringView* title = new BStringView(name, text);
 	title->SetFont(be_bold_font);
+	title->SetExplicitMinSize(BSize(be_bold_font->StringWidth(text) + 4,
+		B_SIZE_UNSET));
 	return title;
 }
 
@@ -38,9 +40,14 @@ EmptyStateView::EmptyStateView()
 	BStringView* heading = new BStringView("heading",
 		"No mail account yet");
 	heading->SetFont(be_bold_font);
+	heading->SetExplicitMinSize(BSize(
+		be_bold_font->StringWidth("No mail account yet") + 4, B_SIZE_UNSET));
 
 	BStringView* body = new BStringView("body",
 		"Add an account to see folders, messages and mail here.");
+	body->SetExplicitMinSize(BSize(be_plain_font->StringWidth(
+		"Add an account to see folders, messages and mail here.") + 4,
+		B_SIZE_UNSET));
 
 	BButton* addAccount = new BButton("add-account",
 		"Add Account" B_UTF8_ELLIPSIS,

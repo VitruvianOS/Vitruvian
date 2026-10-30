@@ -41,6 +41,7 @@ public:
 			void		SetAccounts(const std::vector<Account>& accounts);
 			void		SetUnread(const char* accountId, int32 unread);
 			AccountItem*	SelectedItem() const;
+			void		SelectFirst();
 			int32		CountAccounts() const;
 			AccountItem*	ItemAt(int32 index) const;
 

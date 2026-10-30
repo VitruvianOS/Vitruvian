@@ -76,6 +76,7 @@ WebMailApp::OpenWindow()
 	}
 	BRect frame(80, 80, 1180, 820);
 	fWindow = new MainWindow(frame);
+	fWindow->CenterOnScreen();
 	fWindow->Show();
 }
 

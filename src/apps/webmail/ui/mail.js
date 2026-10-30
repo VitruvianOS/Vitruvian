@@ -109,19 +109,68 @@ var vosMail = (function () {
 			offset: state.offset, count: state.pageSize });
 	}
 
-	function openCompose(to, subject, body) {
+	var draftKey = "vosMail.draft";
+	var draftFields = ["c-to", "c-cc", "c-bcc", "c-subject", "c-body"];
+
+	function draftEmpty() {
+		return state.attachments.length === 0 && draftFields.every(
+			function (id) { return $(id).value.trim() === ""; });
+	}
+
+	function saveDraft() {
+		var draft = { attachments: state.attachments };
+		draftFields.forEach(function (id) { draft[id] = $(id).value; });
+		try {
+			if (draftEmpty())
+				localStorage.removeItem(draftKey);
+			else
+				localStorage.setItem(draftKey, JSON.stringify(draft));
+		} catch (e) {
+		}
+	}
+
+	function restoreDraft() {
+		var draft = null;
+		try {
+			draft = JSON.parse(localStorage.getItem(draftKey));
+		} catch (e) {
+		}
+		if (!draft) return;
+		draftFields.forEach(function (id) { $(id).value = draft[id] || ""; });
+		state.attachments = [];
+		$("c-attachments").innerHTML = "";
+		(draft.attachments || []).forEach(attach);
+	}
+
+	function showCompose() {
 		state.composeOpen = true;
 		$("compose").hidden = false;
+	}
+
+	function clearCompose() {
+		draftFields.forEach(function (id) { $(id).value = ""; });
+		state.attachments = [];
+		$("c-attachments").innerHTML = "";
+		saveDraft();
+	}
+
+	// A reply or forward never replaces an unsent message.
+	function openCompose(to, subject, body) {
+		if (!draftEmpty()) {
+			showCompose();
+			$("status").textContent =
+				"Send or discard the open message first";
+			return;
+		}
 		$("c-to").value = to || "";
 		$("c-subject").value = subject || "";
 		$("c-body").value = body || "";
-		$("c-cc").value = "";
-		$("c-bcc").value = "";
-		state.attachments = [];
-		$("c-attachments").innerHTML = "";
+		saveDraft();
+		showCompose();
 	}
 
 	function closeCompose() {
+		saveDraft();
 		state.composeOpen = false;
 		$("compose").hidden = true;
 	}
@@ -171,6 +220,7 @@ var vosMail = (function () {
 				break;
 			case "sent":
 				$("status").textContent = "Message sent";
+				clearCompose();
 				closeCompose();
 				break;
 			case "error":
@@ -182,11 +232,28 @@ var vosMail = (function () {
 	}
 
 	function wire() {
+		$("btn-folders").addEventListener("click", function () {
+			$("folders").hidden = !$("folders").hidden;
+		});
 		$("btn-check").addEventListener("click", requestHeaders);
 		$("btn-compose").addEventListener("click", function () {
-			openCompose("", "", "");
+			if (draftEmpty())
+				openCompose("", "", "");
+			else
+				showCompose();
 		});
 		$("btn-compose-close").addEventListener("click", closeCompose);
+		$("btn-discard").addEventListener("click", function () {
+			clearCompose();
+			closeCompose();
+		});
+		draftFields.forEach(function (id) {
+			$(id).addEventListener("input", saveDraft);
+		});
+		$("main").addEventListener("mousedown", function () {
+			if (state.composeOpen)
+				closeCompose();
+		});
 		$("btn-send").addEventListener("click", function () {
 			post({ cmd: "send", compose: collectCompose() });
 		});
@@ -241,6 +308,7 @@ var vosMail = (function () {
 	function attach(path) {
 		if (!path) return;
 		state.attachments.push(path);
+		saveDraft();
 		var el = document.createElement("span");
 		el.className = "attachment";
 		el.textContent = path.split("/").pop();
@@ -249,6 +317,7 @@ var vosMail = (function () {
 
 	document.addEventListener("DOMContentLoaded", function () {
 		wire();
+		restoreDraft();
 		requestFolders();
 	});
 

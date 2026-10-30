@@ -8,11 +8,14 @@
 #include "MainWindow.h"
 #include "MailView.h"
 #include "OAuth2.h"
-#include <MailProviders.h>
 #include "SettingsWindow.h"
 #include "SidebarView.h"
 #include "WebMailApp.h"
 #include "WebMailMessages.h"
+
+#include <AccountRoster.h>
+#include <AccountsDefs.h>
+#include <AccountsPreflet.h>
 
 #include <Alert.h>
 #include <Application.h>
@@ -27,6 +30,7 @@
 #include <Path.h>
 #include <Roster.h>
 #include <ScrollView.h>
+#include <SeparatorView.h>
 #include <String.h>
 #include <View.h>
 #include <WebView.h>
@@ -40,6 +44,7 @@ namespace {
 
 
 const uint32 kMsgCompose = 'WmC1';
+const uint32 kMsgAccountSettings = 'WmSt';
 
 
 } // namespace
@@ -47,9 +52,10 @@ const uint32 kMsgCompose = 'WmC1';
 
 MainWindow::MainWindow(BRect frame)
 	:
-	BWindow(frame, "Mail", B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS),
+	BWindow(frame, "WebMail", B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS),
 	fMenuBar(NULL),
 	fSidebar(NULL),
+	fSidebarSeparator(NULL),
 	fContent(NULL),
 	fEmptyState(NULL),
 	fAccounts(DefaultAccountsService()),
@@ -60,18 +66,32 @@ MainWindow::MainWindow(BRect frame)
 
 	fSidebar = new SidebarView();
 	fContent = new BGroupLayout(B_VERTICAL);
+	fSidebarSeparator = new BSeparatorView(B_VERTICAL);
 	fEmptyState = new EmptyStateView();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(fMenuBar)
-		.AddSplit(B_HORIZONTAL, 0.0f)
-			.Add(fSidebar, 0.25f)
+		.AddGroup(B_HORIZONTAL, 0)
+			.Add(fSidebar, 0.0f)
+			.Add(fSidebarSeparator, 0.0f)
 			.AddGroup(B_VERTICAL, 0)
 				.Add(fContent, 1.0f)
 			.End()
 		.End();
 
 	_ReloadAccounts();
+
+	BAccountRoster* roster = BAccountRoster::Default();
+	if (roster != NULL)
+		roster->StartWatching(BMessenger(this));
+}
+
+
+MainWindow::~MainWindow()
+{
+	BAccountRoster* roster = BAccountRoster::Default();
+	if (roster != NULL)
+		roster->StopWatching(BMessenger(this));
 }
 
 
@@ -94,12 +114,14 @@ MainWindow::_BuildMenus()
 	BMenu* accountMenu = new BMenu("Account");
 	accountMenu->AddItem(new BMenuItem("Check Mail",
 		new BMessage(MSG_NEW_MAIL), 'Y'));
+	accountMenu->AddItem(new BMenuItem("Account Settings" B_UTF8_ELLIPSIS,
+		new BMessage(kMsgAccountSettings)));
 	accountMenu->AddItem(new BMenuItem("Sign In (OAuth2)" B_UTF8_ELLIPSIS,
 		new BMessage(MSG_OAUTH_FINISHED)));
 	fMenuBar->AddItem(accountMenu);
 
 	BMenu* helpMenu = new BMenu("Help");
-	helpMenu->AddItem(new BMenuItem("About Mail",
+	helpMenu->AddItem(new BMenuItem("About WebMail",
 		new BMessage(B_ABOUT_REQUESTED)));
 	fMenuBar->AddItem(helpMenu);
 }
@@ -111,6 +133,18 @@ MainWindow::_ReloadAccounts()
 	std::vector<Account> accounts;
 	fAccounts->GetAccounts(accounts);
 	fSidebar->SetAccounts(accounts);
+
+	// no accounts: the empty state has its own panes, hide the list
+	bool hide = accounts.empty();
+	if (hide != fSidebar->IsHidden(fSidebar)) {
+		if (hide) {
+			fSidebar->Hide();
+			fSidebarSeparator->Hide();
+		} else {
+			fSidebar->Show();
+			fSidebarSeparator->Show();
+		}
+	}
 	if (accounts.empty()) {
 		_SwitchTo(fEmptyState);
 		return;
@@ -119,9 +153,12 @@ MainWindow::_ReloadAccounts()
 	// The sidebar list is rebuilt, so its selection is gone; land on
 	// the first account unless the current view is still the choice.
 	AccountItem* selected = fSidebar->SelectedItem();
-	const char* accountId = selected != NULL
-		? selected->GetAccount().id.String() : accounts[0].id.String();
-	_SelectAccount(accountId);
+	if (selected == NULL) {
+		fSidebar->SelectFirst();
+		selected = fSidebar->SelectedItem();
+	}
+	_SelectAccount(selected != NULL
+		? selected->GetAccount().id.String() : accounts[0].id.String());
 }
 
 
@@ -148,7 +185,6 @@ MainWindow::_SwitchTo(BView* view)
 	if (view->Parent() == NULL)
 		fContent->AddView(view, 1.0f);
 	view->Show();
-	Activate();
 }
 
 
@@ -168,7 +204,7 @@ MainWindow::_SelectAccount(const char* accountId)
 	Account account;
 	if (fAccounts->LoadAccount(accountId, account) != B_OK) {
 		BString error = BString("Cannot load account ") << accountId;
-		(new BAlert("Mail", error.String(), "OK"))->Go();
+		(new BAlert("WebMail", error.String(), "OK"))->Go();
 		return;
 	}
 
@@ -204,7 +240,8 @@ MainWindow::_HandleMailto(const char* url)
 {
 	MailView* view = _CurrentView();
 	if (view == NULL) {
-		(new BAlert("Mail", "Select an account first.", "OK"))->Go();
+		(new BAlert("WebMail", "Select an account first.", "OK"))
+			->Go();
 		return;
 	}
 
@@ -241,7 +278,7 @@ MainWindow::_HandleOAuthFinished(BMessage* message)
 	if (message->FindString(WEBMAIL_ERROR_FIELD, &error) == B_OK
 		&& error != NULL) {
 		BString text = BString("Sign-in failed: ") << error;
-		(new BAlert("Mail", text.String(), "OK"))->Go();
+		(new BAlert("WebMail", text.String(), "OK"))->Go();
 		return;
 	}
 
@@ -275,12 +312,56 @@ MainWindow::_HandleOAuthFinished(BMessage* message)
 void
 MainWindow::ShowSettings()
 {
-	if (fSettingsWindow == NULL || fSettingsWindow->Lock() == false) {
-		fSettingsWindow = new SettingsWindow(BMessenger(this));
-		fSettingsWindow->Show();
-	} else {
-		fSettingsWindow->Activate();
-		fSettingsWindow->Unlock();
+	AccountItem* item = fSidebar->SelectedItem();
+	if (item == NULL)
+		return;
+	if (item->GetAccount().kind == WEB_ACCOUNT) {
+		(new BAlert("WebMail",
+			"Web accounts have no WebMail settings.", "OK"))->Go();
+		return;
+	}
+
+	if (fSettingsWindow != NULL) {
+		if (fSettingsWindow->Lock()) {
+			bool same = item->GetAccount().id
+				== fSettingsWindow->AccountId();
+			if (same)
+				fSettingsWindow->Activate();
+			fSettingsWindow->Unlock();
+			if (same)
+				return;
+			fSettingsWindow->PostMessage(B_QUIT_REQUESTED);
+		}
+	}
+	fSettingsWindow = new SettingsWindow(item->GetAccount(),
+		BMessenger(this));
+	fSettingsWindow->Show();
+}
+
+
+void
+MainWindow::_AddAccount()
+{
+	BMessage message(kMsgAccountsAdd);
+	message.AddString(kAccountsTypeField, kAccountTypeMail);
+	BMessenger preflet(kAccountsPreferencesSignature);
+	if (preflet.IsValid())
+		preflet.SendMessage(&message);
+	else
+		be_roster->Launch(kAccountsPreferencesSignature, &message);
+}
+
+
+void
+MainWindow::_DropView(const char* accountId)
+{
+	for (int32 i = 0; i < (int32)fViews.size(); i++) {
+		if (fViews[i]->GetAccount().id == accountId) {
+			fContent->RemoveView(fViews[i]);
+			delete fViews[i];
+			fViews.erase(fViews.begin() + i);
+			break;
+		}
 	}
 }
 
@@ -300,23 +381,42 @@ MainWindow::MessageReceived(BMessage* message)
 			_ReloadAccounts();
 			break;
 		case MSG_ADD_ACCOUNT:
+			_AddAccount();
+			break;
+		case MSG_SETTINGS_CLOSED:
+			fSettingsWindow = NULL;
+			break;
+		case kMsgAccountSettings:
 			ShowSettings();
 			break;
+		case kAccountAdded:
+			_ReloadAccounts();
+			break;
+		case kAccountChanged:
+		case kAccountRemoved:
+		{
+			// A changed account gets a fresh view; a removed one is gone.
+			const char* id = NULL;
+			if (message->FindString(kAccountsIdField, &id) == B_OK)
+				_DropView(id);
+			_ReloadAccounts();
+			break;
+		}
 		case MSG_REMOVE_ACCOUNT:
 		{
 			AccountItem* item = fSidebar->SelectedItem();
 			if (item == NULL)
 				break;
 			BString id = item->GetAccount().id;
+			BString text = BString("Remove the account ")
+				<< item->GetAccount().name << "?";
+			BAlert* alert = new BAlert("WebMail", text.String(), "Cancel",
+				"Remove", NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->SetShortcut(0, B_ESCAPE);
+			if (alert->Go() != 1)
+				break;
+			_DropView(id.String());
 			fAccounts->DeleteAccount(id.String());
-			for (int32 i = 0; i < (int32)fViews.size(); i++) {
-				if (fViews[i]->GetAccount().id == id) {
-					fContent->RemoveView(fViews[i]);
-					delete fViews[i];
-					fViews.erase(fViews.begin() + i);
-					break;
-				}
-			}
 			_ReloadAccounts();
 			break;
 		}
@@ -457,8 +557,8 @@ MainWindow::MessageReceived(BMessage* message)
 		}
 		case B_ABOUT_REQUESTED:
 		{
-			BAlert* alert = new BAlert("About Mail",
-				"Mail 0.1\nWebMail for V\\OS\n"
+			BAlert* alert = new BAlert("About WebMail",
+				"WebMail 0.1\nMail for V\\OS\n"
 				"WPE WebKit + libetpan",
 				"OK");
 			alert->Go();
@@ -474,8 +574,10 @@ MainWindow::MessageReceived(BMessage* message)
 bool
 MainWindow::QuitRequested()
 {
-	for (int32 i = 0; i < (int32)fViews.size(); i++)
+	for (int32 i = 0; i < (int32)fViews.size(); i++) {
+		fViews[i]->RemoveSelf();
 		delete fViews[i];
+	}
 	fViews.clear();
 	WebMailApp* app = static_cast<WebMailApp*>(be_app);
 	app->WindowClosed(this);

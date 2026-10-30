@@ -25,6 +25,7 @@ public:
 	virtual				~MailView();
 
 	virtual void		AttachedToWindow();
+	virtual void		AllAttached();
 	virtual void		FrameResized(float width, float height);
 
 			const Account&	GetAccount() const { return fAccount; }

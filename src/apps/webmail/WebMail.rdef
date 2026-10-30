@@ -13,8 +13,8 @@ resource app_version {
 	minor = 0,
 	variety = B_APPV_DEVELOPMENT,
 	internal = 0,
-	short_info = "Mail",
-	long_info = "Mail 0.1 \xc2\xa9 2026 Dario Casalinuovo"
+	short_info = "WebMail",
+	long_info = "WebMail 0.1 \xc2\xa9 2026 Dario Casalinuovo"
 };
 
 resource vector_icon {

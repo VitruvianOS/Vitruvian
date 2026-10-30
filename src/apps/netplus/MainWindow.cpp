@@ -190,6 +190,11 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fWebView->AddScriptMessageHandler(kInstallHandler);
 	fWebView->SetExtensions(NetPlusApp::Extensions());
 
+	// SetSession() must run before attach; the bridge refuses a later swap.
+	BWebSettings* settings = NetPlusApp::Settings();
+	fWebView->SetSession(NULL,
+		fPrivateWindow || settings->PrivateBrowsing());
+
 	if (!fPwaMode) {
 		_AddShortcuts();
 
@@ -217,10 +222,6 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 			.Add(fWebView, 1.0f);
 
-	BWebSettings* settings = NetPlusApp::Settings();
-
-	fWebView->SetSession(NULL,
-		fPrivateWindow || settings->PrivateBrowsing());
 	_ApplySettings();
 
 	const char* startup = (url != NULL && url[0] != '\0')

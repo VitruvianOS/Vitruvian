@@ -345,9 +345,7 @@ MainWindow::_AddShortcuts()
 	privateWindow->AddBool("private", true);
 	AddShortcut('N', B_COMMAND_KEY | B_SHIFT_KEY, privateWindow);
 
-	// Quit closes the whole application.
-	BMessage* quit = new BMessage(B_QUIT_REQUESTED);
-	AddShortcut('Q', B_COMMAND_KEY, quit, be_app);
+	// No 'Q' here: a registered Ctrl+Q disables the kit's built-in quit.
 
 	AddShortcut(B_LEFT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_BACK));
 	AddShortcut(B_RIGHT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_FORWARD));

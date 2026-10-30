@@ -7,6 +7,9 @@
 
 #include <Application.h>
 #include <Catalog.h>
+#include <Deskbar.h>
+#include <Dragger.h>
+#include <Font.h>
 #include <PopUpMenu.h>
 #include <MenuItem.h>
 #include <Message.h>
@@ -38,7 +41,8 @@ enum {
 	kMsgNMOpDone		= 'psNO',
 	kMsgToggleData		= 'psTD',
 	kMsgToggleAirplane	= 'psTA',
-	kMsgOpenNetwork		= 'psON'
+	kMsgOpenNetwork		= 'psON',
+	kMsgQuit		= 'psQT'
 };
 
 
@@ -52,6 +56,7 @@ PhoneSignalView::PhoneSignalView(BRect frame, int32 resizingMode,
 		B_WILL_DRAW | B_TRANSPARENT_BACKGROUND | B_FRAME_EVENTS),
 	fRoster(NULL),
 	fInDeskbar(inDeskbar),
+	fReplicated(false),
 	fBars(0),
 	fTechLabel(""),
 	fNoModem(true),
@@ -62,6 +67,15 @@ PhoneSignalView::PhoneSignalView(BRect frame, int32 resizingMode,
 	fRunner(NULL)
 {
 	_Init();
+
+	if (!inDeskbar) {
+		// The dragger is what lets the view be pulled onto the desktop.
+		frame.OffsetTo(B_ORIGIN);
+		frame.top = frame.bottom - 7;
+		frame.left = frame.right - 7;
+		AddChild(new BDragger(frame, this,
+			B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM));
+	}
 }
 
 
@@ -70,6 +84,7 @@ PhoneSignalView::PhoneSignalView(BMessage* archive)
 	BView(archive),
 	fRoster(NULL),
 	fInDeskbar(false),
+	fReplicated(false),
 	fBars(0),
 	fTechLabel(""),
 	fNoModem(true),
@@ -85,6 +100,8 @@ PhoneSignalView::PhoneSignalView(BMessage* archive)
 	if (be_app->GetAppInfo(&info) == B_OK
 			&& !strcasecmp(info.signature, "application/x-vnd.Be-TSKB"))
 		fInDeskbar = true;
+	else
+		fReplicated = true;
 
 	_Init();
 }
@@ -98,7 +115,10 @@ PhoneSignalView::~PhoneSignalView()
 void
 PhoneSignalView::_Init()
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	// The tray draws over Deskbar rows; the window keeps a panel backdrop.
+	SetViewColor(fInDeskbar
+		? B_TRANSPARENT_COLOR : ui_color(B_PANEL_BACKGROUND_COLOR));
+	SetLowColor(ViewColor());
 	fRoster = BTelephonyRoster::Default();
 }
 
@@ -133,7 +153,6 @@ PhoneSignalView::AttachedToWindow()
 
 	_SyncFromRoster();
 	_ScheduleRefresh();
-	ResizeTo(Bounds().Width(), fInDeskbar ? Bounds().Height() : 36);
 }
 
 
@@ -220,11 +239,29 @@ PhoneSignalView::MessageReceived(BMessage* message)
 		case kMsgOpenNetwork:
 			_OpenNetworkPreflet();
 			break;
+		case kMsgQuit:
+			_Quit();
+			return;
 		default:
 			BView::MessageReceived(message);
 			break;
 	}
 	Invalidate();
+}
+
+
+void
+PhoneSignalView::_Quit()
+{
+	if (fInDeskbar) {
+		BDeskbar deskbar;
+		deskbar.RemoveItem(kDeskbarItemName);
+	} else if (fReplicated) {
+		BDragger* dragger = dynamic_cast<BDragger*>(ChildAt(0));
+		if (dragger != NULL)
+			BMessenger(dragger).SendMessage(B_TRASH_TARGET);
+	} else
+		be_app->PostMessage(B_QUIT_REQUESTED);
 }
 
 
@@ -248,17 +285,24 @@ PhoneSignalView::_SyncFromRoster()
 		fNoModem = true;
 		fBars = 0;
 		fTechLabel = "";
+		fOperator = "";
 		fSimLocked = false;
 		fAirplane = false;
+		_FitWindow();
 		Invalidate();
 		return;
 	}
 
 	fNoModem = false;
 	fBars = modem->SignalBars();
-	fTechLabel = modem->AccessTypeString();
+	// The access type and operator strings are NULL before registration.
+	const char* tech = modem->AccessTypeString();
+	fTechLabel = tech != NULL ? tech : "";
+	const char* oper = modem->OperatorName();
+	fOperator = oper != NULL ? oper : "";
 	fSimLocked = modem->IsSimLocked();
 	fAirplane = !modem->IsEnabled();
+	_FitWindow();
 	Invalidate();
 }
 
@@ -284,50 +328,202 @@ PhoneSignalView::Draw(BRect updateRect)
 {
 	(void)updateRect;
 
-	if (fNoService || fNoModem) {
-		// Airplane or no modem at all: a crossed-out antenna.
-		SetPenSize(2);
-		SetHighColor(120, 120, 120);
-		StrokeEllipse(BPoint(8, 6), Bounds().Width() / 2 - 4,
-			Bounds().Height() / 2 - 4);
-		StrokeLine(BPoint(4, Bounds().Height() - 4),
-			BPoint(Bounds().Width() - 4, 4));
-		return;
-	}
+	if (fInDeskbar)
+		_DrawTrayIcon(Bounds());
+	else
+		_DrawPanel(Bounds());
+}
 
-	// Four bars, left to right, then the technology label.
-	float width = Bounds().Width();
-	float height = Bounds().Height();
-	float barWidth = 3;
-	float gap = 2;
-	float x = 3;
 
-	SetHighColor(0, 0, 0);
-	SetLowColor(ViewColor());
+// Tray rows are square and tiny: four bars, plus a slash when the radio
+// cannot report (no modem or airplane), so the state reads at a glance.
+void
+PhoneSignalView::_DrawTrayIcon(BRect bounds)
+{
+	float size = bounds.Width() + 1;
+	if (size > bounds.Height() + 1)
+		size = bounds.Height() + 1;
+
+	BRect icon(bounds.left, bounds.top,
+		bounds.left + size - 1, bounds.top + size - 1);
+	icon.InsetBy(2, 2);
+
+	const float barWidth = 2;
+	const float gap = 2;
+	float innerHeight = icon.Height() + 1;
+	float bottom = icon.bottom;
+	float x = icon.left;
 
 	for (uint32 i = 0; i < 4; i++) {
-		float barHeight = (height - 8) * (i + 1) / 4.0;
-		BRect bar(x, height - 4 - barHeight, x + barWidth - 1,
-			height - 4);
-		if (i < fBars)
+		float barHeight = innerHeight * (i + 1) / 4.0f;
+		BRect bar(x, bottom + 1 - barHeight, x + barWidth - 1, bottom);
+		if (!_RadioOff() && !fNoService && i < fBars) {
+			SetHighColor(0, 0, 0);
+			SetLowColor(ViewColor());
 			FillRect(bar);
-		else {
+		} else {
+			SetHighColor(160, 160, 160);
+			SetLowColor(ViewColor());
 			StrokeRect(bar);
 		}
 		x += barWidth + gap;
 	}
 
-	if (fSimLocked) {
-		DrawString("PIN", BPoint(x + 2, height - 6));
+	if (_RadioOff()) {
+		SetPenSize(2);
+		SetHighColor(90, 90, 90);
+		StrokeLine(BPoint(icon.left - 1, icon.bottom + 1),
+			BPoint(icon.right + 2, icon.top - 1));
+		SetPenSize(1);
+	}
+}
+
+
+// Shared with sizing so the window can be measured before drawing.
+void
+PhoneSignalView::_StatusStrings(BString& title, BString& detail)
+{
+	if (fNoModem) {
+		title = B_TRANSLATE("No modem");
+		detail = B_TRANSLATE("Connect a modem to show signal");
+	} else if (fAirplane) {
+		title = B_TRANSLATE("Airplane mode");
+		detail = B_TRANSLATE("The radio is switched off");
+	} else if (fSimLocked) {
+		title = B_TRANSLATE("SIM locked");
+		detail = B_TRANSLATE("Enter the SIM PIN to register");
+	} else if (fNoService) {
+		title = B_TRANSLATE("No service");
+		detail = B_TRANSLATE("Searching for a network");
+	} else {
+		if (fOperator.IsEmpty())
+			title = B_TRANSLATE("Network registered");
+		else
+			title = fOperator;
+		char bars[32];
+		snprintf(bars, sizeof(bars), B_TRANSLATE("%u/4 bars"),
+			(unsigned)fBars);
+		if (fTechLabel.IsEmpty()) {
+			detail = bars;
+		} else {
+			detail = fTechLabel;
+			detail << " · " << bars;
+		}
+	}
+}
+
+
+// The window has to hold the meter column, both status lines and the
+// dragger at the current font size; the floors keep the established look.
+void
+PhoneSignalView::GetPreferredSize(float* _width, float* _height)
+{
+	BString title;
+	BString detail;
+	_StatusStrings(title, detail);
+
+	const float pad = 16;
+	const float barsWidth = 4 * 10 + 3 * 6;
+	const float textX = pad + barsWidth + 18;
+
+	font_height plainHeight;
+	be_plain_font->GetHeight(&plainHeight);
+
+	float titleWidth = be_bold_font->StringWidth(title.String());
+	float detailWidth = be_plain_font->StringWidth(detail.String());
+	float width = textX
+		+ (titleWidth > detailWidth ? titleWidth : detailWidth) + pad;
+	if (width < 324)
+		width = 324;
+
+	float baseline1 = pad + plainHeight.ascent;
+	float baseline2 = baseline1 + plainHeight.descent + 4
+		+ plainHeight.ascent;
+	float height = baseline2 + plainHeight.descent + pad;
+	if (height < 94)
+		height = 94;
+
+	if (_width != NULL)
+		*_width = width;
+	if (_height != NULL)
+		*_height = height;
+}
+
+
+void
+PhoneSignalView::_FitWindow()
+{
+	// Growing only: the deskbar item has a fixed square slot and the
+	// window must not shrink away from the established panel size.
+	if (fInDeskbar || Window() == NULL)
 		return;
+
+	float width;
+	float height;
+	GetPreferredSize(&width, &height);
+	if (width > Bounds().Width() + 0.5 || height > Bounds().Height() + 0.5)
+		Window()->ResizeTo(width, height);
+}
+
+
+// Window mode: the meter on the left, status and detail on the right.
+// Title carries the operator (or the reason there is none), the second
+// line carries access type and bars out of four.
+void
+PhoneSignalView::_DrawPanel(BRect bounds)
+{
+	const float pad = 16;
+	const float barWidth = 10;
+	const float gap = 6;
+	const float barsHeight = 44;
+	float barsBottom = pad + barsHeight;
+	float barsWidth = 4 * barWidth + 3 * gap;
+	bool radioOff = _RadioOff();
+	bool showBars = !radioOff && !fNoService;
+
+	SetLowColor(ViewColor());
+	float x = pad;
+	for (uint32 i = 0; i < 4; i++) {
+		float barHeight = barsHeight * (i + 1) / 4.0f;
+		BRect bar(x, barsBottom + 1 - barHeight, x + barWidth - 1,
+			barsBottom);
+		if (showBars && i < fBars) {
+			SetHighColor(0, 0, 0);
+			FillRect(bar);
+		} else {
+			SetHighColor(160, 160, 160);
+			StrokeRect(bar);
+		}
+		x += barWidth + gap;
 	}
 
-	if (!fTechLabel.IsEmpty() && !fInDeskbar)
-		DrawString(fTechLabel.String(), BPoint(x + 3, height - 6));
-	else if (fInDeskbar && !fTechLabel.IsEmpty()) {
-		// Deskbar tray: label too, the tray is wide enough these days.
-		DrawString(fTechLabel.String(), BPoint(x + 3, height - 6));
+	if (radioOff) {
+		SetPenSize(2);
+		SetHighColor(90, 90, 90);
+		StrokeLine(BPoint(pad - 1, barsBottom + 1),
+			BPoint(pad + barsWidth + 1, pad - 1));
+		SetPenSize(1);
 	}
+
+	BString title;
+	BString detail;
+	_StatusStrings(title, detail);
+
+	font_height plainHeight;
+	be_plain_font->GetHeight(&plainHeight);
+
+	float textX = pad + barsWidth + 18;
+	SetFont(be_bold_font);
+	SetHighColor(0, 0, 0);
+	float baseline1 = pad + plainHeight.ascent;
+	DrawString(title.String(), BPoint(textX, baseline1));
+
+	SetFont(be_plain_font);
+	SetHighColor(110, 110, 110);
+	float baseline2 = baseline1 + plainHeight.descent + 4
+		+ plainHeight.ascent;
+	DrawString(detail.String(), BPoint(textX, baseline2));
+	SetHighColor(0, 0, 0);
 }
 
 
@@ -358,6 +554,9 @@ PhoneSignalView::_ShowMenu(BPoint where)
 	menu->AddSeparatorItem();
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Open Network"),
 		new BMessage(kMsgOpenNetwork)));
+	menu->AddSeparatorItem();
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Quit"),
+		new BMessage(kMsgQuit)));
 
 	ConvertToScreen(&where);
 	menu->SetTargetForItems(this);
@@ -425,7 +624,7 @@ instantiate_deskbar_item(float maxWidth, float maxHeight)
 extern "C" _EXPORT status_t
 instantiate_deskbar_item_for_width(float* width, float* height)
 {
-	*width = 40;
-	*height = 24;
+	*width = 16;
+	*height = 16;
 	return B_OK;
 }

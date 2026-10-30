@@ -37,11 +37,13 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				MouseDown(BPoint where);
+	virtual	void				GetPreferredSize(float* _width,
+									float* _height);
 
 	static	const char*			kAppSignature;
 	static	const char*			kDeskbarItemName;
 
-private:
+	private:
 			void				_Init();
 			void				_SyncFromRoster();
 			void				_RefreshDeviceState();
@@ -49,12 +51,22 @@ private:
 			void				_ToggleData();
 			void				_ToggleAirplane();
 			void				_OpenNetworkPreflet();
+			void				_Quit();
 			void				_ScheduleRefresh();
+			void				_StatusStrings(BString& title,
+									BString& detail);
+			void				_FitWindow();
+			void				_DrawTrayIcon(BRect bounds);
+			void				_DrawPanel(BRect bounds);
+			bool				_RadioOff() const
+									{ return fNoModem || fAirplane; }
 
 			BTelephonyRoster*	fRoster;
 			bool				fInDeskbar;
+			bool				fReplicated;
 			uint32				fBars;
 			BString				fTechLabel;
+			BString				fOperator;
 			bool				fNoModem;
 			bool				fNoService;
 			bool				fSimLocked;

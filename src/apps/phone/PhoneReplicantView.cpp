@@ -174,7 +174,9 @@ PhoneReplicantView::Draw(BRect updateRect)
 {
 	(void)updateRect;
 
-	FillRect(Bounds());
+	// Low color is the view color; FillRect alone would paint the
+	// strip with the high color and hide the glyph and the label.
+	FillRect(Bounds(), B_SOLID_LOW);
 
 	// Receiver glyph: both ear pieces and the bar between them.
 	SetHighColor(70, 70, 70);

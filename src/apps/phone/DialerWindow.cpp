@@ -6,6 +6,7 @@
 #include "DialerWindow.h"
 
 #include <Alert.h>
+#include <Application.h>
 #include <Button.h>
 #include <GroupView.h>
 #include <Catalog.h>
@@ -257,6 +258,16 @@ DialerWindow::MessageReceived(BMessage* message)
 			BWindow::MessageReceived(message);
 			break;
 	}
+}
+
+
+bool
+DialerWindow::QuitRequested()
+{
+	// The File menu quit only reaches this window; forward it so the
+	// whole Phone team exits instead of lingering without a window.
+	be_app->PostMessage(B_QUIT_REQUESTED);
+	return true;
 }
 
 

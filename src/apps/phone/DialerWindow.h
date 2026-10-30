@@ -39,6 +39,7 @@ public:
 								DialerWindow(const BRect& frame);
 
 	virtual	void				MessageReceived(BMessage* message);
+	virtual	bool				QuitRequested();
 
 			void				AppendKeypadKey(char key);
 			void				RefreshLines();

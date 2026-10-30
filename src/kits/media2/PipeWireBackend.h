@@ -445,6 +445,23 @@ private:
 			std::vector<StreamInfo>	fStreams;
 			std::mutex				fStreamsLock;
 
+			// Props subscription per stream node; volume/mute live there.
+			struct StreamParamWatch {
+				PipeWireBackend*	backend;
+				uint32				nodeId;
+				struct pw_node*		proxy;
+				spa_hook			hook;
+			};
+			std::mutex				fStreamParamWatchesLock;
+			std::map<uint32, StreamParamWatch*>	fStreamParamWatches;
+			static void				_StreamParamThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+			void					_OnStreamParam(StreamParamWatch* watch,
+										uint32 id, const struct spa_pod* param);
+			void					_StartStreamParamWatch(uint32 nodeId);
+			void					_DestroyStreamParamWatch(uint32 nodeId);
+
 			std::vector<MidiNodeInfo>	fMidiNodes;
 			std::mutex				fMidiNodesLock;
 

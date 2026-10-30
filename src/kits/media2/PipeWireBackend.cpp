@@ -387,6 +387,8 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 			std::lock_guard<std::mutex> _(fStreamsLock);
 			fStreams.push_back(s);
 		}
+		// The registry dict has no volume/mute; seed from the Props param.
+		_StartStreamParamWatch(id);
 		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 		return;
 	}
@@ -453,6 +455,8 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 			}
 		}
 	}
+	if (streamChanged)
+		_DestroyStreamParamWatch(id);
 
 	bool midiChanged = false;
 	if (!deviceChanged && !streamChanged) {
@@ -781,6 +785,9 @@ PipeWireBackend::_Teardown()
 	// Loop thread is stopped first: destroy below must not race callbacks.
 	if (fThreadLoop != NULL)
 		pw_thread_loop_stop(fThreadLoop);
+
+	while (!fStreamParamWatches.empty())
+		_DestroyStreamParamWatch(fStreamParamWatches.begin()->first);
 
 	while (!fNodeParamWatches.empty())
 		_DestroyNodeParamWatch(fNodeParamWatches.begin()->first);
@@ -3300,6 +3307,138 @@ PipeWireBackend::DestroyLink(uint32 linkId)
 	RoundtripLocked(500000);
 	Unlock();
 	return B_OK;
+}
+
+
+void
+PipeWireBackend::_StartStreamParamWatch(uint32 nodeId)
+{
+	// Runs on the loop thread; a roundtrip would deadlock, so Props
+	// arrive asynchronously.
+	if (fRegistry == NULL)
+		return;
+	{
+		std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+		if (fStreamParamWatches.find(nodeId) != fStreamParamWatches.end())
+			return;
+	}
+
+	StreamParamWatch* watch = new(std::nothrow) StreamParamWatch();
+	if (watch == NULL)
+		return;
+	watch->backend = this;
+	watch->nodeId = nodeId;
+	watch->proxy = NULL;
+	memset(&watch->hook, 0, sizeof(watch->hook));
+
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		delete watch;
+		return;
+	}
+
+	static const pw_node_events kWatchEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_StreamParamThunk
+	};
+	pw_node_add_listener(node, &watch->hook, &kWatchEvents, watch);
+	uint32_t ids[1] = { SPA_PARAM_Props };
+	pw_node_subscribe_params(node, ids, 1);
+	watch->proxy = node;
+
+	std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+	fStreamParamWatches[nodeId] = watch;
+}
+
+
+void
+PipeWireBackend::_DestroyStreamParamWatch(uint32 nodeId)
+{
+	StreamParamWatch* watch = NULL;
+	{
+		std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+		auto it = fStreamParamWatches.find(nodeId);
+		if (it == fStreamParamWatches.end())
+			return;
+		watch = it->second;
+		fStreamParamWatches.erase(it);
+	}
+	if (watch == NULL)
+		return;
+	Lock();
+	if (watch->proxy != NULL) {
+		spa_hook_remove(&watch->hook);
+		pw_proxy_destroy((struct pw_proxy*)watch->proxy);
+	}
+	Unlock();
+	delete watch;
+}
+
+
+void
+PipeWireBackend::_StreamParamThunk(void* data, int seq, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	StreamParamWatch* watch = (StreamParamWatch*)data;
+	if (watch != NULL && watch->backend != NULL)
+		watch->backend->_OnStreamParam(watch, id, param);
+}
+
+
+void
+PipeWireBackend::_OnStreamParam(StreamParamWatch* watch, uint32 id,
+	const struct spa_pod* param)
+{
+	if (param == NULL || id != SPA_PARAM_Props)
+		return;
+
+	// Same parse as _NodeParamThunk: channelVolumes are linear 0..1 per
+	// channel, matching what SetStreamVolume writes back.
+	std::vector<float> volumes;
+	bool mute = false;
+	bool haveMute = false;
+
+	const spa_pod_prop* volProp = spa_pod_find_prop(param, NULL,
+		SPA_PROP_channelVolumes);
+	if (volProp != NULL) {
+		uint32 n = 0;
+		float* vals = (float*)spa_pod_get_array(&volProp->value, &n);
+		if (vals != NULL && n > 0)
+			volumes.assign(vals, vals + n);
+	}
+
+	const spa_pod_prop* muteProp = spa_pod_find_prop(param, NULL,
+		SPA_PROP_mute);
+	if (muteProp != NULL && spa_pod_get_bool(&muteProp->value, &mute) >= 0)
+		haveMute = true;
+
+	// The UI value mirrors SetStreamChannelVolumes: the loudest channel.
+	float volume = volumes.empty() ? 1.0f : volumes[0];
+	for (size_t i = 1; i < volumes.size(); i++) {
+		if (volumes[i] > volume)
+			volume = volumes[i];
+	}
+
+	bool changed = false;
+	{
+		std::lock_guard<std::mutex> _(fStreamsLock);
+		for (auto& stream : fStreams) {
+			if (stream.id != watch->nodeId)
+				continue;
+			if (!volumes.empty() && stream.volume != volume) {
+				stream.volume = volume;
+				changed = true;
+			}
+			if (haveMute && stream.mute != mute) {
+				stream.mute = mute;
+				changed = true;
+			}
+			break;
+		}
+	}
+	if (changed)
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, watch->nodeId);
 }
 
 

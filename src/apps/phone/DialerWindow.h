@@ -13,10 +13,12 @@
 
 class BButton;
 class BListView;
+class BMenuBar;
 class BPopUpMenu;
 class BStringView;
 class BTextControl;
 class Phone;
+class PhoneReplicantView;
 
 
 enum {
@@ -52,6 +54,7 @@ private:
 
 			BTextControl*		fNumberControl;
 			BStringView*		fStatusView;
+			PhoneReplicantView*	fReplicantView;
 			BListView*			fLogView;
 			BButton*			fDialButton;
 			BButton*			fHangUpButton;

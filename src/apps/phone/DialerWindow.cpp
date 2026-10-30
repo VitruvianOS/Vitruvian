@@ -20,8 +20,10 @@
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <Messenger.h>
+#include <MenuBar.h>
 #include <PopUpMenu.h>
 #include <ScrollView.h>
+#include <Size.h>
 #include <StringView.h>
 #include <TextControl.h>
 
@@ -30,6 +32,7 @@
 
 #include "CallLog.h"
 #include "Phone.h"
+#include "PhoneReplicantView.h"
 #include <telephony/Modem.h>
 #include <telephony/TelephonyRoster.h>
 
@@ -74,6 +77,13 @@ DialerWindow::DialerWindow(const BRect& frame)
 	fStatusView = new BStringView("status", B_TRANSLATE("Ready"));
 	fLogView = new BListView("calllog", B_SINGLE_SELECTION_LIST);
 
+	// Replicant strip: drag target and live call status.
+	fReplicantView = new PhoneReplicantView(BRect(0, 0, 99, 15),
+		B_FOLLOW_NONE, false);
+	fReplicantView->SetExplicitMinSize(BSize(100, 16));
+	fReplicantView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 16));
+	fReplicantView->SetExplicitPreferredSize(BSize(100, 16));
+
 	fDialButton = new BButton("dial", B_TRANSLATE("Call"),
 		new BMessage(kMsgDial));
 	fHangUpButton = new BButton("hangup", B_TRANSLATE("Hang up"),
@@ -116,8 +126,16 @@ DialerWindow::DialerWindow(const BRect& frame)
 	BScrollView* logScroll = new BScrollView("logscroll", fLogView,
 		B_FRAME_EVENTS | B_WILL_DRAW, false, true);
 
+	BMenuBar* menuBar = NULL;
+	BLayoutBuilder::Menu<>(menuBar = new BMenuBar("mbar"))
+		.AddMenu(B_TRANSLATE("File"))
+			.AddItem(B_TRANSLATE("Quit"), B_QUIT_REQUESTED, 'q')
+		.End();
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_SMALL_INSETS)
+		.Add(menuBar)
+		.Add(fReplicantView)
 		.Add(fNumberControl)
 		.Add(new BMenuField("line", B_TRANSLATE("Line:"), fLineMenu))
 		.Add(fStatusView)

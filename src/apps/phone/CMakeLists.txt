@@ -1,4 +1,4 @@
-Application(Phone
+RunnableAddOn(Phone
 	SOURCES
 	Phone.cpp
 	CallLog.cpp
@@ -7,6 +7,7 @@ Application(Phone
 	DialerWindow.cpp
 	InCallWindow.cpp
 	IncomingCallWindow.cpp
+	PhoneReplicantView.cpp
 	LIBS be localestub media2
 	RDEF Phone.rdef
 )

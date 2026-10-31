@@ -236,7 +236,6 @@ BCameraSource::~BCameraSource()
 
 	delete fControllable;
 	fControllable = NULL;
-	delete (BParameterWeb*)fParameterWeb;
 	fParameterWeb = NULL;
 
 	_SaveControls();

@@ -841,8 +841,10 @@ MainWin::MessageReceived(BMessage* message)
 				delete fOpenPanel;
 				fOpenPanel = NULL;
 			}
+			// Echoing the menu message back would re-open the panel and
+			// drop the refs; B_REFS_RECEIVED is what _OpenRefs consumes.
 			fOpenPanel = new BFilePanel(B_OPEN_PANEL, new BMessenger(this),
-				NULL, B_FILE_NODE, false, message, NULL, true);
+				NULL, B_FILE_NODE, false, NULL, NULL, true);
 			fOpenPanel->Window()->Show();
 			break;
 		}

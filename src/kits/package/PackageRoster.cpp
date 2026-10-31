@@ -33,7 +33,9 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 
-			bool				fCancelRequested;
+			// Written by the roster's owner (teardown) and by cancel
+			// requests; read by the worker thread inside the list read.
+			volatile bool		fCancelRequested;
 
 private:
 			void				_DoGetPackageList(const BMessenger& replyTo,
@@ -60,6 +62,7 @@ VPackageRoster::Worker::Worker()
 	BLooper("package roster worker"),
 	fCancelRequested(false)
 {
+	fAdapter.SetCancelFlag(&fCancelRequested);
 	Run();
 }
 
@@ -217,12 +220,10 @@ VPackageRoster::Worker::MessageReceived(BMessage* message)
 
 	switch (message->what) {
 		case kDoGetPackageList:
-			fCancelRequested = false;
 			_DoGetPackageList(replyTo, false);
 			break;
 
 		case kDoGetUpgradable:
-			fCancelRequested = false;
 			_DoGetPackageList(replyTo, true);
 			break;
 
@@ -274,6 +275,9 @@ VPackageRoster::VPackageRoster()
 
 VPackageRoster::~VPackageRoster()
 {
+	// A list read over the whole cache can run for minutes; teardown
+	// must not wait it out, so cancel first and only then stop.
+	fWorker->fCancelRequested = true;
 	if (fWorker->Lock())
 		fWorker->Quit();
 }
@@ -282,6 +286,9 @@ VPackageRoster::~VPackageRoster()
 status_t
 VPackageRoster::GetPackageList(const BMessenger& replyTo)
 {
+	// Re-armed here, not when the request runs: teardown may set the
+	// flag while this request is still queued.
+	fWorker->fCancelRequested = false;
 	BMessage request(kDoGetPackageList);
 	request.AddMessenger("replyTo", replyTo);
 	return fWorker->PostMessage(&request);
@@ -291,6 +298,7 @@ VPackageRoster::GetPackageList(const BMessenger& replyTo)
 status_t
 VPackageRoster::GetUpgradable(const BMessenger& replyTo)
 {
+	fWorker->fCancelRequested = false;
 	BMessage request(kDoGetUpgradable);
 	request.AddMessenger("replyTo", replyTo);
 	return fWorker->PostMessage(&request);

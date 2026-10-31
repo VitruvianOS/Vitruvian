@@ -70,6 +70,10 @@ public:
 			// Caller's thread must be the one that makes the next call.
 			void				InvalidateCache();
 
+			// Set by the owner on teardown to abort a long list read.
+			// NULL means never cancel.
+			void				SetCancelFlag(volatile bool* flag);
+
 			bool				ListsLookEmpty();
 
 private:
@@ -93,6 +97,8 @@ private:
 			// Kept for the adapter's lifetime; does not notice a
 			// concurrent "apt update"/"dpkg -i".
 			CacheHandle*		fCache;
+
+			volatile bool*		fCancelFlag;
 };
 
 

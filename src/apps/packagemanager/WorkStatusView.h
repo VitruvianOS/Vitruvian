@@ -26,6 +26,9 @@ public:
 	virtual						~WorkStatusView();
 
 			void				SetIdle(const char* text);
+			// Stop the indeterminate pole without touching the status
+			// line, for a failed transaction whose last message stays.
+			void				StopProgress();
 			// percent < 0 means indeterminate (barber pole); package may
 			// be NULL, and a dlstatus item number must never show as a name.
 			void				SetProgress(int32 percent, const char* text,

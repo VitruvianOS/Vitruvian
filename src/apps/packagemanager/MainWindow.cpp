@@ -751,6 +751,9 @@ MainWindow::_HandleError(BMessage* message)
 	message->FindString("detail", &detail);
 
 	_SetTransactionActive(false);
+	// The error path never reaches kMsgTransactionDone, so the pole
+	// would keep spinning over a window whose buttons are live again.
+	fStatusView->StopProgress();
 
 	BString text;
 	switch (error) {

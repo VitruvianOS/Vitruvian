@@ -79,6 +79,13 @@ WorkStatusView::SetIdle(const char* text)
 
 
 void
+WorkStatusView::StopProgress()
+{
+	fBarberPole->Stop();
+}
+
+
+void
 WorkStatusView::SetProgress(int32 percent, const char* text,
 	const char* package)
 {

@@ -70,6 +70,10 @@ LocationSettings::SetShowDeskbarIndicator(bool enabled)
 void
 LocationSettings::LoadSettings()
 {
+	// Re-read from disk: other processes (the preflet and the indicator
+	// share this file) change values while we hold a copy.
+	fSettingsMessage.Load();
+
 	SetEnabled(fSettingsMessage.GetValue("Enabled", false));
 	SetHost(fSettingsMessage.GetValue("Host", BString(kDefaultHost)));
 	SetPort((uint16)fSettingsMessage.GetValue("Port", (int32)kDefaultPort));

@@ -7,10 +7,13 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
+#include <Alert.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <CheckBox.h>
 #include <Deskbar.h>
 #include <Entry.h>
 #include <ControlLook.h>
@@ -21,11 +24,12 @@
 #include <MenuItem.h>
 #include <Message.h>
 #include <Messenger.h>
+#include <OS.h>
 #include <Path.h>
 #include <PopUpMenu.h>
+#include <Roster.h>
 #include <String.h>
 #include <StringView.h>
-#include <TextView.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -38,8 +42,21 @@ static const uint32 kMsgAccuracyChanged = 'LcAc';
 static const uint32 kMsgToggleTimeZone = 'LcTz';
 static const uint32 kMsgToggleDeskbar = 'LcDb';
 static const uint32 kMsgRefresh = 'LcRf';
+static const uint32 kMsgDeskbarToggled = 'LcDk';
 static const uint32 kMsgLocationChanged = B_LOCATION_CHANGED;
 static const uint32 kMsgLocationStatus = B_LOCATION_STATUS;
+
+// Must match LocationStatus.rdef's app_signature, and BDeskbar's lookup
+// key for the replicant is the view name it archives itself under.
+static const char* kLocationStatusSignature
+	= "application/x-vnd.vos-LocationStatus";
+static const char* kLocationStatusDeskbarItemName = "LocationStatus";
+
+
+struct _DeskbarToggleJob {
+	BMessenger replyTo;
+	bool install;
+};
 
 
 static const char*
@@ -74,17 +91,35 @@ _StatusLabel(int32 status)
 }
 
 
+static const char*
+_NoValue()
+{
+	return B_TRANSLATE("-");
+}
+
+
+static BStringView*
+_Label(const char* name, const char* text)
+{
+	return new BStringView(name, text);
+}
+
+
 LocationSettingsView::LocationSettingsView(const char* name,
 	LocationSettings& settings, LocationProvider& provider)
 	:
 	BView(name, 0),
 	fSettings(settings),
-	fProvider(provider)
+	fProvider(provider),
+	fDeskbarTogglePending(false)
 {
 	fEnabledCheckBox = new BCheckBox("enabled",
 		B_TRANSLATE("Location services"),
 		new BMessage(kMsgToggleEnabled));
 	fEnabledCheckBox->SetValue(fSettings.Enabled());
+	fEnabledCheckBox->SetFont(be_bold_font);
+
+	fStatusLabel = new BStringView("status", B_TRANSLATE("Off"));
 
 	fHostMenu = new BPopUpMenu("host");
 	BMenuItem* item = new BMenuItem(B_TRANSLATE("gpsd (localhost:2947)"),
@@ -94,9 +129,8 @@ LocationSettingsView::LocationSettingsView(const char* name,
 	fHostMenu->AddItem(new BMenuItem(
 		B_TRANSLATE("gpsd (localhost:2948)"),
 		new BMessage(kMsgHostChanged)));
-	fHostMenu->SetTargetForItems(this);
 	fHostField = new BMenuField("hostField",
-		B_TRANSLATE("Source:"), fHostMenu);
+		B_TRANSLATE("Server:"), fHostMenu);
 
 	fAccuracyMenu = new BPopUpMenu("accuracy");
 	fAccuracyMenu->AddItem(new BMenuItem(B_TRANSLATE("Exact"),
@@ -106,24 +140,21 @@ LocationSettingsView::LocationSettingsView(const char* name,
 	fAccuracyMenu->AddItem(new BMenuItem(B_TRANSLATE("Country"),
 		new BMessage(kMsgAccuracyChanged)));
 	fAccuracyMenu->ItemAt(fSettings.AccuracyLevel())->SetMarked(true);
-	fAccuracyMenu->SetTargetForItems(this);
-	BMenuField* accuracyField = new BMenuField("accuracyField",
+	fAccuracyField = new BMenuField("accuracyField",
 		B_TRANSLATE("Accuracy level:"), fAccuracyMenu);
 
-	fStatusView = new BStringView("status", B_TRANSLATE("Off"));
-	fDeviceView = new BStringView("device", "");
-	fDeviceView->SetFont(be_fixed_font);
-	fFixView = new BStringView("fix", "");
-	fSatellitesView = new BStringView("satellites", "");
+	fFixValue = _ValueView("fix");
+	fSatellitesValue = _ValueView("satellites");
+	fAccuracyValue = _ValueView("accuracy");
+	fSourceValue = _ValueView("source");
+	fDeviceValue = _ValueView("device");
 
-	fLatitudeView = new BStringView("latitude", B_TRANSLATE("Latitude:  —"));
-	fLongitudeView = new BStringView("longitude",
-		B_TRANSLATE("Longitude: —"));
-	fAltitudeView = new BStringView("altitude", B_TRANSLATE("Altitude:  —"));
-	fAccuracyView = new BStringView("accuracy", B_TRANSLATE("Accuracy:  —"));
-	fSpeedView = new BStringView("speed", B_TRANSLATE("Speed:     —"));
-	fHeadingView = new BStringView("heading", B_TRANSLATE("Heading:   —"));
-	fUpdatedView = new BStringView("updated", B_TRANSLATE("Updated:   —"));
+	fLatitudeValue = _ValueView("latitude");
+	fLongitudeValue = _ValueView("longitude");
+	fAltitudeValue = _ValueView("altitude");
+	fSpeedValue = _ValueView("speed");
+	fHeadingValue = _ValueView("heading");
+	fUpdatedValue = _ValueView("updated");
 
 	fTimeZoneCheckBox = new BCheckBox("timezone",
 		B_TRANSLATE("Set time zone automatically"),
@@ -133,65 +164,78 @@ LocationSettingsView::LocationSettingsView(const char* name,
 	fDeskbarCheckBox = new BCheckBox("deskbar",
 		B_TRANSLATE("Show location indicator in Deskbar"),
 		new BMessage(kMsgToggleDeskbar));
-	fDeskbarCheckBox->SetValue(fSettings.ShowDeskbarIndicator());
+	fDeskbarCheckBox->SetValue(_IsDeskbarIndicatorInstalled()
+		? B_CONTROL_ON : B_CONTROL_OFF);
 
 	fRefreshButton = new BButton("refresh",
 		B_TRANSLATE("Refresh"), new BMessage(kMsgRefresh));
+
+	BStringView* statusHeader = new BStringView("statusHeader",
+		B_TRANSLATE("Status"));
+	statusHeader->SetFont(be_bold_font);
 
 	BStringView* positionHeader = new BStringView("positionHeader",
 		B_TRANSLATE("Last position"));
 	positionHeader->SetFont(be_bold_font);
 
-	BView* statusBox = BLayoutBuilder::Group<>(B_VERTICAL,
-			B_USE_SMALL_SPACING)
-		.Add(new BStringView("statusHeader", B_TRANSLATE("Source status")))
-		.Add(fStatusView)
-		.Add(fDeviceView)
-		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-			.Add(fFixView)
-			.Add(fSatellitesView)
-		.End()
-	.View();
-	statusBox->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	BStringView* privacyHeader = new BStringView("privacyHeader",
+		B_TRANSLATE("Privacy"));
+	privacyHeader->SetFont(be_bold_font);
 
-	BView* positionBox = BLayoutBuilder::Group<>(B_VERTICAL,
-			B_USE_SMALL_SPACING)
-		.Add(positionHeader)
-		.Add(fLatitudeView)
-		.Add(fLongitudeView)
-		.Add(fAltitudeView)
-		.Add(fAccuracyView)
-		.Add(fSpeedView)
-		.Add(fHeadingView)
-		.Add(fUpdatedView)
-	.View();
-	positionBox->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	BStringView* sourceHeader = new BStringView("sourceHeader",
+		B_TRANSLATE("Source"));
+	sourceHeader->SetFont(be_bold_font);
 
-	// Privacy controls are stubs until a location service enforces them.
-	BView* privacyBox = BLayoutBuilder::Group<>(B_VERTICAL,
-			B_USE_SMALL_SPACING)
-		.Add(new BStringView("privacyHeader", B_TRANSLATE("Privacy")))
-		.Add(new BStringView("appsHeader",
-			B_TRANSLATE("Apps that used location recently:")))
-		.Add(new BStringView("appsEmpty",
-			B_TRANSLATE("(none recorded yet — per-app permission is a stub)")))
-		.Add(fTimeZoneCheckBox)
-		.Add(fDeskbarCheckBox)
-		.AddGlue()
-		.Add(fRefreshButton)
-	.View();
-	privacyBox->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-
-	BLayoutBuilder::Grid<>(this)
+	// Per-app access has no backend yet, so it is not shown at all: a
+	// placeholder list would read as a working permission manager.
+	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(fEnabledCheckBox, 0, 0, 2, 1)
-		.Add(fHostField->CreateLabelLayoutItem(), 0, 1)
-		.Add(fHostField->CreateMenuBarLayoutItem(), 1, 1)
-		.Add(accuracyField->CreateLabelLayoutItem(), 0, 2)
-		.Add(accuracyField->CreateMenuBarLayoutItem(), 1, 2)
-		.Add(statusBox, 0, 3, 2, 1)
-		.Add(positionBox, 0, 4, 2, 1)
-		.Add(privacyBox, 0, 5, 2, 1)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(fEnabledCheckBox)
+			.AddGlue()
+			.Add(fStatusLabel)
+		.End()
+		.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
+			// one grid keeps the status and position values aligned
+			.Add(statusHeader, 0, 0, 2, 1)
+			.Add(_Label("fixLabel", B_TRANSLATE("Fix:")), 0, 1)
+			.Add(fFixValue, 1, 1)
+			.Add(_Label("satsLabel", B_TRANSLATE("Satellites:")), 0, 2)
+			.Add(fSatellitesValue, 1, 2)
+			.Add(_Label("accuracyLabel", B_TRANSLATE("Accuracy:")), 0, 3)
+			.Add(fAccuracyValue, 1, 3)
+			.Add(_Label("sourceLabel", B_TRANSLATE("Source:")), 0, 4)
+			.Add(fSourceValue, 1, 4)
+			.Add(_Label("deviceLabel", B_TRANSLATE("Device:")), 0, 5)
+			.Add(fDeviceValue, 1, 5)
+			.Add(positionHeader, 0, 6, 2, 1)
+			.Add(_Label("latitudeLabel", B_TRANSLATE("Latitude:")), 0, 7)
+			.Add(fLatitudeValue, 1, 7)
+			.Add(_Label("longitudeLabel", B_TRANSLATE("Longitude:")), 0, 8)
+			.Add(fLongitudeValue, 1, 8)
+			.Add(_Label("altitudeLabel", B_TRANSLATE("Altitude:")), 0, 9)
+			.Add(fAltitudeValue, 1, 9)
+			.Add(_Label("speedLabel", B_TRANSLATE("Speed:")), 0, 10)
+			.Add(fSpeedValue, 1, 10)
+			.Add(_Label("headingLabel", B_TRANSLATE("Heading:")), 0, 11)
+			.Add(fHeadingValue, 1, 11)
+			.Add(_Label("updatedLabel", B_TRANSLATE("Updated:")), 0, 12)
+			.Add(fUpdatedValue, 1, 12)
+			.SetColumnWeight(1, 1.0f)
+		.End()
+		.Add(privacyHeader)
+		.AddGrid(B_USE_SMALL_SPACING)
+			.Add(fAccuracyField->CreateLabelLayoutItem(), 0, 0)
+			.Add(fAccuracyField->CreateMenuBarLayoutItem(), 1, 0)
+			.Add(fTimeZoneCheckBox, 0, 1, 2, 1)
+			.Add(fDeskbarCheckBox, 0, 2, 2, 1)
+		.End()
+		.Add(sourceHeader)
+		.Add(fHostField)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.AddGlue()
+			.Add(fRefreshButton)
+		.End()
 	.End();
 }
 
@@ -199,6 +243,14 @@ LocationSettingsView::LocationSettingsView(const char* name,
 LocationSettingsView::~LocationSettingsView()
 {
 	fProvider.Unwatch(BMessenger(this));
+}
+
+
+BStringView*
+LocationSettingsView::_ValueView(const char* name)
+{
+	BStringView* view = new BStringView(name, _NoValue());
+	return view;
 }
 
 
@@ -210,10 +262,21 @@ LocationSettingsView::AttachedToWindow()
 	else
 		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
+	// Items resolve their target when the menu is installed: a messenger
+	// built before this view has a looper never delivers.
+	fHostMenu->SetTargetForItems(this);
+	fAccuracyMenu->SetTargetForItems(this);
+
 	fEnabledCheckBox->SetTarget(this);
 	fTimeZoneCheckBox->SetTarget(this);
-	fDeskbarCheckBox->SetTarget(this);
 	fRefreshButton->SetTarget(this);
+
+	// The Deskbar is the source of truth: a setting that says "shown" with
+	// no replicant in the tray is a lie the checkbox would repeat.
+	fSettings.SetShowDeskbarIndicator(_IsDeskbarIndicatorInstalled());
+	fDeskbarCheckBox->SetValue(_IsDeskbarIndicatorInstalled()
+		? B_CONTROL_ON : B_CONTROL_OFF);
+	fDeskbarCheckBox->SetTarget(this);
 
 	fProvider.Watch(BMessenger(this));
 
@@ -238,6 +301,7 @@ LocationSettingsView::MessageReceived(BMessage* message)
 			else
 				fProvider.Stop();
 			_UpdateStatusViews();
+			_UpdatePositionViews();
 			break;
 		}
 		case kMsgHostChanged:
@@ -246,6 +310,10 @@ LocationSettingsView::MessageReceived(BMessage* message)
 			fSettings.SetHost("127.0.0.1");
 			fSettings.SetPort(index == 1 ? 2948 : 2947);
 			fSettings.SaveSettings();
+			// Without this the menu only took effect on the next launch.
+			fProvider.SetEndpoint(fSettings.Host().String(),
+				fSettings.Port());
+			_UpdateStatusViews();
 			break;
 		}
 		case kMsgAccuracyChanged:
@@ -254,6 +322,9 @@ LocationSettingsView::MessageReceived(BMessage* message)
 			fSettings.SetAccuracyLevel(index);
 			fProvider.SetAccuracyLevel(index);
 			fSettings.SaveSettings();
+			// The coarsened coordinates are what the user asked to see.
+			_UpdateStatusViews();
+			_UpdatePositionViews();
 			break;
 		}
 		case kMsgToggleTimeZone:
@@ -264,14 +335,14 @@ LocationSettingsView::MessageReceived(BMessage* message)
 			break;
 		}
 		case kMsgToggleDeskbar:
-		{
-			fSettings.SetShowDeskbarIndicator(
+			// Saved from the reply in _ApplyDeskbarIndicator(), so a failed
+			// Deskbar round trip cannot leave the setting out of sync.
+			_ToggleDeskbarIndicator(
 				fDeskbarCheckBox->Value() == B_CONTROL_ON);
-			fSettings.SaveSettings();
-			if (fSettings.ShowDeskbarIndicator())
-				_EnsureDeskbarIndicator();
 			break;
-		}
+		case kMsgDeskbarToggled:
+			_ApplyDeskbarIndicator(message);
+			break;
 		case kMsgRefresh:
 			RefreshFromProvider();
 			break;
@@ -310,25 +381,48 @@ LocationSettingsView::_UpdateStatusViews()
 			: B_LOCATION_CONNECTING)
 		: B_LOCATION_OFFLINE;
 
-	fStatusView->SetText(_StatusLabel(status));
+	fStatusLabel->SetText(_StatusLabel(status));
 
-	BString device(B_TRANSLATE("Device: "));
+	fFixValue->SetText(_FixLabel(fProvider.FixType()));
+
+	// Without a fix the source reports no satellites in use, so a stale
+	// "8 used" from the last fix would be misleading.
+	BString sats;
+	if (fProvider.FixType() > 0)
+		sats << fProvider.SatellitesInUse() << B_TRANSLATE(" used / ")
+			<< fProvider.SatellitesInView() << B_TRANSLATE(" in view");
+	else
+		sats.SetTo(_NoValue());
+	fSatellitesValue->SetText(sats.String());
+
+	double latitude = 0.0;
+	double longitude = 0.0;
+	double accuracy = 0.0;
+	int64 timestamp = 0;
+	fProvider.LastLocation(&latitude, &longitude, NULL, &accuracy, NULL,
+		NULL, &timestamp);
+
+	BString text;
+	if (timestamp > 0)
+		text.SetToFormat("±%.1f m", accuracy);
+	else
+		text.SetTo(_NoValue());
+	fAccuracyValue->SetText(text.String());
+
+	BString source;
+	if (fProvider.SourceName()[0] != '\0')
+		source << fProvider.SourceName();
+	else
+		source << B_TRANSLATE("(unknown)");
+	source << " " << fProvider.Host() << ":" << fProvider.Port();
+	fSourceValue->SetText(source.String());
+
+	BString device;
 	if (fProvider.DevicePath()[0] != '\0')
 		device << fProvider.DevicePath();
 	else
 		device << B_TRANSLATE("(unknown)");
-	device << "  |  " << fProvider.SourceName()
-		<< " " << fProvider.Host() << ":" << fProvider.Port();
-	fDeviceView->SetText(device.String());
-
-	BString fix(B_TRANSLATE("Fix: "));
-	fix << _FixLabel(fProvider.FixType());
-	fFixView->SetText(fix.String());
-
-	BString sats(B_TRANSLATE("Sats: "));
-	sats << fProvider.SatellitesInUse() << B_TRANSLATE(" used / ")
-		<< fProvider.SatellitesInView() << B_TRANSLATE(" in view");
-	fSatellitesView->SetText(sats.String());
+	fDeviceValue->SetText(device.String());
 }
 
 
@@ -345,60 +439,132 @@ LocationSettingsView::_UpdatePositionViews()
 	fProvider.LastLocation(&latitude, &longitude, &altitude, &accuracy,
 		&speed, &heading, &timestamp);
 
+	// No fix yet: keep the rows empty instead of showing null island.
+	if (timestamp <= 0) {
+		fLatitudeValue->SetText(_NoValue());
+		fLongitudeValue->SetText(_NoValue());
+		fAltitudeValue->SetText(_NoValue());
+		fSpeedValue->SetText(_NoValue());
+		fHeadingValue->SetText(_NoValue());
+		fUpdatedValue->SetText(_NoValue());
+		return;
+	}
+
 	BString text;
 
-	text.SetToFormat("%s %.6f° %s",
-		B_TRANSLATE("Latitude: "),
+	text.SetToFormat("%.6f° %s",
 		latitude, latitude >= 0.0 ? "N" : "S");
-	fLatitudeView->SetText(text.String());
+	fLatitudeValue->SetText(text.String());
 
-	text.SetToFormat("%s %.6f° %s",
-		B_TRANSLATE("Longitude: "),
+	text.SetToFormat("%.6f° %s",
 		longitude, longitude >= 0.0 ? "E" : "W");
-	fLongitudeView->SetText(text.String());
+	fLongitudeValue->SetText(text.String());
 
-	text.SetToFormat("%s %.1f m",
-		B_TRANSLATE("Altitude:  "), altitude);
-	fAltitudeView->SetText(text.String());
+	text.SetToFormat("%.1f m", altitude);
+	fAltitudeValue->SetText(text.String());
 
-	text.SetToFormat("%s ±%.1f m",
-		B_TRANSLATE("Accuracy:  "), accuracy);
-	fAccuracyView->SetText(text.String());
-
-	text.SetToFormat("%s %.1f km/h",
-		B_TRANSLATE("Speed:     "), speed * 3.6);
-	fSpeedView->SetText(text.String());
+	text.SetToFormat("%.1f km/h", speed * 3.6);
+	fSpeedValue->SetText(text.String());
 
 	if (heading > 0.0)
-		text.SetToFormat("%s %.0f°", B_TRANSLATE("Heading:   "), heading);
+		text.SetToFormat("%.0f°", heading);
 	else
-		text.SetToFormat("%s —", B_TRANSLATE("Heading:   "));
-	fHeadingView->SetText(text.String());
+		text.SetTo(_NoValue());
+	fHeadingValue->SetText(text.String());
 
-	if (timestamp > 0) {
-		time_t seconds = (time_t)(timestamp / 1000000LL);
-		struct tm* utc = gmtime(&seconds);
-		char buffer[64];
-		strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S UTC", utc);
-		text.SetToFormat("%s %s", B_TRANSLATE("Updated:   "), buffer);
-	} else {
-		text.SetToFormat("%s —", B_TRANSLATE("Updated:   "));
-	}
-	fUpdatedView->SetText(text.String());
+	time_t seconds = (time_t)(timestamp / 1000000LL);
+	struct tm* utc = gmtime(&seconds);
+	char buffer[64];
+	strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S UTC", utc);
+	fUpdatedValue->SetText(buffer);
+}
+
+
+bool
+LocationSettingsView::_IsDeskbarIndicatorInstalled()
+{
+	BDeskbar deskbar;
+	return deskbar.IsRunning()
+		&& deskbar.HasItem(kLocationStatusDeskbarItemName);
 }
 
 
 void
-LocationSettingsView::_EnsureDeskbarIndicator()
+LocationSettingsView::_ToggleDeskbarIndicator(bool install)
 {
-	// Install LocationStatus into Deskbar when the preflet checkbox turns on.
-	BDeskbar deskbar;
-	if (!deskbar.IsRunning()
-		|| deskbar.HasItem("LocationStatus"))
+	// Ignore further clicks while one Deskbar round trip is in flight;
+	// BDeskbar calls target Deskbar's own team and freeze when done inline.
+	if (fDeskbarTogglePending)
 		return;
 
-	BPath path("/system/apps/LocationStatus");
-	entry_ref ref;
-	if (get_ref_for_path(path.Path(), &ref) == B_OK)
-		deskbar.AddItem(&ref);
+	fDeskbarTogglePending = true;
+	fDeskbarCheckBox->SetEnabled(false);
+
+	_DeskbarToggleJob* job = new _DeskbarToggleJob;
+	job->replyTo = BMessenger(this);
+	job->install = install;
+
+	thread_id thread = spawn_thread(_ToggleDeskbarThread,
+		"toggle_location_indicator", B_NORMAL_PRIORITY, job);
+	if (thread >= B_OK) {
+		resume_thread(thread);
+	} else {
+		delete job;
+		fDeskbarTogglePending = false;
+		fDeskbarCheckBox->SetEnabled(true);
+	}
+}
+
+
+int32
+LocationSettingsView::_ToggleDeskbarThread(void* data)
+{
+	_DeskbarToggleJob* job = (_DeskbarToggleJob*)data;
+
+	BDeskbar deskbar;
+	status_t status = B_OK;
+	if (job->install) {
+		entry_ref ref;
+		status = be_roster->FindApp(kLocationStatusSignature, &ref);
+		if (status == B_OK)
+			status = deskbar.AddItem(&ref);
+	} else
+		status = deskbar.RemoveItem(kLocationStatusDeskbarItemName);
+
+	BMessage reply(kMsgDeskbarToggled);
+	reply.AddInt32("status", status);
+	reply.AddBool("installed",
+		deskbar.HasItem(kLocationStatusDeskbarItemName));
+	job->replyTo.SendMessage(&reply);
+
+	delete job;
+	return 0;
+}
+
+
+void
+LocationSettingsView::_ApplyDeskbarIndicator(BMessage* message)
+{
+	fDeskbarTogglePending = false;
+	fDeskbarCheckBox->SetEnabled(true);
+
+	bool installed = false;
+	message->FindBool("installed", &installed);
+	fDeskbarCheckBox->SetValue(installed ? B_CONTROL_ON : B_CONTROL_OFF);
+	fSettings.SetShowDeskbarIndicator(installed);
+	fSettings.SaveSettings();
+
+	int32 status = B_OK;
+	message->FindInt32("status", &status);
+	if (status == B_OK)
+		return;
+
+	BString text(B_TRANSLATE(
+		"Couldn't update the location indicator in the Deskbar: %error%"));
+	text.ReplaceFirst("%error%",
+		status == B_TIMED_OUT ? B_TRANSLATE("Deskbar did not reply in "
+			"time.") : strerror(status));
+	BAlert* alert = new BAlert(B_TRANSLATE("Error"), text,
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	alert->Go();
 }

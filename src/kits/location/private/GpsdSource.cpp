@@ -101,8 +101,15 @@ GpsdSource::Stop()
 status_t
 GpsdSource::_Connect()
 {
+	BString host;
+	uint16 port;
+	fLock.Lock();
+	host = fHost;
+	port = fPort;
+	fLock.Unlock();
+
 	BNetworkAddress address;
-	status_t status = address.SetTo(fHost.String(), fPort);
+	status_t status = address.SetTo(host.String(), port);
 	if (status != B_OK)
 		return B_ERROR;
 
@@ -114,6 +121,18 @@ GpsdSource::_Connect()
 	const char* watch = "?WATCH={\"enable\":true,\"json\":true};\n";
 	fSocket.Write(watch, strlen(watch));
 	return B_OK;
+}
+
+
+void
+GpsdSource::SetEndpoint(const char* host, uint16 port)
+{
+	fLock.Lock();
+	if (host != NULL && host[0] != '\0')
+		fHost = host;
+	if (port != 0)
+		fPort = port;
+	fLock.Unlock();
 }
 
 
@@ -193,13 +212,13 @@ GpsdSource::_ReadLoop()
 						fTarget.SendMessage(&data);
 					}
 					if (update.connected || !update.error.IsEmpty()
-						|| update.satellitesUsed > 0
+						|| update.fixKnown || update.satellitesUsed > 0
 						|| update.satellitesInView > 0 || update.fix > 0) {
 						BMessage status(kMsgLocationStatus);
 						status.AddBool("connected", true);
 						if (!update.error.IsEmpty())
 							status.AddString("error", update.error.String());
-						if (update.fix > 0)
+						if (update.fixKnown || update.fix > 0)
 							status.AddInt32("fix", update.fix);
 						if (update.satellitesUsed > 0)
 							status.AddInt32("satellites",

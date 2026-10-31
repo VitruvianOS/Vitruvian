@@ -11,7 +11,6 @@
 #include <Locale.h>
 #include <Message.h>
 #include <Messenger.h>
-#include <TabView.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -20,9 +19,9 @@
 
 LocationWindow::LocationWindow()
 	:
-	BWindow(BRect(80, 80, 480, 620), B_TRANSLATE("Location"),
+	BWindow(BRect(100, 100, 540, 600), B_TRANSLATE("Location"),
 		B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE
-			| B_AUTO_UPDATE_SIZE_LIMITS),
+			| B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 	fProvider(NULL),
 	fSettingsView(NULL)
 {
@@ -33,16 +32,16 @@ LocationWindow::LocationWindow()
 	fProvider->SetAccuracyLevel(fSettings.AccuracyLevel());
 	fProvider->Run();
 
+	// One page, no tab bar: there is nothing to switch to.
 	fSettingsView = new LocationSettingsView("locationPage", fSettings,
 		*fProvider);
-	fSettingsView->SetName(B_TRANSLATE("Location"));
-
-	BTabView* tabView = new BTabView("tabs", B_WIDTH_FROM_LABEL);
-	tabView->AddTab(fSettingsView);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
-		.Add(tabView)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(fSettingsView)
 	.End();
+
+	CenterOnScreen();
 
 	if (fSettings.Enabled())
 		fProvider->Start();

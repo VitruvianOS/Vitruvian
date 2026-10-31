@@ -29,6 +29,9 @@ struct GpsdFix {
 
 struct GpsdSourceStatus {
 	bool		connected;
+	// True when the report explicitly states the fix state (also fix == 0),
+	// so a receiver losing its fix is not mistaken for "no news".
+	bool		fixKnown;
 	BString		error;
 	BString		device;
 	BString		source;

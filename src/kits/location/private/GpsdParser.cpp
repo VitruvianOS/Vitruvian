@@ -172,6 +172,7 @@ _ResetStatus(GpsdSourceStatus* status)
 	if (status == NULL)
 		return;
 	status->connected = false;
+	status->fixKnown = false;
 	status->error = "";
 	status->device = "";
 	status->source = "";
@@ -230,8 +231,23 @@ GpsdParseJson(const BString& json, GpsdFix* fix, GpsdSourceStatus* status,
 	if (classString == "TPV") {
 		int32 mode = 0;
 		_JsonInt(json, "mode", &mode);
-		if (mode < 2 || fix == NULL)
+		if (fix == NULL)
 			return false;
+
+		if (mode < 2) {
+			// Mode 1 is a lost fix; report it so watchers drop the last one.
+			fix->fix = 0;
+			fix->valid = false;
+			if (status != NULL) {
+				status->connected = true;
+				status->fixKnown = true;
+				status->fix = 0;
+				status->source = "gpsd";
+				if (device != NULL && !device->IsEmpty())
+					status->device = *device;
+			}
+			return true;
+		}
 
 		double latitude = 0.0;
 		double longitude = 0.0;
@@ -271,6 +287,10 @@ GpsdParseJson(const BString& json, GpsdFix* fix, GpsdSourceStatus* status,
 		else
 			fix->device = "gpsd";
 		fix->valid = true;
+		if (status != NULL) {
+			status->fixKnown = true;
+			status->fix = fix->fix;
+		}
 		return true;
 	}
 
@@ -359,19 +379,37 @@ GpsdParseNmea(const BString& sentence, GpsdFix* fix, GpsdSourceStatus* status,
 			else
 				fix->device = "nmea";
 			fix->valid = true;
+			if (status != NULL) {
+				status->fixKnown = true;
+				status->fix = fix->fix;
+			}
 			return true;
 		}
 		if (status != NULL) {
 			status->connected = true;
 			status->satellitesUsed = satellites;
 			status->source = "gpsd-nmea";
+			if (quality == 0 && fix != NULL) {
+				// Empty fix quality: the receiver reports no fix.
+				status->fixKnown = true;
+				status->fix = 0;
+			}
 		}
 		return false;
 	}
 
 	if (suffix == "RMC" && fields.CountStrings() >= 9) {
 		char statusFlag = fields.StringAt(1)[0];
-		if (statusFlag != 'A' || fix == NULL)
+		if (statusFlag != 'A') {
+			if (status != NULL && fix != NULL) {
+				status->connected = true;
+				status->fixKnown = true;
+				status->fix = 0;
+				status->source = "gpsd-nmea";
+			}
+			return statusFlag == 'V' && fix != NULL;
+		}
+		if (fix == NULL)
 			return false;
 
 		fix->latitude = _NmeaCoordToDegrees(fields.StringAt(2),
@@ -394,6 +432,15 @@ GpsdParseNmea(const BString& sentence, GpsdFix* fix, GpsdSourceStatus* status,
 	if (suffix == "GSA") {
 		// Fields: talker, mode, fix, then 12 sat IDs, PDOP, HDOP, VDOP.
 		int32 fixType = atoi(fields.StringAt(1));
+		if (status != NULL && fixType < 2) {
+			// Fix type 1: no fix. Report it so watchers do not keep the
+			// previous fix state.
+			status->connected = true;
+			status->fixKnown = true;
+			status->fix = 0;
+			status->source = "gpsd-nmea";
+			return true;
+		}
 		if (fixType >= 2 && status != NULL) {
 			double accuracy = 0.0;
 			if (fields.CountStrings() >= 16) {

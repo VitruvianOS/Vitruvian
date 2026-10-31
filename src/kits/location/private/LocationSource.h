@@ -27,6 +27,11 @@ public:
 			virtual	status_t	Start(BMessenger target) = 0;
 			virtual	void		Stop() = 0;
 			virtual	const char*	Name() const = 0;
+
+			// Re-point the next connection; sources without an endpoint
+			// keep theirs.
+			virtual	void		SetEndpoint(const char* host, uint16 port)
+								{}
 };
 
 

@@ -36,7 +36,11 @@ public:
 private:
 			void				_UpdateStatusViews();
 			void				_UpdatePositionViews();
-			void				_EnsureDeskbarIndicator();
+			void				_ToggleDeskbarIndicator(bool install);
+			void				_ApplyDeskbarIndicator(BMessage* message);
+			bool				_IsDeskbarIndicatorInstalled();
+			BStringView*		_ValueView(const char* name);
+	static	int32				_ToggleDeskbarThread(void* data);
 
 private:
 			LocationSettings&	fSettings;
@@ -46,22 +50,27 @@ private:
 			BMenuField*			fHostField;
 			BPopUpMenu*			fHostMenu;
 			BPopUpMenu*			fAccuracyMenu;
+			BMenuField*			fAccuracyField;
 
-			BStringView*		fStatusView;
-			BStringView*		fDeviceView;
-			BStringView*		fFixView;
-			BStringView*		fSatellitesView;
-			BStringView*		fLatitudeView;
-			BStringView*		fLongitudeView;
-			BStringView*		fAltitudeView;
-			BStringView*		fAccuracyView;
-			BStringView*		fSpeedView;
-			BStringView*		fHeadingView;
-			BStringView*		fUpdatedView;
+			BStringView*		fStatusLabel;
+			BStringView*		fFixValue;
+			BStringView*		fSatellitesValue;
+			BStringView*		fAccuracyValue;
+			BStringView*		fSourceValue;
+			BStringView*		fDeviceValue;
+
+			BStringView*		fLatitudeValue;
+			BStringView*		fLongitudeValue;
+			BStringView*		fAltitudeValue;
+			BStringView*		fSpeedValue;
+			BStringView*		fHeadingValue;
+			BStringView*		fUpdatedValue;
 
 			BCheckBox*			fTimeZoneCheckBox;
 			BCheckBox*			fDeskbarCheckBox;
 			BButton*			fRefreshButton;
+
+			bool				fDeskbarTogglePending;
 };
 
 

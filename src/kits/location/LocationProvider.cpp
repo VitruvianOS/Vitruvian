@@ -17,6 +17,7 @@
 
 static const uint32 kMsgStart = 'LcSt';
 static const uint32 kMsgStop = 'LcSp';
+static const uint32 kMsgSetEndpoint = 'LcEp';
 
 
 LocationProvider::LocationProvider(const char* host, uint16 port)
@@ -90,6 +91,34 @@ LocationProvider::MessageReceived(BMessage* message)
 		{
 			Stop();
 			_NotifyStatus();
+			break;
+		}
+		case kMsgSetEndpoint:
+		{
+			const char* host = NULL;
+			message->FindString("host", &host);
+			int32 port = 0;
+			message->FindInt32("port", &port);
+
+			fLock.Lock();
+			bool restart = fEnabled;
+			if (host != NULL && host[0] != '\0')
+				fHost = host;
+			if (port != 0)
+				fPort = (uint16)port;
+			fConnected = false;
+			fLock.Unlock();
+
+			// Join the reader before re-pointing it, then reconnect on the
+			// same looper thread so Start() cannot race SetEndpoint().
+			Stop();
+			if (fSource != NULL)
+				fSource->SetEndpoint(fHost.String(), fPort);
+
+			if (restart)
+				Start();
+			else
+				_NotifyStatus();
 			break;
 		}
 		case kMsgLocationData:
@@ -196,6 +225,17 @@ LocationProvider::Start()
 	}
 	fLock.Unlock();
 	return PostMessage(kMsgStart);
+}
+
+
+void
+LocationProvider::SetEndpoint(const char* host, uint16 port)
+{
+	BMessage message(kMsgSetEndpoint);
+	if (host != NULL)
+		message.AddString("host", host);
+	message.AddInt32("port", port);
+	PostMessage(&message);
 }
 
 
@@ -361,14 +401,22 @@ LocationProvider::LastLocation(double* latitude, double* longitude,
 	int64* timestamp) const
 {
 	fLock.Lock();
+	// Readers see the same coarsened view watchers get, otherwise the
+	// accuracy setting looks like it does nothing in the preflet.
+	double snappedLatitude = fLatitude;
+	double snappedLongitude = fLongitude;
+	double snappedAccuracy = fAccuracy;
+	_ApplyAccuracy(&snappedLatitude, &snappedLongitude, &snappedAccuracy,
+		fAccuracyLevel);
+
 	if (latitude != NULL)
-		*latitude = fLatitude;
+		*latitude = snappedLatitude;
 	if (longitude != NULL)
-		*longitude = fLongitude;
+		*longitude = snappedLongitude;
 	if (altitude != NULL)
 		*altitude = fAltitude;
 	if (accuracy != NULL)
-		*accuracy = fAccuracy;
+		*accuracy = snappedAccuracy;
 	if (speed != NULL)
 		*speed = fSpeed;
 	if (heading != NULL)

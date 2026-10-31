@@ -86,6 +86,9 @@ public:
 			void			SetAccuracyLevel(int32 level);
 			int32			AccuracyLevel() const;
 
+			// Reconnects to a different gpsd endpoint when enabled.
+			void			SetEndpoint(const char* host, uint16 port);
+
 			const char*		Host() const { return fHost.String(); }
 			uint16			Port() const { return fPort; }
 

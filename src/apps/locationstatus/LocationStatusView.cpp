@@ -15,6 +15,7 @@
 #include <Locale.h>
 #include <MenuItem.h>
 #include <Menu.h>
+#include <MessageRunner.h>
 #include <Messenger.h>
 #include <Path.h>
 #include <PopUpMenu.h>
@@ -47,7 +48,10 @@ LocationStatusView::LocationStatusView(BRect frame, int32 resizingMode,
 	fInDeskbar(inDeskbar),
 	fIndicator(kLocationIndicatorOffline),
 	fProvider(NULL),
-	fSettings(NULL)
+	fSettings(NULL),
+	fSettingsRunner(NULL),
+	fWantsEnabled(false),
+	fSourcePort(0)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
 	SetLowColor(ViewColor());
@@ -69,7 +73,10 @@ LocationStatusView::LocationStatusView(BMessage* archive)
 	fInDeskbar(false),
 	fIndicator(kLocationIndicatorOffline),
 	fProvider(NULL),
-	fSettings(NULL)
+	fSettings(NULL),
+	fSettingsRunner(NULL),
+	fWantsEnabled(false),
+	fSourcePort(0)
 {
 	// Deskbar restores saved replicants through this archive constructor.
 	app_info info;
@@ -140,12 +147,24 @@ LocationStatusView::AttachedToWindow()
 	status.AddInt32("status", fSettings->Enabled()
 		? B_LOCATION_CONNECTING : B_LOCATION_OFFLINE);
 	_ApplyStatus(&status);
+
+	fWantsEnabled = fSettings->Enabled();
+	fSourceHost = fSettings->Host();
+	fSourcePort = fSettings->Port();
+
+	// The preflet owns the same settings file and has no channel to us;
+	// re-read it on a tick so its on/off switch moves this indicator.
+	fSettingsRunner = new BMessageRunner(BMessenger(this),
+		new BMessage(kMsgReloadSettings), 1000000);
 }
 
 
 void
 LocationStatusView::DetachedFromWindow()
 {
+	delete fSettingsRunner;
+	fSettingsRunner = NULL;
+
 	if (fProvider != NULL) {
 		fProvider->Unwatch(BMessenger(this));
 		fProvider->Stop();
@@ -174,9 +193,11 @@ LocationStatusView::MessageReceived(BMessage* message)
 		case kMsgRemoveFromDeskbar:
 			_RemoveFromDeskbar();
 			break;
+		case kMsgReloadSettings:
+			_ReloadSettings();
+			break;
 		case B_QUIT_REQUESTED:
-			if (Window() != NULL)
-				Window()->Quit();
+			_Quit();
 			break;
 		case B_ABOUT_REQUESTED:
 		{
@@ -324,6 +345,45 @@ LocationStatusView::_RemoveFromDeskbarThread(void*)
 	BDeskbar deskbar;
 	deskbar.RemoveItem(kDeskbarItemName);
 	return 0;
+}
+
+
+void
+LocationStatusView::_Quit()
+{
+	// In the tray "Quit" means remove the replicant: forwarding
+	// B_QUIT_REQUESTED to this looper would ask Deskbar itself to quit.
+	if (fInDeskbar) {
+		thread_id thread = spawn_thread(_RemoveFromDeskbarThread,
+			"remove_location_status", B_NORMAL_PRIORITY, NULL);
+		if (thread >= B_OK)
+			resume_thread(thread);
+	} else
+		be_app->PostMessage(B_QUIT_REQUESTED);
+}
+
+
+void
+LocationStatusView::_ReloadSettings()
+{
+	if (fSettings == NULL || fProvider == NULL)
+		return;
+
+	fSettings->LoadSettings();
+	if (fSettings->Enabled() != fWantsEnabled) {
+		fWantsEnabled = fSettings->Enabled();
+		if (fWantsEnabled)
+			fProvider->Start();
+		else
+			fProvider->Stop();
+	}
+
+	if (fSettings->Host() != fSourceHost
+		|| fSettings->Port() != fSourcePort) {
+		fSourceHost = fSettings->Host();
+		fSourcePort = fSettings->Port();
+		fProvider->SetEndpoint(fSourceHost.String(), fSourcePort);
+	}
 }
 
 

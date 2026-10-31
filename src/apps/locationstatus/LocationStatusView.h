@@ -15,6 +15,7 @@
 
 class BBitmap;
 class BMenu;
+class BMessageRunner;
 class LocationProvider;
 class LocationSettings;
 
@@ -23,6 +24,7 @@ enum {
 	kMsgStatusChanged = 'LcUc',
 	kMsgOpenLocationPreferences = 'LcOp',
 	kMsgRemoveFromDeskbar = 'LcRm',
+	kMsgReloadSettings = 'LcRl',
 };
 
 
@@ -56,13 +58,18 @@ private:
 	void				_ShowMenu(BPoint where);
 	void				_OpenLocationPreferences();
 	void				_RemoveFromDeskbar();
+	void				_Quit();
+	void				_ReloadSettings();
 	static	int32		_RemoveFromDeskbarThread(void* data);
-	void				_UpdateTrayIcon();
 
 	bool				fInDeskbar;
 	int32				fIndicator;
 	LocationProvider*	fProvider;
 	LocationSettings*	fSettings;
+	BMessageRunner*		fSettingsRunner;
+	bool				fWantsEnabled;
+	BString				fSourceHost;
+	uint16				fSourcePort;
 };
 
 

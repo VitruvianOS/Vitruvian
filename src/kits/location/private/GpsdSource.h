@@ -24,6 +24,9 @@ public:
 	virtual	void			Stop();
 	virtual	const char*		Name() const { return "gpsd"; }
 
+			// Applies to the next connection; call while stopped.
+			void			SetEndpoint(const char* host, uint16 port);
+
 private:
 			status_t		_Connect();
 			void			_ReadLoop();

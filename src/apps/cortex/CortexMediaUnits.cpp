@@ -1049,5 +1049,5 @@ CortexFileWriterUnit::ProcessCycle(uint32 frameCount)
 
 	int64 frames = size / stride;
 	if (frames > 0)
-		fTrack->WriteFrames(buffer, frames, NULL);
+		fTrack->WriteFrames(buffer, frames, 0);
 }

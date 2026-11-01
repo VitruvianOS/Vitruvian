@@ -13,3 +13,18 @@ target_include_directories(be PRIVATE
 	${CMAKE_SOURCE_DIR}/src/kits/telephony/libtelephony
 	${CMAKE_SOURCE_DIR}/headers/os/account
 )
+
+# Mail provider catalog and autoconfig, shared by WebMail and the Accounts
+# preflet. Kept out of libbe so it does not pull in curl.
+AddOn(
+	mailaccounts
+	STATIC
+
+	SOURCES
+	libaccounts/MailAutoconfig.cpp
+	libaccounts/MailProviders.cpp
+	LIBS be curl resolv
+)
+target_include_directories(mailaccounts PUBLIC
+	${CMAKE_SOURCE_DIR}/headers/private/accounts
+)

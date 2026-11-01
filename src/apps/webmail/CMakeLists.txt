@@ -9,17 +9,15 @@ Application(
 	SidebarView.cpp
 	SettingsWindow.cpp
 	Accounts.cpp
-	Providers.cpp
 	UnreadParser.cpp
 	OAuth2.cpp
 	protocol/ImapClient.cpp
 	protocol/Pop3Client.cpp
 	protocol/SmtpClient.cpp
 	protocol/MimeBuilder.cpp
-	protocol/Autoconfig.cpp
 	protocol/MailSession.cpp
 
-	LIBS web tracker etpan curl gnutls resolv localestub
+	LIBS mailaccounts web tracker etpan curl gnutls resolv localestub
 
 	RDEF WebMail.rdef
 )
@@ -28,6 +26,8 @@ target_include_directories(WebMail PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${PROJECT_SOURCE_DIR}/headers
 	${PROJECT_SOURCE_DIR}/headers/os
+	${PROJECT_SOURCE_DIR}/headers/os/account
+	${PROJECT_SOURCE_DIR}/headers/private/preferences
 )
 
 find_package(PkgConfig)

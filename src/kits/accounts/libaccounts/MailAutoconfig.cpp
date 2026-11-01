@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 
-#include "Autoconfig.h"
+#include <MailAutoconfig.h>
 
 #include <curl/curl.h>
 

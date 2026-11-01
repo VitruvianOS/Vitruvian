@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 
-#include "Providers.h"
+#include <MailProviders.h>
 
 #include <cstring>
 #include <vector>

@@ -2,8 +2,8 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
-#ifndef WEB_MAIL_AUTOCONFIG_H
-#define WEB_MAIL_AUTOCONFIG_H
+#ifndef _MAIL_AUTOCONFIG_H
+#define _MAIL_AUTOCONFIG_H
 
 
 #include <String.h>
@@ -56,4 +56,4 @@ bool	LookupSRV(const char* service, const char* domain,
 			BString& host, int32& port);
 
 
-#endif // WEB_MAIL_AUTOCONFIG_H
+#endif // _MAIL_AUTOCONFIG_H

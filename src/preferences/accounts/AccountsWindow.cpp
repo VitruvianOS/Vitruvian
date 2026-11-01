@@ -12,6 +12,7 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <LayoutBuilder.h>
 #include <ListView.h>
 #include <PopUpMenu.h>
 #include <MenuItem.h>
@@ -25,6 +26,9 @@
 #include <AccountRoster.h>
 #include <AccountsDefs.h>
 
+#include "AccountsPreflet.h"
+#include "MailAccountWindow.h"
+
 
 enum {
 	msg_add_account		= 'LAdd',
@@ -32,7 +36,8 @@ enum {
 	msg_edit_account	= 'LEdt',
 	msg_request_token	= 'LTok',
 	msg_selection		= 'LSel',
-	msg_open_url		= 'OpnU'
+	msg_open_url		= 'OpnU',
+	msg_add_mail		= 'LAml'
 };
 
 
@@ -41,10 +46,12 @@ _GenerateId(BString& id)
 {
 	uint8 bytes[8];
 	int fd = open("/dev/urandom", O_RDONLY);
+	ssize_t got = -1;
 	if (fd >= 0) {
-		read(fd, bytes, sizeof(bytes));
+		got = read(fd, bytes, sizeof(bytes));
 		close(fd);
-	} else
+	}
+	if (got != (ssize_t)sizeof(bytes))
 		memset(bytes, 0, sizeof(bytes));
 
 	id = "ac";
@@ -53,51 +60,103 @@ _GenerateId(BString& id)
 }
 
 
+// List that shows a hint while it has no rows.
+class HintListView : public BListView {
+public:
+	HintListView(const char* name, const char* hint)
+		:
+		BListView(name, B_SINGLE_SELECTION_LIST),
+		fHint(hint)
+	{
+	}
+
+	virtual void Draw(BRect updateRect)
+	{
+		BListView::Draw(updateRect);
+		if (CountItems() > 0)
+			return;
+
+		SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR),
+			B_LIGHTEN_1_TINT));
+		font_height height;
+		GetFontHeight(&height);
+		BRect bounds = Bounds();
+		float x = (bounds.Width() - StringWidth(fHint.String())) / 2;
+		DrawString(fHint.String(), BPoint(max_c(x, 4),
+			bounds.Height() / 2 + height.ascent / 2));
+	}
+
+private:
+	BString	fHint;
+};
+
+
 AccountsWindow::AccountsWindow()
 	:
-	BWindow(BRect(80, 80, 640, 500), "Accounts", B_TITLED_WINDOW,
-		B_NOT_ZOOMABLE | B_NOT_RESIZABLE)
+	BWindow(BRect(0, 0, 560, 420), "Accounts", B_TITLED_WINDOW,
+		B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
+			| B_QUIT_ON_WINDOW_CLOSE)
 {
-	BView* parent = new BView(Bounds(), "parent", B_FOLLOW_ALL, 0);
-	parent->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	AddChild(parent);
-
-	fList = new BListView(BRect(10, 30, 550, 330), "accounts",
-		B_SINGLE_SELECTION_LIST, B_FOLLOW_ALL);
+	fList = new HintListView("accounts",
+		"No accounts yet. Use Add to create one.");
 	fList->SetSelectionMessage(new BMessage(msg_selection));
 
-	BScrollView* scroll = new BScrollView("scroll", fList, B_FOLLOW_ALL, 0,
-		false, true);
-	parent->AddChild(scroll);
+	BScrollView* scroll = new BScrollView("scroll", fList, 0, false, true,
+		B_FANCY_BORDER);
+	scroll->SetExplicitMinSize(BSize(B_SIZE_UNSET,
+		be_plain_font->Size() * 15));
 
-	fStatus = new BStringView(BRect(10, 385, 550, 405), "status", "",
-		B_FOLLOW_BOTTOM);
-	parent->AddChild(fStatus);
+	fStatus = new BStringView("status", "");
+	fStatus->Hide();
 
-	fRemoveButton = new BButton(BRect(120, 345, 230, 370), "remove", "Remove",
-		new BMessage(msg_remove_account), B_FOLLOW_BOTTOM);
+	fAddButton = new BButton("add", "Add" B_UTF8_ELLIPSIS,
+		new BMessage(msg_add_account));
+	fRemoveButton = new BButton("remove", "Remove",
+		new BMessage(msg_remove_account));
 	fRemoveButton->SetEnabled(false);
-	parent->AddChild(fRemoveButton);
-
-	fEditButton = new BButton(BRect(240, 345, 350, 370), "edit", "Edit...",
-		new BMessage(msg_edit_account), B_FOLLOW_BOTTOM);
+	fEditButton = new BButton("edit", "Edit" B_UTF8_ELLIPSIS,
+		new BMessage(msg_edit_account));
 	fEditButton->SetEnabled(false);
-	parent->AddChild(fEditButton);
-
-	fTokenButton = new BButton(BRect(360, 345, 470, 370), "token", "Get Token",
-		new BMessage(msg_request_token), B_FOLLOW_BOTTOM);
+	fList->SetInvocationMessage(new BMessage(msg_edit_account));
+	fTokenButton = new BButton("token", "Get token",
+		new BMessage(msg_request_token));
 	fTokenButton->SetEnabled(false);
-	parent->AddChild(fTokenButton);
 
-	BButton* addButton = new BButton(BRect(10, 345, 110, 370), "add", "Add...",
-		new BMessage(msg_add_account), B_FOLLOW_BOTTOM);
-	parent->AddChild(addButton);
+	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+		.SetInsets(B_USE_WINDOW_INSETS)
+		.Add(scroll)
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fAddButton)
+			.Add(fRemoveButton)
+			.Add(fEditButton)
+			.Add(fTokenButton)
+			.AddGlue()
+		.End()
+		.Add(fStatus);
+
+	float unit = be_plain_font->Size();
+	ResizeTo(unit * 34, unit * 28);
+	CenterOnScreen();
 
 	BAccountRoster* roster = BAccountRoster::Default();
 	if (roster != NULL)
 		roster->StartWatching(BMessenger(this));
 
 	_Refresh();
+}
+
+
+void
+AccountsWindow::_SetStatus(const char* text)
+{
+	fStatus->SetText(text);
+	bool empty = text == NULL || text[0] == '\0';
+	if (empty != fStatus->IsHidden(fStatus)) {
+		if (empty)
+			fStatus->Hide();
+		else
+			fStatus->Show();
+	}
 }
 
 
@@ -130,13 +189,18 @@ AccountsWindow::MessageReceived(BMessage* message)
 			break;
 
 		case msg_selection:
-		{
-			bool hasSelection = fList->CurrentSelection() >= 0;
-			fRemoveButton->SetEnabled(hasSelection);
-			fEditButton->SetEnabled(hasSelection);
-			fTokenButton->SetEnabled(hasSelection);
+			_UpdateButtons();
 			break;
-		}
+
+		case msg_add_mail:
+		case kMsgAccountsAdd:
+			if (message->what == msg_add_mail
+				|| strcmp(message->GetString(kAccountsTypeField, ""),
+					kAccountTypeMail) == 0) {
+				Activate();
+				(new MailAccountWindow(BMessenger(this)))->Show();
+			}
+			break;
 
 		case msg_open_url:
 		{
@@ -160,7 +224,7 @@ AccountsWindow::MessageReceived(BMessage* message)
 			int32 status = B_ERROR;
 			message->FindInt32(kAccountsStatusField, &status);
 			if (status != B_OK)
-				fStatus->SetText("Setup failed");
+				_SetStatus("Setup failed");
 			_Refresh();
 			break;
 		}
@@ -195,7 +259,7 @@ AccountsWindow::MessageReceived(BMessage* message)
 				BString text("Token failed");
 				if (reason != NULL)
 					text << ": " << reason;
-				fStatus->SetText(text.String());
+				_SetStatus(text.String());
 				break;
 			}
 
@@ -206,7 +270,7 @@ AccountsWindow::MessageReceived(BMessage* message)
 				text << BString().SetToFormat("%.16s...", token);
 			} else
 				text << "(empty)";
-			fStatus->SetText(text.String());
+			_SetStatus(text.String());
 			break;
 		}
 
@@ -222,26 +286,31 @@ AccountsWindow::_AddAccount()
 {
 	BAccountRoster* roster = BAccountRoster::Default();
 	if (roster == NULL) {
-		fStatus->SetText("Accounts are unavailable");
+		_SetStatus("Accounts are unavailable");
 		return;
 	}
 
 	BObjectList<BAccountProvider> providers;
 	roster->GetProviders(providers);
-	if (providers.CountItems() == 0) {
-		fStatus->SetText("No provider add-ons installed");
-		return;
-	}
 
-	BPopUpMenu menu("provider");
+	BPopUpMenu menu("type");
+	menu.AddItem(new BMenuItem("Mail", new BMessage(msg_add_mail)));
+	if (providers.CountItems() > 0)
+		menu.AddSeparatorItem();
 	for (int32 i = 0; i < providers.CountItems(); i++) {
 		menu.AddItem(new BMenuItem(providers.ItemAt(i)->DisplayName(),
 			new BMessage(msg_add_account)));
 	}
 
-	BMenuItem* selected = menu.Go(BPoint(120, 400));
+	BMenuItem* selected = menu.Go(fAddButton->ConvertToScreen(
+		BPoint(0, fAddButton->Bounds().Height())));
 	if (selected == NULL)
 		return;
+
+	if (selected->Message()->what == msg_add_mail) {
+		PostMessage(msg_add_mail);
+		return;
+	}
 
 	BAccountProvider* provider = NULL;
 	for (int32 i = 0; i < providers.CountItems(); i++) {
@@ -263,7 +332,7 @@ AccountsWindow::_AddAccount()
 
 	status_t status = provider->EditAccount(account, BMessenger(this));
 	if (status != B_OK)
-		fStatus->SetText("Setup was cancelled");
+		_SetStatus("Setup was cancelled");
 }
 
 
@@ -278,9 +347,20 @@ AccountsWindow::_RemoveAccount()
 	if (roster == NULL)
 		return;
 
-	BAccountProvider* provider = NULL;
-	if (roster->GetProvider(provider, account->ProviderId()) == B_OK)
-		provider->RemoveAccount(*account);
+	if (MailAccountWindow::IsMailAccount(*account)) {
+		BString text("Remove the account ");
+		text << account->UserName() << " and its stored passwords?";
+		BAlert* alert = new BAlert("Remove", text.String(), "Cancel",
+			"Remove", NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+		alert->SetShortcut(0, B_ESCAPE);
+		if (alert->Go() != 1)
+			return;
+		MailAccountWindow::RemoveSecrets(account->Id());
+	} else {
+		BAccountProvider* provider = NULL;
+		if (roster->GetProvider(provider, account->ProviderId()) == B_OK)
+			provider->RemoveAccount(*account);
+	}
 
 	roster->RemoveAccount(account->Id());
 	_Refresh();
@@ -298,9 +378,14 @@ AccountsWindow::_EditAccount()
 	if (roster == NULL)
 		return;
 
+	if (MailAccountWindow::IsMailAccount(*account)) {
+		(new MailAccountWindow(BMessenger(this), account))->Show();
+		return;
+	}
+
 	BAccountProvider* provider = NULL;
 	if (roster->GetProvider(provider, account->ProviderId()) != B_OK) {
-		fStatus->SetText("Provider add-on not installed");
+		_SetStatus("Provider add-on not installed");
 		return;
 	}
 
@@ -315,7 +400,7 @@ AccountsWindow::_RequestToken()
 	if (account == NULL)
 		return;
 
-	fStatus->SetText("Requesting token...");
+	_SetStatus("Requesting token...");
 	account->GetTokenAsync(BMessenger(this));
 }
 
@@ -335,18 +420,30 @@ AccountsWindow::_Refresh()
 	while (roster->GetNextAccount(cookie, account) == B_OK) {
 		fAccounts.AddItem(new BAccount(account));
 
-		BString text(account.Label());
-		if (text.Length() == 0)
-			text = account.Id();
-		text << " (" << account.ProviderId() << ")";
+		BString text;
+		if (MailAccountWindow::IsMailAccount(account))
+			MailAccountWindow::DescribeAccount(account, text);
+		else {
+			text = account.Label();
+			if (text.Length() == 0)
+				text = account.Id();
+			text << " (" << account.ProviderId() << ")";
+		}
 		fList->AddItem(new BStringItem(text.String()));
 	}
 
+	_UpdateButtons();
+}
+
+
+void
+AccountsWindow::_UpdateButtons()
+{
 	BAccount* selected = _SelectedAccount();
-	bool hasSelection = selected != NULL;
-	fRemoveButton->SetEnabled(hasSelection);
-	fEditButton->SetEnabled(hasSelection);
-	fTokenButton->SetEnabled(hasSelection);
+	fRemoveButton->SetEnabled(selected != NULL);
+	fEditButton->SetEnabled(selected != NULL);
+	fTokenButton->SetEnabled(selected != NULL
+		&& !MailAccountWindow::IsMailAccount(*selected));
 }
 
 

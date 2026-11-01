@@ -2,8 +2,8 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
-#ifndef WEB_MAIL_PROVIDERS_H
-#define WEB_MAIL_PROVIDERS_H
+#ifndef _MAIL_PROVIDERS_H
+#define _MAIL_PROVIDERS_H
 
 
 #include <String.h>
@@ -45,4 +45,4 @@ bool				ComposeURLFor(const WebProvider* provider,
 BString				URLEncode(const char* text);
 
 
-#endif // WEB_MAIL_PROVIDERS_H
+#endif // _MAIL_PROVIDERS_H

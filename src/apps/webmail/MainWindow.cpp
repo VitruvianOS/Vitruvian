@@ -7,7 +7,7 @@
 #include "MainWindow.h"
 #include "MailView.h"
 #include "OAuth2.h"
-#include "Providers.h"
+#include <MailProviders.h>
 #include "SettingsWindow.h"
 #include "SidebarView.h"
 #include "WebMailApp.h"

@@ -6,9 +6,9 @@
 #include "SettingsWindow.h"
 #include "Accounts.h"
 #include "OAuth2.h"
-#include "Providers.h"
+#include <MailProviders.h>
 #include "WebMailMessages.h"
-#include "protocol/Autoconfig.h"
+#include <MailAutoconfig.h>
 
 #include <Alert.h>
 #include <Button.h>

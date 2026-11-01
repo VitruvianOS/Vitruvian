@@ -5,7 +5,7 @@
 
 #include "WebMailStrings.h"
 #include "MailView.h"
-#include "Providers.h"
+#include <MailProviders.h>
 #include "UnreadParser.h"
 #include "WebMailMessages.h"
 

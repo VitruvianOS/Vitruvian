@@ -5,7 +5,7 @@
 
 #include "WebMailStrings.h"
 #include "OAuth2.h"
-#include "Providers.h"
+#include <MailProviders.h>
 #include "WebMailMessages.h"
 #include <WebDefs.h>
 

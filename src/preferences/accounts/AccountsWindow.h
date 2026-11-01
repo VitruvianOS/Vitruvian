@@ -28,12 +28,15 @@ private:
 			void				_AddAccount();
 			void				_RemoveAccount();
 			void				_EditAccount();
+			void				_SetStatus(const char* text);
 			void				_RequestToken();
 			void				_Refresh();
+			void				_UpdateButtons();
 			BAccount*			_SelectedAccount();
 
 			BListView*			fList;
 			BStringView*		fStatus;
+			BButton*			fAddButton;
 			BButton*			fRemoveButton;
 			BButton*			fEditButton;
 			BButton*			fTokenButton;

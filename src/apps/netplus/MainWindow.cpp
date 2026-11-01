@@ -347,6 +347,9 @@ MainWindow::_AddShortcuts()
 
 	// No 'Q' here: a registered Ctrl+Q disables the kit's built-in quit.
 
+	// Option+Q must target this window; cross-looper messages are not delivered.
+	AddShortcut('Q', B_OPTION_KEY, new BMessage(B_QUIT_REQUESTED));
+
 	AddShortcut(B_LEFT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_BACK));
 	AddShortcut(B_RIGHT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_FORWARD));
 	AddShortcut('R', B_COMMAND_KEY, new BMessage(MSG_NAV_RELOAD));

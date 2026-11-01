@@ -194,18 +194,12 @@ set(CPACK_DEBIAN_DATA_PACKAGE_DESCRIPTION
 
 # NetPlus starter extensions: separate so the store can update the
 # lists without an OS upgrade. CPackDeb looks the settings up by the
-# uppercased component name; spell it with and without the dash so
-# both lookup styles find them.
-set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_ARCHITECTURE "all")
+# uppercased component name with the dash kept; without an explicit
+# PACKAGE_NAME the deb silently falls back to vos-<component>.
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_NAME "netplus-extensions")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_ARCHITECTURE "all")
-set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_DEPENDS
-	"vos (= ${_vos_runtime_version})")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DEPENDS
 	"vos (= ${_vos_runtime_version})")
-set(CPACK_DEBIAN_NETPLUS_EXTENSIONS_PACKAGE_DESCRIPTION
-	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
-set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DESCRIPTION
-	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_DESCRIPTION
 	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
 

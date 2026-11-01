@@ -67,6 +67,7 @@ CortexApp::ReadyToRun()
 		PostMessage(B_QUIT_REQUESTED);
 		return;
 	}
+	window->CenterOnScreen();
 	window->Show();
 }
 

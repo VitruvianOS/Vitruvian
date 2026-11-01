@@ -21,11 +21,11 @@
 #include "CortexWindow.h"
 
 
-static const float kNodeWidth = 220.0f;
-static const float kTitleHeight = 28.0f;
+static const float kNodeWidth = 280.0f;
+static const float kTitleHeight = 34.0f;
 static const float kPinRow = 16.0f;
 static const float kPinSize = 8.0f;
-static const float kColumnWidth = 240.0f;
+static const float kColumnWidth = 300.0f;
 static const float kMargin = 24.0f;
 
 
@@ -168,7 +168,9 @@ CortexNode::Frame() const
 	float rows = pins.CountItems();
 	if (rows < 1)
 		rows = 1;
-	float height = kTitleHeight + rows * kPinRow + 10.0f;
+	// leave room under the pins for the level bars
+	float height = kTitleHeight + rows * kPinRow
+		+ (metered || hasVolume ? 22.0f : 10.0f);
 	return BRect(origin.x, origin.y, origin.x + kNodeWidth - 1.0f,
 		origin.y + height - 1.0f);
 }
@@ -968,20 +970,23 @@ CortexGraphView::Draw(BRect updateRect)
 
 		float textWidth = frame.Width() - 12.0f;
 		BString label;
-		label.SetToFormat("%s  [%s]", node->name.String(),
-			CortexKindLabel(node->kind));
-		TruncateString(&label, B_TRUNCATE_MIDDLE, textWidth);
-		DrawString(label.String(), BPoint(frame.left + 6.0f, frame.top + 12.0f));
+		label.SetTo(node->name);
+		TruncateString(&label, B_TRUNCATE_END, textWidth);
+		DrawString(label.String(),
+			BPoint(frame.left + 6.0f, frame.top + 14.0f));
 
-		BString sub(node->mediaClass);
+		BString sub;
+		sub << "[" << CortexKindLabel(node->kind) << "]";
+		if (node->mediaClass.Length() > 0)
+			sub << "  " << node->mediaClass;
 		if (node->defaultRole != 0) {
-			if (sub.Length() > 0)
-				sub << "  ";
+			sub << "  ";
 			sub << (node->defaultRole == 1 ? "default out" : "default in");
 		}
 		if (sub.Length() > 0) {
 			TruncateString(&sub, B_TRUNCATE_END, textWidth);
-			DrawString(sub.String(), BPoint(frame.left + 6.0f, frame.top + 24.0f));
+			DrawString(sub.String(),
+				BPoint(frame.left + 6.0f, frame.top + 28.0f));
 		}
 
 		if (node->hasVolume) {

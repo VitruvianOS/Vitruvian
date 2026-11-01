@@ -30,8 +30,8 @@
 #include <StringView.h>
 #include <Window.h>
 
-#include "../sounds/HEventList.h"
-#include "../sounds/SoundFilePanel.h"
+#include "HEventList.h"
+#include "SoundFilePanel.h"
 
 #include <SystemBeep.h>
 
@@ -160,6 +160,9 @@ SoundsSectionView::AttachedToWindow()
 {
 	BGroupView::AttachedToWindow();
 	fFilePanel->SetTarget(this);
+	fPlayButton->SetTarget(this);
+	if (BButton* stop = dynamic_cast<BButton*>(FindView("stop")))
+		stop->SetTarget(this);
 	_SetupMenuField();
 
 	fEventFilter = new BMessageFilter(M_EVENT_CHANGED, _EventChangedFilter);
@@ -167,6 +170,7 @@ SoundsSectionView::AttachedToWindow()
 
 	BMenuField* menufield = dynamic_cast<BMenuField*>(FindView("filemenu"));
 	if (menufield != NULL) {
+		menufield->Menu()->SetTargetForItems(this);
 		BMenuItem* noneItem = menufield->Menu()->FindItem(B_TRANSLATE("<none>"));
 		if (noneItem != NULL)
 			noneItem->SetMarked(true);

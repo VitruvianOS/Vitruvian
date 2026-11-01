@@ -25,7 +25,6 @@ enum {
 	kMsgSelectOutput   = 'AMSO',
 	kMsgSelectInput    = 'AMSI',
 	kMsgOpenMediaPrefs = 'AMOP',
-	kMsgOpenSoundPrefs = 'AMSP',
 	kMsgQuit           = 'AMQT',
 	kMsgRefresh        = 'AMRF',
 	kMsgGraphReady     = 'AMGR'

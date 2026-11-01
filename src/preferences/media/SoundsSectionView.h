@@ -18,6 +18,7 @@
 
 class BButton;
 class BFileGameSound;
+class BMessageFilter;
 class HEventList;
 class SoundFilePanel;
 
@@ -28,17 +29,20 @@ public:
 	virtual					~SoundsSectionView();
 
 	virtual	void			AttachedToWindow();
+	virtual	void			DetachedFromWindow();
 	virtual	void			Pulse();
 	virtual	void			MessageReceived(BMessage* message);
 
 private:
 			void			_SetupMenuField();
+			void			_AssignDefaultSounds();
 
 			HEventList*		fEventList;
 			SoundFilePanel*	fFilePanel;
 			BButton*		fPlayButton;
 			BFileGameSound*	fPlayer;
 			entry_ref		fPathRef;
+			BMessageFilter*	fEventFilter;
 };
 
 

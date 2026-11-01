@@ -20,6 +20,7 @@
 #include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
+#include <MessageFilter.h>
 #include <Node.h>
 #include <NodeInfo.h>
 #include <Path.h>
@@ -27,6 +28,7 @@
 #include <Roster.h>
 #include <ScrollView.h>
 #include <StringView.h>
+#include <Window.h>
 
 #include "../sounds/HEventList.h"
 #include "../sounds/SoundFilePanel.h"
@@ -50,20 +52,39 @@ extern const char* kPlayLabel;
 extern const char* kStopLabel;
 
 
+// The event list posts M_EVENT_CHANGED to the window, which has no handler
+// for it; route it to the section while it is attached.
+static filter_result
+_EventChangedFilter(BMessage* message, BHandler** target,
+	BMessageFilter* filter)
+{
+	BWindow* window = dynamic_cast<BWindow*>(filter->Looper());
+	BView* view = window != NULL ? window->FindView("soundsSection") : NULL;
+	if (view == NULL)
+		return B_DISPATCH_MESSAGE;
+
+	*target = view;
+	return B_DISPATCH_MESSAGE;
+}
+
+
 SoundsSectionView::SoundsSectionView()
 	:
 	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
 	fEventList(NULL),
 	fFilePanel(NULL),
 	fPlayButton(NULL),
-	fPlayer(NULL)
+	fPlayer(NULL),
+	fEventFilter(NULL)
 {
+	SetName("soundsSection");
 	GroupLayout()->SetInsets(B_USE_SMALL_SPACING);
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
 	fEventList = new HEventList();
 	vos_system_beep_ensure_events();
 	fEventList->SetType(BMediaFiles::B_SOUNDS);
+	_AssignDefaultSounds();
 	fEventList->SetSelectionMode(B_SINGLE_SELECTION_LIST);
 
 	BMenu* menu = new BMenu("file");
@@ -141,12 +162,33 @@ SoundsSectionView::AttachedToWindow()
 	fFilePanel->SetTarget(this);
 	_SetupMenuField();
 
+	fEventFilter = new BMessageFilter(M_EVENT_CHANGED, _EventChangedFilter);
+	Window()->AddCommonFilter(fEventFilter);
+
 	BMenuField* menufield = dynamic_cast<BMenuField*>(FindView("filemenu"));
 	if (menufield != NULL) {
 		BMenuItem* noneItem = menufield->Menu()->FindItem(B_TRANSLATE("<none>"));
 		if (noneItem != NULL)
 			noneItem->SetMarked(true);
 	}
+
+	// start on the first event so the menu and Play have something to act on
+	BRow* first = fEventList->RowAt((int32)0, NULL);
+	if (first != NULL) {
+		fEventList->AddToSelection(first);
+		fEventList->SetFocusRow(first, true);
+	}
+}
+
+
+void
+SoundsSectionView::DetachedFromWindow()
+{
+	if (fEventFilter != NULL && Window() != NULL)
+		Window()->RemoveCommonFilter(fEventFilter);
+	delete fEventFilter;
+	fEventFilter = NULL;
+	BGroupView::DetachedFromWindow();
 }
 
 
@@ -221,6 +263,43 @@ SoundsSectionView::_SetupMenuField()
 			menu->AddItem(new BMenuItem(itemPath.Leaf(), msg), 0);
 		}
 	}
+}
+
+
+// Persisted refs do not always resolve; the event then plays its system
+// sound by name, so show that file instead of "<none>".
+static bool
+_DefaultSoundPath(const char* event, BPath& path)
+{
+	if (event == NULL
+		|| find_directory(B_SYSTEM_SOUNDS_DIRECTORY, &path) != B_OK) {
+		return false;
+	}
+
+	BString leaf(event);
+	leaf << ".wav";
+	if (path.Append(leaf.String()) != B_OK)
+		return false;
+	return BEntry(path.Path()).Exists();
+}
+
+
+void
+SoundsSectionView::_AssignDefaultSounds()
+{
+	int32 count = fEventList->CountRows();
+	for (int32 i = 0; i < count; i++) {
+		HEventRow* row = (HEventRow*)fEventList->RowAt(i);
+		if (row == NULL || (row->Path() != NULL && row->Path()[0] != '\0'))
+			continue;
+
+		BPath path;
+		if (_DefaultSoundPath(row->Name(), path)) {
+			row->SetPath(path.Path());
+			fEventList->UpdateRow(row);
+		}
+	}
+	fEventList->ResizeAllColumnsToPreferred();
 }
 
 
@@ -313,7 +392,21 @@ SoundsSectionView::MessageReceived(BMessage* message)
 			menufield->SetEnabled(true);
 
 			const char* filePath;
+			BPath defaultPath;
 			if (message->FindString("path", &filePath) == B_OK) {
+				const char* eventName = NULL;
+				if (filePath[0] == '\0' && message->FindString("name",
+						&eventName) == B_OK
+					&& _DefaultSoundPath(eventName, defaultPath)) {
+					filePath = defaultPath.Path();
+					HEventRow* selected
+						= (HEventRow*)fEventList->CurrentSelection();
+					if (selected != NULL) {
+						selected->SetPath(filePath);
+						fEventList->UpdateRow(selected);
+					}
+				}
+
 				BMenu* menu = menufield->Menu();
 				BPath path(filePath);
 				BMenuItem* item = (path.InitCheck() != B_OK)

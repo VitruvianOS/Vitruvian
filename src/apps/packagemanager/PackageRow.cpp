@@ -234,7 +234,9 @@ PackageRow::Refresh()
 		kIconColumn);
 	SetField(new BStringField(fPackage->Name().String()), kNameColumn);
 
+	// Available packages have no installed version; show the candidate.
 	const BString& version = fPackage->State() == kPackageUpgradable
+		|| fPackage->Version().IsEmpty()
 		? fPackage->CandidateVersion() : fPackage->Version();
 	SetField(new BStringField(version.String()), kVersionColumn);
 

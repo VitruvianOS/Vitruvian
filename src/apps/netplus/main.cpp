@@ -328,6 +328,9 @@ NetPlusApp::OpenWindow(const char* url, bool privateWindow,
 {
 	BRect frame(100, 100, 1100, 800);
 	MainWindow* window = new MainWindow(frame, url, privateWindow, pwa);
+	// later windows keep their cascade offset
+	if (fWindowCount == 0 && pwa == NULL)
+		window->CenterOnScreen();
 	fWindowCount++;
 	window->Show();
 }

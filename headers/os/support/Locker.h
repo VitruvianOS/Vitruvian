@@ -6,6 +6,7 @@
 #define	_LOCKER_H
 
 
+#include <BeBuild.h>
 #include <OS.h>
 
 
@@ -27,7 +28,10 @@ public:
 			bool				IsLocked() const;
 			int32				CountLocks() const;
 			int32				CountLockRequests() const;
-			sem_id				Sem() const;
+
+			// Deprecated, no semaphore backs the lock and it returns
+			// B_ERROR.
+			sem_id				Sem() const _DEPRECATED;
 
 private:
 								BLocker(const char* name, bool benaphoreStyle,
@@ -39,11 +43,14 @@ private:
 			bool				AcquireLock(bigtime_t timeout, status_t* error);
 
 			int32				fBenaphoreCount;
-			sem_id				fSemaphoreID;
 			thread_id			fLockOwner;
-			int32				fRecursiveCount;
 
-			int32				_reserved[4];
+			// Storage of a user_sem, see UserSemaphore.h.
+			int32				fSemLock;
+			int32				fSemCount;
+			int32				fSemInside;
+			int32				fRecursiveCount;	// the user_sem spare word
+			void*				fSemQueue;
 };
 
 

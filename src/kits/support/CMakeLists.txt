@@ -17,6 +17,7 @@ target_sources(be PRIVATE
 	JobQueue.cpp
 	List.cpp
 	Locker.cpp
+	UserSemaphore.cpp
 	PointerList.cpp
 	Referenceable.cpp
 	StopWatch.cpp
@@ -45,6 +46,7 @@ target_sources(be_bootstrap PRIVATE
 	JobQueue.cpp
 	List.cpp
 	Locker.cpp
+	UserSemaphore.cpp
 	PointerList.cpp
 	Referenceable.cpp
 	StopWatch.cpp

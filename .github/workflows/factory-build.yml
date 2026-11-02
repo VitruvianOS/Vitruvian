@@ -69,7 +69,7 @@ jobs:
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             libapt-pkg-dev fakeroot devscripts lintian wget qemu-utils \
             rsync parted zstd dosfstools attr \
-            ${{ inputs.native && 'libcairo2-dev libcups2-dev libgl1-mesa-dev libgbm-dev libglu1-mesa-dev libegl-dev libgl-dev' || '' }} \
+            ${{ inputs.native && 'libcairo2-dev libcups2-dev libgl1-mesa-dev libgbm-dev libglu1-mesa-dev libegl-dev libgl-dev libsane-dev libre-dev libetpan-dev libusb-1.0-0-dev libargon2-dev' || '' }} \
             ${{ inputs.extra_pkgs }}
 
       - name: Fetch the V\OS repo key

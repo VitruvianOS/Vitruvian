@@ -42,6 +42,7 @@ jobs:
              libpipewire-0.3-dev libspa-0.2-dev liblilv-dev libsuil-dev lv2-dev \
              libbluetooth-dev libnm-dev libglib2.0-dev \
              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+             libsane-dev libre-dev libetpan-dev libusb-1.0-0-dev libargon2-dev \
             libegl-dev libgl-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             libapt-pkg-dev fakeroot devscripts lintian wget attr

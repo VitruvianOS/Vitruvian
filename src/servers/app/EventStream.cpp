@@ -66,6 +66,8 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 	if (fCursorArea >= B_OK) {
 		// The wake word lives at the end of the shared area.
 		fCursorEvent.SetTo(&fCursorBuffer->event);
+		if (shared_liveness_init(&fCursorBuffer->liveness) == B_OK)
+			fCursorEvent.SetPeer(&fCursorBuffer->liveness);
 		message.AddInt32("cursor area", fCursorArea);
 	} else {
 		fCursorArea = -1;
@@ -86,6 +88,7 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 		delete_area(fCursorArea);
 		fCursorArea = -1;
 		fCursorBuffer = NULL;
+		fCursorEvent.SetPeer(NULL);
 		fCursorEvent.SetTo(NULL);
 	}
 }
@@ -199,7 +202,8 @@ InputServerStream::GetNextCursorPosition(BPoint &where, bigtime_t timeout)
 		return B_ERROR;
 
 	// Wait on the futex word the input_server posts. A dead input_server
-	// is noticed by the event thread, which marks the word dead.
+	// is noticed by the kernel through its liveness lock, or by the event
+	// thread, which marks the word dead.
 	status_t status;
 	do {
 		status = fCursorEvent.WaitWithTimeout(timeout);

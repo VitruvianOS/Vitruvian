@@ -464,6 +464,7 @@ BDirectWindow::_DirectDaemon()
 		// Posted by the app_server when our clipping region changes,
 		// or when our window is moved, resized, etc. etc.
 		BSharedEvent disable(fDisableState);
+		disable.SetPeer(direct_window_server_liveness(fBufferDesc));
 		status_t status;
 		do {
 			status = disable.Wait();
@@ -580,6 +581,9 @@ BDirectWindow::_InitData()
 		fDisableState = direct_window_disable_state(fBufferDesc);
 		fAckState = direct_window_ack_state(fBufferDesc);
 
+		// The app_server watches this team while it waits for our ack.
+		shared_liveness_hold(direct_window_client_liveness(fBufferDesc));
+
 		fDirectDaemonId = spawn_thread(_daemon_thread, "direct daemon",
 			B_DISPLAY_PRIORITY, this);
 
@@ -615,8 +619,10 @@ BDirectWindow::_DisposeData()
 	}
 
 
-	if (fInitStatus & DW_STATUS_AREA_CLONED)
+	if (fInitStatus & DW_STATUS_AREA_CLONED) {
+		shared_liveness_release(direct_window_client_liveness(fBufferDesc));
 		delete_area(fClonedDirectArea);
+	}
 }
 
 

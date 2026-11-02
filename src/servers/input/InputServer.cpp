@@ -413,6 +413,8 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 		if (fCursorArea >= B_OK) {
 			// The wake word lives in the shared area.
 			fCursorEvent.SetTo(&fCursorBuffer->event);
+			// The app_server's cursor wait watches this team.
+			shared_liveness_hold(&fCursorBuffer->liveness);
 		} else
 			fCursorBuffer = NULL;
 	}
@@ -445,6 +447,7 @@ void
 InputServer::_ReleaseInput(BMessage* /*message*/)
 {
 	if (fCursorBuffer != NULL) {
+		shared_liveness_release(&fCursorBuffer->liveness);
 		fCursorBuffer = NULL;
 		fCursorEvent.SetTo(NULL);
 		delete_area(fCursorArea);

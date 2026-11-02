@@ -47,6 +47,13 @@ DirectWindowInfo::DirectWindowInfo()
 	// The sync words live in the shared area tail, mapped by the daemon too.
 	fDisableEvent.SetTo(direct_window_disable_state(fBufferInfo));
 	fAcknowledgeEvent.SetTo(direct_window_ack_state(fBufferInfo));
+
+	// We hold the first liveness state, the client daemon watches it. We
+	// watch the client's while waiting for the acknowledge.
+	shared_liveness_init(direct_window_server_liveness(fBufferInfo));
+	shared_liveness_init(direct_window_client_liveness(fBufferInfo));
+	shared_liveness_hold(direct_window_server_liveness(fBufferInfo));
+	fAcknowledgeEvent.SetPeer(direct_window_client_liveness(fBufferInfo));
 }
 
 
@@ -55,6 +62,7 @@ DirectWindowInfo::~DirectWindowInfo()
 	// The client may be blocked on either word, or about to be.
 	fDisableEvent.MarkDead();
 	fAcknowledgeEvent.MarkDead();
+	shared_liveness_release(direct_window_server_liveness(fBufferInfo));
 
 	// this should make the client die in case it's still running
 	fBufferInfo->bits = NULL;

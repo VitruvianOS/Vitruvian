@@ -129,6 +129,7 @@ private:
 			BString			fCurrentUser;
 			BTextView*		fMessageView;
 			BTextView*		fDetailsView;
+			float			fDetailsWidth;
 			BMenuField*		fIdentityField;
 			BTextControl*	fPassword;
 			BCheckBox*		fRemember;
@@ -218,6 +219,15 @@ make_read_only_text_view(const char* name, const BFont* font,
 }
 
 
+static void
+fit_text_height(BTextView* view, float width)
+{
+	float min, max, preferred;
+	view->GetHeightForWidth(width, &min, &max, &preferred);
+	view->SetExplicitSize(BSize(width, preferred));
+}
+
+
 AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 	BMessenger agent)
 	:
@@ -235,6 +245,7 @@ AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 	fCurrentUser(req.identityUser),
 	fMessageView(NULL),
 	fDetailsView(NULL),
+	fDetailsWidth(0),
 	fIdentityField(NULL),
 	fPassword(NULL),
 	fRemember(NULL),
@@ -255,13 +266,13 @@ AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 
 	fMessageView = make_read_only_text_view("message", be_bold_font, textColor);
 	fMessageView->SetText(message);
-	fMessageView->SetExplicitMaxSize(BSize(maxWidth, B_SIZE_UNSET));
+	fit_text_height(fMessageView, maxWidth);
 
 	// Details sit under a bold headline; slightly smaller than plain is enough.
 	BFont smallFont(*be_plain_font);
 	smallFont.SetSize(be_plain_font->Size() * 0.85f);
 	fDetailsView = make_read_only_text_view("details", &smallFont, textColor);
-	fDetailsView->SetExplicitMaxSize(BSize(maxWidth, B_SIZE_UNSET));
+	fDetailsWidth = maxWidth;
 
 	IconView* iconView = new IconView(B_LARGE_ICON);
 	BResources* res = BApplication::AppResources();
@@ -366,7 +377,7 @@ AuthDialog::_UpdateDetails()
 	details << B_TRANSLATE("Action:") << " " << action << "\n"
 		<< B_TRANSLATE("Authenticating as:") << " " << user;
 	fDetailsView->SetText(details.String());
-	fDetailsView->InvalidateLayout(true);
+	fit_text_height(fDetailsView, fDetailsWidth);
 }
 
 
@@ -962,7 +973,7 @@ AgentApp::MessageReceived(BMessage* msg)
 				"failed");
 			_Notify(B_TRANSLATE("Could not remember admin "
 				"access"),
-				B_TRANSLATE("The password was not saved; you "
+				B_TRANSLATE("The password was not saved. You "
 					"will be asked again."));
 			return;
 		}

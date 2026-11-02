@@ -128,6 +128,8 @@ install(FILES data/systemd/logind.conf.d/50-vos.conf
 
 install(FILES data/etc/security/pwquality.conf.d/50-vos.conf
   DESTINATION /etc/security/pwquality.conf.d/ COMPONENT data)
+install(FILES data/etc/security/limits.d/90-vos.conf
+  DESTINATION /etc/security/limits.d/ COMPONENT data)
 
 ImageIncludeFile("data/pam.d/vitruvian-session" "/etc/pam.d")
 ImageIncludeFile("data/pam.d/vitruvian-greeter" "/etc/pam.d")

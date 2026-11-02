@@ -132,6 +132,7 @@ DrmHWInterface::DrmHWInterface()
 	fAgeSlotCount(0),
 	fPacingLockHeld(false),
 	fFlipIssueTime(0),
+	fLastFlipIssue(0),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
@@ -781,6 +782,21 @@ DrmHWInterface::_DirectFlipComplete()
 }
 
 
+// Less one millisecond, so a flip event that lands on a real vblank never
+// misses the next one.
+bigtime_t
+DrmHWInterface::_FramePeriod() const
+{
+	const display_timing& t = fDisplayMode.timing;
+	bigtime_t period = 16667;
+	if (t.pixel_clock > 0 && t.h_total > 0 && t.v_total > 0) {
+		period = (bigtime_t)t.h_total * t.v_total * 1000
+			/ t.pixel_clock;
+	}
+	return period > 2000 ? period - 1000 : period;
+}
+
+
 int32
 DrmHWInterface::_AgeSlotForFb(uint32_t fbId) const
 {
@@ -928,8 +944,13 @@ DrmHWInterface::_EventThreadMain()
 			continue;
 		}
 
-		// TODO this should be dynamic I think not 16ms hardcoded
-		int ret = poll(pfds, nfds, 16);
+		// A flip held back by the pacing below wakes when it is due.
+		int timeout = 16;
+		const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
+		const bigtime_t now = system_time();
+		if (fPageFlipEnabled && !fPageFlipPending && flipDue > now)
+			timeout = (int)((flipDue - now + 999) / 1000);
+		int ret = poll(pfds, nfds, timeout);
 		if (ret < 0) {
 			if (errno == EBADF || errno == EINVAL) {
 				acquire_sem_etc(fSessionSem, 1, B_RELATIVE_TIMEOUT, 100000);
@@ -994,7 +1015,11 @@ DrmHWInterface::_EventThreadMain()
 		// SetMode() deletes and recreates the buffers under the exclusive
 		// lock; reading fWriteTarget outside it used a freed buffer (#303).
 		bool flipLocked = false;
-		if (active && fPageFlipEnabled && !fPageFlipPending) {
+		// Without a real vblank (virtio-gpu) a flip completes at once and
+		// every client frame became a full upload. Issue at most one per
+		// refresh period.
+		if (active && fPageFlipEnabled && !fPageFlipPending
+				&& system_time() >= fLastFlipIssue + _FramePeriod()) {
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
 			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
@@ -1077,6 +1102,7 @@ DrmHWInterface::_EventThreadMain()
 
 				if (r == 0) {
 					fFlipFailures = 0;
+					fLastFlipIssue = system_time();
 					if (fDirectRender && !fPacingLockHeld) {
 						// Keep the exclusive lock until the completion
 						// handler drops it.

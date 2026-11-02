@@ -201,6 +201,7 @@ private:
 			void				_LeaveDirectRender();
 			int32				_AgeSlotForFb(uint32_t fbId) const;
 			void				_DirectFlipComplete();
+			bigtime_t			_FramePeriod() const;
 
 			void				_BlitRect(RenderingBuffer* src,
 									RenderingBuffer* dst,
@@ -360,6 +361,7 @@ private:
 			int32				fAgeSlotCount;
 			bool				fPacingLockHeld;
 			bigtime_t			fFlipIssueTime;
+			bigtime_t			fLastFlipIssue;
 
 			int					fWakeFd;
 

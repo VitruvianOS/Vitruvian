@@ -484,6 +484,8 @@ sync_view_size(const BView* view, Impl* impl)
 
 	int w, h;
 	view_pixel_size(view, &w, &h);
+	if (w <= 1 || h <= 1)
+		return;
 	if (w == impl->fPixelWidth && h == impl->fPixelHeight)
 		return;
 
@@ -652,6 +654,12 @@ BWebView::AttachedToWindow()
 
 	int w, h;
 	view_pixel_size(this, &w, &h);
+	// WebKit grown from 0x0 leaves its first tile unpainted until input.
+	if ((w <= 1 || h <= 1) && Window() != NULL) {
+		BRect frame = Window()->Bounds();
+		w = std::max(w, (int)frame.Width() + 1);
+		h = std::max(h, (int)frame.Height() + 1);
+	}
 	fImpl->fPixelWidth = w;
 	fImpl->fPixelHeight = h;
 

@@ -1580,6 +1580,8 @@ BWebView::Draw(BRect updateRect)
 			FillRegion(&rest, B_SOLID_LOW);
 		}
 		fImpl->fCompositor->ReleaseFront();
+		Flush();
+		fImpl->fCompositor->NotifyPresented();
 		return;
 	}
 #endif

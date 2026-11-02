@@ -56,6 +56,7 @@ private:
 	void						_Cleanup();
 	void						_CreateFbo(int32 width, int32 height);
 	void						_DestroyFbo();
+	void						_PaceToRefresh();
 
 private:
 	gl_device					fDevice;
@@ -87,6 +88,9 @@ private:
 	BBitmap*					fBitmap;
 	pthread_mutex_t				fBitmapLock;
 	pthread_mutex_t				fContextLock;
+
+	bigtime_t					fLastSwap;
+	bigtime_t					fFramePeriod;
 };
 
 

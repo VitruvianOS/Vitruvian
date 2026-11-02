@@ -17,6 +17,9 @@
 
 #include <Bitmap.h>
 #include <GLView.h>
+#include <OS.h>
+#include <Screen.h>
+#include <Window.h>
 #include <Rect.h>
 
 #ifndef EGL_PLATFORM_SURFACELESS_MESA
@@ -52,7 +55,9 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fHeight(1),
 	fInitialized(false),
 	fFboReady(false),
-	fBitmap(NULL)
+	fBitmap(NULL),
+	fLastSwap(0),
+	fFramePeriod(0)
 {
 	memset(&fDevice, 0, sizeof(fDevice));
 	fDebug = getenv("VOS_GL_DEBUG") != NULL;
@@ -566,7 +571,7 @@ MesaSurfacelessRenderer::UnlockGL()
 
 
 void
-MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
+MesaSurfacelessRenderer::SwapBuffers(bool vSync)
 {
 	if (!fInitialized || !fFboReady)
 		return;
@@ -642,6 +647,46 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 		view->Invalidate();
 		view->UnlockLooper();
 	}
+
+	if (vSync)
+		_PaceToRefresh();
+}
+
+
+void
+MesaSurfacelessRenderer::_PaceToRefresh()
+{
+	if (fFramePeriod == 0) {
+		fFramePeriod = 16667;
+		BGLView* view = GLView();
+		BWindow* window = view != NULL ? view->Window() : NULL;
+		display_mode mode;
+		bool haveMode = false;
+		if (window != NULL) {
+			BScreen screen(window);
+			haveMode = screen.IsValid() && screen.GetMode(&mode) == B_OK;
+		} else {
+			BScreen screen(B_MAIN_SCREEN_ID);
+			haveMode = screen.IsValid() && screen.GetMode(&mode) == B_OK;
+		}
+		if (haveMode && mode.timing.pixel_clock > 0) {
+			uint64 total = (uint64)mode.timing.h_total * mode.timing.v_total;
+			bigtime_t period = (bigtime_t)(total * 1000
+				/ mode.timing.pixel_clock);
+			if (period >= 2000 && period <= 100000)
+				fFramePeriod = period;
+		}
+	}
+
+	bigtime_t now = system_time();
+	bigtime_t deadline = fLastSwap + fFramePeriod;
+	if (now < deadline) {
+		snooze_until(deadline, B_SYSTEM_TIMEBASE);
+		now = deadline;
+	}
+
+	// No catch-up bursts when more than one period late.
+	fLastSwap = (now - deadline > fFramePeriod) ? now : deadline;
 }
 
 

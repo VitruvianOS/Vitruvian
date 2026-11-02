@@ -4628,7 +4628,8 @@ ServerWindow::_MessageNeedsAllWindowsLocked(uint32 code) const
 		case AS_SET_SIZE_LIMITS:
 		case AS_SYSTEM_FONT_CHANGED:
 		case AS_SET_DECORATOR_SETTINGS:
-		case AS_GET_MOUSE:
+		// AS_GET_MOUSE only reads the last mouse state, so it stays
+		// under the read lock.
 		case AS_DIRECT_WINDOW_SET_FULLSCREEN:
 //		case AS_VIEW_SET_EVENT_MASK:
 //		case AS_VIEW_SET_MOUSE_EVENT_MASK:

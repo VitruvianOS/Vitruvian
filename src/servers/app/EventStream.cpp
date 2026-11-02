@@ -54,6 +54,8 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 	fInputServer(messenger),
 	fPort(-1),
 	fQuitting(false),
+	fCursorArea(-1),
+	fCursorBuffer(NULL),
 	fLatestMouseMoved(NULL)
 {
 	BMessage message(IS_ACQUIRE_INPUT);
@@ -61,8 +63,14 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 
 	fCursorArea = create_area("shared cursor", (void **)&fCursorBuffer, B_ANY_ADDRESS,
 		B_PAGE_SIZE, B_LAZY_LOCK, B_READ_AREA | B_WRITE_AREA | B_CLONEABLE_AREA);
-	if (fCursorArea >= B_OK)
+	if (fCursorArea >= B_OK) {
+		// The wake word lives at the end of the shared area.
+		fCursorEvent.SetTo(&fCursorBuffer->event);
 		message.AddInt32("cursor area", fCursorArea);
+	} else {
+		fCursorArea = -1;
+		fCursorBuffer = NULL;
+	}
 
 	BMessage reply;
 	if (messenger.SendMessage(&message, &reply) != B_OK)
@@ -70,8 +78,16 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 
 	if (reply.FindInt32("event port", &fPort) != B_OK)
 		fPort = -1;
-	if (reply.FindInt32("cursor semaphore", &fCursorSemaphore) != B_OK)
-		fCursorSemaphore = -1;
+
+	// Without the input_server mapping the cursor moves on the event path.
+	bool cursorArea;
+	if (fCursorArea >= 0
+		&& reply.FindBool("cursor area", &cursorArea) != B_OK) {
+		delete_area(fCursorArea);
+		fCursorArea = -1;
+		fCursorBuffer = NULL;
+		fCursorEvent.SetTo(NULL);
+	}
 }
 
 
@@ -79,7 +95,8 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 InputServerStream::InputServerStream()
 	:
 	fQuitting(false),
-	fCursorSemaphore(-1),
+	fCursorArea(-1),
+	fCursorBuffer(NULL),
 	fLatestMouseMoved(NULL)
 {
 	fPort = find_port(SERVER_INPUT_PORT);
@@ -109,7 +126,9 @@ InputServerStream::SendQuit()
 {
 	fQuitting = true;
 	write_port(fPort, 'quit', NULL, 0);
-	release_sem(fCursorSemaphore);
+	if (fCursorBuffer != NULL)
+		fCursorEvent.Post();
+		// Wakes the cursor thread out of its wait on shutdown.
 }
 
 
@@ -174,20 +193,47 @@ InputServerStream::GetNextEvent(BMessage** _event)
 status_t
 InputServerStream::GetNextCursorPosition(BPoint &where, bigtime_t timeout)
 {
-	status_t status;
-
-	do {
-		status = acquire_sem_etc(fCursorSemaphore, 1, B_RELATIVE_TIMEOUT,
-			timeout);
-	} while (status == B_INTERRUPTED);
-
-	if (status == B_TIMED_OUT)
-		return status;
-
-	if (status == B_BAD_SEM_ID) {
-		// the semaphore is no longer valid - the input_server must have died
-		fCursorSemaphore = -1;
+	if (fCursorBuffer == NULL)
 		return B_ERROR;
+
+	// Wait on the futex word the input_server posts. The wait is sliced
+	// so a dead input_server is noticed through the event port.
+	const bigtime_t kSlice = 500000;
+	const bigtime_t start = system_time();
+
+	status_t status;
+	for (;;) {
+		bigtime_t slice = kSlice;
+		if (timeout != B_INFINITE_TIMEOUT) {
+			bigtime_t remaining = timeout - (system_time() - start);
+			if (remaining <= 0)
+				return B_TIMED_OUT;
+			if (remaining < slice)
+				slice = remaining;
+		}
+
+		do {
+			status = fCursorEvent.WaitWithTimeout(slice);
+		} while (status == B_INTERRUPTED);
+
+		if (status == B_OK)
+			break;
+
+		if (status != B_TIMED_OUT)
+			return status;
+
+		if (timeout != B_INFINITE_TIMEOUT
+			&& system_time() - start >= timeout) {
+			return B_TIMED_OUT;
+		}
+
+		// Timed out without a post. Check the input_server is still
+		// connected before waiting again.
+		port_info info;
+		if (get_port_info(fPort, &info) != B_OK) {
+			fPort = -1;
+			return B_ERROR;
+		}
 	}
 
 #ifdef __VOS__

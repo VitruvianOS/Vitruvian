@@ -159,7 +159,7 @@ InputServer::InputServer()
 	fReplicantMessenger(NULL),
 	fInputMethodWindow(NULL),
 	fInputMethodAware(false),
-	fCursorSem(-1),
+	fCursorEvent(),
 	fAppServerPort(-1),
 	fAppServerTeam(-1),
 	fCursorArea(-1),
@@ -408,11 +408,13 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 		// try to clone the area
 		fCursorBuffer = NULL;
 
-		fCursorSem = create_sem(0, "cursor semaphore");
-		if (fCursorSem >= B_OK) {
-			fCursorArea = clone_area("input server cursor", (void**)&fCursorBuffer,
-				B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, area);
-		}
+		fCursorArea = clone_area("input server cursor", (void**)&fCursorBuffer,
+			B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, area);
+		if (fCursorArea >= B_OK) {
+			// The wake word lives in the shared area.
+			fCursorEvent.SetTo(&fCursorBuffer->event);
+		} else
+			fCursorBuffer = NULL;
 	}
 
 	fRegistrationPending = false;
@@ -431,8 +433,8 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 	reply.AddInt32("event port", fAppServerPort);
 
 	if (fCursorBuffer != NULL) {
-		// cursor shared buffer is supported
-		reply.AddInt32("cursor semaphore", fCursorSem);
+		// Tell the app_server the shared cursor buffer is available.
+		reply.AddBool("cursor area", true);
 	}
 
 	return B_OK;
@@ -444,10 +446,9 @@ InputServer::_ReleaseInput(BMessage* /*message*/)
 {
 	if (fCursorBuffer != NULL) {
 		fCursorBuffer = NULL;
-		delete_sem(fCursorSem);
+		fCursorEvent.SetTo(NULL);
 		delete_area(fCursorArea);
 
-		fCursorSem = -1;
 		fCursorArea = -1;
 	}
 
@@ -2027,11 +2028,11 @@ InputServer::_DispatchEvent(BMessage* event)
 		case B_MOUSE_MOVED:
 		case B_MOUSE_DOWN:
 		case B_MOUSE_UP:
-			if (fCursorBuffer) {
-				atomic_set((int32*)&fCursorBuffer->pos, (uint32)fMousePos.x << 16UL
-					| ((uint32)fMousePos.y & 0xffff));
-				if (atomic_or(&fCursorBuffer->read, 1) == 0)
-					release_sem(fCursorSem);
+		if (fCursorBuffer) {
+			atomic_set((int32*)&fCursorBuffer->pos, (uint32)fMousePos.x << 16UL
+				| ((uint32)fMousePos.y & 0xffff));
+			if (atomic_or(&fCursorBuffer->read, 1) == 0)
+				fCursorEvent.Post();
         	}
         	break;
 

@@ -13,6 +13,7 @@
 #include <LinkReceiver.h>
 #include <MessageQueue.h>
 #include <Messenger.h>
+#include <SharedEvent.h>
 
 
 struct shared_cursor;
@@ -61,7 +62,7 @@ class InputServerStream : public EventStream {
 		virtual bool IsValid();
 		virtual void SendQuit();
 
-		virtual bool SupportsCursorThread() const { return fCursorSemaphore >= B_OK; }
+		virtual bool SupportsCursorThread() const { return fCursorBuffer != NULL; }
 
 		virtual void UpdateScreenBounds(BRect bounds);
 		virtual void UpdateScreenBounds(BRect bounds, int32 orientation,
@@ -83,7 +84,7 @@ class InputServerStream : public EventStream {
 		BMessageQueue fEvents;
 		port_id	fPort;
 		bool	fQuitting;
-		sem_id	fCursorSemaphore;
+		BSharedEvent	fCursorEvent;
 		area_id	fCursorArea;
 		shared_cursor* fCursorBuffer;
 		BMessage* fLatestMouseMoved;

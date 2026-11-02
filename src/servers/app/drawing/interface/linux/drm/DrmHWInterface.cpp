@@ -153,7 +153,6 @@ DrmHWInterface::DrmHWInterface()
 	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
-	pthread_mutex_init(&fDirtyMutex, NULL);
 	pthread_mutex_init(&fFlipMutex, NULL);
 	pthread_mutex_init(&fCursorBlendMutex, NULL);
 	// Recursive: SetMode() holds it and calls SetCursor(), which re-takes
@@ -343,11 +342,11 @@ DrmHWInterface::_OnSessionEnable()
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (modeset_create_back_fb(fFd, get_dev()) == 0) {
 		fBackBuffer      = new DrmBuffer(fFd, get_dev(), true);
@@ -539,11 +538,11 @@ DrmHWInterface::_OnSessionDisable()
 	fPageFlipPending = false;
 	pthread_mutex_unlock(&fFlipMutex);
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	// Clear while still DRM master, or the next VT/session owner scans
 	// out our stale sprite.
@@ -664,7 +663,7 @@ DrmHWInterface::_FinishFrameSwap(uint64_t generation)
 	// with the previous frame's (covers double-buffer staleness). Then
 	// rotate: previous <- accumulated, accumulated <- empty.
 	BRegion toBlit;
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	if (fPreviousDirty.CountRects() > 0) {
 		toBlit.Include(&fPreviousDirty);
 		toBlit.Include(&fAccumulatedDirty);
@@ -675,7 +674,7 @@ DrmHWInterface::_FinishFrameSwap(uint64_t generation)
 	// Damage copied while this flip was in flight reached the buffer that
 	// just left the screen; ask for a follow-up flip.
 	fNeedsFlip = (fPreviousDirty.CountRects() > 0);
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 	pthread_mutex_unlock(&fFlipMutex);
 
 	if (toBlit.CountRects() > 0) {
@@ -853,9 +852,9 @@ DrmHWInterface::_EventThreadMain()
 		bool flipLocked = false;
 		if (active && fPageFlipEnabled && !fPageFlipPending) {
 			// Idle frames must not drain the drawing threads every poll.
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 			if (wantFlip)
 				flipLocked = LockExclusiveAccess();
 		}
@@ -867,7 +866,7 @@ DrmHWInterface::_EventThreadMain()
 			staged.valid = false;
 			BRegion damage;
 
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			bool hasDirty = (fAccumulatedDirty.CountRects() > 0)
 				|| fNeedsFlip || fStagedCursor.valid;
 			if (hasDirty && fAtomicBatch) {
@@ -878,7 +877,7 @@ DrmHWInterface::_EventThreadMain()
 				damage.Include(&fAccumulatedDirty);
 				damage.Include(&fPreviousDirty);
 			}
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 
 			if (hasDirty && fVblankPacedFlip) {
 				_VblankPacedFlip();
@@ -934,16 +933,16 @@ DrmHWInterface::_EventThreadMain()
 
 				if (r == 0) {
 					fFlipFailures = 0;
-					pthread_mutex_lock(&fDirtyMutex);
+					fDirtyMutex.Lock();
 					fNeedsFlip = false;
-					pthread_mutex_unlock(&fDirtyMutex);
+					fDirtyMutex.Unlock();
 				} else {
 					// The staged cursor did not ride this commit;
 					// keep it for the next tick's retry.
 					if (staged.valid) {
-						pthread_mutex_lock(&fDirtyMutex);
+						fDirtyMutex.Lock();
 						fStagedCursor = staged;
-						pthread_mutex_unlock(&fDirtyMutex);
+						fDirtyMutex.Unlock();
 					}
 				}
 				if (r != 0 && attempted) {
@@ -1081,7 +1080,6 @@ DrmHWInterface::~DrmHWInterface()
 
 	modeset_cleanup(fFd);
 
-	pthread_mutex_destroy(&fDirtyMutex);
 	pthread_mutex_destroy(&fFlipMutex);
 	pthread_mutex_destroy(&fCursorBlendMutex);
 	pthread_mutex_destroy(&fModesetMutex);
@@ -1262,11 +1260,11 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (modeset_create_back_fb(fFd, dev) == 0) {
 		fBackBuffer = new DrmBuffer(fFd, dev, true);
@@ -1353,12 +1351,12 @@ DrmHWInterface::SetMode(const display_mode& mode)
 		const BRect fullFrame(0, 0,
 			fDisplayMode.virtual_width - 1, fDisplayMode.virtual_height - 1);
 
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.MakeEmpty();
 		fPreviousDirty.MakeEmpty();
 		fAccumulatedDirty.Include(fullFrame);
 		fNeedsFlip = fPageFlipEnabled;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 
 		// Single-buffered has no flip to ride in on: present now, or the
 		// cleared buffers stay on screen until the first damage blit.
@@ -1818,9 +1816,9 @@ DrmHWInterface::_RepaintAfterDPMS()
 {
 	if (fDpmsState != B_DPMS_ON)
 		return;
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fNeedsFlip = true;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 	if (fWakeFd >= 0) {
 		uint64_t v = 1;
 		write(fWakeFd, &v, sizeof(v));
@@ -2418,9 +2416,9 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 		return B_ERROR;
 
 	if (fPageFlipEnabled) {
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.Include(frame);
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 
 		// Snapshot the present targets under the flip mutex: the flip
 		// completion on the event thread swaps fWriteTarget between
@@ -2488,9 +2486,9 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 		return B_OK;
 
 	if (fPageFlipEnabled) {
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.Include(&region);
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 
 		// Same torn-pair hazard as the BRect overload: fWriteTarget is
 		// swapped on the event thread without the parallel lock.
@@ -2788,14 +2786,14 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			// A second non-blocking commit on a CRTC with a flip in
 			// flight is answered with EBUSY; stage the update so it
 			// rides the next frame commit instead.
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			fStagedCursor.valid = true;
 			fStagedCursor.fb_id = dev->cursor_fb;
 			fStagedCursor.x = px;
 			fStagedCursor.y = py;
 			fStagedCursor.w = dev->cursor_w;
 			fStagedCursor.h = dev->cursor_h;
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 
 			if (fWakeFd >= 0) {
 				uint64_t v = 1;
@@ -2816,9 +2814,9 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 				// A flip became pending between the check and
 				// this commit; stage the move so the next frame
 				// commit carries it instead of dropping it.
-				pthread_mutex_lock(&fDirtyMutex);
+				fDirtyMutex.Lock();
 				fStagedCursor = update;
-				pthread_mutex_unlock(&fDirtyMutex);
+				fDirtyMutex.Unlock();
 
 				if (fWakeFd >= 0) {
 					uint64_t v = 1;
@@ -2906,9 +2904,9 @@ DrmHWInterface::_PushCursorTrackDirty(int32 oldX, int32 oldY,
 	if (track.CountRects() == 0)
 		return;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.Include(&track);
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (fPageFlipEnabled && fWakeFd >= 0) {
 		uint64_t v = 1;
@@ -3027,9 +3025,9 @@ DrmHWInterface::_OnResume()
 	if (!LockExclusiveAccess()) {
 		// Mode lock unusable: at least re-arm the flip so a pending
 		// damage does not sit on screen forever.
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fNeedsFlip = true;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 		if (fWakeFd >= 0) {
 			uint64_t v = 1;
 			write(fWakeFd, &v, sizeof(v));
@@ -3070,9 +3068,9 @@ DrmHWInterface::_OnResume()
 				fDisplayMode.virtual_height - 1));
 		UnlockExclusiveAccess();
 
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fNeedsFlip = true;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 		if (fWakeFd >= 0) {
 			uint64_t v = 1;
 			write(fWakeFd, &v, sizeof(v));

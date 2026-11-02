@@ -32,6 +32,7 @@ extern "C" {
 #include <Messenger.h>
 #include <MessengerPrivate.h>
 #include <OS.h>
+#include <BFutexLocker.h>
 #include <TokenSpace.h>
 
 #include <kernel/util/KMessage.h>
@@ -88,7 +89,7 @@ struct CurrentSession {
 };
 
 static CurrentSession       sSession = { -1, "", "", (uid_t)-1, (gid_t)-1, false, "" };
-static pthread_mutex_t      sSessionLock = PTHREAD_MUTEX_INITIALIZER;
+static BFutexLocker         sSessionLock;
 
 static bool  sSystemMode = false;
 static bool  sGreeterMode = false;
@@ -150,7 +151,7 @@ struct JanusApp {
 #define JANUS_MAX_APPS 32
 static JanusApp        sApps[JANUS_MAX_APPS];
 static int              sAppCount = 0;
-static pthread_mutex_t  sAppsLock = PTHREAD_MUTEX_INITIALIZER;
+static BFutexLocker     sAppsLock;
 
 
 struct PendingLaunch {
@@ -191,7 +192,7 @@ find_app_by_sig(const char* sig)
 static void
 invalidate_app_by_pid(pid_t pid)
 {
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid == pid) {
 			sApps[i].pid  = -1;
@@ -199,7 +200,7 @@ invalidate_app_by_pid(pid_t pid)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 }
 
 
@@ -215,7 +216,7 @@ handle_get_launch_data(BMessage* msg)
 
 	// janus_session mirrors its fan-out here fire-and-forget, and those are
 	// not our children to reap, so a row can outlive the server it names.
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int idx = find_app_by_sig(signature);
 	port_id port = -1;
 	pid_t   pid  = -1;
@@ -229,7 +230,7 @@ handle_get_launch_data(BMessage* msg)
 			sApps[idx].port = -1;
 		}
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (port >= 0) {
 		BMessage reply(B_OK);
@@ -276,7 +277,7 @@ handle_register_app(BPrivate::KMessage& kmsg)
 			|| name == NULL || signature == NULL)
 		return;
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	// Match live rows too: find_app_by_sig() returns the first hit, so a
 	// row left behind by a dead server would shadow its replacement.
 	int idx = find_app_by_sig(signature);
@@ -288,7 +289,7 @@ handle_register_app(BPrivate::KMessage& kmsg)
 		sApps[idx].pid  = (pid_t)pid;
 		sApps[idx].port = (port_id)port;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	// mount_server needs the login's registrar; start it once it exists.
 	if (strcmp(name, "registrar") == 0)
@@ -305,7 +306,7 @@ handle_unregister_app(BPrivate::KMessage& kmsg)
 			|| kmsg.FindInt32("pid", &pid) != B_OK || signature == NULL)
 		return;
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int idx = find_app_by_sig(signature);
 	// Only if the pid still matches: a replacement may already have
 	// registered, and this late notice must not clear the live row.
@@ -313,7 +314,7 @@ handle_unregister_app(BPrivate::KMessage& kmsg)
 		sApps[idx].pid  = -1;
 		sApps[idx].port = -1;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 }
 
 
@@ -330,7 +331,7 @@ handle_session_hello(BPrivate::KMessage& kmsg, pid_t sender_pid)
 	}
 	kmsg.FindBool("greeter", &greeter);
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	if (sender_pid != sSession.pid) {
 		fprintf(stderr, "janus: HELLO from pid=%d, expected current "
 			"session pid=%d; ignoring\n", (int)sender_pid, (int)sSession.pid);
@@ -339,7 +340,7 @@ handle_session_hello(BPrivate::KMessage& kmsg, pid_t sender_pid)
 		sSession.uid = (uid_t)uid;
 		sSession.greeter = greeter;
 	}
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 }
 
 
@@ -438,7 +439,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 
 	close(fds[1]);
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int app_idx = -1;
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid == -1
@@ -455,7 +456,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		sApps[app_idx].pid  = pid;
 		sApps[app_idx].port = -1;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (app_idx < 0) {
 		fprintf(stderr, "janus: sApps[] full\n");
@@ -668,7 +669,7 @@ user_has_usable_password(const char* username)
 static bool
 send_to_app_server(int32 what, bigtime_t timeout, int32 unlockTeam = -1)
 {
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	port_id port = -1;
 	pid_t pid = -1;
 	for (int i = 0; i < sAppCount; i++) {
@@ -686,7 +687,7 @@ send_to_app_server(int32 what, bigtime_t timeout, int32 unlockTeam = -1)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (port < 0)
 		port = find_port("picasso");
@@ -717,7 +718,7 @@ send_to_app_server(int32 what, bigtime_t timeout, int32 unlockTeam = -1)
 static bool
 launch_unlock_app()
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	char user[64];
 	char home[PATH_MAX];
 	uid_t uid = sSession.uid;
@@ -725,7 +726,7 @@ launch_unlock_app()
 	bool greeter = sSession.greeter;
 	strlcpy(user, sSession.user, sizeof(user));
 	strlcpy(home, sSession.home, sizeof(home));
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	if (greeter || uid == (uid_t)-1 || user[0] == '\0')
 		return false;
@@ -794,10 +795,10 @@ launch_unlock_app()
 static void
 stop_unlock_app()
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	pid_t pid = sUnlockAppPid;
 	sUnlockAppPid = -1;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	if (pid <= 0)
 		return;
@@ -828,12 +829,12 @@ notify_session_lock_watchers()
 static void
 handle_lock_session(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	uid_t sessionUid = sSession.uid;
 	bool greeter = sSession.greeter;
 	char user[64];
 	strlcpy(user, sSession.user, sizeof(user));
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	bool allowed = sender_uid == 0 || sender_uid == sessionUid;
 	if (!allowed || greeter || sessionUid == (uid_t)-1) {
@@ -899,10 +900,10 @@ handle_lock_session(BPrivate::KMessage& kmsg, uid_t sender_uid)
 static void
 handle_unlock_auth(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	uid_t sessionUid = sSession.uid;
 	bool greeter = sSession.greeter;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	if (sender_uid != sessionUid || greeter || sessionUid == (uid_t)-1) {
 		fprintf(stderr, "janus: B_JANUS_UNLOCK_AUTH rejected from uid=%u\n",
@@ -937,10 +938,10 @@ handle_unlock_auth(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	}
 
 	// Unlock only accepts the session's own user.
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	char sessionUser[64];
 	strlcpy(sessionUser, sSession.user, sizeof(sessionUser));
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 	if (strcmp(user, sessionUser) != 0) {
 		explicit_bzero(const_cast<char*>(pass), strlen(pass));
 		BPrivate::KMessage reply(B_PERMISSION_DENIED);
@@ -983,9 +984,9 @@ handle_unlock_auth(BPrivate::KMessage& kmsg, uid_t sender_uid)
 static void
 handle_locker_died(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	uid_t sessionUid = sSession.uid;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	// app_server (runs as the session user) or root may report this.
 	if (sender_uid != sessionUid && sender_uid != 0)
@@ -1231,7 +1232,7 @@ terminate_and_wait_session(pid_t pid)
 static void
 purge_session_apps()
 {
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int keep = 0;
 	for (int i = 0; i < sAppCount; i++) {
 		bool owned = false;
@@ -1248,7 +1249,7 @@ purge_session_apps()
 		}
 	}
 	sAppCount = keep;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 }
 
 
@@ -1262,9 +1263,9 @@ session_transition_thread(void* arg)
 {
 	SessionTransition* t = (SessionTransition*)arg;
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	pid_t oldPid = sSession.pid;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	// Two janus_sessions alive at once would race libseat over the seat.
 	terminate_and_wait_session(oldPid);
@@ -1272,7 +1273,7 @@ session_transition_thread(void* arg)
 
 	pid_t newPid = fork_janus_session(t->user, t->greeter);
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	sSession.pid = newPid;
 	strlcpy(sSession.user, t->user, sizeof(sSession.user));
 	sSession.greeter = t->greeter;
@@ -1283,7 +1284,7 @@ session_transition_thread(void* arg)
 		sSession.uid = pw->pw_uid;
 		sSession.gid = pw->pw_gid;
 	}
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	sGreeterMode = t->greeter;
 
@@ -1357,11 +1358,11 @@ handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		return;
 	}
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	bool allowed = sender_uid == sSession.uid;
 	char controlPort[64];
 	strlcpy(controlPort, sSession.controlPort, sizeof(controlPort));
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	if (!allowed) {
 		fprintf(stderr, "janus: B_JANUS_SWITCH_VT rejected from uid=%u\n",
@@ -1399,10 +1400,10 @@ handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
 static void
 handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	uid_t sessionUid = sSession.uid;
 	bool  greeter    = sSession.greeter;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 
 	jdbg("handle_logout() ENTER sender_uid=%u session_uid=%u shutdownInFlight=%d",
 		(unsigned)sender_uid, (unsigned)sessionUid, (int)sShutdownInFlight);
@@ -1593,11 +1594,11 @@ check_pending_launches()
 		int idx = sPending[i].app_idx;
 
 		if (port >= 0) {
-			pthread_mutex_lock(&sAppsLock);
+			sAppsLock.Lock();
 			bool stale = sApps[idx].pid != sPending[i].pid;
 			if (!stale)
 				sApps[idx].port = port;
-			pthread_mutex_unlock(&sAppsLock);
+			sAppsLock.Unlock();
 			if (stale)
 				port = -1;
 		}
@@ -1788,10 +1789,10 @@ mount_server_restart_thread(void*)
 		}
 	}
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int idx = (signature != NULL) ? find_app_by_sig(signature) : -1;
 	pid_t old = (idx >= 0) ? sApps[idx].pid : -1;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	// A survivor of the last login holds a dead be_roster; kill it.
 	if (old > 0) {
@@ -1858,10 +1859,10 @@ janus_handle_shutdown(bool reboot)
 	// systemctl child's waitpid status.
 	sShuttingDown = true;
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	pid_t currentPid = sSession.pid;
 	sSession.pid = -1;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 	terminate_and_wait_session(currentPid);
 
 	sync();
@@ -1935,10 +1936,10 @@ main(int argc, char** argv)
 
 	sRunning = false;
 
-	pthread_mutex_lock(&sSessionLock);
+	sSessionLock.Lock();
 	pid_t currentPid = sSession.pid;
 	sSession.pid = -1;
-	pthread_mutex_unlock(&sSessionLock);
+	sSessionLock.Unlock();
 	terminate_and_wait_session(currentPid);
 
 	if (sLaunchPort >= 0) {

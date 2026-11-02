@@ -14,6 +14,7 @@ extern "C" {
 
 #include <OS.h>
 #include <Region.h>
+#include <BFutexLocker.h>
 #include <pthread.h>
 #include <atomic>
 #include <vector>
@@ -329,7 +330,7 @@ private:
 			BRegion				fAccumulatedDirty;
 			BRegion				fPreviousDirty;
 			bool				fNeedsFlip;
-			pthread_mutex_t		fDirtyMutex;
+			BFutexLocker		fDirtyMutex;
 
 			// Serialises _BlendCursor's write to the scanout buffer
 			// (fWriteTarget) between the main thread (CopyBackToFront,

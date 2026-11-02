@@ -8,6 +8,9 @@
 #include <libroot/futex.h>
 
 
+#define DEAD_FLAG	((int32)0x80000000)
+
+
 BSharedLocker::BSharedLocker()
 	:
 	fState(NULL),
@@ -61,9 +64,21 @@ BSharedLocker::LockWithTimeout(bigtime_t timeout)
 	// 0 free, 1 held, 2 held with waiters
 	bigtime_t deadline = futex_deadline(timeout);
 	while (true) {
-		if (__atomic_exchange_n(&fState->fState, 2, __ATOMIC_ACQUIRE) == 0) {
-			fLocked = true;
-			return B_OK;
+		int32 state = __atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE);
+		if ((state & DEAD_FLAG) != 0)
+			return B_BAD_SEM_ID;
+
+		if (state == 0) {
+			if (__atomic_compare_exchange_n(&fState->fState, &state, 2, false,
+					__ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+				fLocked = true;
+				return B_OK;
+			}
+			continue;
+		}
+		if (state == 1 && !__atomic_compare_exchange_n(&fState->fState,
+				&state, 2, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+			continue;
 		}
 
 		bigtime_t left = futex_time_left(deadline);
@@ -83,9 +98,37 @@ BSharedLocker::Unlock()
 		return;
 
 	fLocked = false;
-	int32 old = __atomic_exchange_n(&fState->fState, 0, __ATOMIC_RELEASE);
-	if (old == 2)
+	int32 state = __atomic_load_n(&fState->fState, __ATOMIC_RELAXED);
+	for (;;) {
+		if ((state & DEAD_FLAG) != 0)
+			return;
+		if (__atomic_compare_exchange_n(&fState->fState, &state, 0, false,
+				__ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
+			break;
+		}
+	}
+	if (state == 2)
 		futex_wake_shared(&fState->fState, 1);
+}
+
+
+void
+BSharedLocker::MarkDead()
+{
+	if (fState == NULL)
+		return;
+
+	__atomic_fetch_or(&fState->fState, DEAD_FLAG, __ATOMIC_SEQ_CST);
+	futex_wake_all_shared(&fState->fState);
+}
+
+
+bool
+BSharedLocker::IsDead() const
+{
+	return fState != NULL
+		&& (__atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE)
+			& DEAD_FLAG) != 0;
 }
 
 

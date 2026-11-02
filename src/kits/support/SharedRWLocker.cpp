@@ -10,7 +10,8 @@
 
 #define WRITER_FLAG		((int32)0x80000000)
 #define WRITER_WAITING	((int32)0x40000000)
-#define READER_MASK		((int32)0x3FFFFFFF)
+#define DEAD_FLAG		((int32)0x20000000)
+#define READER_MASK		((int32)0x1FFFFFFF)
 
 
 BSharedRWLocker::BSharedRWLocker()
@@ -54,6 +55,8 @@ BSharedRWLocker::ReadLockWithTimeout(bigtime_t timeout)
 	bigtime_t deadline = futex_deadline(timeout);
 	for (;;) {
 		int32 state = __atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE);
+		if ((state & DEAD_FLAG) != 0)
+			return B_BAD_SEM_ID;
 
 		if ((state & (WRITER_FLAG | WRITER_WAITING)) != 0) {
 			bigtime_t left = futex_time_left(deadline);
@@ -80,7 +83,16 @@ BSharedRWLocker::ReadUnlock()
 	if (fState == NULL)
 		return;
 
-	int32 old = __atomic_add_fetch(&fState->fState, -1, __ATOMIC_RELEASE);
+	int32 state = __atomic_load_n(&fState->fState, __ATOMIC_RELAXED);
+	for (;;) {
+		if ((state & DEAD_FLAG) != 0)
+			return;
+		if (__atomic_compare_exchange_n(&fState->fState, &state, state - 1,
+				false, __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
+			break;
+		}
+	}
+	int32 old = state - 1;
 	if ((old & READER_MASK) == 0
 		&& (old & (WRITER_FLAG | WRITER_WAITING)) != 0) {
 		futex_wake_all_shared(&fState->fState);
@@ -103,6 +115,8 @@ BSharedRWLocker::WriteLockWithTimeout(bigtime_t timeout)
 	bigtime_t deadline = futex_deadline(timeout);
 	for (;;) {
 		int32 state = __atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE);
+		if ((state & DEAD_FLAG) != 0)
+			return B_BAD_SEM_ID;
 
 		// The winner clears the waiting bit, other writers set it again.
 		if ((state & (WRITER_FLAG | READER_MASK)) == 0) {
@@ -140,7 +154,16 @@ BSharedRWLocker::WriteUnlock()
 		return;
 
 	// Waiting writers keep their bit.
-	__atomic_fetch_and(&fState->fState, ~WRITER_FLAG, __ATOMIC_RELEASE);
+	int32 state = __atomic_load_n(&fState->fState, __ATOMIC_RELAXED);
+	for (;;) {
+		if ((state & DEAD_FLAG) != 0)
+			return;
+		if (__atomic_compare_exchange_n(&fState->fState, &state,
+				state & ~WRITER_FLAG, false, __ATOMIC_RELEASE,
+				__ATOMIC_RELAXED)) {
+			break;
+		}
+	}
 	futex_wake_all_shared(&fState->fState);
 }
 
@@ -164,4 +187,24 @@ BSharedRWLocker::IsWriteLocked() const
 
 	return (__atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE)
 		& WRITER_FLAG) != 0;
+}
+
+
+void
+BSharedRWLocker::MarkDead()
+{
+	if (fState == NULL)
+		return;
+
+	__atomic_fetch_or(&fState->fState, DEAD_FLAG, __ATOMIC_SEQ_CST);
+	futex_wake_all_shared(&fState->fState);
+}
+
+
+bool
+BSharedRWLocker::IsDead() const
+{
+	return fState != NULL
+		&& (__atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE)
+			& DEAD_FLAG) != 0;
 }

@@ -11,8 +11,12 @@
 
 
 /* Reader/writer lock on a shared word, placed as for BSharedLocker.
- * Writers go first. Bit 31 is the writer, bit 30 a waiting writer and
- * bits 0 to 29 count readers. */
+ * Writers go first. Bit 31 is the writer, bit 30 a waiting writer, bit 29
+ * the dead bit and bits 0 to 28 count readers.
+ *
+ * The survivor that learns a peer died holding the lock calls MarkDead():
+ * every lock call then fails with B_BAD_SEM_ID, unlocks do nothing and
+ * blocked waiters are woken. */
 struct shared_rw_lock_state {
 	int32	fState;
 	int32	_reserved[3];
@@ -38,6 +42,9 @@ public:
 
 			bool				IsReadLocked() const;
 			bool				IsWriteLocked() const;
+
+			void				MarkDead();
+			bool				IsDead() const;
 
 private:
 							BSharedRWLocker(const BSharedRWLocker&);

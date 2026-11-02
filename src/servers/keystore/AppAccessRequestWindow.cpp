@@ -155,7 +155,10 @@ AppAccessRequestWindow::RequestAppAccess(bool& allowAlways)
 {
 	ResizeToPreferred();
 	CenterOnScreen();
+	// Stay above the requesting app, which may activate itself meanwhile.
+	SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 	Show();
+	Activate();
 
 	while (acquire_sem(fDoneSem) == B_INTERRUPTED)
 		;

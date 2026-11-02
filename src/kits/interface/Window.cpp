@@ -2452,10 +2452,11 @@ BWindow::MoveTo(float x, float y)
 		fLink->StartMessage(AS_WINDOW_MOVE);
 		fLink->Attach<float>(x);
 		fLink->Attach<float>(y);
+		// Fire and forget. B_WINDOW_MOVED corrects the frame if the
+		// server did not apply the move.
+		fLink->Flush();
 
-		status_t status;
-		if (fLink->FlushWithReply(status) == B_OK && status == B_OK)
-			fFrame.OffsetTo(x, y);
+		fFrame.OffsetTo(x, y);
 	}
 
 	Unlock();
@@ -2496,13 +2497,13 @@ BWindow::ResizeTo(float width, float height)
 		fLink->StartMessage(AS_WINDOW_RESIZE);
 		fLink->Attach<float>(width);
 		fLink->Attach<float>(height);
+		// Fire and forget. B_WINDOW_RESIZED corrects the frame if the
+		// server used a different size.
+		fLink->Flush();
 
-		status_t status;
-		if (fLink->FlushWithReply(status) == B_OK && status == B_OK) {
-			fFrame.right = fFrame.left + width;
-			fFrame.bottom = fFrame.top + height;
-			_AdoptResize();
-		}
+		fFrame.right = fFrame.left + width;
+		fFrame.bottom = fFrame.top + height;
+		_AdoptResize();
 	}
 
 	Unlock();

@@ -896,9 +896,8 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fDesktop->ResizeWindowBy(fWindow.Get(),
 					xResizeTo - fWindow->Frame().Width(),
 					yResizeTo - fWindow->Frame().Height());
-				fLink.StartMessage(B_OK);
 //			}
-			fLink.Flush();
+			// No reply, the client corrects itself from B_WINDOW_RESIZED.
 			break;
 		}
 		case AS_WINDOW_MOVE:
@@ -916,14 +915,13 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (fWindow->IsDragging()) {
 				// While the user moves the window, we ignore
 				// pragmatically set window positions
-				fLink.StartMessage(B_BUSY);
 			} else {
 				fDesktop->MoveWindowBy(fWindow.Get(),
 					xMoveTo - fWindow->Frame().left,
 					yMoveTo - fWindow->Frame().top);
-				fLink.StartMessage(B_OK);
 			}
-			fLink.Flush();
+			// No reply, B_WINDOW_MOVED corrects the client frame if the
+			// move was ignored above.
 			break;
 		}
 		case AS_SET_SIZE_LIMITS:

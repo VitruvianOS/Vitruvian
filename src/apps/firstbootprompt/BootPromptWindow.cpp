@@ -238,6 +238,10 @@ BootPromptWindow::BootPromptWindow()
 	data = (const uint8_t*)res->LoadResource('VICN', "Installer", &size);
 	BIconUtils::GetVectorIcon(data, size, &installerIcon);
 
+	BBitmap setupIcon(iconRect, B_RGBA32);
+	data = (const uint8_t*)res->LoadResource('VICN', "Setup", &size);
+	BIconUtils::GetVectorIcon(data, size, &setupIcon);
+
 	fTryItButton = new BButton("desktop", "",
 		new BMessage(MSG_BOOT_DESKTOP));
 	fTryItButton->SetIcon(&desktopIcon);
@@ -250,6 +254,7 @@ BootPromptWindow::BootPromptWindow()
 	// The raw image booted from a disk has a writable root to convert.
 	fSetupButton = new BButton("setup", "",
 		new BMessage(MSG_SETUP_INSTALL));
+	fSetupButton->SetIcon(&setupIcon);
 	if (access("/etc/vos/live", F_OK) != 0 || !root_is_persistent_rw())
 		fSetupButton->Hide();
 

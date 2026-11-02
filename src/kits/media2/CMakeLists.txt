@@ -49,6 +49,7 @@ AddOn(media2
 	SoundPlayer.cpp
 	SystemBeep.cpp
 	TimeCode.cpp
+	VideoView.cpp
 
 	LIBS be root shared
 )

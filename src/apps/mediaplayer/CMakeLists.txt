@@ -30,6 +30,7 @@ Application(MediaPlayer
 target_include_directories(MediaPlayer PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/interface
+	${CMAKE_SOURCE_DIR}/src/kits/media2
 )
 UsePrivateHeaders(MediaPlayer interface shared)
 DoCatalogs("x-vnd.vos-MediaPlayer" apps/mediaplayer)

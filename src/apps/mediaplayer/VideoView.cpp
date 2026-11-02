@@ -16,8 +16,11 @@
 #include <media2/MediaDefs.h>
 #include <media2/MediaPlayer.h>
 
+#include <Bitmap.h>
+
 #include "MediaMessages.h"
 #include "VideoDisplay.h"
+#include "VideoFrameRing.h"
 
 
 // Frames lagging the presented audio sample by more than this are dropped.
@@ -205,33 +208,44 @@ VideoView::MessageReceived(BMessage* message)
 		return;
 	}
 
-	const void* data = NULL;
-	ssize_t size = 0;
+	void* bitmapPtr = NULL;
+	void* ringPtr = NULL;
 	int32 width = 0;
-	int32 height = 0;
-	int32 stride = 0;
+	int32 slot = -1;
+	int64 sequence = -1;
+	int64 generation = -1;
 	bigtime_t startTime = 0;
 	bigtime_t audioTime = -1;
-	if (message->FindData("frame", B_RAW_TYPE, &data, &size) != B_OK)
-		return;
-	message->FindInt32("width", &width);
-	message->FindInt32("height", &height);
-	message->FindInt32("stride", &stride);
-	message->FindInt64("start_time", &startTime);
-	message->FindInt64("audio_time", &audioTime);
-	if (width <= 0 || height <= 0 || stride < width * 4
-			|| size < (ssize_t)stride * height) {
+	if (message->FindPointer("bitmap", &bitmapPtr) != B_OK
+			|| message->FindPointer("ring", &ringPtr) != B_OK
+			|| message->FindInt32("slot", &slot) != B_OK
+			|| message->FindInt64("sequence", &sequence) != B_OK
+			|| message->FindInt64("generation", &generation) != B_OK) {
 		return;
 	}
+	message->FindInt32("width", &width);
+	message->FindInt64("start_time", &startTime);
+	message->FindInt64("audio_time", &audioTime);
+
+	BBitmap* source = static_cast<BBitmap*>(bitmapPtr);
+	VideoFrameRing* ring = static_cast<VideoFrameRing*>(ringPtr);
+	if (source == NULL || ring == NULL || width <= 0)
+		return;
+	if (generation != ring->Generation() || !ring->ClaimSlot(slot, sequence))
+		return;
 
 	// Without an audio track there is nothing to compare against, so
 	// present every frame in order.
 	if (audioTime >= 0 && startTime >= 0
 			&& (audioTime - startTime) > kFrameDropThreshold) {
+		ring->ReleaseSlot(slot);
 		return;
 	}
 
-	_PresentFrame(data, (uint32)width, (uint32)height, (uint32)stride);
+	_PresentFrame(source->Bits(), (uint32)width,
+		(uint32)source->Bounds().IntegerHeight() + 1,
+		(uint32)source->BytesPerRow());
+	ring->ReleaseSlot(slot);
 }
 
 

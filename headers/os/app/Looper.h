@@ -26,6 +26,9 @@ namespace BPrivate {
 #define B_LOOPER_PORT_DEFAULT_CAPACITY	200
 
 
+struct looper_lock;
+
+
 class BLooper : public BHandler {
 public:
 							BLooper(const char* name = NULL,
@@ -134,7 +137,7 @@ private:
 	static	status_t		_Lock(BLooper* loop, port_id port,
 								bigtime_t timeout);
 	static	status_t		_LockComplete(BLooper* loop, int32 old,
-								thread_id this_tid, sem_id sem,
+								thread_id this_tid, looper_lock* lock,
 								bigtime_t timeout);
 			void			_InitData(const char* name, int32 priority,
 								port_id port, int32 capacity);
@@ -161,6 +164,7 @@ private:
 			port_id			fMsgPort;
 			int32			fAtomicCount;
 			sem_id			fLockSem;
+								// unused, always B_ERROR
 			int32			fOwnerCount;
 			thread_id		fOwner;
 			thread_id		fThread;
@@ -172,7 +176,9 @@ private:
 			bool			fTerminating;
 			bool			fRunCalled;
 			bool			fOwnsPort;
-			uint32			_reserved[11];
+			uint32			_reserved0;
+			looper_lock*	fLock;
+			uint32			_reserved[8];
 };
 
 #endif	// _LOOPER_H

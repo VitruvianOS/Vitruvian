@@ -23,6 +23,7 @@ public:
 								Messages();
 
 	virtual	void				ReadyToRun();
+	virtual	bool				QuitRequested();
 	virtual	void				MessageReceived(BMessage* message);
 
 private:

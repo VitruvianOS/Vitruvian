@@ -43,6 +43,14 @@ Messages::ReadyToRun()
 }
 
 
+bool
+Messages::QuitRequested()
+{
+	BTelephonyRoster::Default()->StopWatching(fSelfMessenger);
+	return true;
+}
+
+
 void
 Messages::MessageReceived(BMessage* message)
 {

@@ -1,7 +1,8 @@
-Application(Messages
+RunnableAddOn(Messages
 	SOURCES
 	Messages.cpp
 	MessageStore.cpp
+	MessagesView.cpp
 	MessagesWindow.cpp
 	LIBS be localestub
 	RDEF Messages.rdef

@@ -27,13 +27,11 @@ set(SYSTEM_APPS
 	Magnify
 	MediaConverter
 	MediaPlayer
-	Messages
 	NetworkStatus
 	NetPlus
 	PackageManager
 	People
 	Passwords
-	Phone
 	PrintOMatic
 	ResEdit
 	SerialConnect
@@ -103,8 +101,10 @@ set(DESKBAR_APPLETS
 	BluetoothStatus
 	Clock
 	LocationStatus
+	Messages
 	NetworkStatus
 	OverlayImage
+	Phone
 	PhoneSignal
 	PowerStatus
 	ProcessController

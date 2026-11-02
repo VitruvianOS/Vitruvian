@@ -46,6 +46,8 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fContextMinor(0),
 	fDebug(false),
 	fFirstFrameDumped(false),
+	fReadBuffer(NULL),
+	fReadBufferSize(0),
 	fWidth(1),
 	fHeight(1),
 	fInitialized(false),
@@ -535,6 +537,9 @@ MesaSurfacelessRenderer::_Cleanup()
 	}
 	delete fBitmap;
 	fBitmap = NULL;
+	free(fReadBuffer);
+	fReadBuffer = NULL;
+	fReadBufferSize = 0;
 }
 
 
@@ -566,8 +571,6 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 	if (!fInitialized || !fFboReady)
 		return;
 
-	glFinish();
-
 	pthread_mutex_lock(&fBitmapLock);
 
 	if (fBitmap == NULL
@@ -579,31 +582,31 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 			B_RGBA32);
 	}
 
-	if (fBitmap != NULL && fBitmap->IsValid()) {
+	const size_t rowBytes = (size_t)fWidth * 4;
+	const size_t readSize = rowBytes * fHeight;
+	if (fReadBufferSize < readSize) {
+		uint8* buffer = (uint8*)realloc(fReadBuffer, readSize);
+		if (buffer != NULL) {
+			fReadBuffer = buffer;
+			fReadBufferSize = readSize;
+		}
+	}
+
+	if (fBitmap != NULL && fBitmap->IsValid() && fReadBufferSize >= readSize) {
+		// glReadPixels waits for the frame and returns it bottom-up. A
+		// packed read and one copy per row into the flipped position.
 		// GLES has no GL_BGRA readback: read RGBA and swizzle.
 		uint8* bits = (uint8*)fBitmap->Bits();
 		uint32 bpr  = (uint32)fBitmap->BytesPerRow();
 		GLenum readFormat = fIsGles ? GL_RGBA : GL_BGRA;
 
 		glPixelStorei(GL_PACK_ALIGNMENT, 4);
-		if (!fIsGles || fContextMajor >= 3) {
-			glPixelStorei(GL_PACK_ROW_LENGTH,
-				(GLint)(bpr / 4));
-			glReadPixels(0, 0, fWidth, fHeight, readFormat,
-				GL_UNSIGNED_BYTE, bits);
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-		} else {
-			// ES 2 has no GL_PACK_ROW_LENGTH; read row by row.
-			uint8* row = (uint8*)malloc((size_t)fWidth * 4);
-			if (row != NULL) {
-				for (int32 y = 0; y < fHeight; y++) {
-					glReadPixels(0, y, fWidth, 1, readFormat,
-						GL_UNSIGNED_BYTE, row);
-					memcpy(bits + y * bpr, row,
-						(size_t)fWidth * 4);
-				}
-				free(row);
-			}
+		glReadPixels(0, 0, fWidth, fHeight, readFormat, GL_UNSIGNED_BYTE,
+			fReadBuffer);
+
+		for (int32 y = 0; y < fHeight; y++) {
+			memcpy(bits + (fHeight - 1 - y) * bpr,
+				fReadBuffer + y * rowBytes, rowBytes);
 		}
 
 		if (fIsGles) {
@@ -614,15 +617,6 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 					row[x * 4] = row[x * 4 + 2];
 					row[x * 4 + 2] = tmp;
 				}
-			}
-		}
-
-		// glReadPixels returns bottom-up; flip in place.
-		for (int32 y = 0; y < fHeight / 2; y++) {
-			uint8_t* a = bits + y * bpr;
-			uint8_t* b = bits + (fHeight - 1 - y) * bpr;
-			for (uint32_t x = 0; x < bpr; x++) {
-				uint8_t t = a[x]; a[x] = b[x]; b[x] = t;
 			}
 		}
 

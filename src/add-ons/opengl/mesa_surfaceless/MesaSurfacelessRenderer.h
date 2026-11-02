@@ -76,6 +76,8 @@ private:
 	int32						fContextMinor;
 	bool						fDebug;
 	bool						fFirstFrameDumped;
+	uint8*						fReadBuffer;
+	size_t						fReadBufferSize;
 
 	int32						fWidth;
 	int32						fHeight;

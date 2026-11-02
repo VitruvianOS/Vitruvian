@@ -16,7 +16,12 @@
  *
  * The survivor that learns a peer died holding the lock calls MarkDead():
  * every lock call then fails with B_BAD_SEM_ID, unlocks do nothing and
- * blocked waiters are woken. */
+ * blocked waiters are woken.
+ *
+ * There is no owner death detection: glibc has no robust reader/writer
+ * lock. A peer that can die holding it must be paired with a liveness
+ * state (see BSharedEvent::SetPeer()) or another watcher, whose survivor
+ * calls MarkDead(). */
 struct shared_rw_lock_state {
 	int32	fState;
 	int32	_reserved[3];

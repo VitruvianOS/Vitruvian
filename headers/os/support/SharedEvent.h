@@ -24,7 +24,14 @@
  *
  * Dead: a peer that learns the other side is gone calls MarkDead(). Every
  * Acquire() then returns B_BAD_SEM_ID, as for a deleted kernel semaphore,
- * Release() does nothing and returns B_BAD_SEM_ID. A dead word stays dead. */
+ * Release() does nothing and returns B_BAD_SEM_ID. A dead word stays dead.
+ *
+ * SetPeer() names the liveness state of the peer that posts. A waiter then
+ * also wakes when the kernel reports that peer's team dead: the event is
+ * marked dead and Acquire() returns B_BAD_SEM_ID. Without a peer, or on a
+ * kernel without futex_waitv, only MarkDead() ends the wait. */
+struct shared_liveness_state;
+
 struct shared_event_state {
 	int32	fCount;
 	int32	fWaiters;
@@ -39,6 +46,7 @@ public:
 	virtual					~BSharedEvent();
 
 			void				SetTo(shared_event_state* state);
+			void				SetPeer(shared_liveness_state* peer);
 
 			status_t			Acquire(int32 count = 1, uint32 flags = 0,
 									bigtime_t timeout = 0);
@@ -59,6 +67,7 @@ private:
 			BSharedEvent&		operator=(const BSharedEvent&);
 
 			shared_event_state*	fState;
+			shared_liveness_state*	fPeer;
 };
 
 

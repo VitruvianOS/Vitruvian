@@ -21,6 +21,7 @@ target_sources(be PRIVATE
 	BFutexLocker.cpp
 	SharedLocker.cpp
 	SharedEvent.cpp
+	SharedLiveness.cpp
 	SharedRWLocker.cpp
 	PointerList.cpp
 	Referenceable.cpp

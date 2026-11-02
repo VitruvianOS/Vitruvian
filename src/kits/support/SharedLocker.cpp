@@ -5,6 +5,9 @@
 
 #include <SharedLocker.h>
 
+#include <errno.h>
+#include <time.h>
+
 #include <libroot/futex.h>
 
 
@@ -14,6 +17,7 @@
 BSharedLocker::BSharedLocker()
 	:
 	fState(NULL),
+	fRobust(NULL),
 	fLocked(false)
 {
 }
@@ -22,6 +26,7 @@ BSharedLocker::BSharedLocker()
 BSharedLocker::BSharedLocker(shared_lock_state* state)
 	:
 	fState(state),
+	fRobust(NULL),
 	fLocked(false)
 {
 }
@@ -37,6 +42,38 @@ BSharedLocker::SetTo(shared_lock_state* state)
 {
 	Unlock();
 	fState = state;
+	fRobust = NULL;
+	fLocked = false;
+}
+
+
+status_t
+BSharedLocker::InitRobust(shared_robust_locker_state* state)
+{
+	if (state == NULL)
+		return B_BAD_VALUE;
+
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+	int error = pthread_mutex_init(&state->fMutex, &attr);
+	pthread_mutexattr_destroy(&attr);
+	if (error != 0)
+		return B_ERROR;
+
+	state->fDead = 0;
+	state->_reserved[0] = state->_reserved[1] = state->_reserved[2] = 0;
+	return B_OK;
+}
+
+
+void
+BSharedLocker::SetRobust(shared_robust_locker_state* state)
+{
+	Unlock();
+	fState = NULL;
+	fRobust = state;
 	fLocked = false;
 }
 
@@ -51,6 +88,39 @@ BSharedLocker::Lock()
 status_t
 BSharedLocker::LockWithTimeout(bigtime_t timeout)
 {
+	if (fRobust != NULL) {
+		int error;
+		if (timeout == B_INFINITE_TIMEOUT)
+			error = pthread_mutex_lock(&fRobust->fMutex);
+		else {
+			struct timespec ts;
+			clock_gettime(CLOCK_MONOTONIC, &ts);
+			bigtime_t wait = timeout > 0 ? timeout : 0;
+			ts.tv_sec += wait / 1000000;
+			ts.tv_nsec += (wait % 1000000) * 1000;
+			if (ts.tv_nsec >= 1000000000) {
+				ts.tv_sec++;
+				ts.tv_nsec -= 1000000000;
+			}
+			error = pthread_mutex_clocklock(&fRobust->fMutex, CLOCK_MONOTONIC,
+				&ts);
+		}
+		if (error == ETIMEDOUT)
+			return futex_timeout_error(timeout);
+		if (error == EOWNERDEAD) {
+			__atomic_store_n(&fRobust->fDead, 1, __ATOMIC_SEQ_CST);
+			pthread_mutex_consistent(&fRobust->fMutex);
+		} else if (error != 0)
+			return B_ERROR;
+
+		if (__atomic_load_n(&fRobust->fDead, __ATOMIC_ACQUIRE) != 0) {
+			pthread_mutex_unlock(&fRobust->fMutex);
+			return B_BAD_SEM_ID;
+		}
+		fLocked = true;
+		return B_OK;
+	}
+
 	if (fState == NULL)
 		return B_BAD_VALUE;
 
@@ -94,6 +164,13 @@ BSharedLocker::LockWithTimeout(bigtime_t timeout)
 void
 BSharedLocker::Unlock()
 {
+	if (fRobust != NULL) {
+		if (fLocked) {
+			fLocked = false;
+			pthread_mutex_unlock(&fRobust->fMutex);
+		}
+		return;
+	}
 	if (fState == NULL || !fLocked)
 		return;
 
@@ -115,6 +192,10 @@ BSharedLocker::Unlock()
 void
 BSharedLocker::MarkDead()
 {
+	if (fRobust != NULL) {
+		__atomic_store_n(&fRobust->fDead, 1, __ATOMIC_SEQ_CST);
+		return;
+	}
 	if (fState == NULL)
 		return;
 
@@ -126,6 +207,8 @@ BSharedLocker::MarkDead()
 bool
 BSharedLocker::IsDead() const
 {
+	if (fRobust != NULL)
+		return __atomic_load_n(&fRobust->fDead, __ATOMIC_ACQUIRE) != 0;
 	return fState != NULL
 		&& (__atomic_load_n(&fState->fState, __ATOMIC_ACQUIRE)
 			& DEAD_FLAG) != 0;

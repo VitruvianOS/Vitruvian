@@ -6,6 +6,8 @@
 #define _OS_SUPPORT_SHARED_LOCKER_H
 
 
+#include <pthread.h>
+
 #include <OS.h>
 #include <SupportDefs.h>
 
@@ -23,6 +25,24 @@ struct shared_lock_state {
 };
 
 
+/* Robust mode: a process shared robust pthread mutex, so the kernel
+ * reports a holder that dies. Call BSharedLocker::InitRobust() once in the
+ * creator, then SetRobust() in every peer. The word layout above is not
+ * touched.
+ *
+ * A Lock() that finds the previous holder dead marks the mutex consistent,
+ * sets fDead, releases it and fails with B_BAD_SEM_ID, as for MarkDead().
+ * The protected data is not trusted after an owner death, so there is no
+ * success-with-flag result. Every later lock fails with B_BAD_SEM_ID.
+ * MarkDead() in this mode only sets fDead: threads already blocked in the
+ * mutex wake when the holder unlocks or dies. */
+struct shared_robust_locker_state {
+	pthread_mutex_t	fMutex;
+	int32			fDead;
+	int32			_reserved[3];
+};
+
+
 class BSharedLocker {
 public:
 							BSharedLocker();
@@ -30,6 +50,10 @@ public:
 	virtual					~BSharedLocker();
 
 			void				SetTo(shared_lock_state* state);
+
+	static	status_t			InitRobust(shared_robust_locker_state* state);
+			void				SetRobust(
+									shared_robust_locker_state* state);
 
 			bool				Lock();
 			status_t			LockWithTimeout(bigtime_t timeout);
@@ -45,6 +69,7 @@ private:
 			BSharedLocker&		operator=(const BSharedLocker&);
 
 			shared_lock_state*	fState;
+			shared_robust_locker_state*	fRobust;
 			bool				fLocked;
 };
 

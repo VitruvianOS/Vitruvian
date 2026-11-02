@@ -5,6 +5,8 @@
 
 #include <SharedEvent.h>
 
+#include <support/SharedLiveness.h>
+
 #include <libroot/futex.h>
 
 
@@ -15,14 +17,16 @@
 
 BSharedEvent::BSharedEvent()
 	:
-	fState(NULL)
+	fState(NULL),
+	fPeer(NULL)
 {
 }
 
 
 BSharedEvent::BSharedEvent(shared_event_state* state)
 	:
-	fState(state)
+	fState(state),
+	fPeer(NULL)
 {
 }
 
@@ -36,6 +40,13 @@ void
 BSharedEvent::SetTo(shared_event_state* state)
 {
 	fState = state;
+}
+
+
+void
+BSharedEvent::SetPeer(shared_liveness_state* peer)
+{
+	fPeer = peer;
 }
 
 
@@ -89,7 +100,13 @@ BSharedEvent::Acquire(int32 count, uint32 flags, bigtime_t timeout)
 			break;
 		}
 		// A release changes the word, so the wait returns at once.
-		status_t error = futex_wait_shared(&fState->fCount, state, left);
+		status_t error = shared_liveness_wait(fPeer, &fState->fCount, state,
+			left);
+		if (error == B_BAD_SEM_ID) {
+			// The poster died. Wake the other waiters, the loop then ends.
+			MarkDead();
+			continue;
+		}
 		if (error == B_TIMED_OUT || futex_wait_failed(error)) {
 			result = error;
 			break;

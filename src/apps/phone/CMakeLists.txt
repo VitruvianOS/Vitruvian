@@ -4,6 +4,7 @@ RunnableAddOn(Phone
 	CallLog.cpp
 	CallAudioRouter.cpp
 	SipAudioRouter.cpp
+	DialerView.cpp
 	DialerWindow.cpp
 	InCallWindow.cpp
 	IncomingCallWindow.cpp

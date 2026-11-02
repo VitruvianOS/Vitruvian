@@ -6,6 +6,7 @@
 #define _PASSWORDS_VIEW_H
 
 
+#include <CardLayout.h>
 #include <GroupView.h>
 #include <KeyStore.h>
 #include <List.h>
@@ -17,11 +18,13 @@
 #include <ColumnListView.h>
 
 
-class BButton;
+class BCardLayout;
+class BMenuBar;
+class BMenuItem;
 class BStringView;
 class BTextControl;
-class BTextView;
 class EntryItem;
+class OpenEntry;
 
 
 class PasswordsView : public BGroupView {
@@ -35,13 +38,13 @@ public:
 private:
 			void				_LoadKeyrings();
 			void				_LoadEntries(const char* keyring);
-			void				_ShowEntry(int32 index);
-			void				_SaveCurrentEntry();
+			void				_OpenEntry(int32 index);
+			void				_UpdateMenus();
+			void				_DeleteEntry();
+			void				_Error(const char* message);
 			void				_CopyToClipboard(const BString& text,
 									int32 clearAfterSeconds);
 			void				_ClearClipboard();
-			void				_UpdateTotp();
-			void				_GeneratePassword();
 			void				_ExportDatabase();
 			void				_ImportDatabase();
 			void				_ClearRows(BList& rows,
@@ -53,20 +56,17 @@ private:
 			BList				fGroupRows;
 			BList				fEntryRows;
 			BString				fCurrentKeyring;
-			bool				fHaveCurrent;
+			BObjectList<OpenEntry>	fOpenEntries;
 
 			BColumnListView*	fGroupList;
 			BColumnListView*	fEntryList;
+			BCardLayout*		fEntryCards;
 			BTextControl*		fSearchControl;
-			BTextControl*		fTitleControl;
-			BTextControl*		fUserControl;
-			BTextControl*		fPasswordControl;
-			BTextControl*		fUrlControl;
-			BTextView*			fNotesControl;
-			BTextControl*		fTotpControl;
-			BStringView*		fTotpCodeView;
-			BStringView*		fStatusLabel;
-			BMessageRunner*		fTotpRunner;
+			BMenuItem*			fNewItem;
+			BMenuItem*			fOpenItem;
+			BMenuItem*			fCopyUserItem;
+			BMenuItem*			fCopyPasswordItem;
+			BMenuItem*			fDeleteItem;
 			BMessageRunner*		fClipboardRunner;
 			int32				fClipboardMessageWhat;
 };

@@ -3,6 +3,7 @@ Application(Passwords
 	Passwords.cpp
 	PasswordsView.cpp
 	PasswordDialog.cpp
+	EntryWindow.cpp
 	${CMAKE_SOURCE_DIR}/src/servers/keystore/VosCrypto.c
 
 	INCLUDES

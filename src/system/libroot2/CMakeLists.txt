@@ -3,6 +3,7 @@ target_sources(root PRIVATE
 	exec_status.cpp
 
 	thread.cpp
+	rtkit.cpp
 	port.cpp
 	sem.cpp
 	area.cpp

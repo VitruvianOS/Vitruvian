@@ -13,7 +13,7 @@ Application(MediaPlayer
 		PlaylistItem.cpp
 		PlaylistWindow.cpp
 		VideoDisplay.cpp
-		VideoView.cpp
+		PlayerVideoView.cpp
 		interface/DurationView.cpp
 		interface/LocationStringView.cpp
 		interface/PeakView.cpp

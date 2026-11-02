@@ -16,11 +16,11 @@
 // Receives B_PLAYER_VIDEO_FRAME from BMediaPlayer::SetVideoView and
 // letterboxes the decoded frame into the current bounds. In full screen it
 // also reports mouse intent (reveal, drag-move, double-click) to the window.
-class VideoView : public BView {
+class PlayerVideoView : public BView {
 public:
-								VideoView(BRect frame, const char* name,
+								PlayerVideoView(BRect frame, const char* name,
 									uint32 resizeMask = B_FOLLOW_ALL);
-	virtual						~VideoView();
+	virtual						~PlayerVideoView();
 
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				FrameResized(float width, float height);

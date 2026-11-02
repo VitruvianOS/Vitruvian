@@ -42,7 +42,7 @@
 #include "PlaylistItem.h"
 #include "PlaylistWindow.h"
 #include "VideoDisplay.h"
-#include "VideoView.h"
+#include "PlayerVideoView.h"
 
 #include <media2/MediaPlayer.h>
 #include <SettingsMessage.h>
@@ -123,7 +123,7 @@ MainWin::~MainWin()
 void
 MainWin::_SetupWindow()
 {
-	fVideoView = new VideoView(BRect(0, 0, 360, 200), "video", B_FOLLOW_ALL);
+	fVideoView = new PlayerVideoView(BRect(0, 0, 360, 200), "video", B_FOLLOW_ALL);
 
 	fLocationView = new LocationStringView("location", "");
 	fLocationView->SetExplicitMinSize(BSize(250,

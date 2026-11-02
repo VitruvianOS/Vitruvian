@@ -86,6 +86,17 @@ static const float kMouseTransitImportance = 1.0f;
 static const float kStandardImportance = 0.9f;
 static const float kListenerImportance = 0.8f;
 
+// Delivery deadline: 500 ms scaled by the importance factor. Standard
+// events (keys, buttons) wait without limit, the others are dropped so a
+// wedged client cannot freeze the dispatcher.
+static bigtime_t
+_deliveryTimeout(float importance)
+{
+	if (importance >= kStandardImportance)
+		return B_INFINITE_TIMEOUT;
+	return (bigtime_t)(500000 * importance);
+}
+
 
 EventTarget::EventTarget()
 	:
@@ -690,7 +701,14 @@ EventDispatcher::_SendMessage(BMessenger& messenger, BMessage* message,
 	// TODO: add failed messages to a queue, and start dropping them by importance
 	//	(and use the same mechanism in ServerWindow::SendMessageToClient())
 
-	status_t status = messenger.SendMessage(message, (BHandler*)NULL, 0);
+	// Events below kStandardImportance are dropped on timeout.
+	status_t status = messenger.SendMessage(message, (BHandler*)NULL,
+		_deliveryTimeout(importance));
+	if (status == B_TIMED_OUT) {
+		ETRACE(("events: dropped '%.4s', target did not accept it in time\n",
+			(char*)&message->what));
+		return true;
+	}
 	if (status != B_OK) {
 		printf("EventDispatcher: failed to send message '%.4s' to target: %s\n",
 			(char*)&message->what, strerror(status));

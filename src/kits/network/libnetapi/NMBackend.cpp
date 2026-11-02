@@ -3556,7 +3556,67 @@ struct _SetStaticIPJob {
 	BString dns;
 	BMessenger replyTo;
 	uint32 replyWhat;
+	NMDevice* device;
+	NMConnection* liveConnection;
 };
+
+
+static void
+_FinishStaticIPJob(_SetStaticIPJob* job, status_t status, const char* reason)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", (int32)status);
+	if (status != B_OK && reason != NULL)
+		reply.AddString("reason", reason);
+	job->replyTo.SendMessage(&reply);
+	if (job->liveConnection != NULL)
+		g_object_unref(job->liveConnection);
+	if (job->device != NULL)
+		g_object_unref(job->device);
+	delete job;
+}
+
+
+static void
+_OnReactivateIPConfigDone(GObject* source, GAsyncResult* result,
+	gpointer userData)
+{
+	_SetStaticIPJob* job = (_SetStaticIPJob*)userData;
+
+	GError* error = NULL;
+	NMActiveConnection* active = nm_client_activate_connection_finish(
+		job->nmClient, result, &error);
+
+	if (active != NULL) {
+		g_object_unref(active);
+		_FinishStaticIPJob(job, B_OK, NULL);
+		return;
+	}
+
+	_FinishStaticIPJob(job, B_ERROR, error != NULL
+		? error->message : "could not reactivate the connection");
+	if (error != NULL)
+		g_error_free(error);
+}
+
+
+static void
+_OnReapplyIPConfigDone(GObject* source, GAsyncResult* result, gpointer userData)
+{
+	_SetStaticIPJob* job = (_SetStaticIPJob*)userData;
+
+	GError* error = NULL;
+	if (nm_device_reapply_finish(NM_DEVICE(source), result, &error)) {
+		_FinishStaticIPJob(job, B_OK, NULL);
+		return;
+	}
+
+	// Fall back to reactivating if the reapply is rejected.
+	nm_client_activate_connection_async(job->nmClient, job->liveConnection,
+		job->device, NULL, NULL, _OnReactivateIPConfigDone, job);
+	if (error != NULL)
+		g_error_free(error);
+}
 
 
 static void
@@ -3568,16 +3628,27 @@ _OnCommitIPConfigDone(GObject* source, GAsyncResult* result, gpointer userData)
 	gboolean ok = nm_remote_connection_commit_changes_finish(
 		NM_REMOTE_CONNECTION(source), result, &error);
 
-	BMessage reply(job->replyWhat);
-	reply.AddInt32("status", ok ? (int32)B_OK : (int32)B_ERROR);
 	if (!ok) {
-		reply.AddString("reason",
-			error != NULL ? error->message : "unknown error");
+		_FinishStaticIPJob(job, B_ERROR, error != NULL
+			? error->message : "unknown error");
 		if (error != NULL)
 			g_error_free(error);
+		return;
 	}
-	job->replyTo.SendMessage(&reply);
-	delete job;
+
+	if (error != NULL) {
+		g_error_free(error);
+		error = NULL;
+	}
+
+	if (job->device == NULL) {
+		_FinishStaticIPJob(job, B_OK, NULL);
+		return;
+	}
+
+	job->liveConnection = (NMConnection*)g_object_ref(source);
+	nm_device_reapply_async(job->device, job->liveConnection, 0, 0, NULL,
+		_OnReapplyIPConfigDone, job);
 }
 
 
@@ -3592,12 +3663,26 @@ _RunSetStaticIPConfig(gpointer data)
 	NMConnection* connection = (NMConnection*)nm_client_get_connection_by_path(
 		job->nmClient, job->connectionPath.String());
 	if (connection == NULL || !NM_IS_REMOTE_CONNECTION(connection)) {
-		BMessage reply(job->replyWhat);
-		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
-		reply.AddString("reason", "no such saved connection profile");
-		job->replyTo.SendMessage(&reply);
-		delete job;
+		_FinishStaticIPJob(job, B_ENTRY_NOT_FOUND,
+			"no such saved connection profile");
 		return G_SOURCE_REMOVE;
+	}
+
+	const char* uuid = nm_connection_get_uuid(connection);
+	const GPtrArray* devices = nm_client_get_devices(job->nmClient);
+	for (guint i = 0; devices != NULL && i < devices->len; i++) {
+		NMDevice* device = (NMDevice*)devices->pdata[i];
+		NMActiveConnection* active = nm_device_get_active_connection(device);
+		if (active == NULL)
+			continue;
+		const char* activeUUID = nm_active_connection_get_uuid(active);
+		if (activeUUID == NULL || uuid == NULL
+			|| strcmp(activeUUID, uuid) != 0)
+			continue;
+		if (nm_device_get_state(device) != NM_DEVICE_STATE_ACTIVATED)
+			continue;
+		job->device = (NMDevice*)g_object_ref(device);
+		break;
 	}
 
 	NMRemoteConnection* remote = NM_REMOTE_CONNECTION(connection);
@@ -3621,11 +3706,7 @@ _RunSetStaticIPConfig(gpointer data)
 	if (job->mode == NMBackend::IP4_CONFIG_MANUAL) {
 		int32 prefix = _NetmaskToPrefix(job->netmask.String());
 		if (prefix < 0) {
-			BMessage reply(job->replyWhat);
-			reply.AddInt32("status", (int32)B_BAD_VALUE);
-			reply.AddString("reason", "invalid IPv4 netmask");
-			job->replyTo.SendMessage(&reply);
-			delete job;
+			_FinishStaticIPJob(job, B_BAD_VALUE, "invalid IPv4 netmask");
 			return G_SOURCE_REMOVE;
 		}
 
@@ -3633,14 +3714,10 @@ _RunSetStaticIPConfig(gpointer data)
 		NMIPAddress* addr = nm_ip_address_new(AF_INET, job->address.String(),
 			prefix, &error);
 		if (addr == NULL) {
-			BMessage reply(job->replyWhat);
-			reply.AddInt32("status", (int32)B_BAD_VALUE);
-			reply.AddString("reason",
-				error != NULL ? error->message : "invalid IPv4 address");
+			_FinishStaticIPJob(job, B_BAD_VALUE, error != NULL
+				? error->message : "invalid IPv4 address");
 			if (error != NULL)
 				g_error_free(error);
-			job->replyTo.SendMessage(&reply);
-			delete job;
 			return G_SOURCE_REMOVE;
 		}
 		nm_setting_ip_config_add_address(ipSetting, addr);
@@ -3695,6 +3772,8 @@ NMBackend::SetStaticIPConfigAsync(const char* connectionPath,
 	job->dns = dns != NULL ? dns : "";
 	job->replyTo = replyTo;
 	job->replyWhat = replyWhat;
+	job->device = NULL;
+	job->liveConnection = NULL;
 
 	g_main_context_invoke((GMainContext*)fMainContext, _RunSetStaticIPConfig,
 		job);

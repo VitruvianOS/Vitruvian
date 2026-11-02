@@ -9,6 +9,8 @@
 #include <OS.h>
 #include <libudev.h>
 
+#include <support/BranchHints.h>
+
 
 namespace BKernelPrivate {
 

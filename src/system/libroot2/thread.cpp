@@ -802,7 +802,7 @@ thread_id
 find_thread(const char* name)
 {
 	if (name == NULL) {
-		if (sCachedTid == 0)
+		if (unlikely(sCachedTid == 0))
 			sCachedTid = syscall(SYS_gettid);
 		return sCachedTid;
 	}

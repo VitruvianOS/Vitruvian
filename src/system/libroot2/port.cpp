@@ -21,7 +21,7 @@ create_port(int32 queueLength, const char* name)
 	}
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_create exchange;
@@ -30,7 +30,7 @@ create_port(int32 queueLength, const char* name)
 	exchange.size = (uint32_t)(strlen(name) + 1);
 	exchange.capacity = queueLength;
 
-	if (nexus_io(nexus, NEXUS_PORT_CREATE, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_CREATE, &exchange) < 0))
 		return B_ERROR;
 	if (exchange.ret != B_OK)
 		return exchange.ret;
@@ -44,7 +44,7 @@ close_port(port_id id)
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_id exchange;
@@ -52,10 +52,10 @@ close_port(port_id id)
 	exchange.id = id;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
-	if (nexus_io(nexus, NEXUS_PORT_CLOSE, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_CLOSE, &exchange) < 0))
 		return B_ERROR;
 	return exchange.ret;
 }
@@ -66,18 +66,18 @@ delete_port(port_id id)
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_id exchange;
 	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 
-	if (nexus_io(nexus, NEXUS_PORT_DELETE, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_DELETE, &exchange) < 0))
 		return B_ERROR;
 	return exchange.ret;
 }
@@ -90,7 +90,7 @@ find_port(const char* name)
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_find_req exchange;
@@ -98,7 +98,7 @@ find_port(const char* name)
 	exchange.name = name;
 	exchange.size = strlen(name)+1;
 
-	if (nexus_io(nexus, NEXUS_PORT_FIND, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_FIND, &exchange) < 0))
 		return B_ERROR;
 	if (exchange.ret != B_OK)
 		return exchange.ret;
@@ -115,7 +115,7 @@ _kern_get_next_port_info(team_id team, int32* _cookie,
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_get_next_port req;
@@ -123,7 +123,7 @@ _kern_get_next_port_info(team_id team, int32* _cookie,
 	req.team   = (pid_t)team;
 	req.cookie = *_cookie;
 
-	if (nexus_io(nexus, NEXUS_GET_NEXT_PORT_FOR_TEAM, &req) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_GET_NEXT_PORT_FOR_TEAM, &req) < 0))
 		return B_ERROR;
 	if (req.ret != B_OK)
 		return req.ret;
@@ -153,14 +153,14 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	if (out_info == NULL || size != sizeof(*out_info))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_get_info exchange;
@@ -170,7 +170,7 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 	exchange.id = id;
 	exchange.info = &info;
 
-	if (nexus_io(nexus, NEXUS_PORT_INFO, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_INFO, &exchange) < 0))
 		return B_ERROR;
 	if (exchange.ret != B_OK)
 		return exchange.ret;
@@ -191,7 +191,7 @@ port_count(port_id id)
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	port_info info;
@@ -216,7 +216,7 @@ port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	port_message_info info;
@@ -235,14 +235,14 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	if (info == NULL /*|| infoSize != sizeof(*info)*/)
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_get_message_info exchange;
@@ -257,7 +257,7 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 		exchange.size = sizeof(privateInfo);
 		exchange.info = &privateInfo;
 
-		if (nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange) < 0))
 			return B_ERROR;
 	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
 		&timeout));
@@ -279,16 +279,16 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
-	if ((msgBuffer == NULL && bufferSize > 0)
-			|| bufferSize > PORT_MAX_MESSAGE_SIZE) {
+	if (unlikely((msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE)) {
 		return B_BAD_VALUE;
 	}
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_read exchange;
@@ -302,7 +302,7 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 		exchange.flags = flags;
 		exchange.timeout = timeout;
 
-		if (nexus_io(nexus, NEXUS_PORT_READ, &exchange) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_READ, &exchange) < 0))
 			return B_ERROR;
 	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
 		&timeout));
@@ -327,16 +327,16 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
-	if ((msgBuffer == NULL && bufferSize > 0)
-			|| bufferSize > PORT_MAX_MESSAGE_SIZE) {
+	if (unlikely((msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE)) {
 		return B_BAD_VALUE;
 	}
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_write exchange;
@@ -350,7 +350,7 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 		exchange.flags = flags;
 		exchange.timeout = timeout;
 
-		if (nexus_io(nexus, NEXUS_PORT_WRITE, &exchange) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_WRITE, &exchange) < 0))
 			return B_ERROR;
 	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
 		&timeout));
@@ -375,19 +375,19 @@ write_port_with_caps(port_id id, int32 msgCode,
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
-	if ((msgBuffer == NULL && bufferSize > 0)
-			|| bufferSize > PORT_MAX_MESSAGE_SIZE) {
+	if (unlikely((msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE)) {
 		return B_BAD_VALUE;
 	}
 
-	if (caps == NULL && capsCount > 0)
+	if (unlikely(caps == NULL && capsCount > 0))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	// Userland `port_cap_in` matches `nexus_port_cap_in` byte-for-byte.
@@ -404,7 +404,7 @@ write_port_with_caps(port_id id, int32 msgCode,
 		exchange.flags = flags;
 		exchange.timeout = timeout;
 
-		if (nexus_io(nexus, NEXUS_PORT_WRITE_CAPS, &exchange) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_WRITE_CAPS, &exchange) < 0))
 			return B_ERROR;
 	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
 		&timeout));
@@ -421,22 +421,22 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 {
 	CALLED();
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
-	if (bufferSize == NULL || capsCount == NULL)
+	if (unlikely(bufferSize == NULL || capsCount == NULL))
 		return B_BAD_VALUE;
 
-	if ((msgBuffer == NULL && *bufferSize > 0)
-			|| *bufferSize > PORT_MAX_MESSAGE_SIZE) {
+	if (unlikely((msgBuffer == NULL && *bufferSize > 0)
+			|| *bufferSize > PORT_MAX_MESSAGE_SIZE)) {
 		return B_BAD_VALUE;
 	}
 
-	if (caps == NULL && *capsCount > 0)
+	if (unlikely(caps == NULL && *capsCount > 0))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	// Userland `port_cap_out` matches `nexus_port_cap_out` byte-for-byte.
@@ -453,7 +453,7 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 		exchange.flags = flags;
 		exchange.timeout = timeout;
 
-		if (nexus_io(nexus, NEXUS_PORT_READ_CAPS, &exchange) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_READ_CAPS, &exchange) < 0))
 			return B_ERROR;
 	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
 		&timeout));
@@ -497,14 +497,14 @@ set_port_owner(port_id id, team_id team)
 	// and introduce a mechanism that requires
 	// the target process approval.
 
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_PORT_ID;
 
 	if (team < 0)
 		return B_BAD_TEAM_ID;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_set_owner exchange;
@@ -512,7 +512,7 @@ set_port_owner(port_id id, team_id team)
 	exchange.id = id;
 	exchange.team = team;
 
-	if (nexus_io(nexus, NEXUS_SET_PORT_OWNER, &exchange) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SET_PORT_OWNER, &exchange) < 0))
 		return B_ERROR;
 	return exchange.ret;
 }

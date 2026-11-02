@@ -25,10 +25,10 @@ create_sem(int32 count, const char* name)
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_CREATE, &ex) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_CREATE, &ex) < 0))
 		return B_ERROR;
 	if (ex.ret != B_OK)
 		return ex.ret;
@@ -39,16 +39,16 @@ create_sem(int32 count, const char* name)
 status_t
 delete_sem(sem_id id)
 {
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_SEM_ID;
 
 	struct nexus_sem_delete_req ex = { .id = id, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_DELETE, &ex) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_DELETE, &ex) < 0))
 		return B_ERROR;
 	return ex.ret;
 }
@@ -64,14 +64,14 @@ acquire_sem(sem_id id)
 status_t
 acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_SEM_ID;
 
 	if (count < 1)
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
 	// nexus returns B_INTERRUPTED for any signal, including the suspend freezer's, so repeat the wait
@@ -91,7 +91,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 			.timeout = timeout,
 			.ret = B_OK
 		};
-		if (nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex) < 0)
+		if (unlikely(nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex) < 0))
 			return B_ERROR;
 	} while (ex.ret == B_INTERRUPTED && (flags & B_CAN_INTERRUPT) == 0);
 	return ex.ret;
@@ -108,7 +108,7 @@ release_sem(sem_id id)
 status_t
 release_sem_etc(sem_id id, int32 count, uint32 flags)
 {
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_SEM_ID;
 
 	if (count < 1)
@@ -123,10 +123,10 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_RELEASE, &ex) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_RELEASE, &ex) < 0))
 		return B_ERROR;
 	return ex.ret;
 }
@@ -135,7 +135,7 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 status_t
 get_sem_count(sem_id id, int32* threadCount)
 {
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_SEM_ID;
 
 	if (threadCount == NULL)
@@ -144,10 +144,10 @@ get_sem_count(sem_id id, int32* threadCount)
 	struct nexus_sem_count_req ex = { .id = id, .count = 0, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_COUNT, &ex) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_COUNT, &ex) < 0))
 		return B_ERROR;
 	if (ex.ret == B_OK)
 		*threadCount = ex.count;
@@ -158,7 +158,7 @@ get_sem_count(sem_id id, int32* threadCount)
 status_t
 _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
-	if (id < 0)
+	if (unlikely(id < 0))
 		return B_BAD_SEM_ID;
 
 	if (info == NULL || infoSize != sizeof(sem_info))
@@ -169,10 +169,10 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 	req.id = id;
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_INFO, &req) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_INFO, &req) < 0))
 		return B_ERROR;
 	if (req.ret == B_OK) {
 		info->sem = req.info.sem;
@@ -198,10 +198,10 @@ _get_next_sem_info(team_id id, int32* cookie, struct sem_info* info, size_t size
 	nextInfo.cookie = *cookie;
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_NEXT_INFO, &nextInfo) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_SEM_NEXT_INFO, &nextInfo) < 0))
 		return B_ERROR;
 	if (nextInfo.ret == B_OK) {
 		info->sem = nextInfo.info.sem;

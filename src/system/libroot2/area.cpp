@@ -342,7 +342,7 @@ delete_area(area_id id)
 area_id
 find_area(const char* name)
 {
-	if (name == NULL || name[0] == '\0')
+	if (unlikely(name == NULL || name[0] == '\0'))
 		return B_BAD_VALUE;
 
 	// TODO
@@ -351,13 +351,13 @@ find_area(const char* name)
 		return local;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
 	struct nexus_area_find find = {};
 	strncpy(find.name, name, B_OS_NAME_LENGTH - 1);
 
-	if (nexus_io(nexus, NEXUS_AREA_FIND, &find) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_AREA_FIND, &find) < 0))
 		return B_ERROR;
 	if (find.ret != B_OK)
 		return find.ret;
@@ -388,7 +388,7 @@ set_area_protection(area_id id, uint32 protection)
 		return B_ERROR;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
 	struct nexus_area_set_protection sp = {
@@ -413,15 +413,15 @@ area_for(void* address)
 status_t
 _get_area_info(area_id id, area_info* info, size_t size)
 {
-	if (id < 0 || info == NULL || size != sizeof(area_info))
+	if (unlikely(id < 0 || info == NULL || size != sizeof(area_info)))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
-	if (nexus < 0)
+	if (unlikely(nexus < 0))
 		return B_ERROR;
 
 	struct nexus_area_get_info gi = { .area = id };
-	if (nexus_io(nexus, NEXUS_AREA_GET_INFO, &gi) < 0)
+	if (unlikely(nexus_io(nexus, NEXUS_AREA_GET_INFO, &gi) < 0))
 		return B_ERROR;
 	if (gi.ret != B_OK)
 		return gi.ret;

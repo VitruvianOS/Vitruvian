@@ -6,6 +6,8 @@
 
 #include <support/UserSemaphore.h>
 
+#include <support/BranchHints.h>
+
 #include <libroot/futex.h>
 
 
@@ -76,7 +78,7 @@ status_t
 user_sem_acquire(user_sem* sem, bigtime_t timeout)
 {
 	lock_sem(sem);
-	if (sem->count < 0) {
+	if (unlikely(sem->count < 0)) {
 		unlock_sem(sem);
 		return B_BAD_SEM_ID;
 	}
@@ -158,7 +160,7 @@ void
 user_sem_release(user_sem* sem)
 {
 	lock_sem(sem);
-	if (sem->count < 0) {
+	if (unlikely(sem->count < 0)) {
 		unlock_sem(sem);
 		return;
 	}

@@ -20,6 +20,8 @@ target_sources(root PRIVATE
 	shutdown.cpp
 	system_info.cpp
 	system_revision.c
+	hardware_info.cpp
+	hardware_info_parse.cpp
 
 	SystemWatcher.cpp
 	KMessage.cpp

@@ -22,7 +22,7 @@
 #include <Window.h>
 
 #include "DrawState.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 
 class Desktop;
 class DesktopSettings;
@@ -283,7 +283,7 @@ protected:
 			void 				_InvalidateBitmaps();
 
 protected:
-	mutable		MultiLocker	fLocker;
+	mutable		BRWLocker	fLocker;
 
 			DrawingEngine*		fDrawingEngine;
 			DrawState			fDrawState;

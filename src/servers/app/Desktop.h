@@ -37,7 +37,7 @@
 #include "DisplayChangeTracker.h"
 #include "EventDispatcher.h"
 #include "MessageLooper.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 #include "Screen.h"
 #include "ScreenManager.h"
 #include "ServerCursor.h"
@@ -116,7 +116,7 @@ public:
 			void				UnlockAllWindows()
 									{ fWindowLock.WriteUnlock(); }
 
-			const MultiLocker&	WindowLocker() { return fWindowLock; }
+			const BRWLocker&	WindowLocker() { return fWindowLock; }
 
 	// Mouse and cursor methods
 
@@ -161,7 +161,7 @@ public:
 			status_t			CancelScreenChange(team_id owner);
 			void				ScreenChangeOwnerDied(team_id owner);
 
-			MultiLocker&		ScreenLocker() { return fScreenLock; }
+			BRWLocker&		ScreenLocker() { return fScreenLock; }
 
 			status_t			LockDirectScreen(team_id team);
 			status_t			UnlockDirectScreen(team_id team);
@@ -405,7 +405,7 @@ private:
 			int32				fShutdownCount;
 
 			::Workspace::Private fWorkspaces[kMaxWorkspaces];
-			MultiLocker			fScreenLock;
+			BRWLocker			fScreenLock;
 			BLocker				fDirectScreenLock;
 			team_id				fDirectScreenTeam;
 			int32				fCurrentWorkspace;
@@ -429,7 +429,7 @@ private:
 			ServerCursorReference fCursor;
 			ServerCursorReference fManagementCursor;
 
-			MultiLocker			fWindowLock;
+			BRWLocker			fWindowLock;
 
 			BRegion				fBackgroundRegion;
 			BRegion				fScreenRegion;

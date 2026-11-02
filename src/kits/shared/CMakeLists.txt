@@ -38,7 +38,7 @@ AddOn(
 	PromptWindow.cpp
 	#QueryFile.cpp
 	RegExp.cpp
-	RWLocker.cpp
+	BRWLocker.cpp
 	RWLockManager.cpp
 	SettingsHandler.cpp
 	SettingsMessage.cpp

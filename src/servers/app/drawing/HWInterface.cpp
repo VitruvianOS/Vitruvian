@@ -42,7 +42,7 @@ HWInterfaceListener::~HWInterfaceListener()
 
 HWInterface::HWInterface()
 	:
-	MultiLocker("hw interface lock"),
+	BRWLocker("hw interface lock"),
 	fFloatingOverlaysLock("floating overlays lock"),
 	fCursor(NULL),
 	fDragBitmap(NULL),
@@ -66,7 +66,7 @@ HWInterface::~HWInterface()
 status_t
 HWInterface::Initialize()
 {
-	return MultiLocker::InitCheck();
+	return BRWLocker::InitCheck();
 }
 
 

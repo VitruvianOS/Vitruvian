@@ -2582,8 +2582,7 @@ Desktop::LockScreen()
 	if (!LockAllWindows())
 		return B_ERROR;
 
-	// Collect first: HideWindow() nests the write lock, which MultiLocker
-	// allows, but iterating while mutating is clearer this way.
+	// Collect first, HideWindow() changes the list being iterated.
 	BList toHide;
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -3620,7 +3619,7 @@ Desktop::AllWindows()
 Window*
 Desktop::WindowForClientLooperPort(port_id port)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -3833,7 +3832,7 @@ Desktop::_WindowCanHaveFocus(Window* window) const
 void
 Desktop::_WindowChanged(Window* window)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	BAutolock _(fWorkspacesLock);
 
@@ -3849,7 +3848,7 @@ Desktop::_WindowChanged(Window* window)
 void
 Desktop::_WindowRemoved(Window* window)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	BAutolock _(fWorkspacesLock);
 
@@ -4232,7 +4231,7 @@ void
 Desktop::RebuildAndRedrawAfterWindowChange(Window* changedWindow,
 	BRegion& dirty)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 	if (!changedWindow->IsVisible() || dirty.CountRects() == 0)
 		return;
 
@@ -4274,7 +4273,7 @@ Desktop::RebuildAndRedrawAfterWindowChange(Window* changedWindow,
 void
 Desktop::_SuspendDirectFrameBufferAccess()
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -4288,7 +4287,7 @@ Desktop::_SuspendDirectFrameBufferAccess()
 void
 Desktop::_ResumeDirectFrameBufferAccess()
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -4320,7 +4319,7 @@ void
 Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 	const BRect& newFrame)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	if (oldFrame == newFrame)
 		return;
@@ -4386,7 +4385,7 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 void
 Desktop::_ScreenChanged(Screen* screen)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	// item->frame is still the old size; Screen::Frame() is already the new.
 	const int32 screenIndex = fVirtualScreen.ScreenIndex(screen);
@@ -4477,7 +4476,7 @@ Desktop::_ActivateApp(team_id team)
 void
 Desktop::_SetCurrentWorkspaceConfiguration()
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	status_t status = fDirectScreenLock.LockWithTimeout(1000000L);
 	if (status != B_OK) {
@@ -4512,7 +4511,7 @@ Desktop::_SetCurrentWorkspaceConfiguration()
 void
 Desktop::_SetWorkspace(int32 index, bool moveFocusWindow)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	int32 previousIndex = fCurrentWorkspace;
 	rgb_color previousColor = fWorkspaces[fCurrentWorkspace].Color();

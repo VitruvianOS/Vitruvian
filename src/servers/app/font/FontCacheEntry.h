@@ -36,7 +36,7 @@
 
 #include "ServerFont.h"
 #include "FontEngine.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 #include "Referenceable.h"
 #include "Transformable.h"
 
@@ -84,7 +84,7 @@ struct GlyphCache {
 
 class FontCache;
 
-class FontCacheEntry : public MultiLocker, public BReferenceable {
+class FontCacheEntry : public BRWLocker, public BReferenceable {
  public:
 	typedef FontEngine::PathAdapter					GlyphPathAdapter;
 	typedef FontEngine::Gray8Adapter				GlyphGray8Adapter;

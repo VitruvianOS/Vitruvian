@@ -4503,7 +4503,7 @@ ServerWindow::MakeWindow(BRect frame, const char* name,
 void
 ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 {
-	ASSERT_MULTI_LOCKED(fDesktop->WindowLocker());
+	ASSERT_BRW_LOCKED(fDesktop->WindowLocker());
 
 	if (!fDirectWindowInfo.IsSet())
 		return;

@@ -23,7 +23,7 @@
 #include <new>
 
 #include "IntRect.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 #include "ServerCursor.h"
 
 
@@ -48,7 +48,7 @@ public:
 };
 
 
-class HWInterface : protected MultiLocker {
+class HWInterface : protected BRWLocker {
 public:
 								HWInterface();
 	virtual						~HWInterface();

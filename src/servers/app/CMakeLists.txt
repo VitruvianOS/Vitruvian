@@ -76,7 +76,6 @@ Server(
 		IntPoint.cpp
 		IntRect.cpp
 		Layer.cpp
-		MultiLocker.cpp
 		MessageLooper.cpp
 		OffscreenServerWindow.cpp
 		OffscreenWindow.cpp

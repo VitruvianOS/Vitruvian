@@ -52,6 +52,10 @@ DirectWindowInfo::DirectWindowInfo()
 
 DirectWindowInfo::~DirectWindowInfo()
 {
+	// The client may be blocked on either word, or about to be.
+	fDisableEvent.MarkDead();
+	fAcknowledgeEvent.MarkDead();
+
 	// this should make the client die in case it's still running
 	fBufferInfo->bits = NULL;
 	fBufferInfo->bytes_per_row = 0;

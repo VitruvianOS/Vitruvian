@@ -469,6 +469,12 @@ BDirectWindow::_DirectDaemon()
 			status = disable.Wait();
 		} while (status == B_INTERRUPTED);
 
+		if (status == B_BAD_SEM_ID) {
+			// The app_server marked the word dead, the window is gone and
+			// no stop notification will follow.
+			fConnectionEnable = false;
+			return 0;
+		}
 		if (status != B_OK) {
 			//fprintf(stderr, "DirectDaemon: failed to wait direct event: %s\n",
 				// strerror(status));

@@ -167,6 +167,8 @@ InputServerStream::GetNextEvent(BMessage** _event)
 		} else if (status == B_BAD_PORT_ID) {
 			// our port got deleted - the input_server must have died
 			fPort = -1;
+			if (fCursorBuffer != NULL)
+				fCursorEvent.MarkDead();
 			return false;
 		}
 
@@ -196,45 +198,19 @@ InputServerStream::GetNextCursorPosition(BPoint &where, bigtime_t timeout)
 	if (fCursorBuffer == NULL)
 		return B_ERROR;
 
-	// Wait on the futex word the input_server posts. The wait is sliced
-	// so a dead input_server is noticed through the event port.
-	const bigtime_t kSlice = 500000;
-	const bigtime_t start = system_time();
-
+	// Wait on the futex word the input_server posts. A dead input_server
+	// is noticed by the event thread, which marks the word dead.
 	status_t status;
-	for (;;) {
-		bigtime_t slice = kSlice;
-		if (timeout != B_INFINITE_TIMEOUT) {
-			bigtime_t remaining = timeout - (system_time() - start);
-			if (remaining <= 0)
-				return B_TIMED_OUT;
-			if (remaining < slice)
-				slice = remaining;
-		}
+	do {
+		status = fCursorEvent.WaitWithTimeout(timeout);
+	} while (status == B_INTERRUPTED);
 
-		do {
-			status = fCursorEvent.WaitWithTimeout(slice);
-		} while (status == B_INTERRUPTED);
-
-		if (status == B_OK)
-			break;
-
-		if (status != B_TIMED_OUT)
-			return status;
-
-		if (timeout != B_INFINITE_TIMEOUT
-			&& system_time() - start >= timeout) {
-			return B_TIMED_OUT;
-		}
-
-		// Timed out without a post. Check the input_server is still
-		// connected before waiting again.
-		port_info info;
-		if (get_port_info(fPort, &info) != B_OK) {
-			fPort = -1;
-			return B_ERROR;
-		}
+	if (status == B_BAD_SEM_ID) {
+		fPort = -1;
+		return B_ERROR;
 	}
+	if (status != B_OK)
+		return status;
 
 #ifdef __VOS__
 	uint32 pos = atomic_get((int32*)&fCursorBuffer->pos);

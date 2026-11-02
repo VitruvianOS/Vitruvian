@@ -4532,8 +4532,8 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 			App()->Signature(), strerror(status));
 		syslog(LOG_ERR, errorString);
 
-		// The client application didn't release the semaphore
-		// within the given timeout. Or something else went wrong.
+		// The client did not acknowledge within the timeout, or
+		// something else went wrong.
 		// Deleting this member should make it crash.
 		fDirectWindowInfo.Unset();
 	} else if ((bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_START)

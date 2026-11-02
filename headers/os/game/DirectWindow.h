@@ -13,6 +13,9 @@
 #include <Window.h>
 
 
+struct shared_event_state;
+
+
 enum direct_buffer_state {
 	B_DIRECT_MODE_MASK = 15,
 	B_DIRECT_START = 0,
@@ -146,8 +149,8 @@ private:
 			uint32				fDirectLockCount;
 			thread_id			fDirectLockOwner;
 			char*				fDirectLockStack;
-			sem_id				fDisableSem;
-			sem_id				fDisableSemAck;
+			shared_event_state*	fDisableState;
+			shared_event_state*	fAckState;
 
 			uint32				fInitStatus;
 

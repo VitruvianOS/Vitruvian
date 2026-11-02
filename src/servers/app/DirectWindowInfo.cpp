@@ -32,8 +32,6 @@
 DirectWindowInfo::DirectWindowInfo()
 	:
 	fBufferInfo(NULL),
-	fSem(-1),
-	fAcknowledgeSem(-1),
 	fBufferArea(-1),
 	fOriginalFeel(B_NORMAL_WINDOW_FEEL),
 	fFullScreen(false)
@@ -46,8 +44,9 @@ DirectWindowInfo::DirectWindowInfo()
 	fBufferInfo->buffer_state = B_DIRECT_STOP;
 	fBufferInfo->bits_area = -1;
 
-	fSem = create_sem(0, "direct sem");
-	fAcknowledgeSem = create_sem(0, "direct sem ack");
+	// The sync words live in the shared area tail, mapped by the daemon too.
+	fDisableEvent.SetTo(direct_window_disable_state(fBufferInfo));
+	fAcknowledgeEvent.SetTo(direct_window_ack_state(fBufferInfo));
 }
 
 
@@ -58,8 +57,6 @@ DirectWindowInfo::~DirectWindowInfo()
 	fBufferInfo->bytes_per_row = 0;
 
 	delete_area(fBufferArea);
-	delete_sem(fSem);
-	delete_sem(fAcknowledgeSem);
 }
 
 
@@ -68,10 +65,6 @@ DirectWindowInfo::InitCheck() const
 {
 	if (fBufferArea < B_OK)
 		return fBufferArea;
-	if (fSem < B_OK)
-		return fSem;
-	if (fAcknowledgeSem < B_OK)
-		return fAcknowledgeSem;
 
 	return B_OK;
 }
@@ -81,8 +74,6 @@ status_t
 DirectWindowInfo::GetSyncData(direct_window_sync_data& data) const
 {
 	data.area = fBufferArea;
-	data.disable_sem = fSem;
-	data.disable_sem_ack = fAcknowledgeSem;
 
 	return B_OK;
 }
@@ -176,7 +167,8 @@ DirectWindowInfo::SetState(direct_buffer_state bufferState,
 		fBufferInfo->window_bounds = to_clipping_rect(windowFrame);
 
 		const int32 kMaxClipRectsCount = (DIRECT_BUFFER_INFO_AREA_SIZE
-			- sizeof(direct_buffer_info)) / sizeof(clipping_rect);
+			- sizeof(direct_buffer_info) - DIRECT_WINDOW_SYNC_RESERVED)
+			/ sizeof(clipping_rect);
 
 		fBufferInfo->clip_list_count = min_c(clipRegion.CountRects(),
 			kMaxClipRectsCount);
@@ -209,16 +201,13 @@ DirectWindowInfo::DisableFullScreen()
 status_t
 DirectWindowInfo::_SynchronizeWithClient()
 {
-	// Releasing this semaphore causes the client to call
-	// BDirectWindow::DirectConnected()
-	status_t status = release_sem(fSem);
-	if (status != B_OK)
-		return status;
+	// Posting wakes the client daemon into DirectConnected(). Wait up to
+	// half a second for it to return.
+	fDisableEvent.Post();
 
-	// Wait with a timeout of half a second until the client exits
-	// from its DirectConnected() implementation
+	status_t status;
 	do {
-		status = acquire_sem_etc(fAcknowledgeSem, 1, B_TIMEOUT, 500000);
+		status = fAcknowledgeEvent.WaitWithTimeout(500000);
 	} while (status == B_INTERRUPTED);
 
 	return status;

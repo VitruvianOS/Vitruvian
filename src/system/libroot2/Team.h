@@ -21,7 +21,6 @@ public:
 	static void			InitTeam();
 
 	static int			GetNexusDescriptor();
-	static int			GetSemDescriptor();
 	static int			GetAreaDescriptor();
 	static int			GetVRefDescriptor(dev_t* dev = NULL);
 	static int			GetNodeMonitorDescriptor();
@@ -42,6 +41,9 @@ public:
 // Must be called first thing in Team::ReinitChildAtFork(), before any
 // code that may call find_thread(NULL) and re-cache the parent's tid.
 void ResetCachedThreadId();
+
+// Drops waiter counts copied from the parent.
+void ReinitSemsAfterFork();
 
 // True for a detached load_image child; wait_for_thread() refuses it.
 bool loaded_pid_is_detached(pid_t pid);

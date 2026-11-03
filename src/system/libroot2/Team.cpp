@@ -306,16 +306,6 @@ Team::GetNexusDescriptor()
 
 
 int
-Team::GetSemDescriptor()
-{
-	if (gNexus == -1)
-		OpenNexusDevices();
-
-	return gNexus;
-}
-
-
-int
 Team::GetAreaDescriptor()
 {
 	if (gNexusArea == -1)
@@ -409,6 +399,8 @@ Team::ReinitChildAtFork()
 	// thread may have held one, deadlocking the first user of it here.
 	pthread_mutex_init(&gDetachedPidsLock, NULL);
 	pthread_mutex_init(&gDevicesLock, NULL);
+
+	ReinitSemsAfterFork();
 
 	// Enumeration handles belong to the parent's get_next_* calls.
 	proc_enum_reset_after_fork();

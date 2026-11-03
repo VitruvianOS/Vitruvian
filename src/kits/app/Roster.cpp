@@ -2072,9 +2072,9 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 		if (error == B_OK && !alreadyRunning) {
 			DBG(OUT("  token: %" B_PRIu32 "\n", appToken));
 			// load the app image
-			appThread = __load_image_with_status(argVector.Count(),
+			appThread = __load_image_etc_with_status(argVector.Count(),
 				const_cast<const char**>(argVector.Args()), environment,
-				&execStatusFd);
+				B_LOAD_IMAGE_DETACHED, &execStatusFd);
 
 			// get the app team
 			if (appThread >= 0) {
@@ -2128,7 +2128,7 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 			// on error: kill the launched team and unregister the app
 			if (error != B_OK) {
 				if (appThread >= 0)
-					kill_thread(appThread);
+					__kill_detached_child(appThread);
 
 				if (!isScript) {
 					if (!fNoRegistrar)

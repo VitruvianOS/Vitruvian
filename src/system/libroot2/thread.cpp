@@ -840,6 +840,10 @@ wait_for_remote_thread(thread_id id, status_t* returnCode)
 	if (id <= 0)
 		return B_BAD_THREAD_ID;
 
+	// A detached child has no status to join.
+	if (BKernelPrivate::loaded_pid_is_detached(id))
+		return B_BAD_THREAD_ID;
+
 	int pfd = syscall(SYS_pidfd_open, id, 0);
 	if (pfd < 0)
 		return B_BAD_THREAD_ID;
@@ -859,12 +863,16 @@ wait_for_remote_thread(thread_id id, status_t* returnCode)
 	siginfo_t si;
 	memset(&si, 0, sizeof(si));
 
-	if (waitid(P_PIDFD, pfd, &si, WEXITED) == 0) {
-		if (si.si_code == CLD_EXITED)
-			exitStatus = (status_t)si.si_status;
-		else if (si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED)
-			exitStatus = (status_t)(-si.si_status);
+	// Not our child, so its exit status is not ours to read.
+	if (waitid(P_PIDFD, pfd, &si, WEXITED) != 0) {
+		close(pfd);
+		return B_OK;
 	}
+
+	if (si.si_code == CLD_EXITED)
+		exitStatus = (status_t)si.si_status;
+	else if (si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED)
+		exitStatus = (status_t)(-si.si_status);
 
 	close(pfd);
 

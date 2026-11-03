@@ -1116,15 +1116,34 @@ load_image(int32 argc, const char** argv, const char** envp)
 }
 
 
-// Like load_image(), but hands back the exec status pipe's read end. A
-// successful exec closes it (CLOEXEC); the child reports a failed exec as a
-// negative status on it. Consume with __wait_exec_status() after resuming
-// the thread.
 thread_id
-__load_image_with_status(int32 argc, const char** argv, const char** envp,
-	int* execStatusFd)
+load_image_etc(int32 argc, const char** argv, const char** envp, uint32 flags)
 {
-	return BKernelPrivate::Team::LoadImage(argc, argv, envp, execStatusFd);
+	if ((flags & ~(uint32)B_LOAD_IMAGE_DETACHED) != 0)
+		return B_BAD_VALUE;
+
+	return BKernelPrivate::Team::LoadImage(argc, argv, envp, NULL,
+		(flags & B_LOAD_IMAGE_DETACHED) != 0);
+}
+
+
+// Like load_image_etc(), with the exec status pipe's read end.
+thread_id
+__load_image_etc_with_status(int32 argc, const char** argv, const char** envp,
+	uint32 flags, int* execStatusFd)
+{
+	if ((flags & ~(uint32)B_LOAD_IMAGE_DETACHED) != 0)
+		return B_BAD_VALUE;
+
+	return BKernelPrivate::Team::LoadImage(argc, argv, envp, execStatusFd,
+		(flags & B_LOAD_IMAGE_DETACHED) != 0);
+}
+
+
+status_t
+__kill_detached_child(thread_id id)
+{
+	return BKernelPrivate::kill_detached_child(id);
 }
 
 

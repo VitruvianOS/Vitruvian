@@ -15,6 +15,7 @@ set(SYSTEMD_SERVICES
   data/systemd/vos-fsck-failed.service
   data/systemd/vos-overclock.service
   data/systemd/vos-overclock-ok.service
+  data/systemd/vos-attrs-sync.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
@@ -25,6 +26,10 @@ install(PROGRAMS data/libexec/vos-firstboot-commit
 
 install(PROGRAMS data/libexec/vos-pdf-printer
   DESTINATION /usr/libexec/)
+
+install(PROGRAMS data/libexec/vos-attrs-sync
+  DESTINATION /usr/libexec/)
+install(DIRECTORY DESTINATION /usr/share/vos/attrs)
 
 install(PROGRAMS data/libexec/vos-install-helper
   DESTINATION /usr/libexec/)

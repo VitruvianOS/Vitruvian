@@ -1,0 +1,12 @@
+[Unit]
+Description=V\OS: apply attributes of packages installed without nexus
+ConditionPathExists=/var/lib/vos/attrs/pending
+After=systemd-modules-load.service
+Before=registrar.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-attrs-sync
+
+[Install]
+WantedBy=multi-user.target

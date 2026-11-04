@@ -1,0 +1,57 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+#
+# Turns the resources embedded in packaged files into file attributes
+# (application signature, icon, version, supported types) and registers
+# them with mimeset. Packages list those files in
+# /usr/share/vos/attrs/<package>.list (written by dh_vosattrs); dpkg runs
+# this through the vos trigger on that directory.
+#
+# resattr and mimeset need nexus. Without it (image builds, chroots) the
+# run is only queued, and vos-attrs-sync.service finishes it at boot.
+#
+#   vos-attrs-sync          process lists that changed since the last run
+#   vos-attrs-sync --all    process every list
+
+LISTS=/usr/share/vos/attrs
+STATE=/var/lib/vos/attrs
+PENDING=$STATE/pending
+
+mkdir -p "$STATE"
+
+if [ ! -e /dev/nexus ]; then
+	touch "$PENDING"
+	exit 0
+fi
+
+all=0
+[ "$1" = "--all" ] && all=1
+[ -e "$PENDING" ] && all=1
+
+for list in "$LISTS"/*.list; do
+	[ -f "$list" ] || continue
+	done_copy="$STATE/${list##*/}"
+	if [ "$all" = 0 ] && cmp -s "$list" "$done_copy"; then
+		continue
+	fi
+	failed=0
+	while IFS= read -r file; do
+		[ -n "$file" ] && [ -f "$file" ] || continue
+		if ! resattr -O -o "$file" "$file"; then
+			echo "vos-attrs-sync: resattr failed on $file" >&2
+			failed=1
+			continue
+		fi
+		mimeset -F "$file" || failed=1
+	done < "$list"
+	[ "$failed" = 0 ] && cp "$list" "$done_copy"
+done
+
+# Lists of removed packages.
+for done_copy in "$STATE"/*.list; do
+	[ -f "$done_copy" ] || continue
+	[ -f "$LISTS/${done_copy##*/}" ] || rm -f "$done_copy"
+done
+
+rm -f "$PENDING"
+exit 0

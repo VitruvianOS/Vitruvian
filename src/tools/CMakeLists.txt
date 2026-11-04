@@ -11,6 +11,7 @@ UsePrivateHeaders(GLOBAL app storage support shared)
 #Application(rm_attrs                  SOURCES rm_attrs.cpp)
 
 add_subdirectory(cppunit)
+add_subdirectory(dh-vos)
 add_subdirectory(locale)
 #add_subdirectory(hvif2png)
 #add_subdirectory(MsgSpy)

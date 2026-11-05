@@ -71,6 +71,7 @@ set(SYSTEM_LIBS
 	localestub
 	midi
 	midi2
+	outputaddon
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 

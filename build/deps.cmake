@@ -404,7 +404,7 @@ DeclareDependency(
 	LIBVPX
 	LIBRARIES  "vpx"
 	PACKAGES   "libvpx-dev"
-	RUNTIMES   "libvpx9"
+	RUNTIMES   "libvpx9 | libvpx12"
 )
 
 # HTTPS for the WebMail OAuth2 token exchange and ISPDB autoconfig.

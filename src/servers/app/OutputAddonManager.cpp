@@ -65,8 +65,12 @@ _FlattenToPort(port_id port, BMessage& message)
 	if (flat == NULL)
 		return;
 
-	if (message.Flatten(flat, size) == B_OK)
-		write_port(port, message.what, flat, size);
+	if (message.Flatten(flat, size) == B_OK) {
+		// Timed: a wedged add-on must not block app_server, least of
+		// all on the capture path.
+		write_port_etc(port, message.what, flat, size, B_RELATIVE_TIMEOUT,
+			100000);
+	}
 
 	delete[] flat;
 }
@@ -753,8 +757,11 @@ OutputAddonManager::_PublishLocked(subscription* sub)
 	int32 size = output_addon_frame_encode(&frame, rects, payload,
 		sizeof(payload));
 	if (size > 0) {
-		status_t status = write_port(sub->updatePort, kOutputAddonCodeFrame,
-			payload, size);
+		// Timed write: a full client port drops this frame instead of
+		// stalling the compositor; the damage stays pending and merges
+		// with the next one.
+		status_t status = write_port_etc(sub->updatePort,
+			kOutputAddonCodeFrame, payload, size, B_RELATIVE_TIMEOUT, 5000);
 		if (status == B_BAD_PORT_ID) {
 			// The add-on is gone without a team notice yet; fLock is
 			// already held here, so detach inline.
@@ -793,7 +800,10 @@ OutputAddonManager::PublishInput(const BMessage& event)
 		if (sub->eventPort < B_OK)
 			continue;
 
-		write_port(sub->eventPort, kOutputAddonCodeInput, flat, size);
+		// Non-blocking: dropped input is preferable to a stalled
+		// dispatcher thread.
+		write_port_etc(sub->eventPort, kOutputAddonCodeInput, flat, size,
+			B_RELATIVE_TIMEOUT, 0);
 	}
 
 	delete[] flat;

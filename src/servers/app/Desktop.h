@@ -30,6 +30,8 @@
 
 #include <ServerProtocolStructs.h>
 
+#include <PointerControlCore.h>
+
 #include "CursorManager.h"
 #include "DelayedMessage.h"
 #include "DesktopListener.h"
@@ -272,6 +274,26 @@ public:
 
 			EventTarget*		KeyboardEventTarget();
 
+			// Pointer/keyboard grabs: one of each per desktop, owned by
+			// a team and anchored to one of its windows. The secure
+			// attention team suppresses both; VT chords never arrive
+			// because the keyboard add-on consumes them upstream.
+			status_t			AcquirePointerGrab(team_id team,
+									int32 token, EventTarget* target,
+									uint32 flags, const BRect& confineTo);
+			status_t			ReleasePointerGrab(team_id team);
+			status_t			AcquireKeyboardGrab(team_id team,
+									int32 token, EventTarget* target,
+									uint32 flags);
+			status_t			ReleaseKeyboardGrab(team_id team);
+			EventTarget*		PointerGrabTarget();
+			EventTarget*		KeyboardGrabTarget();
+			// While a secure-attention team holds the exclusive (the
+			// authentication dialog), grabs deliver nothing; the
+			// dispatcher falls back to the focus path, which the
+			// secure gate then redirects.
+			void				SetSecureAttentionTeam(team_id team);
+
 			void				SetFocusWindow(Window* window = NULL);
 			void				SetFocusLocked(const Window* window);
 
@@ -438,6 +460,15 @@ private:
 			const Window*		fWindowUnderMouse;
 			const Window*		fLockedFocusWindow;
 			int32				fViewUnderMouse;
+
+			BLocker				fGrabLock;
+			input_grab_state	fInputGrabs;
+			EventTarget*		fPointerGrabTarget;
+			EventTarget*		fKeyboardGrabTarget;
+			BRect				fPointerGrabRect;
+
+			void				_ReleaseGrabsForTarget(
+									EventTarget* target);
 			BPoint				fLastMousePosition;
 			int32				fLastMouseButtons;
 

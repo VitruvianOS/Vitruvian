@@ -100,6 +100,7 @@ Server(
 		VirtualScreen.cpp
 		Window.cpp
 		WindowList.cpp
+		../../kits/shared/PointerControlCore.cpp
 		Workspace.cpp
 		WorkspacesView.cpp
 
@@ -203,7 +204,7 @@ Server(
 	"./drawing/Painter/drawing_modes"
 )
 
-UsePrivateHeaders(app_server app interface graphics graphics/common kernel support system)
+UsePrivateHeaders(app_server app interface graphics graphics/common input kernel support system)
 
 # Decorator add-ons subclass app_server classes and resolve them here.
 set_target_properties(app_server PROPERTIES ENABLE_EXPORTS ON)

@@ -45,6 +45,7 @@
 #include <Roster.h>
 
 #include <PrivateScreen.h>
+#include <PointerGrab.h>
 #include <ServerProtocol.h>
 #include <ServerReadOnlyMemory.h>
 #include <ViewPrivate.h>
@@ -499,6 +500,9 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 	fWindowUnderMouse(NULL),
 	fLockedFocusWindow(NULL),
 	fViewUnderMouse(B_NULL_TOKEN),
+	fGrabLock("window grab lock"),
+	fPointerGrabTarget(NULL),
+	fKeyboardGrabTarget(NULL),
 	fLastMousePosition(B_ORIGIN),
 	fLastMouseButtons(0),
 
@@ -512,6 +516,7 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 {
 	memset(fLastWorkspaceFocus, 0, sizeof(fLastWorkspaceFocus));
 	memset(&fScreenChangeSnapshot, 0, sizeof(fScreenChangeSnapshot));
+	input_grab_init(&fInputGrabs);
 
 	char name[B_OS_NAME_LENGTH];
 	Desktop::_GetLooperName(name, sizeof(name));
@@ -2272,6 +2277,9 @@ Desktop::RemoveWindow(Window *window)
 	if (!window->IsNormal())
 		fSubsetWindows.RemoveWindow(window);
 
+	// A grab anchored to a dying window must not outlive it.
+	_ReleaseGrabsForTarget(&window->EventTarget());
+
 	_ChangeWindowWorkspaces(window, window->Workspaces(), 0);
 
 	NotifyWindowRemoved(window);
@@ -2699,6 +2707,126 @@ Desktop::KeyboardEventTarget()
 		return &FocusWindow()->EventTarget();
 
 	return NULL;
+}
+
+
+status_t
+Desktop::AcquirePointerGrab(team_id team, int32 token, EventTarget* target,
+	uint32 flags, const BRect& confineTo)
+{
+	if (team < 0 || token < 0 || target == NULL)
+		return B_BAD_VALUE;
+
+	{
+		BAutolock _(fGrabLock);
+		if (!input_grab_acquire_pointer(&fInputGrabs, team, token, flags))
+			return B_ERROR;
+		fPointerGrabTarget = target;
+		fPointerGrabRect = confineTo;
+	}
+
+	// Device-side confinement and relative mode: pre-acceleration
+	// deltas and the cursor clamp live in the pointing add-ons.
+	uint32 constraint = 0;
+	if ((flags & B_POINTER_GRAB_CONFINED) != 0)
+		constraint |= kPointerConstraintConfined;
+	if ((flags & B_POINTER_GRAB_RELATIVE) != 0)
+		constraint |= kPointerConstraintRelative;
+	if (gInputManager != NULL)
+		gInputManager->SetPointerConstraint(constraint, confineTo);
+
+	return B_OK;
+}
+
+
+status_t
+Desktop::ReleasePointerGrab(team_id team)
+{
+	{
+		BAutolock _(fGrabLock);
+		if (!input_grab_release_pointer(&fInputGrabs, team))
+			return B_ERROR;
+		fPointerGrabTarget = NULL;
+		fPointerGrabRect = BRect();
+	}
+
+	if (gInputManager != NULL)
+		gInputManager->SetPointerConstraint(0, BRect());
+	return B_OK;
+}
+
+
+status_t
+Desktop::AcquireKeyboardGrab(team_id team, int32 token, EventTarget* target,
+	uint32 flags)
+{
+	if (team < 0 || token < 0 || target == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock _(fGrabLock);
+	if (!input_grab_acquire_keyboard(&fInputGrabs, team, token, flags))
+		return B_ERROR;
+	fKeyboardGrabTarget = target;
+	return B_OK;
+}
+
+
+status_t
+Desktop::ReleaseKeyboardGrab(team_id team)
+{
+	BAutolock _(fGrabLock);
+	if (!input_grab_release_keyboard(&fInputGrabs, team))
+		return B_ERROR;
+	fKeyboardGrabTarget = NULL;
+	return B_OK;
+}
+
+
+EventTarget*
+Desktop::PointerGrabTarget()
+{
+	BAutolock _(fGrabLock);
+	if (fInputGrabs.secureAttentionTeam >= 0)
+		return NULL;
+	return fPointerGrabTarget;
+}
+
+
+EventTarget*
+Desktop::KeyboardGrabTarget()
+{
+	BAutolock _(fGrabLock);
+	if (fInputGrabs.secureAttentionTeam >= 0)
+		return NULL;
+	return fKeyboardGrabTarget;
+}
+
+
+void
+Desktop::SetSecureAttentionTeam(team_id team)
+{
+	BAutolock _(fGrabLock);
+	input_grab_set_secure_attention_team(&fInputGrabs, team);
+}
+
+
+void
+Desktop::_ReleaseGrabsForTarget(EventTarget* target)
+{
+	team_id pointerTeam = -1;
+	team_id keyboardTeam = -1;
+	{
+		BAutolock _(fGrabLock);
+		if (fPointerGrabTarget == target)
+			pointerTeam = fInputGrabs.pointerOwnerTeam;
+		if (fKeyboardGrabTarget == target)
+			keyboardTeam = fInputGrabs.keyboardOwnerTeam;
+	}
+
+	if (pointerTeam >= 0)
+		ReleasePointerGrab(pointerTeam);
+	if (keyboardTeam >= 0)
+		ReleaseKeyboardGrab(keyboardTeam);
 }
 
 

@@ -1371,6 +1371,50 @@ fDesktop->LockSingleWindow();
 			// TODO: support B_LOCK_WINDOW_FOCUS option in Desktop
 			break;
 		}
+		case AS_ACQUIRE_POINTER_GRAB:
+		{
+			uint32 flags = 0;
+			BRect confineTo;
+			link.Read<uint32>(&flags);
+			if (link.Read<BRect>(&confineTo) != B_OK)
+				break;
+
+			status_t status = fDesktop->AcquirePointerGrab(fClientTeam,
+				fServerToken, &fEventTarget, flags, confineTo);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_RELEASE_POINTER_GRAB:
+		{
+			status_t status = fDesktop->ReleasePointerGrab(fClientTeam);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_ACQUIRE_KEYBOARD_GRAB:
+		{
+			uint32 flags = 0;
+			link.Read<uint32>(&flags);
+
+			status_t status = fDesktop->AcquireKeyboardGrab(fClientTeam,
+				fServerToken, &fEventTarget, flags);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_RELEASE_KEYBOARD_GRAB:
+		{
+			status_t status = fDesktop->ReleaseKeyboardGrab(fClientTeam);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
 		case AS_VIEW_MOVE_TO:
 		{
 			float x, y;

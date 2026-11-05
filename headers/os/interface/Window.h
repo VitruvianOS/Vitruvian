@@ -217,6 +217,18 @@ public:
 									float* minHeight, float* maxHeight);
 			void				UpdateSizeLimits();
 
+			// Pointer/keyboard grabs: this window receives the events
+			// regardless of focus or hover (XGrabPointer/XGrabKeyboard
+			// semantics). Flags: B_POINTER_GRAB_* from <PointerGrab.h>.
+			// Only the calling team can release; the grab also drops
+			// when the window or the team goes away. VT chords and the
+			// secure-attention dialog always win over a keyboard grab.
+			status_t			AcquirePointerGrab(uint32 flags,
+									const BRect& confineTo);
+			status_t			ReleasePointerGrab();
+			status_t			AcquireKeyboardGrab(uint32 flags = 0);
+			status_t			ReleaseKeyboardGrab();
+
 			status_t			SetDecoratorSettings(const BMessage& settings);
 			status_t			GetDecoratorSettings(BMessage* settings) const;
 

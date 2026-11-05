@@ -1508,6 +1508,77 @@ BWindow::UpdateSizeLimits()
 
 
 status_t
+BWindow::AcquirePointerGrab(uint32 flags, const BRect& confineTo)
+{
+	if (!Lock())
+		return B_ERROR;
+
+	fLink->StartMessage(AS_ACQUIRE_POINTER_GRAB);
+	fLink->Attach<uint32>(flags);
+	fLink->Attach<BRect>(confineTo);
+
+	int32 code = B_ERROR;
+	status_t status = fLink->FlushWithReply(code);
+	Unlock();
+	if (status != B_OK)
+		return status;
+	return code;
+}
+
+
+status_t
+BWindow::ReleasePointerGrab()
+{
+	if (!Lock())
+		return B_ERROR;
+
+	fLink->StartMessage(AS_RELEASE_POINTER_GRAB);
+
+	int32 code = B_ERROR;
+	status_t status = fLink->FlushWithReply(code);
+	Unlock();
+	if (status != B_OK)
+		return status;
+	return code;
+}
+
+
+status_t
+BWindow::AcquireKeyboardGrab(uint32 flags)
+{
+	if (!Lock())
+		return B_ERROR;
+
+	fLink->StartMessage(AS_ACQUIRE_KEYBOARD_GRAB);
+	fLink->Attach<uint32>(flags);
+
+	int32 code = B_ERROR;
+	status_t status = fLink->FlushWithReply(code);
+	Unlock();
+	if (status != B_OK)
+		return status;
+	return code;
+}
+
+
+status_t
+BWindow::ReleaseKeyboardGrab()
+{
+	if (!Lock())
+		return B_ERROR;
+
+	fLink->StartMessage(AS_RELEASE_KEYBOARD_GRAB);
+
+	int32 code = B_ERROR;
+	status_t status = fLink->FlushWithReply(code);
+	Unlock();
+	if (status != B_OK)
+		return status;
+	return code;
+}
+
+
+status_t
 BWindow::SetDecoratorSettings(const BMessage& settings)
 {
 	// flatten the given settings into a buffer and send

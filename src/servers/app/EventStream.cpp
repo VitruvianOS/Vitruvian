@@ -155,6 +155,17 @@ InputServerStream::UpdateScreenBounds(BRect bounds, int32 orientation,
 }
 
 
+void
+InputServerStream::SetPointerConstraint(uint32 flags, const BRect& rect)
+{
+	BMessage constraint(IS_SET_POINTER_CONSTRAINT);
+	constraint.AddInt32("flags", (int32)flags);
+	constraint.AddRect("rect", rect);
+
+	fInputServer.SendMessage(&constraint);
+}
+
+
 bool
 InputServerStream::GetNextEvent(BMessage** _event)
 {

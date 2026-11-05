@@ -900,21 +900,32 @@ EventDispatcher::_EventLoop()
 #endif
 				pointerEvent = true;
 
-				if (!fMouseFilter.IsSet())
-					break;
+				EventTarget* grabTarget = fDesktop != NULL
+					? fDesktop->PointerGrabTarget() : NULL;
 
 				EventTarget* mouseTarget = fPreviousMouseTarget;
 				int32 viewToken = B_NULL_TOKEN;
-				if (fMouseFilter->Filter(event, &mouseTarget, &viewToken,
-						fNextLatestMouseMoved) == B_SKIP_MESSAGE) {
-					// this is a work-around if the wrong B_MOUSE_UP
-					// event is filtered out
-					if (event->what == B_MOUSE_UP
-						&& event->FindInt32("buttons") == 0) {
-						fSuspendFocus = false;
-						_RemoveTemporaryListeners();
+				if (grabTarget != NULL) {
+					// A grab takes the events regardless of focus or
+					// hover; hit-testing belongs to the grabber, so
+					// the mouse filter must not redirect them.
+					mouseTarget = grabTarget;
+				} else {
+					if (!fMouseFilter.IsSet())
+						break;
+
+					if (fMouseFilter->Filter(event, &mouseTarget,
+							&viewToken, fNextLatestMouseMoved)
+							== B_SKIP_MESSAGE) {
+						// this is a work-around if the wrong B_MOUSE_UP
+						// event is filtered out
+						if (event->what == B_MOUSE_UP
+							&& event->FindInt32("buttons") == 0) {
+							fSuspendFocus = false;
+							_RemoveTemporaryListeners();
+						}
+						break;
 					}
-					break;
 				}
 
 				int32 buttons;
@@ -985,6 +996,25 @@ EventDispatcher::_EventLoop()
 				}
 
 				keyboardEvent = true;
+
+				{
+					EventTarget* keyGrabTarget = fDesktop != NULL
+						? fDesktop->KeyboardGrabTarget() : NULL;
+					if (keyGrabTarget != NULL) {
+						// The keyboard filter already ran so system
+						// chords (workspace switch, VT) keep working;
+						// the grab only redirects delivery.
+						if (_AddTokens(event, keyGrabTarget,
+								B_KEYBOARD_EVENTS)) {
+							addedTokens = true;
+							if (!fSuspendFocus)
+								_SetFeedFocus(event);
+						}
+						_SendMessage(keyGrabTarget->Messenger(), event,
+							kStandardImportance);
+						break;
+					}
+				}
 
 				if (fFocus != NULL && _AddTokens(event, fFocus,
 						B_KEYBOARD_EVENTS)) {

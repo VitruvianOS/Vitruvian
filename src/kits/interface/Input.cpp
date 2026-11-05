@@ -15,6 +15,8 @@
 #include <Input.h>
 #include <List.h>
 #include <Message.h>
+#include <Point.h>
+#include <PointerGrab.h>
 
 #include <input_globals.h>
 #include <InputServerTypes.h>
@@ -274,4 +276,15 @@ _control_input_server_(BMessage *command, BMessage *reply)
 		return B_ERROR;
 
 	return err;
+}
+
+
+void
+warp_pointer(const BPoint& where)
+{
+	BMessage command(IS_SET_MOUSE_POSITION);
+	BMessage reply;
+
+	command.AddPoint("where", where);
+	_control_input_server_(&command, &reply);
 }

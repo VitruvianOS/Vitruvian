@@ -20,6 +20,8 @@
 
 #include <ObjectList.h>
 
+#include <PointerControlCore.h>
+
 
 class MouseDevice;
 
@@ -44,6 +46,12 @@ private:
 			status_t		_HandleMonitor(BMessage* message);
 			status_t		_UpdateScreenBounds(MouseDevice* device,
 								BMessage* message);
+			// Seat pointer constraint (confinement, relative mode)
+			// pushed by app_server when a grab takes effect.
+			status_t		_UpdatePointerConstraint(MouseDevice* device,
+								BMessage* message);
+			void			GetPointerConstraint(
+								pointer_constraint* out) const;
 			void			_RecursiveScan(const char* directory);
 			// Reconcile fDevices with /dev/input after resume; replaces
 			// same-path nodes whose inode changed and drops stale ones.
@@ -83,6 +91,10 @@ public:
 			BRect			fScreenFrame;
 			int32			fOrientation;
 			int32			fReflection;
+
+private:
+			mutable BLocker	fConstraintLock;
+			pointer_constraint fConstraint;
 };
 
 extern "C" BInputServerDevice* instantiate_input_device();

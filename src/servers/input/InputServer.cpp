@@ -516,6 +516,12 @@ InputServer::MessageReceived(BMessage* message)
 		case IS_SET_MOUSE_POSITION:
 			status = HandleSetMousePosition(message, &reply);
 			break;
+		case IS_SET_POINTER_CONSTRAINT:
+			// Confinement and relative mode live in the pointing
+			// add-ons; the grab owner is app_server's business only.
+			ControlDevices(NULL, B_POINTING_DEVICE,
+				B_POINTER_CONSTRAINT_CHANGED, message);
+			break;
 		case IS_GET_MOUSE_MAP:
 			status = HandleGetSetMouseMap(message, &reply);
 			break;

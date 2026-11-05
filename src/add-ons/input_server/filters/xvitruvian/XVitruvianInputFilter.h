@@ -25,8 +25,24 @@ public:
 
 private:
 			port_id				_InputPort();
+			void				_WriteFlat(port_id port,
+									BMessage* message);
+			// Announces a device once, on the first event carrying its
+			// be:device_id; the DDX uses this plus the roster to keep
+			// its XI2 device list current.
+			void				_NoteDevices(BMessage* message);
 
 			port_id				fPort;
+
+	static	const int32			kMaxSeenDevices = 32;
+			struct SeenDevice {
+				int32	id;
+				int32	subtype;
+				int32	flags;
+				char	name[128];
+			};
+			SeenDevice			fSeen[kMaxSeenDevices];
+			int32				fSeenCount;
 };
 
 

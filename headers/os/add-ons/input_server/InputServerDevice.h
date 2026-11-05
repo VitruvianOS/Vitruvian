@@ -40,6 +40,10 @@ enum {
 
 	// Screen mode changed; "screen_bounds" carries the new frame.
 	B_SCREEN_BOUNDS_CHANGED,
+
+	// Pointer confinement / relative mode; "flags" (1 = confined to
+	// "rect", 2 = relative mode about the "where" lock point).
+	B_POINTER_CONSTRAINT_CHANGED,
 };
 
 

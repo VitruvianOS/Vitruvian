@@ -28,6 +28,7 @@ set(INPUT_SERVER_FILTERS
 	switch_workspace
 	minimize_all
 	screen_saver
+	xvitruvian
 #	shortcut_catcher
 )
 ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})

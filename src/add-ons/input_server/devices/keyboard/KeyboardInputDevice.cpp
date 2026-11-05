@@ -597,6 +597,9 @@ KeyboardDevice::_ControlThread()
 					if (upMsg != NULL) {
 						upMsg->AddInt64("when", system_time());
 						upMsg->AddInt32("key", haiku);
+						upMsg->AddInt32("be:evdev_code", (int32)k);
+						upMsg->AddInt32("be:device_id", fSerial);
+						upMsg->AddString("be:device_name", fDeviceRef.name);
 						upMsg->AddInt32("modifiers", fModifiers);
 						upMsg->AddData("states", B_UINT8_TYPE, states, 16);
 						if (fOwner->EnqueueMessage(upMsg) != B_OK)
@@ -947,6 +950,11 @@ KeyboardDevice::_ControlThread()
 
 		msg->AddInt64("when", keyInfo.timestamp);
 		msg->AddInt32("key", msgKey);
+		// "key" is the hybrid contract; XVitruvian derives X keycodes from
+		// the original evdev code, which the hybrid map cannot recover.
+		msg->AddInt32("be:evdev_code", (int32)keycode);
+		msg->AddInt32("be:device_id", fSerial);
+		msg->AddString("be:device_name", fDeviceRef.name);
 		msg->AddInt32("modifiers", fModifiers);
 		msg->AddData("states", B_UINT8_TYPE, states, 16);
 		if (numBytes > 0) {
@@ -1172,6 +1180,9 @@ KeyboardDevice::_ReleaseHeldKeys(uint8* states, bool& vtLCtrl, bool& vtRCtrl,
 		if (upMsg != NULL) {
 			upMsg->AddInt64("when", system_time());
 			upMsg->AddInt32("key", haiku);
+			// Synthetic release: the evdev code is not recoverable here.
+			upMsg->AddInt32("be:device_id", fSerial);
+			upMsg->AddString("be:device_name", fDeviceRef.name);
 			upMsg->AddInt32("modifiers", fModifiers);
 			upMsg->AddData("states", B_UINT8_TYPE, states, 16);
 			if (fOwner->EnqueueMessage(upMsg) != B_OK)

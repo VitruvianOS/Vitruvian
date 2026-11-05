@@ -1070,6 +1070,9 @@ MouseDevice::_ControlThread()
 
 			// Accumulate events; flush on EV_SYN SYN_REPORT
 			int32 xdelta = 0, ydelta = 0;
+			// Pre-acceleration snapshot for the raw-valuator fields the
+			// XVitruvian XI2 path needs; acceleration must not see this.
+			int32 rawX = 0, rawY = 0;
 			int32 wheel_xdelta = 0, wheel_ydelta = 0;
 			int32 currentAbsX = fLastAbsX, currentAbsY = fLastAbsY;
 			bool touchChanged = false;
@@ -1228,6 +1231,8 @@ MouseDevice::_ControlThread()
 				}
 
 				if (xdelta != 0 || ydelta != 0) {
+					rawX = xdelta;
+					rawY = ydelta;
 
 					float histX = 0, histY = 0;
 					mouse_movement mv;
@@ -1309,6 +1314,9 @@ MouseDevice::_ControlThread()
 				BMessage* message = _BuildMouseMessage(B_MOUSE_MOVED,
 					timestamp, remappedButtons);
 				if (message != NULL) {
+					// Pre-acceleration deltas: XI2 raw valuators.
+					message->AddFloat("be:raw_delta_x", (float)rawX);
+					message->AddFloat("be:raw_delta_y", (float)rawY);
 					fTarget.EnqueueMessage(message);
 				}
 			}
@@ -1323,6 +1331,8 @@ MouseDevice::_ControlThread()
 					message->AddInt64("when", timestamp);
 					message->AddFloat("be:wheel_delta_x", wx);
 					message->AddFloat("be:wheel_delta_y", wy);
+					message->AddInt32("be:device_id", fSerial);
+					message->AddString("be:device_name", fDeviceRef.name);
 					fTarget.EnqueueMessage(message);
 				}
 			}
@@ -1645,7 +1655,9 @@ MouseDevice::_BuildMouseMessage(uint32 what, uint64 when,
 		|| message->AddInt64("when", when) < B_OK
 		|| message->AddInt32("be:device_subtype",
 			fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
-				: B_MOUSE_POINTING_DEVICE) < B_OK) {
+				: B_MOUSE_POINTING_DEVICE) < B_OK
+		|| message->AddInt32("be:device_id", fSerial) < B_OK
+		|| message->AddString("be:device_name", fDeviceRef.name) < B_OK) {
 		delete message;
 		return NULL;
 	}
@@ -1770,6 +1782,13 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			msg->AddInt32("be:device_subtype",
 				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
 					: B_MOUSE_POINTING_DEVICE);
+			// XI2 raw valuators: unaccelerated deltas from libinput.
+			msg->AddFloat("be:raw_delta_x",
+				(float)libinput_event_pointer_get_dx_unaccelerated(pev));
+			msg->AddFloat("be:raw_delta_y",
+				(float)libinput_event_pointer_get_dy_unaccelerated(pev));
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1812,6 +1831,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			msg->AddInt32("be:device_subtype",
 				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
 					: B_MOUSE_POINTING_DEVICE);
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1875,6 +1896,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				msg->AddInt32("clicks", fLibinputClickCount);
 				msg->AddInt32("be:button", (int32)beButton);
 			}
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}

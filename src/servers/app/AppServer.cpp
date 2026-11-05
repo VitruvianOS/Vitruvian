@@ -27,6 +27,7 @@
 #include "GlobalFontManager.h"
 #include "HWInterface.h"
 #include "InputManager.h"
+#include "OutputAddonManager.h"
 #include "ScreenManager.h"
 #include "ServerProtocol.h"
 
@@ -75,6 +76,12 @@ AppServer::AppServer(status_t* status)
 	gScreenManager = new ScreenManager();
 	gScreenManager->Run();
 
+	// Output add-ons: created after the screen manager because attach
+	// resolves screens through it; before any desktop because remote
+	// sessions attach as soon as they register.
+	gOutputAddonManager = new OutputAddonManager(this);
+	gOutputAddonManager->InitCheck();
+
 	// Create the bitmap allocator. Object declared in BitmapManager.cpp
 	gBitmapManager = new BitmapManager();
 
@@ -103,6 +110,12 @@ AppServer::~AppServer()
 	delete fLockRequest;
 	delete gBitmapManager;
 
+	if (gOutputAddonManager != NULL) {
+		gOutputAddonManager->Lock();
+		gOutputAddonManager->Quit();
+		gOutputAddonManager = NULL;
+	}
+
 	gScreenManager->Lock();
 	gScreenManager->Quit();
 
@@ -110,6 +123,13 @@ AppServer::~AppServer()
 	gFontManager->Quit();
 
 	closelog();
+}
+
+
+Desktop*
+AppServer::DesktopForUser(uid_t userID)
+{
+	return _FindDesktop(userID, NULL);
 }
 
 

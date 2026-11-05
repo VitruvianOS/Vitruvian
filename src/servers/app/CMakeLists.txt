@@ -79,6 +79,7 @@ Server(
 		MessageLooper.cpp
 		OffscreenServerWindow.cpp
 		OffscreenWindow.cpp
+		OutputAddonManager.cpp
 		PictureBoundingBoxPlayer.cpp
 		ProfileMessageSupport.cpp
 		RGBColor.cpp
@@ -95,6 +96,7 @@ Server(
 		ServerWindow.cpp
 		SystemPalette.cpp
 		View.cpp
+		VirtualOutput.cpp
 		VirtualScreen.cpp
 		Window.cpp
 		WindowList.cpp
@@ -201,7 +203,7 @@ Server(
 	"./drawing/Painter/drawing_modes"
 )
 
-UsePrivateHeaders(app_server app interface graphics graphics/common kernel support)
+UsePrivateHeaders(app_server app interface graphics graphics/common kernel support system)
 
 # Decorator add-ons subclass app_server classes and resolve them here.
 set_target_properties(app_server PROPERTIES ENABLE_EXPORTS ON)

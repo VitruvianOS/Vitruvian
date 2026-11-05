@@ -37,6 +37,8 @@ enum {
 	kOutputAddonCodeFrame			= 1,
 	kOutputAddonCodeScreenChanged	= 2,
 	kOutputAddonCodeOutputRemoved	= 3,
+	kOutputAddonCodeInput			= 4,
+		// payload is one flattened BMessage from the input stream
 };
 
 

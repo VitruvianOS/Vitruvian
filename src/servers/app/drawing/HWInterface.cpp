@@ -319,6 +319,8 @@ HWInterface::InvalidateRegion(const BRegion& region)
 status_t
 HWInterface::Invalidate(const BRect& frame)
 {
+	_NotifyFrameCommitted(frame);
+
 	if (IsDoubleBuffered())
 		return CopyBackToFront(frame);
 
@@ -1068,6 +1070,19 @@ HWInterface::_NotifyScreenChanged()
 		HWInterfaceListener* listener
 			= (HWInterfaceListener*)listeners.ItemAtFast(i);
 		listener->ScreenChanged(this);
+	}
+}
+
+
+void
+HWInterface::_NotifyFrameCommitted(const BRect& frame)
+{
+	BList listeners(fListeners);
+	int32 count = listeners.CountItems();
+	for (int32 i = 0; i < count; i++) {
+		HWInterfaceListener* listener
+			= (HWInterfaceListener*)listeners.ItemAtFast(i);
+		listener->FrameCommitted(this, frame);
 	}
 }
 

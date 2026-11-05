@@ -88,6 +88,9 @@ class EventDispatcher : public BLocker {
 
 		void GetMouse(BPoint& where, int32& buttons);
 		void SendFakeMouseMoved(EventTarget& target, int32 viewToken);
+		// Hands an event from an output add-on (remote desktop and
+		// friends) to the stream queue; ownership moves on success.
+		void InjectEvent(BMessage* event);
 		bigtime_t IdleTime();
 		// Set by PowerManager when it turns the display off for idle; the
 		// next input event turns it back on.

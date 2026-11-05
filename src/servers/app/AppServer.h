@@ -44,6 +44,10 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	bool				QuitRequested();
 
+			// For output add-on input injection: the desktop of the
+			// session user the add-on belongs to.
+			Desktop*			DesktopForUser(uid_t userID);
+
 private:
 			Desktop*			_CreateDesktop(uid_t userID,
 									const char* targetScreen);

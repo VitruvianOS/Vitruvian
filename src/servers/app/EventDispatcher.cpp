@@ -15,6 +15,7 @@
 #include "EventStream.h"
 #include "HWInterface.h"
 #include "InputManager.h"
+#include "OutputAddonManager.h"
 #include "ServerBitmap.h"
 
 #include <MessagePrivate.h>
@@ -541,6 +542,22 @@ EventDispatcher::SendFakeMouseMoved(EventTarget& target, int32 viewToken)
 
 
 void
+EventDispatcher::InjectEvent(BMessage* event)
+{
+	if (event == NULL)
+		return;
+
+	BAutolock _(this);
+	if (fStream == NULL) {
+		delete event;
+		return;
+	}
+
+	fStream->InsertEvent(event);
+}
+
+
+void
 EventDispatcher::_SendFakeMouseMoved(BMessage* message)
 {
 	BMessenger target;
@@ -819,6 +836,11 @@ EventDispatcher::_EventLoop()
 	while (fStream->GetNextEvent(&event)) {
 		BAutolock _(this);
 		fLastUpdate = system_time();
+
+		// Pre-hit-test copy for output add-ons: remote desktops need the
+		// raw stream, not the routed per-window messages.
+		if (gOutputAddonManager != NULL)
+			gOutputAddonManager->PublishInput(*event);
 		if (atomic_get_and_set(&fDisplayAsleep, 0) != 0 && fHWInterface != NULL)
 			fHWInterface->SetDPMSMode(B_DPMS_ON);
 

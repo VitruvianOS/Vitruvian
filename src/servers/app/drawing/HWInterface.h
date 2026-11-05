@@ -45,6 +45,11 @@ public:
 
 	virtual	void				ScreenChanged(HWInterface* interface) {};
 		// Informs an upstream client of a changed screen configuration.
+
+	virtual	void				FrameCommitted(HWInterface* interface,
+									const BRect& frame) {};
+		// Informs output add-on capture of freshly composited pixels;
+		// called with the interface locked, listeners must not re-lock.
 };
 
 
@@ -227,6 +232,7 @@ protected:
 
 			void				_NotifyFrameBufferChanged();
 			void				_NotifyScreenChanged();
+			void				_NotifyFrameCommitted(const BRect& frame);
 
 	static	bool				_IsValidMode(const display_mode& mode);
 

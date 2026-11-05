@@ -20,6 +20,15 @@ add_executable(test_display_change_tracker
 target_include_directories(test_display_change_tracker PRIVATE
 	${CMAKE_SOURCE_DIR}/src/servers/app)
 
+# Output add-on transport core (pure helpers, no window server).
+add_executable(test_output_addon_core
+	output_addon/output_addon_host_test.cpp
+	${CMAKE_SOURCE_DIR}/src/kits/interface/OutputAddonCore.cpp
+)
+target_include_directories(test_output_addon_core PRIVATE
+	${CMAKE_SOURCE_DIR}/headers/private/interface)
+
+
 # Panel orientation rules (header only, no window server).
 Application(test_panel_orientation
 	SOURCES test_panel_orientation.cpp)

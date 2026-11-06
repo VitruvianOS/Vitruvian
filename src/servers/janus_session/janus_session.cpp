@@ -607,8 +607,8 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 		setenv("SUDO_GID", buf, 1);
 
 		setenv("XDG_SESSION_TYPE",    "vos",       1);
-		setenv("XDG_CURRENT_DESKTOP", "Vitruvian", 1);
-		setenv("XDG_SESSION_DESKTOP", "vitruvian", 1);
+		setenv("XDG_CURRENT_DESKTOP", "vos",       1);
+		setenv("XDG_SESSION_DESKTOP", "vos",       1);
 		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
 		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
 

@@ -122,9 +122,10 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    # 4 GiB disk, nothing grows it on boot: 128 MiB ESP (GRUB loaders),
-    # the rest root.
-    _disk_mib=4096
+    # 4 GiB disk unless --size, nothing grows it on boot: 128 MiB ESP
+    # (GRUB loaders), the rest root.
+    _disk_mib="${VOS_RAW_DISK_MIB:-4096}"
+    [ "$_disk_mib" -ge 1024 ] || die "raw disk must be at least 1G"
     _esp_start_mib=1
     _esp_size_mib=128
     _root_start_mib=129

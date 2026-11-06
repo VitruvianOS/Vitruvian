@@ -71,6 +71,7 @@ Build options:
   --legacy-boot          amd64 iso/disk: boot with legacy BIOS (SeaBIOS)
                           instead of the default UEFI firmware (OVMF)
   --smp=N                Give the VM N CPUs (e.g. 1 to expose one-CPU races)
+  --size=SIZE            raw: disk size, e.g. 12G or 6144M (default 4G)
   --regenerate-chroot    Recreate the chroot before building
   --arch=ARCH            Target architecture: amd64, arm64, arm32, riscv64
                           (reads from buildstate.conf if omitted)
@@ -145,6 +146,19 @@ cmd_build() {
                 ;;
             --output-dir=*)
                 _output_dir="${arg#*=}"
+                ;;
+            --size=*)
+                _sz="${arg#*=}"
+                case "$_sz" in
+                    *G) _n="${_sz%G}"; _mul=1024 ;;
+                    *M) _n="${_sz%M}"; _mul=1 ;;
+                    *)  _n=""; _mul=1 ;;
+                esac
+                case "$_n" in
+                    ''|*[!0-9]*) die "--size needs a size like 12G or 6144M: $arg" ;;
+                esac
+                VOS_RAW_DISK_MIB=$((_n * _mul))
+                export VOS_RAW_DISK_MIB
                 ;;
             --list-boards)
                 _list_boards=1

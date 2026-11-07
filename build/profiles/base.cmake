@@ -73,6 +73,7 @@ set(SYSTEM_LIBS
 	midi
 	midi2
 	outputaddon
+	vos_x_client
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 

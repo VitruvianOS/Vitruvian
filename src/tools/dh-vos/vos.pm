@@ -8,6 +8,7 @@ use warnings;
 use Debian::Debhelper::Dh_Lib;
 
 insert_before('dh_dwz', 'dh_vosattrs');
+insert_before('dh_dwz', 'dh_vosmenu');
 insert_before('dh_dwz', 'dh_vosstrip');
 remove_command('dh_dwz');
 remove_command('dh_strip');

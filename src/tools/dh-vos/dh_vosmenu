@@ -1,0 +1,92 @@
+#!/usr/bin/perl
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+
+=head1 NAME
+
+dh_vosmenu - add packaged applications to the Deskbar Applications menu
+
+=head1 DESCRIPTION
+
+The Deskbar lists the entries of F</system/data/deskbar/menu/Applications>.
+For each package this links every executable installed directly in
+F</system/apps> unless its application flags say it has no GUI
+(B_BACKGROUND_APP or B_ARGV_ONLY, read from the embedded resources), and every F<.desktop> entry that launches something outside
+F</system/>, into that directory. Entries a package already ships are kept.
+
+=cut
+
+use strict;
+use warnings;
+use Debian::Debhelper::Dh_Lib;
+
+init();
+
+my $resattr = '/usr/lib/vos/buildtools/resattr';
+use constant { B_BACKGROUND_APP => 0x4, B_ARGV_ONLY => 0x8 };
+
+# Application flags from the embedded resources (type word + uint32 LE).
+sub app_flags {
+	my ($path, $probe) = @_;
+	return undef unless -x $resattr;
+	open(my $fh, '>', $probe) or return undef;
+	close($fh);
+	return undef if system($resattr, '-O', '-o', $probe, $path) != 0;
+	my $out = `getfattr --absolute-names -n user.beos.BEOS:APP_FLAGS -e hex '$probe' 2>/dev/null`;
+	return undef unless $out =~ /=0x[0-9a-f]{8}([0-9a-f]{8})/i;
+	return unpack('V', pack('H8', $1));
+}
+
+my $menu = 'system/data/deskbar/menu/Applications';
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	my $tmp = tmpdir($package);
+	next unless -d $tmp;
+	my %links;
+	my $probe = generated_file($package, 'vosmenu-probe');
+
+	if (opendir(my $dh, "$tmp/system/apps")) {
+		foreach my $name (sort readdir($dh)) {
+			my $path = "$tmp/system/apps/$name";
+			next if $name =~ /^\./ || -l $path || ! -f $path || ! -x $path;
+			my $flags = app_flags($path, $probe);
+			next if defined $flags && ($flags & (B_BACKGROUND_APP | B_ARGV_ONLY));
+			$links{$name} = "/system/apps/$name";
+		}
+		closedir($dh);
+	}
+
+	unlink($probe);
+
+	foreach my $desktop (glob("$tmp/usr/share/applications/*.desktop")) {
+		open(my $fh, '<', $desktop) or next;
+		my ($name, $exec, $hidden);
+		my $in_entry = 0;
+		while (my $line = <$fh>) {
+			chomp($line);
+			if ($line =~ /^\[(.*)\]/) {
+				$in_entry = $1 eq 'Desktop Entry';
+				next;
+			}
+			next unless $in_entry;
+			$name = $1 if !defined $name && $line =~ /^Name=(.+)/;
+			$exec = $1 if !defined $exec && $line =~ /^Exec=(.+)/;
+			$hidden = 1 if $line =~ /^(NoDisplay|Hidden)=true/;
+		}
+		close($fh);
+		next if $hidden || !defined $name || !defined $exec;
+		my ($cmd) = $exec =~ /^\s*"?([^"\s]+)/;
+		next unless defined $cmd;
+		next if $cmd =~ m{^/system/};
+		$cmd = "/usr/bin/$cmd" unless $cmd =~ m{^/};
+		$name =~ s{/}{-}g;
+		$links{$name} //= $cmd;
+	}
+
+	next unless %links;
+	install_dir("$tmp/$menu");
+	foreach my $name (sort keys %links) {
+		next if -e "$tmp/$menu/$name" || -l "$tmp/$menu/$name";
+		symlink($links{$name}, "$tmp/$menu/$name")
+			or error("cannot link $menu/$name: $!");
+	}
+}

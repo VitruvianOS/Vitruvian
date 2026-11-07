@@ -7115,6 +7115,12 @@ BPoseView::KeyDown(const char* bytes, int32 count)
 			}
 			break;
 
+		case B_DELETE:
+		{
+			DoMoveToTrash();
+			break;
+		}
+
 		case B_BACKSPACE:
 		{
 			if (IsTypeAheadFiltering()) {
@@ -7133,7 +7139,8 @@ BPoseView::KeyDown(const char* bytes, int32 count)
 				break;
 			}
 
-			if (sMatchString.Length() == 0)
+			// only while characters are being typed
+			if (fKeyRunner == NULL || sMatchString.Length() == 0)
 				break;
 
 			// remove last char from the typeahead buffer

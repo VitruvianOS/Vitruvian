@@ -640,7 +640,8 @@ CupsBridge::SubmitPdf(const char* filePath, BMessage* settings, int32* jobId)
 	if (cupsOptions != NULL)
 		cupsFreeOptions(numOptions, cupsOptions);
 
-	if (id < 0) {
+	// cupsPrintFile() returns 0 (not a negative value) on failure.
+	if (id <= 0) {
 		_SetError(cupsLastErrorString());
 		return B_ERROR;
 	}
@@ -698,8 +699,13 @@ CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 
 	cups_job_t* cupJobs = NULL;
 	const char* name = (queue != NULL && queue[0] != '\0') ? queue : NULL;
-	// Active jobs too, so they can be canceled.
-	int count = cupsGetJobs2(NULL, &cupJobs, name, 0, CUPS_WHICHJOBS_ALL);
+	// CUPS_WHICHJOBS_ACTIVE (0): only jobs still pending/printing/held.
+	// A job that's completed/canceled/aborted has nothing left for the
+	// user to act on -- CUPS keeps it in history regardless (cancel and
+	// purge don't remove it either), so showing it here just leaves
+	// stale, unactionable rows the user can't make sense of. The list
+	// should read 0 jobs once the queue has nothing left to print.
+	int count = cupsGetJobs2(NULL, &cupJobs, name, 0, CUPS_WHICHJOBS_ACTIVE);
 	if (count < 0) {
 		_SetError(cupsLastErrorString());
 		return -1;
@@ -956,15 +962,15 @@ CupsBridge::PurgeJobs(const char* queue)
 	if (queue == NULL || queue[0] == '\0')
 		return B_BAD_VALUE;
 
-	// Cancel-Jobs on the printer URI drops every job on that queue.
 	char printerUri[HTTP_MAX_URI];
 	httpAssembleURIf(HTTP_URI_CODING_ALL, printerUri, sizeof(printerUri),
 		"ipp", NULL, "localhost", 0, "/printers/%s", queue);
-	ipp_t* request = ippNewRequest(IPP_OP_CANCEL_JOBS);
+	ipp_t* request = ippNewRequest(IPP_OP_PURGE_JOBS);
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri",
 		NULL, printerUri);
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME,
 		"requesting-user-name", NULL, cupsUser());
+	ippAddBoolean(request, IPP_TAG_OPERATION, "purge-jobs", 1);
 	return AdminRequest(request, &fLastError);
 }
 
@@ -1025,68 +1031,60 @@ CupsBridge::ListPPDs(const char* uri, printcups_ppd* ppds, int maxPpds)
 	// cupsGetPPDs() left the public headers; CUPS-Get-PPDs is the same data
 	// lpinfo -m shows. Empty response means cupsd has no driver list yet.
 	ipp_t* request = ippNewRequest(IPP_OP_CUPS_GET_PPDS);
-	if (uri != NULL && uri[0] != '\0') {
-		char match[512];
-		snprintf(match, sizeof(match), "ppd-device-id:%s", uri);
-		ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_TEXT,
-			"ppd-make-and-model", NULL, match);
-	}
+	(void)uri;
+	static const char* const kWanted[] = { "ppd-name", "ppd-make-and-model" };
+	ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD,
+		"requested-attributes", 2, NULL, kWanted);
 
-	ipp_t* response = cupsDoRequest(CUPS_HTTP_DEFAULT, request,
-		"/admin/ppds/");
+	ipp_t* response = cupsDoRequest(CUPS_HTTP_DEFAULT, request, "/");
 	if (response == NULL) {
 		_SetError(cupsLastErrorString());
 		return -1;
 	}
-
-	int written = 0;
-	for (ipp_attribute_t* attr = ippFirstAttribute(response); attr != NULL;
-		attr = ippNextAttribute(response)) {
-		if (ippGetGroupTag(attr) != IPP_TAG_TEXT
-			&& ippGetGroupTag(attr) != IPP_TAG_NAME)
-			continue;
-		const char* name = ippGetName(attr);
-		if (name == NULL || strcmp(name, "ppd-name") != 0)
-			continue;
-		if (ippGetCount(attr) <= 0)
-			continue;
-		const char* value = ippGetString(attr, 0, NULL);
-		if (value == NULL || written >= maxPpds)
-			continue;
-		strlcpy(ppds[written].name, value, sizeof(ppds[written].name));
-		ppds[written].make_model[0] = '\0';
-		written++;
+	if (ippGetStatusCode(response) > IPP_STATUS_OK_CONFLICTING) {
+		_SetError(cupsLastErrorString());
+		ippDelete(response);
+		return -1;
 	}
 
-	// Second pass: pair each ppd-name with the make/model after it.
-	{
-		int idx = 0;
-		const char* currentName = NULL;
-		for (ipp_attribute_t* attr = ippFirstAttribute(response); attr != NULL;
-			attr = ippNextAttribute(response)) {
-			if (ippGetGroupTag(attr) != IPP_TAG_TEXT
-				&& ippGetGroupTag(attr) != IPP_TAG_NAME)
+	// One group per driver. Match attributes by name only: the group tag
+	// is IPP_TAG_PRINTER for all of them, so filtering on it (as an
+	// earlier version did) dropped every attribute and left the list
+	// empty. A nameless attribute is the separator between groups.
+	int written = 0;
+	int current = -1;
+	char pendingMake[sizeof(ppds[0].make_model)];
+	pendingMake[0] = '\0';
+	for (ipp_attribute_t* attr = ippFirstAttribute(response); attr != NULL;
+		attr = ippNextAttribute(response)) {
+		const char* name = ippGetName(attr);
+		if (name == NULL) {
+			current = -1;
+			pendingMake[0] = '\0';
+			continue;
+		}
+		if (ippGetCount(attr) <= 0)
+			continue;
+
+		if (strcmp(name, "ppd-name") == 0) {
+			const char* value = ippGetString(attr, 0, NULL);
+			if (value == NULL || written >= maxPpds) {
+				current = -1;
 				continue;
-			const char* name = ippGetName(attr);
-			if (name == NULL)
+			}
+			current = written++;
+			strlcpy(ppds[current].name, value, sizeof(ppds[current].name));
+			strlcpy(ppds[current].make_model, pendingMake,
+				sizeof(ppds[current].make_model));
+		} else if (strcmp(name, "ppd-make-and-model") == 0) {
+			const char* value = ippGetString(attr, 0, NULL);
+			if (value == NULL)
 				continue;
-			if (strcmp(name, "ppd-name") == 0 && ippGetCount(attr) > 0) {
-				const char* value = ippGetString(attr, 0, NULL);
-				if (value != NULL)
-					currentName = value;
-			} else if (strcmp(name, "ppd-make-and-model") == 0
-				&& currentName != NULL && ippGetCount(attr) > 0) {
-				const char* make = ippGetString(attr, 0, NULL);
-				if (make != NULL) {
-					for (int i = 0; i < written; i++) {
-						if (strcmp(ppds[i].name, currentName) == 0) {
-							strlcpy(ppds[i].make_model, make,
-								sizeof(ppds[i].make_model));
-							break;
-						}
-					}
-				}
-				(void)idx;
+			if (current >= 0) {
+				strlcpy(ppds[current].make_model, value,
+					sizeof(ppds[current].make_model));
+			} else {
+				strlcpy(pendingMake, value, sizeof(pendingMake));
 			}
 		}
 	}

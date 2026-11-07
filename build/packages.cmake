@@ -179,7 +179,7 @@ else()
 endif()
 
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS
-	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version})")
+	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version}), vos-archive")
 
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")
@@ -228,6 +228,18 @@ set(CPACK_DEBIAN_DH-VOS_PACKAGE_DEPENDS
 	"debhelper (>= 13), attr, vos-buildtools, vos-dev")
 set(CPACK_DEBIAN_DH-VOS_DESCRIPTION
 	"debhelper add-on and Makefile-Engine buildsystem for V\\\\OS packages")
+
+# The repository signing key and, on systems installed without one, the
+# apt source.
+set(CPACK_DEBIAN_ARCHIVE_PACKAGE_NAME "vos-archive")
+set(CPACK_DEBIAN_ARCHIVE_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_ARCHIVE_DESCRIPTION
+	"V\\\\OS package repository signing key and apt source")
+set(CPACK_DEBIAN_ARCHIVE_PACKAGE_CONTROL_EXTRA
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/archive/postinst")
+install(FILES data/keys/vitruvian-archive-keyring.asc
+	DESTINATION /usr/share/keyrings
+	COMPONENT archive)
 
 # These files used to ship in vos itself.
 set(CPACK_DEBIAN_DATA_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")

@@ -963,25 +963,7 @@ deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free n
 deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 APTSRC
 
-    # Key-gated VitruvianOS repo, as chroot.sh.
-    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
-        # No default suite; see chroot.sh.
-        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
-        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
-        sudo install -m 644 "$VOS_REPO_KEY" \
-            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
-        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
-Types: deb
-URIs: $VOS_REPO_URL
-Suites: $VOS_REPO_SUITE
-Components: main
-Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
-VOSSRC
-        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
-    else
-        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
-    fi
+    vos_repo_source "$_mnt"
 
     # Opt-in unsafe I/O for the disposable rootfs; removed again by
     # _common_chroot_setup so it never ships.
@@ -1292,25 +1274,7 @@ deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free n
 deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 APTSRC
 
-    # Same key-gated VitruvianOS repo as create_raspberry.
-    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
-        # No default suite; see chroot.sh.
-        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
-        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
-        sudo install -m 644 "$VOS_REPO_KEY" \
-            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
-        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
-Types: deb
-URIs: $VOS_REPO_URL
-Suites: $VOS_REPO_SUITE
-Components: main
-Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
-VOSSRC
-        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
-    else
-        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
-    fi
+    vos_repo_source "$_mnt"
 
     # Opt-in unsafe I/O for the build only; see create_raspberry for why.
     if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then

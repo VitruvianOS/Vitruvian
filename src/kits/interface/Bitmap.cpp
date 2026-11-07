@@ -68,6 +68,13 @@ BBitmap::Private::Private(BBitmap* bitmap)
 }
 
 
+int32
+BBitmap::Private::ServerToken() const
+{
+	return fBitmap->_ServerToken();
+}
+
+
 void
 BBitmap::Private::ReconnectToAppServer()
 {

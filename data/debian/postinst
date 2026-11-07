@@ -7,6 +7,10 @@ case "$1" in
         case " $2 " in
             *" /usr/share/vos/attrs "*) /usr/libexec/vos-attrs-sync || true ;;
         esac
+        case " $2 " in
+            *" /usr/share/applications "*|*" /usr/local/share/applications "*|*" /var/lib/flatpak/exports/share/applications "*)
+                /usr/libexec/vos-desktop-sync || true ;;
+        esac
         exit 0 ;;
     abort-upgrade|abort-remove|abort-deconfigure) exit 0 ;;
     *) echo "postinst: unknown action $1" >&2; exit 0 ;;
@@ -174,6 +178,9 @@ fi
 systemctl enable cups.service 2>/dev/null || true
 systemctl enable vos-pdf-printer.service 2>/dev/null || true
 systemctl enable vos-attrs-sync.service 2>/dev/null || true
+systemctl enable vos-desktop-sync.service 2>/dev/null || true
+# Menu entries for everything already installed.
+/usr/libexec/vos-desktop-sync || true
 
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true

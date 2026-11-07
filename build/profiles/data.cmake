@@ -16,6 +16,7 @@ set(SYSTEMD_SERVICES
   data/systemd/vos-overclock.service
   data/systemd/vos-overclock-ok.service
   data/systemd/vos-attrs-sync.service
+  data/systemd/vos-desktop-sync.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
@@ -30,6 +31,8 @@ install(PROGRAMS data/libexec/vos-pdf-printer
 install(PROGRAMS data/libexec/vos-attrs-sync
   DESTINATION /usr/libexec/)
 install(DIRECTORY DESTINATION /usr/share/vos/attrs)
+install(PROGRAMS data/libexec/vos-desktop-sync
+  DESTINATION /usr/libexec/)
 
 install(PROGRAMS data/libexec/vos-install-helper
   DESTINATION /usr/libexec/)

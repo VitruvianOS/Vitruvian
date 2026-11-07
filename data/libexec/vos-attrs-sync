@@ -31,13 +31,22 @@ all=0
 for list in "$LISTS"/*.list; do
 	[ -f "$list" ] || continue
 	done_copy="$STATE/${list##*/}"
+	# An upgrade can keep the list but replace the files, which drops
+	# their attributes: reapply when a listed file lost them.
 	if [ "$all" = 0 ] && cmp -s "$list" "$done_copy"; then
-		continue
+		stale=0
+		while IFS= read -r file; do
+			[ -n "$file" ] && [ -f "$file" ] || continue
+			listattr "$file" 2>/dev/null | grep -q 'BEOS:' && continue
+			stale=1
+			break
+		done < "$list"
+		[ "$stale" = 0 ] && continue
 	fi
 	failed=0
 	while IFS= read -r file; do
 		[ -n "$file" ] && [ -f "$file" ] || continue
-		if ! resattr -O -o "$file" "$file"; then
+		if ! resattr -m -O -o "$file" "$file"; then
 			echo "vos-attrs-sync: resattr failed on $file" >&2
 			failed=1
 			continue

@@ -1,0 +1,250 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# Puts the applications installed from .desktop entries (Debian packages,
+# flatpak exports) into the Deskbar Applications menu: one small launcher
+# per entry: a symlink to the program, with the icon taken from the entry's
+# Icon=. The program gets the signature xclientsig computes and the argv-only
+# single launch flags. Entries it made are listed in a manifest; stale ones are
+# removed, others never touched.
+# dpkg runs this through the vos trigger on the applications directories
+# and from postinst.
+#
+# Icons and signatures are attributes and need nexus. Without it
+# (image builds, chroots) the symlinks are made and the rest is left
+# for the next run, which happens at boot through vos-attrs-sync.service.
+
+MENU=/system/data/deskbar/menu/Applications
+STATE=/var/lib/vos/desktop
+MANIFEST=$STATE/manifest
+DIRS="/usr/share/applications /usr/local/share/applications /var/lib/flatpak/exports/share/applications"
+ICON_DIRS="/usr/share/icons /usr/local/share/icons /var/lib/flatpak/exports/share/icons /usr/share/pixmaps"
+
+mkdir -p "$STATE" "$MENU" || exit 0
+[ -f "$MANIFEST" ] || : > "$MANIFEST"
+NEW=$(mktemp "$STATE/new.XXXXXX") || exit 0
+trap 'rm -f "$NEW"' EXIT
+
+have_nexus=0
+[ -e /dev/nexus ] && have_nexus=1
+
+# Succeeds when file $1 lists launcher $2 in its first column.
+listed() {
+	awk -F'\t' -v l="$2" '$1 == l { f = 1 } END { exit !f }' "$1"
+}
+
+# Prints the file for icon name $1.
+find_icon() {
+	case $1 in
+		/*) [ -f "$1" ] && echo "$1"; return ;;
+	esac
+	for root in $ICON_DIRS; do
+		for f in "$root/hicolor/scalable/apps/$1.svg" "$root/$1.svg"; do
+			[ -f "$f" ] && { echo "$f"; return; }
+		done
+	done
+	best=
+	bestsize=0
+	for root in $ICON_DIRS; do
+		for f in "$root"/hicolor/[0-9]*x[0-9]*/apps/"$1".png "$root/$1.png"; do
+			[ -f "$f" ] || continue
+			d=${f%/apps/*}
+			d=${d##*/}
+			size=${d%%x*}
+			case $size in *[!0-9]*|'') size=1 ;; esac
+			if [ "$size" -gt "$bestsize" ]; then best=$f; bestsize=$size; fi
+		done
+	done
+	if [ -z "$best" ]; then
+		# Other themes: scalable first, then any size.
+		best=$(find $ICON_DIRS \( -name "$1.svg" -o -name "$1.png" \) 2>/dev/null \
+			| sort -r | head -n1)
+	fi
+	[ -n "$best" ] && echo "$best"
+}
+
+set_icon() {	# launcher icon-file
+	for size in 32 16; do
+		ffmpeg -v error -y -i "$2" -vf "scale=$size:$size:force_original_aspect_ratio=decrease,format=rgba,pad=$size:$size:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=bgra" \
+			-frames:v 1 -f rawvideo - 2>/dev/null | seticon "$1" $size || return 1
+	done
+}
+
+# Prints the program the Exec line $1 runs, resolved.
+exec_bin() {
+	first=${1#\"}
+	first=${first%%[ \"]*}
+	case ${first##*/} in
+		env) first=$(printf %s "$1" | awk '{ for (i = 2; i <= NF; i++) if ($i !~ /=/ && $i !~ /^-/) { print $i; exit } }') ;;
+	esac
+	bin=$(command -v "$first" 2>/dev/null)
+	[ -f "$bin" ] && readlink -f "$bin"
+}
+
+# Signature of program $1, and the attributes the roster launches it by.
+set_signature() {
+	# addattr -c writes the value as a string: the flags are written raw.
+	printf '\010\000\000\000' > "$STATE/appflags" || return 1
+	addattr -t string BEOS:APP_SIG "$2" "$1" \
+		&& addattr -f "$STATE/appflags" -c APPF BEOS:APP_FLAGS "$1"
+}
+
+# The signature gets the program as app file, the entry's file types and the
+# icon, in the system MIME database.
+set_types() {	# signature icon-file name program mime-types
+	[ "$1" = - ] && return
+	for size in 32 16; do
+		ffmpeg -v error -y -i "$2" -vf "scale=$size:$size:force_original_aspect_ratio=decrease,format=rgba,pad=$size:$size:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=bgra" \
+			-frames:v 1 -f rawvideo "$STATE/icon$size.raw" 2>/dev/null
+	done
+	old=$IFS
+	IFS=,
+	primary=1
+	for t in $1; do
+		[ -n "$t" ] || continue
+		if [ "$primary" = 1 ]; then
+			setapptype "$t" -d "$3" -l "$4" -t "$5" -i16 "$STATE/icon16.raw" -i32 "$STATE/icon32.raw"
+			primary=0
+		else
+			setapptype "$t" -d "$3" -i16 "$STATE/icon16.raw" -i32 "$STATE/icon32.raw"
+		fi
+	done
+	IFS=$old
+	rm -f "$STATE/icon16.raw" "$STATE/icon32.raw"
+}
+
+# Prints name, exec, path, icon, WM class (tab separated) for a visible desktop entry.
+parse() {
+	awk -F= '
+	/^\[/ { inentry = ($0 == "[Desktop Entry]"); next }
+	!inentry { next }
+	{
+		k = $1; v = substr($0, length(k) + 2)
+		if (k == "Name") name = v
+		else if (k == "Exec") exec_ = v
+		else if (k == "Path") path = v
+		else if (k == "Icon") icon = v
+		else if (k == "StartupWMClass") wmclass = v
+		else if (k == "MimeType") mimes = v
+		else if (k == "Type") type = v
+		else if (k == "NoDisplay" || k == "Hidden") { if (v == "true") skip = 1 }
+		else if (k == "Terminal") { if (v == "true") skip = 1 }
+		else if (k == "OnlyShowIn") only = v
+		else if (k == "NotShowIn") notin = v
+	}
+	END {
+		if (skip || type != "Application" || name == "" || exec_ == "") exit 1
+		if (only != "" && only !~ /(^|;)Vitruvian(;|$)/) exit 1
+		if (notin ~ /(^|;)Vitruvian(;|$)/) exit 1
+		printf "%s\t%s\t%s\t%s\t%s\t%s\n", name, exec_, path, icon, wmclass, mimes
+	}' "$1"
+}
+
+for dir in $DIRS; do
+	[ -d "$dir" ] || continue
+	for desktop in "$dir"/*.desktop; do
+		[ -f "$desktop" ] || continue
+		line=$(parse "$desktop") || continue
+		name=$(printf %s "$line" | cut -f1 | tr '/' '-')
+		cmd=$(printf %s "$line" | cut -f2)
+		wd=$(printf %s "$line" | cut -f3)
+		icon=$(printf %s "$line" | cut -f4)
+		wmclass=$(printf %s "$line" | cut -f5)
+		mimes=$(printf %s "$line" | cut -f6 | tr ';' ',' | sed -e 's/,*$//' -e 's/,,*/,/g')
+		# Field codes: %% is a percent, any other %x is dropped.
+		cmd=$(printf %s "$cmd" | sed -e 's/%%/\x01/g' -e 's/%[a-zA-Z]//g' -e 's/\x01/%/g')
+		first=${cmd#\"}
+		first=${first%%[ \"]*}
+		case $first in /system/*) continue ;; esac
+		[ -n "$name" ] && [ -n "$cmd" ] || continue
+		launcher="$MENU/$name"
+		# Ours only when listed; a name taken by anything else is left alone.
+		listed "$NEW" "$launcher" && continue
+		if [ -e "$launcher" ] || [ -L "$launcher" ]; then
+			listed "$MANIFEST" "$launcher" || continue
+		fi
+		bin=$(exec_bin "$cmd")
+		[ -n "$bin" ] && [ -x "$bin" ] || continue
+		case $bin in /system/*) continue ;; esac
+		iconfile=$(find_icon "$icon")
+		forget=0
+		if [ -n "$wd" ] && [ -d "$wd" ]; then
+			# Path=: a small wrapper that starts the program there.
+			want_script=$(printf '#!/bin/sh\n# Generated by vos-desktop-sync\ncd %s && exec %s "$@"\n' \
+				"$(printf %s "$wd" | sed "s/'/'\\\\''/g; s/^/'/; s/\$/'/")" \
+				"$(printf %s "$bin" | sed "s/'/'\\\\''/g; s/^/'/; s/\$/'/")")
+			if [ -L "$launcher" ] || [ "$(cat "$launcher" 2>/dev/null)" != "$want_script" ]; then
+				rm -f "$launcher"
+				printf '%s\n' "$want_script" > "$launcher" && chmod 755 "$launcher" || continue
+				forget=1
+			fi
+		elif [ "$(readlink "$launcher" 2>/dev/null)" != "$bin" ]; then
+			ln -sfn "$bin" "$launcher" || continue
+			forget=1
+		fi
+		sigs=-
+		[ "$have_nexus" = 1 ] && sigs=$(xclientsig "$bin" 2>/dev/null)
+		printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$launcher" "$desktop" "${iconfile:--}" "$forget" "${sigs:--}" "${mimes:--}" "$name" >> "$NEW"
+	done
+done
+
+# Signature and icon: when the entry is new or its icon source changed.
+OUT=$STATE/manifest.out
+: > "$OUT"
+while IFS='	' read -r launcher desktop iconfile forget sigs mimes title; do
+	[ "$iconfile" = - ] && iconfile=
+	have=$(awk -F'\t' -v l="$launcher" '$1 == l { print $3; exit }' "$MANIFEST")
+	havesigs=$(awk -F'\t' -v l="$launcher" '$1 == l { print $4; exit }' "$MANIFEST")
+	want=$iconfile
+	[ -n "$iconfile" ] && [ -f "$iconfile" ] && want="$iconfile $(stat -c %Y "$iconfile")"
+	bin=$(readlink -f "$launcher")
+	[ "$sigs" = - ] && sigs=
+	if [ "$have_nexus" = 1 ] && [ -n "$sigs" ]; then
+		if [ "$forget" = 1 ] || [ "$havesigs" != "$sigs" ] \
+			|| [ "$(catattr -d BEOS:APP_SIG "$bin" 2>/dev/null)" != "$sigs" ] \
+			|| ! getfattr --absolute-names -n user.beos.BEOS:APP_FLAGS -e hex "$bin" 2>/dev/null \
+				| grep -q '=0x4650504108000000$'; then
+			set_signature "$bin" "$sigs"
+			# Signatures of earlier runs.
+			for t in $(printf %s "$havesigs" | tr , ' '); do
+				[ "$t" = - ] || [ "$t" = "$sigs" ] || setapptype -r "$t" >/dev/null 2>&1
+			done
+		fi
+	fi
+	done_icon=
+	if [ -n "$iconfile" ] && [ -f "$iconfile" ]; then
+		if [ "$have" = "$want" ] && [ "$forget" = 0 ] && [ "$havesigs" = "$sigs" ]; then
+			done_icon=$want
+		elif [ "$have_nexus" = 1 ] && [ -n "$sigs" ] && set_icon "$bin" "$iconfile"; then
+			set_types "$sigs" "$iconfile" "$title" "$bin" "$mimes"
+			done_icon=$want
+		fi
+	else
+		done_icon=none
+	fi
+	printf '%s\t%s\t%s\t%s\n' "$launcher" "$desktop" "$done_icon" "${sigs:--}" >> "$OUT"
+done < "$NEW"
+
+# Entries of earlier runs that are gone.
+while IFS='	' read -r launcher desktop rest; do
+	[ -n "$launcher" ] || continue
+	listed "$OUT" "$launcher" && continue
+	if [ -L "$launcher" ] || { [ -f "$launcher" ] \
+		&& grep -q '^# Generated by vos-desktop-sync' "$launcher"; }; then
+		rm -f "$launcher"
+	fi
+	[ "$have_nexus" = 1 ] || continue
+	for t in $(awk -F'\t' -v l="$launcher" '$1 == l { print $4 }' "$MANIFEST" | tr , ' '); do
+		[ "$t" = - ] || setapptype -r "$t" >/dev/null 2>&1
+	done
+done < "$MANIFEST"
+
+mv "$OUT" "$MANIFEST"
+# Icons still pending (no nexus yet) are finished at boot.
+if awk -F'\t' '$3 == "" { f = 1 } END { exit !f }' "$MANIFEST"; then
+	touch "$STATE/pending"
+else
+	rm -f "$STATE/pending"
+fi
+exit 0

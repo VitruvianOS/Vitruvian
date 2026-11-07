@@ -352,6 +352,11 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 		|| (fView->CommandIsControlKey() && (mod & B_COMMAND_KEY) != 0);
 	const int32 keyMods = controlPressed ? (mod | B_CONTROL_KEY) : mod;
 
+	// Word motion and erase: physical Ctrl or Alt, never the Option key.
+	const bool wordKey = ((mod & (B_CONTROL_KEY | B_COMMAND_KEY)) != 0)
+		&& (mod & B_OPTION_KEY) == 0;
+	const int32 wordMods = wordKey ? (mod | B_CONTROL_KEY) : mod;
+
 	switch (*bytes) {
 		case B_RETURN:
 			if (rawChar == B_RETURN)
@@ -359,27 +364,27 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 			break;
 
 		case B_DELETE:
-			toWrite = DELETE_KEY_CODE;
+			toWrite = wordKey ? "\033[3;5~" : DELETE_KEY_CODE;
 			break;
 
 		case B_BACKSPACE:
 			// Translate only the actual backspace key to the backspace
 			// code. CTRL-H shall just be echoed.
 			if (!((mod & B_CONTROL_KEY) && rawChar == 'h'))
-				toWrite = BACKSPACE_KEY_CODE;
+				toWrite = wordKey ? "\033\177" : BACKSPACE_KEY_CODE;
 			break;
 
 		case B_LEFT_ARROW:
 			if (rawChar == B_LEFT_ARROW) {
 				toWrite = _BuildXtermPCFunctionKeySequence(outputBuffer, sizeof(outputBuffer),
-					keyMods, prefix, '1', 'D');
+					wordMods, prefix, '1', 'D');
 			}
 			break;
 
 		case B_RIGHT_ARROW:
 			if (rawChar == B_RIGHT_ARROW) {
 				toWrite = _BuildXtermPCFunctionKeySequence(outputBuffer, sizeof(outputBuffer),
-					keyMods, prefix, '1', 'C');
+					wordMods, prefix, '1', 'C');
 			}
 			break;
 

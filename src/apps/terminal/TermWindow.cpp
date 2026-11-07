@@ -731,24 +731,31 @@ TermWindow::DispatchMessage(BMessage* message, BHandler* handler)
 {
 	int32 modifiers;
 	int32 rawChar;
-	if (message->what == B_KEY_DOWN && command_is_control_key(fKeymap)
+	if (message->what == B_KEY_DOWN
 		&& message->FindInt32("modifiers", &modifiers) == B_OK
 		&& (modifiers & B_COMMAND_KEY) != 0
 		&& message->FindInt32("raw_char", &rawChar) == B_OK) {
+		const bool ctrlMode = command_is_control_key(fKeymap);
 		TermView* view = _ActiveTermView();
 		bool shift = (modifiers & B_SHIFT_KEY) != 0;
-		if (view != NULL && !shift && view->WriteControlCharacter(rawChar))
+		if (ctrlMode && view != NULL && !shift
+			&& view->WriteControlCharacter(rawChar)) {
 			return;
+		}
 
 		// Shift+Left/Right switch tabs and Option+Left/Right move them
 		// (see _UpdateShortcuts()), so those stay with BWindow.
 		const char* bytes;
 		bool option = (modifiers & B_OPTION_KEY) != 0;
-		bool toView = !option && (rawChar == B_UP_ARROW
-			|| rawChar == B_DOWN_ARROW
+		bool word = rawChar == B_BACKSPACE || rawChar == B_DELETE
 			|| (!shift && (rawChar == B_LEFT_ARROW
-				|| rawChar == B_RIGHT_ARROW || rawChar == B_HOME
-				|| rawChar == B_END)));
+				|| rawChar == B_RIGHT_ARROW));
+		bool toView = !option && (word
+			|| (ctrlMode && (rawChar == B_UP_ARROW
+				|| rawChar == B_DOWN_ARROW || (!shift
+				&& (rawChar == B_HOME || rawChar == B_END)))));
+		if (!ctrlMode && HasShortcut(rawChar, B_COMMAND_KEY))
+			toView = false;
 		if (view != NULL && toView
 			&& message->FindString("bytes", &bytes) == B_OK) {
 			static_cast<BView*>(view)->KeyDown(bytes, strlen(bytes));

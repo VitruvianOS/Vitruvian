@@ -65,12 +65,15 @@
 	mimeset
 	mountvolume
 	setmime
+	seticon
+	setapptype
 	sysinfo
 	xres
 	notify
 	translate
 	filepanel
 	vos-signature-migrate
+	xclientsig
 	screen_blanker
 	screenshot_cli
 )

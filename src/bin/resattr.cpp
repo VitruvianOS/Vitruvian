@@ -28,6 +28,9 @@ static const char *kUsage =
 "                     wins. If the options is not given, already existing\n"
 "                     attributes remain untouched. Otherwise the first input\n"
 "                     file specifying an attribute wins.\n"
+"  -m, --meta       - Only copy the application metadata (signature, icons,\n"
+"                     version, flags, file types), not every resource. File\n"
+"                     systems limit the space for attributes.\n"
 "  -r, --reverse    - Reverse mode: Reads attributes from input files and\n"
 "                     writes resources. A unique resource ID is assigned to\n"
 "                     each attribute, so there will be no conflicts if two\n"
@@ -76,10 +79,38 @@ next_arg(int argc, const char* const* argv, int& argi, bool dontFail = false)
 
 // write_attributes
 static
+bool
+is_meta_name(const char *name)
+{
+	if (name == NULL || strncmp(name, "BEOS:", 5) != 0)
+		return false;
+	if (strncmp(name, "BEOS:L:", 7) == 0 || strncmp(name, "BEOS:M:", 7) == 0)
+		return strcmp(name + 7, "STD_ICON") == 0;
+	return true;
+}
+
+static bool sMetaOnly = false;
+static bool sWriteFailed = false;
+
+static
 void
 write_attributes(BNode &out, const char *inFileName, BResources &resources,
 	bool overwrite)
 {
+	// a vector icon makes the legacy bitmap ones redundant
+	bool hasVectorIcon = false;
+	if (sMetaOnly) {
+		type_code vType;
+		int32 vId;
+		const char *vName;
+		size_t vSize;
+		for (int i = 0; resources.GetResourceInfo(i, &vType, &vId, &vName,
+				&vSize); i++) {
+			if (vName != NULL && strcmp(vName, "BEOS:ICON") == 0)
+				hasVectorIcon = true;
+		}
+	}
+
 	// iterate through the resources
 	type_code type;
 	int32 id;
@@ -90,6 +121,11 @@ write_attributes(BNode &out, const char *inFileName, BResources &resources,
 		 resIndex++) {
 		// if we shall not overwrite attributes, we skip the attribute, if it
 		// already exists
+		if (sMetaOnly && (!is_meta_name(name)
+				|| (hasVectorIcon && strstr(name, "STD_ICON") != NULL))) {
+			continue;
+		}
+
 		attr_info attrInfo;
 		if (!overwrite && out.GetAttrInfo(name, &attrInfo) == B_OK)
 			continue;
@@ -116,6 +152,7 @@ write_attributes(BNode &out, const char *inFileName, BResources &resources,
 		if (bytesWritten < 0) {
 			fprintf(stderr, "Failed to write attribute `%s' to output file: "
 				"%s\n", name, strerror(bytesWritten));
+			sWriteFailed = true;
 		}
 	}
 }
@@ -287,6 +324,9 @@ main(int argc, const char *const *argv)
 				outputFile = next_arg(argc, argv, argi);
 			} else if (strcmp(arg, "-O") == 0) {
 				overwrite = true;
+			} else if (strcmp(arg, "-m") == 0
+				|| strcmp(arg, "--meta") == 0) {
+				sMetaOnly = true;
 			} else if (strcmp(arg, "-r") == 0
 				|| strcmp(arg, "--reverse") == 0) {
 				reverse = true;
@@ -309,5 +349,5 @@ main(int argc, const char *const *argv)
 			overwrite);
 	}
 
-	return 0;
+	return sWriteFailed ? 1 : 0;
 }

@@ -80,6 +80,8 @@ Application(diff_zip       SOURCES diff_zip.cpp)
 Application(mimeset        SOURCES mimeset.cpp          RDEF mimeset.rdef)
 Application(mountvolume    SOURCES mountvolume.cpp      RDEF mountvolume.rdef)
 Application(setmime        SOURCES setmime.cpp          RDEF setmime.rdef)
+Application(seticon       SOURCES seticon.cpp)
+Application(setapptype    SOURCES setapptype.cpp)
 Application(sysinfo        SOURCES sysinfo.cpp)
 Application(xres           SOURCES xres.cpp)
 

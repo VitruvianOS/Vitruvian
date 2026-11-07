@@ -11,8 +11,10 @@ set(SYSTEM_SERVERS
 	mount_server
 	registrar
 	keystore_server
+	notifications_bridge
 )
 ImageInclude("/system/servers" ${SYSTEM_SERVERS})
+ImageIncludeFile("${CMAKE_SOURCE_DIR}/src/servers/notification/org.freedesktop.Notifications.service" "/usr/share/dbus-1/services")
 
 
 set(INPUT_SERVER_ADDONS

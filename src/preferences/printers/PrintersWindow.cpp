@@ -29,6 +29,7 @@
 #include <Roster.h>
 #include <String.h>
 #include <StringView.h>
+#include <TabView.h>
 
 #include "AddPrinterDialog.h"
 #include "Messages.h"
@@ -143,9 +144,10 @@ JobRow::JobRow(const printcups_job& job)
 	fId(job.id),
 	fQueue(job.queue)
 {
-	BString id;
-	id << job.id;
-	SetField(new BStringField(id.String()), kJobIdColumn);
+	// kJobIdColumn is a BIntegerColumn; BIntegerColumn::DrawField casts
+	// its field to BIntegerField* unconditionally, so a BStringField here
+	// gets its bytes reinterpreted as a BIntegerField and always reads 0.
+	SetField(new BIntegerField(job.id), kJobIdColumn);
 	SetField(new BStringField(job.name), kJobNameColumn);
 	SetField(new BStringField(StateText(job.state)), kJobStateColumn);
 	SetField(new BStringField(job.queue), kJobQueueColumn);
@@ -173,7 +175,7 @@ PrintersWindow::PrintersWindow()
 	BWindow(BRect(60, 60, 760, 640),
 		B_TRANSLATE("Printers and scanners"),
 		B_TITLED_WINDOW, B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
-			| B_QUIT_ON_WINDOW_CLOSE),
+			| B_NOT_RESIZABLE | B_QUIT_ON_WINDOW_CLOSE),
 	fBusy(false)
 {
 	_SetupLists();
@@ -262,11 +264,17 @@ PrintersWindow::PrintersWindow()
 			.Add(fPurgeButton)
 		.End();
 
+	BTabView* tabView = new BTabView("tabView");
+	tabView->AddTab(printerBox);
+	tabView->TabAt(0)->SetLabel(B_TRANSLATE("Printers"));
+	tabView->AddTab(scannerBox);
+	tabView->TabAt(1)->SetLabel(B_TRANSLATE("Scanners"));
+	tabView->AddTab(jobBox);
+	tabView->TabAt(2)->SetLabel(B_TRANSLATE("Jobs"));
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(printerBox, 2)
-		.Add(scannerBox, 1)
-		.Add(jobBox, 2)
+		.Add(tabView)
 		.Add(fStatusView);
 
 	_UpdateButtons();
@@ -285,7 +293,7 @@ PrintersWindow::_SetupLists()
 	const float scale = be_plain_font->Size() / 12.0f;
 
 	fPrinterList = new BColumnListView("printers",
-		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
+		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, true);
 	fPrinterList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
 		200 * scale, 120 * scale, 400 * scale, B_TRUNCATE_END), kPrinterColumn);
@@ -301,7 +309,7 @@ PrintersWindow::_SetupLists()
 	fScannerList->SetSelectionMessage(new BMessage(kMsgScannerSelected));
 
 	fJobList = new BColumnListView("jobs",
-		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
+		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, true);
 	fJobList->SetSelectionMessage(new BMessage(kMsgJobSelected));
 	fJobList->AddColumn(new BIntegerColumn(B_TRANSLATE("ID"),
 		50 * scale, 40 * scale, 80 * scale, B_ALIGN_LEFT), kJobIdColumn);
@@ -637,8 +645,10 @@ PrintersWindow::_UpdateJobs()
 
 	if (gJobCount <= 0) {
 		BRow* row = new BRow();
-		row->SetField(new BStringField(B_TRANSLATE("No jobs")), kJobIdColumn);
-		row->SetField(new BStringField(""), kJobNameColumn);
+		// kJobIdColumn needs a BIntegerField (see JobRow's constructor);
+		// the placeholder message goes in the name column instead.
+		row->SetField(new BIntegerField(0), kJobIdColumn);
+		row->SetField(new BStringField(B_TRANSLATE("No jobs")), kJobNameColumn);
 		row->SetField(new BStringField(""), kJobStateColumn);
 		row->SetField(new BStringField(""), kJobQueueColumn);
 		fJobList->AddRow(row);

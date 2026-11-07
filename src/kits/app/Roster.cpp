@@ -18,6 +18,8 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include <vector>
+
 #include <AppFileInfo.h>
 #include <Application.h>
 #include <Bitmap.h>
@@ -2038,9 +2040,36 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 		if (error != B_OK)
 			return error;
 
-		// build an argument vector
-		error = argVector.Init(argc, args, &appRef,
-			wasDocument ? docRef : NULL);
+		// B_ARGV_ONLY apps get no refs messages: pass the files as arguments
+		std::vector<BString> fileArgs;
+		std::vector<const char*> launchArgs(args, args + (argc > 0 ? argc : 0));
+		const entry_ref* argvDoc = wasDocument ? docRef : NULL;
+		if ((appFlags & B_ARGV_ONLY) != 0) {
+			entry_ref fileRef;
+			BPath filePath;
+			for (int32 i = 0; messageList != NULL
+					&& i < messageList->CountItems(); i++) {
+				BMessage* message = (BMessage*)messageList->ItemAt(i);
+				for (int32 j = 0; message != NULL
+						&& message->what == B_REFS_RECEIVED
+						&& message->FindRef("refs", j, &fileRef) == B_OK; j++) {
+					if (filePath.SetTo(&fileRef) == B_OK)
+						fileArgs.push_back(filePath.Path());
+				}
+			}
+			if (docRef != NULL && wasDocument && !(appRef == *docRef)
+					&& filePath.SetTo(docRef) == B_OK) {
+				fileArgs.push_back(filePath.Path());
+			}
+			if (!fileArgs.empty()) {
+				for (size_t i = 0; i < fileArgs.size(); i++)
+					launchArgs.push_back(fileArgs[i].String());
+				argvDoc = NULL;
+			}
+		}
+		int launchArgc = (int)launchArgs.size();
+		error = argVector.Init(launchArgc, launchArgc > 0 ? &launchArgs[0] : NULL,
+			&appRef, argvDoc);
 		DBG(OUT("  build argv: %s (%" B_PRIx32 ")\n", strerror(error), error));
 		if (error != B_OK)
 			return error;
@@ -2168,8 +2197,8 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 		// If the target app is B_ARGV_ONLY, only if it is newly launched
 		// messages are sent to it (namely B_ARGV_RECEIVED and B_READY_TO_RUN).
 		// An already running B_ARGV_ONLY app won't get any messages.
-		bool argvOnly = (appFlags & B_ARGV_ONLY) != 0
-			|| (alreadyRunning && (otherAppFlags & B_ARGV_ONLY) != 0);
+		bool argvOnly = alreadyRunning ? (otherAppFlags & B_ARGV_ONLY) != 0
+			: (appFlags & B_ARGV_ONLY) != 0;
 		const BList* _messageList = (argvOnly ? NULL : messageList);
 		// don't send ref, if it refers to the app or is included in the
 		// argument vector
@@ -2216,6 +2245,12 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 void
 BRoster::_SetAppFlags(team_id team, uint32 flags) const
 {
+	BMessage request(B_REG_SET_SIGNATURE);
+	BMessage reply;
+	if (request.AddInt32("team", team) == B_OK
+		&& request.AddInt32("flags", (int32)flags) == B_OK) {
+		fMessenger.SendMessage(&request, &reply);
+	}
 }
 
 

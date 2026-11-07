@@ -99,6 +99,11 @@ public:
 
 	class Private;
 
+protected:
+	// V\OS: register with explicit app flags instead of the file's.
+								BApplication(const char* signature,
+									status_t* error, uint32 appFlags);
+
 private:
 	typedef BLooper _inherited;
 
@@ -125,7 +130,7 @@ private:
 									BMessage* specifier, int32 form,
 									const char* property);
 			void				_InitData(const char* signature, bool initGUI,
-									status_t* error);
+									status_t* error, const uint32* flags = NULL);
 			port_id				_GetPort(const char* signature);
 			void				BeginRectTracking(BRect r, bool trackWhole);
 			void				EndRectTracking();

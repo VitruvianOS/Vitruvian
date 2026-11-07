@@ -88,6 +88,8 @@ public:
 
 			// related thread/team_id(s).
 	inline	team_id				ClientTeam() const { return fClientTeam; }
+	inline	team_id				PresentedTeam() const
+									{ return fPresentedTeam; }
 
 	inline	port_id				ClientLooperPort () const
 									{ return fClientLooperPort; }
@@ -153,6 +155,7 @@ private:
 			bool				fWindowAddedToDesktop;
 
 			team_id				fClientTeam;
+			team_id				fPresentedTeam;
 
 			port_id				fMessagePort;
 			port_id				fClientReplyPort;

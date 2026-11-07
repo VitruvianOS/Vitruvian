@@ -171,6 +171,7 @@ ServerWindow::ServerWindow(const char* title, ServerApp* app,
 	fWindowAddedToDesktop(false),
 
 	fClientTeam(app->ClientTeam()),
+	fPresentedTeam(app->ClientTeam()),
 
 	fMessagePort(-1),
 	fClientReplyPort(clientPort),
@@ -464,7 +465,7 @@ ServerWindow::NotifyZoom()
 void
 ServerWindow::GetInfo(window_info& info)
 {
-	info.team = ClientTeam();
+	info.team = PresentedTeam();
 	info.server_token = ServerToken();
 
 	info.thread = Thread();
@@ -719,6 +720,14 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				SetTitle(newTitle);
 				free(newTitle);
 			}
+			break;
+		}
+
+		case AS_SET_WINDOW_TEAM:
+		{
+			team_id team;
+			if (link.Read<team_id>(&team) == B_OK && team > 0)
+				fPresentedTeam = team;
 			break;
 		}
 
@@ -4665,6 +4674,7 @@ ServerWindow::_MessageNeedsAllWindowsLocked(uint32 code) const
 		case AS_SET_FEEL:
 		case AS_SET_FLAGS:
 		case AS_SET_WORKSPACES:
+		case AS_SET_WINDOW_TEAM:
 		case AS_WINDOW_MOVE:
 		case AS_WINDOW_RESIZE:
 		case AS_SET_SIZE_LIMITS:

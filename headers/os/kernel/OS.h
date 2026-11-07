@@ -154,6 +154,10 @@ extern ssize_t		port_buffer_size_etc(port_id port, uint32 flags,
 extern ssize_t		port_count(port_id port);
 extern status_t		set_port_owner(port_id port, team_id team);
 
+/* pollable fd (POLLIN while a message is queued); owner team only,
+ * close() it when done */
+extern int			port_to_fd(port_id port);
+
 /* system private, use the macros instead */
 extern status_t		_get_port_info(port_id port, port_info *portInfo,
 						size_t portInfoSize);

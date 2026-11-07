@@ -38,6 +38,7 @@ const uint32 kMsgPpdsLoaded         = 'PpdL';
 const uint32 kMsgAddConfirm         = 'AdCf';
 const uint32 kMsgAddDone            = 'AdDn';
 const uint32 kMsgToggleMode         = 'TgMd';
+const uint32 kMsgDriverFilter       = 'DrFl';
 
 // PrinterOptionsDialog
 const uint32 kMsgOptionsChoices     = 'OpCh';

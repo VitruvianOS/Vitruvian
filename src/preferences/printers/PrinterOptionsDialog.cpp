@@ -39,8 +39,8 @@ PrinterOptionsDialog::PrinterOptionsDialog(const BMessenger& replyTo,
 	BWindow(BRect(100, 100, 420, renameMode ? 220 : 340),
 		renameMode ? B_TRANSLATE("Rename Printer")
 			: B_TRANSLATE("Printer Options"),
-		B_TITLED_WINDOW, B_NOT_RESIZABLE | B_NOT_ZOOMABLE
-			| B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
+		B_TITLED_WINDOW,  B_NOT_ZOOMABLE 
+		| B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS),
 	fReplyTo(replyTo),
 	fQueue(queue),
 	fInfo(info),
@@ -62,22 +62,6 @@ PrinterOptionsDialog::PrinterOptionsDialog(const BMessenger& replyTo,
 		_SetupRename();
 	else
 		_SetupOptions();
-
-	if (renameMode) {
-		// Save/cancel already in the group from _SetupRename's grid plus glue.
-	} else if (fSaveButton->Parent() == NULL) {
-	}
-
-	if (fSaveButton->Parent() == NULL) {
-		BLayoutBuilder::Group<>(this, B_VERTICAL)
-			.SetInsets(B_USE_WINDOW_SPACING)
-			.AddGlue()
-			.AddGroup(B_HORIZONTAL)
-				.AddGlue()
-				.Add(fSaveButton)
-				.Add(fCancelButton)
-			.End();
-	}
 
 	fSaveButton->SetTarget(this);
 	fCancelButton->SetTarget(this);
@@ -102,10 +86,10 @@ PrinterOptionsDialog::_SetupRename()
 
 	BLayoutBuilder::Grid<>(this)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(fDescriptionField, 0, 0, B_ALIGN_LEFT)
-		.Add(fLocationField, 0, 1, B_ALIGN_LEFT)
+		.AddTextControl(fDescriptionField, 0, 0)
+		.AddTextControl(fLocationField, 0, 1)
 		.AddGlue(0, 2)
-		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 3, 2, 2)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0, 3, 2)
 			.AddGlue()
 			.Add(fSaveButton)
 			.Add(fCancelButton)

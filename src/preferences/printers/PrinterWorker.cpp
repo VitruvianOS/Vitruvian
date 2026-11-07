@@ -155,7 +155,7 @@ WorkerEntry(void* data)
 
 		case kWorkerOpListPPDs:
 		{
-			static const int32 kMax = 256;
+			static const int32 kMax = 4096;
 			printcups_ppd* ppds = new printcups_ppd[kMax];
 			int count = printcups_list_ppds(
 				request->name.IsEmpty() ? NULL : request->name.String(),

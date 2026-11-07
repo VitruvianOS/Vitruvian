@@ -611,6 +611,9 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 		setenv("XDG_SESSION_DESKTOP", "vos",       1);
 		// Native plugin first; Qt falls back to X when it is missing.
 		setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
+		// No portal backend runs here, and GTK blocks ~20s on its D-Bus
+		// activation otherwise.
+		setenv("GTK_USE_PORTAL", "0", 0);
 		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
 		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
 
@@ -644,6 +647,9 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 				*eq = '=';
 			}
 		}
+		// PAM sets "wayland" for logind. Clients must not take it for a
+		// Wayland session (Chromium, SDL pick their backend from it).
+		setenv("XDG_SESSION_TYPE", "vos", 1);
 
 		// Session apps are forked here, not by the user manager: export the
 		// session bus address unless pam_systemd already set it.

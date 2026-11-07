@@ -21,9 +21,13 @@
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/prctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include <string>
 
 extern "C" {
 #include <libseat.h>
@@ -521,6 +525,76 @@ launch_reply(port_id replyPort, int32 replyToken, status_t error)
 }
 
 
+// Environment shared by every process the session starts.
+static void
+apply_session_env(const char* name)
+{
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%u", (unsigned)sUserUid);
+	setenv("SUDO_UID", buf, 1);
+	snprintf(buf, sizeof(buf), "%u", (unsigned)sUserGid);
+	setenv("SUDO_GID", buf, 1);
+
+	setenv("XDG_SESSION_TYPE",    "vos",       1);
+	setenv("XDG_CURRENT_DESKTOP", "vos",       1);
+	setenv("XDG_SESSION_DESKTOP", "vos",       1);
+	// Native plugin first; Qt falls back to X when it is missing.
+	setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
+	// No portal backend runs here, and GTK blocks ~20s on its D-Bus
+	// activation otherwise.
+	setenv("GTK_USE_PORTAL", "0", 0);
+	setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
+	setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
+
+	if (sUserHome[0] != '\0') {
+		char xdgPath[PATH_MAX + 32];
+		snprintf(xdgPath, sizeof(xdgPath), "%s/config/settings", sUserHome);
+		setenv("XDG_CONFIG_HOME", xdgPath, 0);
+		snprintf(xdgPath, sizeof(xdgPath), "%s/config/data", sUserHome);
+		setenv("XDG_DATA_HOME", xdgPath, 0);
+		snprintf(xdgPath, sizeof(xdgPath), "%s/config/cache", sUserHome);
+		setenv("XDG_CACHE_HOME", xdgPath, 0);
+	}
+
+	char runtimeDir[64];
+	snprintf(runtimeDir, sizeof(runtimeDir), "/run/user/%u", (unsigned)sUserUid);
+	struct stat st;
+	if (stat(runtimeDir, &st) == 0 && S_ISDIR(st.st_mode))
+		setenv("XDG_RUNTIME_DIR", runtimeDir, 0);
+	else {
+		fprintf(stderr, "janus_session: %s not usable for %s, "
+			"XDG_RUNTIME_DIR left unset (%s)\n", runtimeDir, name, strerror(errno));
+	}
+
+	if (sPamEnv != NULL) {
+		for (char** e = sPamEnv; *e != NULL; ++e) {
+			char* eq = strchr(*e, '=');
+			if (eq == NULL)
+				continue;
+			*eq = '\0';
+			setenv(*e, eq + 1, 1);
+			*eq = '=';
+		}
+	}
+	// PAM sets "wayland" for logind. Clients must not take it for a
+	// Wayland session (Chromium, SDL pick their backend from it).
+	setenv("XDG_SESSION_TYPE", "vos", 1);
+
+	// Session apps are forked here, not by the user manager: export the
+	// session bus address unless pam_systemd already set it.
+	if (runtimeDir[0] != '\0') {
+		char busAddr[128];
+		snprintf(busAddr, sizeof(busAddr), "unix:path=%s/bus",
+			runtimeDir);
+		setenv("DBUS_SESSION_BUS_ADDRESS", busAddr, 0);
+	}
+
+	setenv("HOME",    sUserHome, 1);
+	setenv("USER",    sUserName, 1);
+	setenv("LOGNAME", sUserName, 1);
+}
+
+
 // Fork+exec with privilege drop; this process never runs anything as root.
 // replyPort < 0 marks a supervised relaunch: nobody waits on a reply.
 static void
@@ -601,68 +675,7 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 				"JANUS_FBDEV=1 for %s\n", name);
 		}
 
-		snprintf(buf, sizeof(buf), "%u", (unsigned)sUserUid);
-		setenv("SUDO_UID", buf, 1);
-		snprintf(buf, sizeof(buf), "%u", (unsigned)sUserGid);
-		setenv("SUDO_GID", buf, 1);
-
-		setenv("XDG_SESSION_TYPE",    "vos",       1);
-		setenv("XDG_CURRENT_DESKTOP", "vos",       1);
-		setenv("XDG_SESSION_DESKTOP", "vos",       1);
-		// Native plugin first; Qt falls back to X when it is missing.
-		setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
-		// No portal backend runs here, and GTK blocks ~20s on its D-Bus
-		// activation otherwise.
-		setenv("GTK_USE_PORTAL", "0", 0);
-		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
-		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
-
-		if (sUserHome[0] != '\0') {
-			char xdgPath[PATH_MAX + 32];
-			snprintf(xdgPath, sizeof(xdgPath), "%s/config/settings", sUserHome);
-			setenv("XDG_CONFIG_HOME", xdgPath, 0);
-			snprintf(xdgPath, sizeof(xdgPath), "%s/config/data", sUserHome);
-			setenv("XDG_DATA_HOME", xdgPath, 0);
-			snprintf(xdgPath, sizeof(xdgPath), "%s/config/cache", sUserHome);
-			setenv("XDG_CACHE_HOME", xdgPath, 0);
-		}
-
-		char runtimeDir[64];
-		snprintf(runtimeDir, sizeof(runtimeDir), "/run/user/%u", (unsigned)sUserUid);
-		struct stat st;
-		if (stat(runtimeDir, &st) == 0 && S_ISDIR(st.st_mode))
-			setenv("XDG_RUNTIME_DIR", runtimeDir, 0);
-		else {
-			fprintf(stderr, "janus_session: %s not usable for %s, "
-				"XDG_RUNTIME_DIR left unset (%s)\n", runtimeDir, name, strerror(errno));
-		}
-
-		if (sPamEnv != NULL) {
-			for (char** e = sPamEnv; *e != NULL; ++e) {
-				char* eq = strchr(*e, '=');
-				if (eq == NULL)
-					continue;
-				*eq = '\0';
-				setenv(*e, eq + 1, 1);
-				*eq = '=';
-			}
-		}
-		// PAM sets "wayland" for logind. Clients must not take it for a
-		// Wayland session (Chromium, SDL pick their backend from it).
-		setenv("XDG_SESSION_TYPE", "vos", 1);
-
-		// Session apps are forked here, not by the user manager: export the
-		// session bus address unless pam_systemd already set it.
-		if (runtimeDir[0] != '\0') {
-			char busAddr[128];
-			snprintf(busAddr, sizeof(busAddr), "unix:path=%s/bus",
-				runtimeDir);
-			setenv("DBUS_SESSION_BUS_ADDRESS", busAddr, 0);
-		}
-
-		setenv("HOME",    sUserHome, 1);
-		setenv("USER",    sUserName, 1);
-		setenv("LOGNAME", sUserName, 1);
+		apply_session_env(name);
 		if (!drop_to_user(groups, ngroups)) {
 			fprintf(stderr, "janus_session: drop-priv for %s failed: %s\n",
 				name, strerror(errno));
@@ -1630,6 +1643,291 @@ run_signature_migration_for_user()
 }
 
 
+// --- X server on demand ------------------------------------------------
+//
+// The session owns the display socket and starts Xvitr on the first
+// connection. The socket outlives the server, so a later client restarts it.
+
+static const char* const kXServer = "/usr/bin/Xvitr";
+static int    sXDisplay  = -1;
+static int    sXSocket   = -1;
+static pid_t  sXPid      = -1;
+static bigtime_t sXStarted = 0;
+static char   sXSockPath[64] = "";
+static char   sXLockPath[64] = "";
+static char   sXAuthPath[PATH_MAX] = "";
+
+
+static bool
+x_pid_alive(const char* lockPath)
+{
+	FILE* f = fopen(lockPath, "r");
+	if (f == NULL)
+		return false;
+	int pid = 0;
+	bool alive = fscanf(f, " %d", &pid) == 1 && pid > 0
+		&& (kill(pid, 0) == 0 || errno == EPERM);
+	fclose(f);
+	return alive;
+}
+
+
+// True when something accepts connections at the (path or abstract) name.
+static bool
+x_endpoint_live(int n, bool abstract)
+{
+	int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd < 0)
+		return false;
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	int len = snprintf(addr.sun_path + (abstract ? 1 : 0),
+		sizeof(addr.sun_path) - 1, "/tmp/.X11-unix/X%d", n);
+	socklen_t size = offsetof(struct sockaddr_un, sun_path) + len
+		+ (abstract ? 1 : 0);
+	bool live = connect(fd, (struct sockaddr*)&addr, size) == 0
+		|| (errno != ECONNREFUSED && errno != ENOENT);
+	close(fd);
+	return live;
+}
+
+
+static bool
+x_auth_dir(char* out, size_t size)
+{
+	struct stat st;
+	snprintf(out, size, "/run/user/%u", (unsigned)sUserUid);
+	if (stat(out, &st) == 0 && S_ISDIR(st.st_mode) && st.st_uid == sUserUid)
+		return true;
+	snprintf(out, size, "%s/x-%u", runtime_dir(), (unsigned)sUserUid);
+	if (mkdir(out, 0700) != 0 && errno != EEXIST)
+		return false;
+	return chown(out, sUserUid, sUserGid) == 0 && chmod(out, 0700) == 0;
+}
+
+
+// MIT-MAGIC-COOKIE-1 entry for the local display, the format Xauth reads.
+static bool
+x_write_auth(const char* path, int n)
+{
+	unsigned char cookie[16];
+	int rnd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+	if (rnd < 0 || read(rnd, cookie, sizeof(cookie)) != (ssize_t)sizeof(cookie)) {
+		if (rnd >= 0)
+			close(rnd);
+		return false;
+	}
+	close(rnd);
+
+	char host[256] = "";
+	gethostname(host, sizeof(host) - 1);
+	char number[16];
+	snprintf(number, sizeof(number), "%d", n);
+	const char* name = "MIT-MAGIC-COOKIE-1";
+
+	std::string blob;
+	auto put16 = [&](size_t v) {
+		blob += (char)(v >> 8);
+		blob += (char)(v & 0xff);
+	};
+	auto field = [&](const void* data, size_t len) {
+		put16(len);
+		blob.append((const char*)data, len);
+	};
+	put16(256);		// FamilyLocal
+	field(host, strlen(host));
+	field(number, strlen(number));
+	field(name, strlen(name));
+	field(cookie, sizeof(cookie));
+
+	unlink(path);
+	int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+		0600);
+	if (fd < 0)
+		return false;
+	bool ok = write(fd, blob.data(), blob.size()) == (ssize_t)blob.size()
+		&& fchown(fd, sUserUid, sUserGid) == 0;
+	close(fd);
+	if (!ok)
+		unlink(path);
+	return ok;
+}
+
+
+static bool
+x_claim_display(int n)
+{
+	char lock[64], sock[64];
+	snprintf(lock, sizeof(lock), "/tmp/.X%d-lock", n);
+	snprintf(sock, sizeof(sock), "/tmp/.X11-unix/X%d", n);
+
+	if (access(lock, F_OK) == 0) {
+		if (x_pid_alive(lock))
+			return false;
+		unlink(lock);
+	}
+	if (x_endpoint_live(n, false) || x_endpoint_live(n, true))
+		return false;
+
+	int lfd = open(lock, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+		0644);
+	if (lfd < 0)
+		return false;
+	char pidText[16];
+	int pidLen = snprintf(pidText, sizeof(pidText), "%10d\n", (int)getpid());
+	bool wrote = write(lfd, pidText, pidLen) == pidLen;
+	close(lfd);
+	if (!wrote) {
+		unlink(lock);
+		return false;
+	}
+
+	// No live endpoint: a socket file left behind is stale.
+	unlink(sock);
+	int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd >= 0) {
+		struct sockaddr_un addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sun_family = AF_UNIX;
+		strlcpy(addr.sun_path, sock, sizeof(addr.sun_path));
+		mode_t old = umask(077);
+		int bound = bind(fd, (struct sockaddr*)&addr, sizeof(addr));
+		umask(old);
+		if (bound == 0 && chown(sock, sUserUid, sUserGid) == 0
+				&& listen(fd, 128) == 0) {
+			sXSocket = fd;
+			strlcpy(sXSockPath, sock, sizeof(sXSockPath));
+			strlcpy(sXLockPath, lock, sizeof(sXLockPath));
+			return true;
+		}
+		if (bound == 0)
+			unlink(sock);
+		close(fd);
+	}
+	unlink(lock);
+	return false;
+}
+
+
+static void
+x_release_display()
+{
+	if (sXSocket >= 0)
+		close(sXSocket);
+	sXSocket = -1;
+	if (sXSockPath[0] != '\0')
+		unlink(sXSockPath);
+	if (sXLockPath[0] != '\0')
+		unlink(sXLockPath);
+	if (sXAuthPath[0] != '\0')
+		unlink(sXAuthPath);
+	sXSockPath[0] = sXLockPath[0] = sXAuthPath[0] = '\0';
+	sXDisplay = -1;
+}
+
+
+static void
+x_session_setup()
+{
+	if (sGreeterMode || access(kXServer, X_OK) != 0)
+		return;
+
+	mkdir("/tmp/.X11-unix", 01777);
+	chmod("/tmp/.X11-unix", 01777);
+
+	char dir[128];
+	if (!x_auth_dir(dir, sizeof(dir))) {
+		fprintf(stderr, "janus_session: no auth dir for X\n");
+		return;
+	}
+	for (int n = 0; n < 256; n++) {
+		if (!x_claim_display(n))
+			continue;
+		snprintf(sXAuthPath, sizeof(sXAuthPath), "%s/Xauthority", dir);
+		if (!x_write_auth(sXAuthPath, n)) {
+			fprintf(stderr, "janus_session: cannot write %s\n", sXAuthPath);
+			x_release_display();
+			return;
+		}
+		sXDisplay = n;
+		char name[16];
+		snprintf(name, sizeof(name), ":%d", n);
+		setenv("DISPLAY", name, 1);
+		setenv("XAUTHORITY", sXAuthPath, 1);
+		printf("janus_session: X display %s reserved\n", name);
+		return;
+	}
+	fprintf(stderr, "janus_session: no free X display\n");
+}
+
+
+static void
+x_start_server()
+{
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (!resolve_user_groups(&groups, &ngroups))
+		return;
+
+	char number[16], fdText[16];
+	snprintf(number, sizeof(number), ":%d", sXDisplay);
+	snprintf(fdText, sizeof(fdText), "%d", sXSocket);
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		free(groups);
+		return;
+	}
+	if (pid == 0) {
+		int logfd = open("/var/log/Xvitr.log",
+			O_WRONLY | O_CREAT | O_APPEND, 0644);
+		if (logfd >= 0) {
+			dup2(logfd, STDOUT_FILENO);
+			dup2(logfd, STDERR_FILENO);
+			close(logfd);
+		}
+		fcntl(sXSocket, F_SETFD, 0);
+		apply_session_env("Xvitr");
+		if (!drop_to_user(groups, ngroups)) {
+			fprintf(stderr, "janus_session: drop-priv for Xvitr failed\n");
+			_exit(126);
+		}
+		if (chdir(sUserHome) != 0 && chdir("/") != 0)
+			_exit(126);
+		execl(kXServer, "Xvitr", number, "-auth", sXAuthPath, "-listenfd",
+			fdText, "-nolisten", "tcp", "-noreset", (char*)NULL);
+		fprintf(stderr, "janus_session: execl(%s): %s\n", kXServer,
+			strerror(errno));
+		_exit(127);
+	}
+	free(groups);
+	sXPid = pid;
+	sXStarted = system_time();
+	printf("janus_session: Xvitr started pid=%d on %s\n", (int)pid, number);
+}
+
+
+static void
+x_session_teardown()
+{
+	if (sXPid > 0) {
+		kill(sXPid, SIGTERM);
+		for (int i = 0; i < 100; i++) {
+			if (waitpid(sXPid, NULL, WNOHANG) != 0)
+				break;
+			usleep(20 * 1000);
+			if (i == 99) {
+				kill(sXPid, SIGKILL);
+				waitpid(sXPid, NULL, 0);
+			}
+		}
+		sXPid = -1;
+	}
+	x_release_display();
+}
+
+
 // --- Teardown / main -----------------------------------------------------
 
 static void
@@ -1732,6 +2030,7 @@ static void
 teardown_and_exit()
 {
 	sShuttingDown = true;
+	x_session_teardown();
 	kill_fanout();
 	kill_session_cgroup();
 
@@ -1962,8 +2261,19 @@ daemon_loop()
 	sDaemonLoopActive = true;
 
 	while (sRunning) {
-		struct pollfd pfds[2];
+		struct pollfd pfds[3];
 		int count = 0;
+		// Back off for a second after a server dies so a crash cannot spin.
+		bool xWatch = sXSocket >= 0 && sXPid <= 0
+			&& system_time() - sXStarted > 1000000;
+		int xIndex = -1;
+		if (xWatch) {
+			xIndex = count;
+			pfds[count].fd = sXSocket;
+			pfds[count].events = POLLIN;
+			pfds[count].revents = 0;
+			count++;
+		}
 		if (seat_fd >= 0) {
 			pfds[count].fd = seat_fd;
 			pfds[count].events = POLLIN;
@@ -1983,7 +2293,9 @@ daemon_loop()
 			for (int i = 0; i < count; i++) {
 				if ((pfds[i].revents & POLLIN) == 0)
 					continue;
-				if (pfds[i].fd == seat_fd) {
+				if (i == xIndex) {
+					x_start_server();
+				} else if (pfds[i].fd == seat_fd) {
 					if (sSeat)
 						libseat_dispatch(sSeat, 0);
 				} else {
@@ -2002,6 +2314,10 @@ daemon_loop()
 		int status = 0;
 		char name[64];
 		while ((reaped = waitpid(-1, &status, WNOHANG)) > 0) {
+			if (reaped == sXPid) {
+				sXPid = -1;
+				continue;
+			}
 			// A zero exit is the registrar's logout quit dance; only
 			// deaths earn a supervised restart.
 			if (invalidate_app_by_pid(reaped, name, sizeof(name))
@@ -2137,6 +2453,7 @@ main(int argc, char** argv)
 	}
 
 	apply_session_proxy_env();
+	x_session_setup();
 
 	sSeatWakeFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 	if (sSeatWakeFd < 0)

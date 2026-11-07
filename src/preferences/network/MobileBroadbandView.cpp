@@ -11,6 +11,9 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <CheckBox.h>
+#include <File.h>
+#include <Path.h>
 #include <Catalog.h>
 #include <LayoutBuilder.h>
 #include <Messenger.h>
@@ -34,6 +37,7 @@ static const uint32 kMsgDisconnectDone = 'mDdn';
 static const uint32 kMsgProfileReady = 'mPfl';
 static const uint32 kMsgMMStatusReady = 'mMmr';
 static const uint32 kMsgUnlockDone = 'mUdn';
+static const uint32 kMsgDataToggled = 'mDtt';
 
 
 MobileBroadbandView::MobileBroadbandView()
@@ -54,6 +58,8 @@ MobileBroadbandView::MobileBroadbandView()
 	fDisconnectButton(NULL),
 	fUnlockButton(NULL),
 	fRefreshButton(NULL),
+	fRoamingCheck(NULL),
+	fDataCheck(NULL),
 	fSnapshotAPNHash(0),
 	fSnapshotUserHash(0),
 	fSnapshotNumberHash(0)
@@ -85,6 +91,10 @@ MobileBroadbandView::MobileBroadbandView()
 		new BMessage(kMsgUnlock));
 	fRefreshButton = new BButton("refresh", B_TRANSLATE("Refresh"),
 		new BMessage(kMsgRefreshMM));
+	fRoamingCheck = new BCheckBox("roaming", B_TRANSLATE("Allow roaming"),
+		new BMessage(kMsgFieldModified));
+	fDataCheck = new BCheckBox("data", B_TRANSLATE("Mobile data"),
+		new BMessage(kMsgDataToggled));
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.Add(fStatusView)
@@ -96,6 +106,8 @@ MobileBroadbandView::MobileBroadbandView()
 			.Add(fPasswordField, 0, 2, 2, 1)
 			.Add(fNumberField, 0, 3, 2, 1)
 			.Add(fPINField, 0, 4, 2, 1)
+			.Add(fRoamingCheck, 0, 5, 2, 1)
+			.Add(fDataCheck, 0, 6, 2, 1)
 		.End()
 		.AddGroup(B_HORIZONTAL)
 			.Add(fConnectButton)
@@ -163,6 +175,27 @@ MobileBroadbandView::MessageReceived(BMessage* message)
 			if (nm == NULL || fDevicePath.IsEmpty())
 				break;
 
+			// libnm dropped NMSettingGsm allow-roaming, so the
+			// checkbox is enforced here: refuse to dial out on a
+			// roaming network unless it is ticked.
+			ModemManagerBackend* mm = ModemManagerBackend::Instance();
+			if (mm != NULL && fRoamingCheck->Value() != B_CONTROL_ON
+					&& !fMMModemPath.IsEmpty()) {
+				BMessage modemInfo;
+				if (mm->GetModemInfo(fMMModemPath.String(),
+						&modemInfo) == B_OK) {
+					bool roaming = false;
+					modemInfo.FindBool(kMMFieldModemIsRoaming,
+						&roaming);
+					if (roaming) {
+						BString text(B_TRANSLATE(
+							"Roaming: not allowed"));
+						_SetStatusText(text);
+						break;
+					}
+				}
+			}
+
 			const char* name = fAPNField->Text();
 			if (name == NULL || name[0] == '\0')
 				name = "mobile";
@@ -172,6 +205,25 @@ MobileBroadbandView::MessageReceived(BMessage* message)
 				fPasswordField->Text(), fNumberField->Text(), true,
 				BMessenger(this), kMsgConnectDone);
 			_EnableForm(false);
+			break;
+		}
+
+		case kMsgDataToggled:
+		{
+			// The data checkbox is the connect/disconnect switch;
+			// the outcome still lands in kMsgConnectDone.
+			if (fDataCheck->Value() == B_CONTROL_ON) {
+				if (Window() != NULL)
+					Window()->PostMessage(kMsgConnect);
+			}
+			else {
+				NMBackend* nm = NMBackend::Instance();
+				if (nm != NULL && !fDevicePath.IsEmpty()) {
+					nm->DisconnectMobileAsync(
+						fDevicePath.String(),
+						BMessenger(this), kMsgDisconnectDone);
+				}
+			}
 			break;
 		}
 
@@ -228,6 +280,21 @@ MobileBroadbandView::MessageReceived(BMessage* message)
 		case ModemManagerBackend::NOTIFICATION_MODEM_SIGNAL_CHANGED:
 		case ModemManagerBackend::NOTIFICATION_MODEM_STATE_CHANGED:
 			_RequestMMStatus();
+			// Drop the data connection when the modem lands on a
+			// roaming network and the user disallows roaming.
+			if (fConnected && fRoamingCheck->Value() != B_CONTROL_ON) {
+				bool roaming = false;
+				message->FindBool(kMMFieldModemIsRoaming, &roaming);
+				if (roaming) {
+					NMBackend* nm = NMBackend::Instance();
+					if (nm != NULL && !fDevicePath.IsEmpty()) {
+						nm->DisconnectMobileAsync(
+							fDevicePath.String(),
+							BMessenger(this),
+							kMsgDisconnectDone);
+					}
+				}
+			}
 			break;
 
 		default:
@@ -340,6 +407,8 @@ MobileBroadbandView::_EnableForm(bool enable)
 	fConnectButton->SetEnabled(enable && !fConnected);
 	fDisconnectButton->SetEnabled(enable && fConnected);
 	fRefreshButton->SetEnabled(enable);
+	fRoamingCheck->SetEnabled(enable && fIsGSM);
+	fDataCheck->SetEnabled(enable);
 }
 
 
@@ -369,6 +438,13 @@ MobileBroadbandView::_FillFormFromProfile(BMessage& profile)
 		? BString(fUserField->Text()).HashValue() : 0;
 	fSnapshotNumberHash = fNumberField->Text() != NULL
 		? BString(fNumberField->Text()).HashValue() : 0;
+
+	fDataCheck->SetValue(fConnected ? B_CONTROL_ON : B_CONTROL_OFF);
+
+	// An empty APN with a known operator gets the carrier default.
+	if ((fAPNField->Text() == NULL || fAPNField->Text()[0] == '\0')
+			&& !fOperatorCode.IsEmpty())
+		_SuggestApnFromProviderInfo(fOperatorCode.String());
 }
 
 
@@ -463,6 +539,11 @@ MobileBroadbandView::_OnMMStatusReady(BMessage& message)
 		_SetOperatorText(text);
 	}
 
+	const char* operatorCode = NULL;
+	if (message.FindString(kMMFieldModemOperatorCode, &operatorCode) == B_OK
+			&& operatorCode != NULL)
+		fOperatorCode = operatorCode;
+
 	bool locked = false;
 	bool pinRequired = false;
 	bool pukRequired = false;
@@ -490,6 +571,78 @@ MobileBroadbandView::_OnMMStatusReady(BMessage& message)
 	} else {
 		_SetPINVisible(false);
 		fUnlockButton->SetEnabled(false);
+	}
+}
+
+
+// First <apn value=...> of the <provider> whose <mcc>/<mnc> match the
+// modem's operator code; APN auto-fill from mobile-broadband-provider-info.
+void
+MobileBroadbandView::_SuggestApnFromProviderInfo(const char* operatorCode)
+{
+	if (operatorCode == NULL || strlen(operatorCode) < 4)
+		return;
+
+	BString mcc(operatorCode, 3);
+	BString mnc(operatorCode + 3);
+
+	BFile file(
+		"/usr/share/mobile-broadband-provider-info/providers.xml",
+		B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return;
+
+	BString content;
+	char buffer[4096];
+	ssize_t bytes;
+	while ((bytes = file.Read(buffer, sizeof(buffer) - 1)) > 0) {
+		buffer[bytes] = '\0';
+		content << buffer;
+	}
+
+	const char* scan = content.String();
+	while ((scan = strstr(scan, "<provider")) != NULL) {
+		const char* end = strstr(scan, "</provider>");
+		if (end == NULL)
+			break;
+
+		BString block(scan, (int32)(end - scan));
+
+		int32 mccAt = block.FindFirst("<mcc>");
+		int32 mncAt = block.FindFirst("<mnc>");
+		if (mccAt >= 0 && mncAt >= 0) {
+			BString blockMcc;
+			BString blockMnc;
+			int32 mccEnd = block.FindFirst("</mcc>", mccAt);
+			int32 mncEnd = block.FindFirst("</mnc>", mncAt);
+			if (mccEnd > mccAt && mncEnd > mncAt) {
+				blockMcc.SetTo(block.String() + mccAt + 5,
+					mccEnd - mccAt - 5);
+				blockMnc.SetTo(block.String() + mncAt + 5,
+					mncEnd - mncAt - 5);
+				// Carriers store mnc zero padded; the modem
+				// reports it stripped.
+				BString stripped(blockMnc);
+				while (stripped.Length() > 1
+						&& stripped.StartsWith("0"))
+					stripped.Remove(0, 1);
+				if (blockMcc == mcc
+						&& (blockMnc == mnc || stripped == mnc)) {
+					int32 apnAt = block.FindFirst("value=\"");
+					if (apnAt >= 0) {
+						int32 start = apnAt + 7;
+						int32 stop = block.FindFirst("\"", start);
+						if (stop > start) {
+							BString apn(block.String() + start,
+								stop - start);
+							fAPNField->SetText(apn.String());
+							fSnapshotAPNHash = apn.HashValue();
+						}
+					}
+				}
+			}
+		}
+		scan = end + 1;
 	}
 }
 

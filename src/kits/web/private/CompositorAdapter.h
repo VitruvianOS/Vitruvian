@@ -29,6 +29,8 @@ struct CompositorAdapter {
 
 			BBitmap*			AcquireFront();
 			void				ReleaseFront();
+			// Window thread: the exported frame was drawn.
+			void				NotifyPresented();
 
 	struct	wpe_view_backend*	Backend() const { return fBackend; }
 	// Hands the fdo exportable to WebKit, which destroys it with the view.
@@ -41,6 +43,8 @@ private:
 			void				_BlitSHMFrame(const uint8_t* data, int stride,
 									int srcW, int srcH);
 			void				_SwapBuffersLocked();
+			void				_CompleteExported();
+			void				_ArmFallback();
 
 			struct wpe_view_backend_exportable_fdo* fExportable;
 			bool				fOwnsExportable;
@@ -58,8 +62,11 @@ private:
 			std::atomic<bool>		fClockRunning;
 			std::atomic<int64_t>	fLastActivity;
 			unsigned int			fClockSource;
+			std::atomic<bool>		fOutstanding;
+			unsigned int			fFallbackSource;
 
 	static	int					_ClockTick(void* data);
+	static	int					_FallbackTick(void* data);
 };
 
 

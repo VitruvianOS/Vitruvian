@@ -311,6 +311,7 @@ public:
 	virtual const char*	Name() const;
 	virtual const char*	Label() const;
 	virtual const char*	ShortLabel() const;
+	virtual bool		Primary() const;
 
 private:
 	BString				fSensorId;

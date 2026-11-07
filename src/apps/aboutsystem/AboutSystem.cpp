@@ -65,6 +65,7 @@
 #include <AutoDeleter.h>
 #include <AutoDeleterPosix.h>
 #include <cpu_type.h>
+#include <private/system/hardware_info.h>
 #include <parsedate.h>
 #include <system_revision.h>
 
@@ -236,6 +237,7 @@ private:
 			BString			_GetCPUCount(system_info*);
 			BString			_GetCPUInfo();
 			BString			_GetCPUFrequency();
+			BString			_FormatFrequency(uint64 frequencyHz);
 			BString			_GetRamSize(system_info*);
 			BString			_GetRamUsage(system_info*);
 			BString			_GetKernelDateTime(system_info*);
@@ -262,6 +264,12 @@ private:
 			BStringView*	fScreenInfoView;
 			BStringView*	fArchLabelView;
 			BStringView*	fArchInfoView;
+			BStringView*	fMachineLabelView;
+			BStringView*	fMachineInfoView;
+			BStringView*	fSoCLabelView;
+			BStringView*	fSoCInfoView;
+			BStringView*	fGraphicsLabelView;
+			BStringView*	fGraphicsInfoView;
 
 			BDragger*		fDragger;
 
@@ -272,8 +280,8 @@ private:
 			float			fCachedBaseHeight;
 			float			fCachedMinHeight;
 
-	static const uint8		kLabelCount = 8;
-	static const uint8		kSubtextCount = 8;
+	static const uint8		kLabelCount = 10;
+	static const uint8		kSubtextCount = 10;
 };
 
 
@@ -377,12 +385,6 @@ AboutWindow::AboutWindow()
 	AddChild(fAboutView);
 
 	UpdateSizeLimits();
-
-	// Resize according to golden rule
-	float width = Bounds().IntegerWidth();
-	if (width * 0.618 > Bounds().Height())
-		ResizeTo(width, width * 0.618);
-
 	CenterOnScreen();
 }
 
@@ -579,6 +581,12 @@ SysInfoView::SysInfoView()
 	fScreenInfoView(NULL),
 	fArchLabelView(NULL),
 	fArchInfoView(NULL),
+	fMachineLabelView(NULL),
+	fMachineInfoView(NULL),
+	fSoCLabelView(NULL),
+	fSoCInfoView(NULL),
+	fGraphicsLabelView(NULL),
+	fGraphicsInfoView(NULL),
 	fDragger(NULL),
 	fCachedBaseWidth(kSysInfoMinWidth),
 	fCachedMinWidth(kSysInfoMinWidth),
@@ -588,6 +596,9 @@ SysInfoView::SysInfoView()
 	// Begin construction of system information controls.
 	system_info sysInfo;
 	get_system_info(&sysInfo);
+
+	hardware_info hwInfo;
+	get_hardware_info(&hwInfo);
 
 	// Create all the various labels for system infomation.
 
@@ -626,13 +637,32 @@ SysInfoView::SysInfoView()
 	fArchLabelView = _CreateLabel("archlabel", B_TRANSLATE("Architecture:"));
 	fArchInfoView = _CreateSubtext("archtext", _GetCPUArchitecture());
 
+	fMachineLabelView = _CreateLabel("machinelabel", B_TRANSLATE("Machine:"));
+	const char* machineName = hwInfo.machine_name;
+	if (machineName[0] == '\0')
+		machineName = B_TRANSLATE("Unknown");
+	fMachineInfoView = _CreateSubtext("machinetext", machineName);
+
+	if (hwInfo.soc_name[0] != '\0') {
+		fSoCLabelView = _CreateLabel("soclabel", B_TRANSLATE("SoC:"));
+		fSoCInfoView = _CreateSubtext("soctext", hwInfo.soc_name);
+	}
+
+	fGraphicsLabelView = _CreateLabel("graphicslabel",
+		B_TRANSLATE("Graphics:"));
+	const char* gpuName = hwInfo.gpu_name;
+	if (gpuName[0] == '\0')
+		gpuName = B_TRANSLATE("Unknown");
+	fGraphicsInfoView = _CreateSubtext("graphicstext", gpuName);
+
 	// Now comes the layout
 
 	const float offset = be_control_look->DefaultLabelSpacing();
 	const float inset = offset;
 
 	SetLayout(new BGroupLayout(B_VERTICAL, 0));
-	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
+	BLayoutBuilder::Group<> builder((BGroupLayout*)GetLayout());
+	builder
 		// Version:
 		.Add(fVersionLabelView)
 		.Add(fVOSVersionView)
@@ -645,6 +675,19 @@ SysInfoView::SysInfoView()
 		// Architecture:
 		.Add(fArchLabelView)
 		.Add(fArchInfoView)
+		.AddStrut(offset)
+		.Add(fMachineLabelView)
+		.Add(fMachineInfoView)
+		.AddStrut(offset);
+	if (fSoCLabelView != NULL) {
+		builder
+			.Add(fSoCLabelView)
+			.Add(fSoCInfoView)
+			.AddStrut(offset);
+	}
+	builder
+		.Add(fGraphicsLabelView)
+		.Add(fGraphicsInfoView)
 		.AddStrut(offset)
 		// Memory:
 		.Add(fMemSizeView)
@@ -981,9 +1024,10 @@ SysInfoView::_BaseHeight()
 	font_height boldFH;
 	be_bold_font->GetHeight(&boldFH);
 
-	return ceilf(((boldFH.ascent + boldFH.descent) * kLabelCount
-		+ (plainFH.ascent + plainFH.descent) * kSubtextCount
-		+ be_control_look->DefaultLabelSpacing() * kLabelCount));
+	int32 socRows = fSoCLabelView != NULL ? 1 : 0;
+	return ceilf(((boldFH.ascent + boldFH.descent) * (kLabelCount + socRows)
+		+ (plainFH.ascent + plainFH.descent) * (kSubtextCount + socRows)
+		+ be_control_look->DefaultLabelSpacing() * (kLabelCount + socRows)));
 }
 
 
@@ -1045,6 +1089,23 @@ SysInfoView::_GetCPUCount(system_info* sysInfo)
 BString
 SysInfoView::_GetCPUInfo()
 {
+	hardware_info hwInfo;
+	if (get_hardware_info(&hwInfo) == B_OK && hwInfo.group_count > 0) {
+		BString result;
+		for (uint32 i = 0; i < hwInfo.group_count; i++) {
+			if (i > 0)
+				result << ", ";
+			result << hwInfo.groups[i].cpu_count << " x ";
+			result << hwInfo.groups[i].name;
+			BString frequency
+				= _FormatFrequency(hwInfo.groups[i].max_frequency);
+			if (!frequency.IsEmpty())
+				result << " @ " << frequency;
+		}
+		if (!result.IsEmpty())
+			return result;
+	}
+
 	uint32 topologyNodeCount = 0;
 	cpu_topology_node_info* topology = NULL;
 
@@ -1117,11 +1178,39 @@ SysInfoView::_GetCPUFrequency()
 
 
 BString
+SysInfoView::_FormatFrequency(uint64 frequencyHz)
+{
+	BString clockSpeed;
+
+	if (frequencyHz == 0)
+		return clockSpeed;
+
+	double mhz = frequencyHz / 1000000.0;
+	if (mhz < 1000.0) {
+		clockSpeed.SetToFormat(B_TRANSLATE_COMMENT("%ld MHz",
+			"750 Mhz (CPU clock speed)"), (long int)(mhz + 0.5));
+	}
+	else {
+		clockSpeed.SetToFormat(B_TRANSLATE_COMMENT("%.2f GHz",
+			"3.49 Ghz (CPU clock speed)"), mhz / 1000.0);
+	}
+
+	return clockSpeed;
+}
+
+
+BString
 SysInfoView::_GetRamSize(system_info* sysInfo)
 {
 	BString ramSize;
+
+	int totalMiB = max_and_ignored_pages(sysInfo);
+	hardware_info hwInfo;
+	if (get_hardware_info(&hwInfo) == B_OK && hwInfo.memory_total > 0)
+		totalMiB = (int)(hwInfo.memory_total / (1024 * 1024));
+
 	ramSize.SetToFormat(B_TRANSLATE_COMMENT("%d MiB Memory:",
-		"2048 MiB Memory:"), max_and_ignored_pages(sysInfo));
+		"2048 MiB Memory:"), totalMiB);
 
 	return ramSize;
 }

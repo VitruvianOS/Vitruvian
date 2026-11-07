@@ -39,6 +39,7 @@ AddOn(media2
 	MediaSynth.cpp
 	ParameterWeb.cpp
 	PeakMeter.cpp
+	MixerParams.cpp
 	PipeWireBackend.cpp
 	PlaySound.cpp
 	SimpleMediaNode.cpp
@@ -48,6 +49,7 @@ AddOn(media2
 	SoundPlayer.cpp
 	SystemBeep.cpp
 	TimeCode.cpp
+	VideoView.cpp
 
 	LIBS be root shared
 )

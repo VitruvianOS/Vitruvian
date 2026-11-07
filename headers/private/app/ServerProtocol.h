@@ -388,6 +388,16 @@ enum {
 	AS_SCREEN_CONFIRM_CHANGE,
 	AS_SCREEN_CANCEL_CHANGE,
 
+	// Pointer and keyboard grabs (XGrabPointer/XGrabKeyboard semantics
+	// for the X server and for native games). Window-scoped: the calling
+	// team owns the grab and only it may release it.
+	AS_ACQUIRE_POINTER_GRAB,
+		// uint32 flags (B_POINTER_GRAB_*), BRect confineTo
+	AS_RELEASE_POINTER_GRAB,
+	AS_ACQUIRE_KEYBOARD_GRAB,
+		// uint32 flags
+	AS_RELEASE_KEYBOARD_GRAB,
+
 	AS_LAST_CODE
 };
 

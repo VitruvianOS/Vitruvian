@@ -42,5 +42,8 @@ extern const size_t kNetPlusSecureIconSize;
 extern const uint8 kNetPlusInsecureIcon[];
 extern const size_t kNetPlusInsecureIconSize;
 
+extern const uint8 kNetPlusReaderIcon[];
+extern const size_t kNetPlusReaderIconSize;
+
 
 #endif // _NET_PLUS_TOOLBAR_ICONS_H

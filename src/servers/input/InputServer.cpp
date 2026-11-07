@@ -159,7 +159,7 @@ InputServer::InputServer()
 	fReplicantMessenger(NULL),
 	fInputMethodWindow(NULL),
 	fInputMethodAware(false),
-	fCursorSem(-1),
+	fCursorEvent(),
 	fAppServerPort(-1),
 	fAppServerTeam(-1),
 	fCursorArea(-1),
@@ -408,11 +408,15 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 		// try to clone the area
 		fCursorBuffer = NULL;
 
-		fCursorSem = create_sem(0, "cursor semaphore");
-		if (fCursorSem >= B_OK) {
-			fCursorArea = clone_area("input server cursor", (void**)&fCursorBuffer,
-				B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, area);
-		}
+		fCursorArea = clone_area("input server cursor", (void**)&fCursorBuffer,
+			B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, area);
+		if (fCursorArea >= B_OK) {
+			// The wake word lives in the shared area.
+			fCursorEvent.SetTo(&fCursorBuffer->event);
+			// The app_server's cursor wait watches this team.
+			shared_liveness_hold(&fCursorBuffer->liveness);
+		} else
+			fCursorBuffer = NULL;
 	}
 
 	fRegistrationPending = false;
@@ -431,8 +435,8 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 	reply.AddInt32("event port", fAppServerPort);
 
 	if (fCursorBuffer != NULL) {
-		// cursor shared buffer is supported
-		reply.AddInt32("cursor semaphore", fCursorSem);
+		// Tell the app_server the shared cursor buffer is available.
+		reply.AddBool("cursor area", true);
 	}
 
 	return B_OK;
@@ -443,11 +447,11 @@ void
 InputServer::_ReleaseInput(BMessage* /*message*/)
 {
 	if (fCursorBuffer != NULL) {
+		shared_liveness_release(&fCursorBuffer->liveness);
 		fCursorBuffer = NULL;
-		delete_sem(fCursorSem);
+		fCursorEvent.SetTo(NULL);
 		delete_area(fCursorArea);
 
-		fCursorSem = -1;
 		fCursorArea = -1;
 	}
 
@@ -511,6 +515,12 @@ InputServer::MessageReceived(BMessage* message)
 			break;
 		case IS_SET_MOUSE_POSITION:
 			status = HandleSetMousePosition(message, &reply);
+			break;
+		case IS_SET_POINTER_CONSTRAINT:
+			// Confinement and relative mode live in the pointing
+			// add-ons; the grab owner is app_server's business only.
+			ControlDevices(NULL, B_POINTING_DEVICE,
+				B_POINTER_CONSTRAINT_CHANGED, message);
 			break;
 		case IS_GET_MOUSE_MAP:
 			status = HandleGetSetMouseMap(message, &reply);
@@ -2027,11 +2037,11 @@ InputServer::_DispatchEvent(BMessage* event)
 		case B_MOUSE_MOVED:
 		case B_MOUSE_DOWN:
 		case B_MOUSE_UP:
-			if (fCursorBuffer) {
-				atomic_set((int32*)&fCursorBuffer->pos, (uint32)fMousePos.x << 16UL
-					| ((uint32)fMousePos.y & 0xffff));
-				if (atomic_or(&fCursorBuffer->read, 1) == 0)
-					release_sem(fCursorSem);
+		if (fCursorBuffer) {
+			atomic_set((int32*)&fCursorBuffer->pos, (uint32)fMousePos.x << 16UL
+				| ((uint32)fMousePos.y & 0xffff));
+			if (atomic_or(&fCursorBuffer->read, 1) == 0)
+				fCursorEvent.Post();
         	}
         	break;
 

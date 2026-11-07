@@ -23,6 +23,8 @@
 #include <FindDirectory.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
+#include <media2/MediaFile.h>
+#include <media2/MediaTrack.h>
 #include <Menu.h>
 #include <MenuBar.h>
 #include <MenuField.h>
@@ -141,6 +143,40 @@ OutputBox::OutputBox(border_style border, BView* child)
 }
 
 
+static bool
+_FileFormatAccepts(const media_file_format* fileFormat, bool wantAudio)
+{
+	media_format format;
+	media_codec_info codecInfo;
+	format.Clear();
+	if (wantAudio) {
+		format.type = B_MEDIA_RAW_AUDIO;
+		format.u.raw_audio = media_raw_audio_format::wildcard;
+	} else {
+		format.type = B_MEDIA_RAW_VIDEO;
+		format.u.raw_video.last_active = (uint32)(240 - 1);
+		format.u.raw_video.orientation = B_VIDEO_TOP_LEFT_RIGHT;
+		format.u.raw_video.display.format = B_RGB32;
+		format.u.raw_video.display.line_width = (int32)320;
+		format.u.raw_video.display.line_count = (int32)240;
+		format.u.raw_video.display.bytes_per_row = 4 * 320;
+	}
+	int32 cookie = 0;
+	return get_next_encoder(&cookie, fileFormat, &format, NULL, &codecInfo)
+		== B_OK;
+}
+
+
+static void
+_SetShown(BView* view, bool shown)
+{
+	if (shown && view->IsHidden(view))
+		view->Show();
+	else if (!shown && !view->IsHidden(view))
+		view->Hide();
+}
+
+
 // #pragma mark - MediaConverterWindow
 
 
@@ -150,6 +186,8 @@ MediaConverterWindow::MediaConverterWindow(BRect frame)
 		B_TITLED_WINDOW_LOOK, B_NORMAL_WINDOW_FEEL, B_NOT_ZOOMABLE
 		| B_NOT_V_RESIZABLE | B_ASYNCHRONOUS_CONTROLS
 		| B_AUTO_UPDATE_SIZE_LIMITS),
+	fAudioQualityItem(NULL),
+	fVideoQualityItem(NULL),
 	fVideoQuality(75),
 	fAudioQuality(75),
 	fSaveFilePanel(NULL),
@@ -247,6 +285,14 @@ MediaConverterWindow::MediaConverterWindow(BRect frame)
 		.Add(fVideoQualitySlider, 0, 6, 2, 1)
 		.Add(fAudioQualitySlider, 0, 7, 2, 1)
 		.View();
+
+	// the grid wrapped the sliders; keep their items to hide the rows
+	BLayout* gridLayout = outputGrid->GetLayout();
+	fVideoQualityItem = gridLayout->ItemAt(
+		gridLayout->IndexOfView(fVideoQualitySlider));
+	fAudioQualityItem = gridLayout->ItemAt(
+		gridLayout->IndexOfView(fAudioQualitySlider));
+
 	outputGrid->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_USE_FULL_HEIGHT));
 	fOutputBox = new OutputBox(B_FANCY_BORDER, outputGrid);
@@ -321,7 +367,7 @@ MediaConverterWindow::MessageReceived(BMessage* message)
 		#endif
 
 		case INIT_FORMAT_MENUS:
-			BuildFormatMenu();
+			_UpdateOutputControls();
 			if (CountSourceFiles() == 0)
 				SetEnabled(false, false);
 			break;
@@ -366,6 +412,7 @@ MediaConverterWindow::MessageReceived(BMessage* message)
 			bool enable = CountSourceFiles() > 0;
 			SetEnabled(enable, enable);
 			fConvertButton->SetLabel(B_TRANSLATE("Convert"));
+			_UpdateOutputControls();
 			break;
 		}
 
@@ -543,7 +590,7 @@ MediaConverterWindow::LanguageChanged()
 	_DestroyMenu();
 	_CreateMenu();
 	_UpdateLabels();
-	BuildAudioVideoMenus();
+	_UpdateOutputControls();
 	Lock();
 	fInfoView->Invalidate();
 	Unlock();
@@ -556,6 +603,18 @@ MediaConverterWindow::BuildAudioVideoMenus()
 	BMenu* menu = fAudioMenu->Menu();
 	BMenuItem* item;
 
+	// keep the current codec if the container still offers it
+	media_codec_info previousAudio;
+	media_codec_info previousVideo;
+	bool hasPreviousAudio = false;
+	bool hasPreviousVideo = false;
+	CodecMenuItem* marked = dynamic_cast<CodecMenuItem*>(
+		menu->FindMarked());
+	if (marked != NULL) {
+		memcpy(&previousAudio, &marked->fCodecInfo, sizeof(previousAudio));
+		hasPreviousAudio = true;
+	}
+
 	// clear out old audio codec menu items
 	while ((item = menu->RemoveItem((int32)0)) != NULL)
 		delete item;
@@ -565,6 +624,8 @@ MediaConverterWindow::BuildAudioVideoMenus()
 	// get selected file format
 	FileFormatMenuItem* ffmi
 		= (FileFormatMenuItem*)fFormatMenu->Menu()->FindMarked();
+	if (ffmi == NULL)
+		return;
 	media_file_format* mf_format = &(ffmi->fFileFormat);
 
 	media_format format, outfmt;
@@ -595,13 +656,20 @@ MediaConverterWindow::BuildAudioVideoMenus()
 */
 	}
 
-	// mark the first real codec; item 0 is the "No audio" placeholder
+	// mark the restored codec; item 0 is the "No audio" placeholder
 	item = NULL;
 	for (int32 i = 0; ; i++) {
-		BMenuItem* candidate = menu->ItemAt(i);
-		if (candidate == NULL)
-			break;
-		if (dynamic_cast<CodecMenuItem*>(candidate) != NULL) {
+		CodecMenuItem* candidate
+			= dynamic_cast<CodecMenuItem*>(menu->ItemAt(i));
+		if (candidate == NULL) {
+			if (menu->ItemAt(i) == NULL)
+				break;
+			continue;
+		}
+		if (item == NULL)
+			item = candidate;
+		if (hasPreviousAudio && strcmp(candidate->fCodecInfo.short_name,
+				previousAudio.short_name) == 0) {
 			item = candidate;
 			break;
 		}
@@ -622,6 +690,11 @@ MediaConverterWindow::BuildAudioVideoMenus()
 
 	// clear out old video codec menu items
 	menu = fVideoMenu->Menu();
+	marked = dynamic_cast<CodecMenuItem*>(menu->FindMarked());
+	if (marked != NULL) {
+		memcpy(&previousVideo, &marked->fCodecInfo, sizeof(previousVideo));
+		hasPreviousVideo = true;
+	}
 	while ((item = menu->RemoveItem((int32)0)) != NULL)
 		delete item;
 
@@ -655,13 +728,20 @@ MediaConverterWindow::BuildAudioVideoMenus()
 		menu->AddItem(cmi);
 	}
 
-	// mark the first real codec; item 0 is the "No video" placeholder
+	// mark the restored codec; item 0 is the "No video" placeholder
 	item = NULL;
 	for (int32 i = 0; ; i++) {
-		BMenuItem* candidate = menu->ItemAt(i);
-		if (candidate == NULL)
-			break;
-		if (dynamic_cast<CodecMenuItem*>(candidate) != NULL) {
+		CodecMenuItem* candidate
+			= dynamic_cast<CodecMenuItem*>(menu->ItemAt(i));
+		if (candidate == NULL) {
+			if (menu->ItemAt(i) == NULL)
+				break;
+			continue;
+		}
+		if (item == NULL)
+			item = candidate;
+		if (hasPreviousVideo && strcmp(candidate->fCodecInfo.short_name,
+				previousVideo.short_name) == 0) {
 			item = candidate;
 			break;
 		}
@@ -712,26 +792,110 @@ MediaConverterWindow::BuildFormatMenu()
 	BMenu* menu = fFormatMenu->Menu();
 	BMenuItem* item;
 
+	// keep the current container if it survives the track filter
+	media_file_format previous;
+	bool hasPrevious = false;
+	FileFormatMenuItem* marked = (FileFormatMenuItem*)menu->FindMarked();
+	if (marked != NULL) {
+		memcpy(&previous, &marked->fFileFormat, sizeof(previous));
+		hasPrevious = true;
+	}
+
 	// clear out old format menu items
 	while ((item = menu->RemoveItem((int32)0)) != NULL)
 		delete item;
+
+	bool hasAudio = false;
+	bool hasVideo = false;
+	bool filterTracks = CountSourceFiles() > 0;
+	if (filterTracks)
+		_SelectedTracks(&hasAudio, &hasVideo);
 
 	// add menu items for each file format
 	media_file_format mfi;
 	int32 cookie = 0;
 	FileFormatMenuItem* ff_item;
+	FileFormatMenuItem* restored = NULL;
 	while (get_next_file_format(&cookie, &mfi) == B_OK) {
 		if ((mfi.capabilities & media_file_format::B_WRITABLE) == 0)
 			continue;
+		// every stream kind that is left must fit the container
+		if (filterTracks && hasAudio && !_FileFormatAccepts(&mfi, true))
+			continue;
+		if (filterTracks && hasVideo && !_FileFormatAccepts(&mfi, false))
+			continue;
 		ff_item = new FileFormatMenuItem(&mfi);
+		if (hasPrevious && strcmp(ff_item->fFileFormat.short_name,
+				previous.short_name) == 0) {
+			restored = ff_item;
+		}
 		menu->AddItem(ff_item);
 	}
 
-	// mark first item
-	item = menu->ItemAt(0);
+	// mark the restored item, or the first one
+	item = restored != NULL ? (BMenuItem*)restored : menu->ItemAt(0);
 	if (item != NULL) {
 		item->SetMarked(true);
 		((BInvoker*)item)->Invoke();
+	}
+}
+
+
+void
+MediaConverterWindow::_UpdateOutputControls()
+{
+	// the batch converts with the menus as they were when it started
+	if (fConverting)
+		return;
+
+	bool hasAudio = true;
+	bool hasVideo = true;
+	if (CountSourceFiles() > 0)
+		_SelectedTracks(&hasAudio, &hasVideo);
+
+	// menu field layout items follow the field's own visibility
+	_SetShown(fAudioMenu, hasAudio);
+	if (fAudioQualityItem != NULL)
+		fAudioQualityItem->SetVisible(hasAudio);
+	_SetShown(fVideoMenu, hasVideo);
+	if (fVideoQualityItem != NULL)
+		fVideoQualityItem->SetVisible(hasVideo);
+
+	BuildFormatMenu();
+}
+
+
+void
+MediaConverterWindow::_SelectedTracks(bool* _hasAudio, bool* _hasVideo)
+{
+	*_hasAudio = false;
+	*_hasVideo = false;
+
+	int32 count = fListView->CountItems();
+	bool anySelected = fListView->CurrentSelection() >= 0;
+	for (int32 i = 0; i < count; i++) {
+		if (anySelected && !fListView->IsItemSelected(i))
+			continue;
+		MediaFileListItem* item = dynamic_cast<MediaFileListItem*>(
+			fListView->ItemAt(i));
+		if (item == NULL || item->fMediaFile == NULL)
+			continue;
+		BMediaFile* file = item->fMediaFile;
+		int32 tracks = file->CountTracks();
+		for (int32 j = 0; j < tracks; j++) {
+			BMediaTrack* track = file->TrackAt(j);
+			if (track == NULL)
+				continue;
+			media_format format;
+			format.Clear();
+			if (track->EncodedFormat(&format) == B_OK) {
+				if (format.IsAudio())
+					*_hasAudio = true;
+				if (format.IsVideo())
+					*_hasVideo = true;
+			}
+			file->ReleaseTrack(track);
+		}
 	}
 }
 
@@ -765,6 +929,7 @@ MediaConverterWindow::AddSourceFile(BMediaFile* file, const entry_ref& ref)
 		_SetOutputFolder(entry);
 	}
 
+	_UpdateOutputControls();
 	return true;
 }
 
@@ -775,6 +940,7 @@ MediaConverterWindow::RemoveSourceFile(int32 index)
 	delete fListView->RemoveItem(index);
 	fStartDurationTC->SetText("0");
 	fEndDurationTC->SetText("0");
+	_UpdateOutputControls();
 }
 
 
@@ -803,7 +969,15 @@ MediaConverterWindow::GetSourceFileAt(int32 index, BMediaFile** _file,
 void
 MediaConverterWindow::SourceFileSelectionChanged()
 {
-	int32 selected = fListView->CurrentSelection();
+	int32 count = fListView->CountItems();
+	int32 selected = -1;
+	for (int32 i = 0; i < count; i++) {
+		if (fListView->IsItemSelected(i)) {
+			selected = i;
+			break;
+		}
+	}
+
 	BMediaFile* file = NULL;
 	entry_ref ref;
 	bool enabled = GetSourceFileAt(selected, &file, &ref) == B_OK;
@@ -826,6 +1000,8 @@ MediaConverterWindow::SourceFileSelectionChanged()
 	// update duration text controls
 	fStartDurationTC->SetText("0");
 	fEndDurationTC->SetText(duration.String());
+
+	_UpdateOutputControls();
 }
 
 

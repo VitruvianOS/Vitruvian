@@ -32,13 +32,14 @@
 
 // Internal state we own; not exposed via the header _reserved storage.
 // Held in a side table keyed by `this` so we don't touch the verbatim
-// haiku-latest layout of BFileGameSound.
+// legacy layout of BFileGameSound.
 struct FileGameSoundState {
 	BMediaFile*		file;
 	BMediaTrack*	track;
 	gs_audio_format	format;
 	uint32			frameStride;
 	bool			eos;
+	bool			looping;
 
 	_gs_ramp*		pausing;
 	bool			paused;
@@ -90,6 +91,7 @@ AttachState(BFileGameSound* self)
 	s->track       = NULL;
 	s->frameStride = 0;
 	s->eos         = false;
+	s->looping     = false;
 	s->pausing     = NULL;
 	s->paused      = false;
 	s->pauseGain   = 1.0f;
@@ -165,11 +167,8 @@ BFileGameSound::BFileGameSound(const entry_ref* file, bool looping,
 		SetInitError(err);
 		return;
 	}
+	s->looping = looping;
 	BGameSound::Init(sound);
-
-	// Default to looping per haiku-latest BFileGameSound semantics — caller
-	// can override via SetAttributes(B_GS_LOOPING).
-	(void)looping;	// FIXME: persist as fLooping once header storage allows
 }
 
 
@@ -211,11 +210,11 @@ BFileGameSound::BFileGameSound(const char* file, bool looping,
 			SetInitError(err);
 			return;
 		}
-		BGameSound::Init(sound);
+		s->looping = looping;
+	BGameSound::Init(sound);
 	} else {
 		SetInitError(B_BAD_VALUE);
 	}
-	(void)looping;
 }
 
 
@@ -224,10 +223,12 @@ BFileGameSound::BFileGameSound(BDataIO* data, bool looping,
 	:
 	BStreamingGameSound(device)
 {
-	(void)looping;
 	status_t status = Init(data);
 	if (status != B_OK)
 		SetInitError(status);
+	FileGameSoundState* s = GetState(this);
+	if (s != NULL)
+		s->looping = looping;
 }
 
 
@@ -323,30 +324,25 @@ BFileGameSound::FillBuffer(void* buffer, size_t byteCount)
 	}
 
 	int64 wantFrames = byteCount / s->frameStride;
-	int64 gotFrames  = wantFrames;
-	status_t err = s->track->ReadFrames(buffer, &gotFrames);
-
-	if (err == B_LAST_BUFFER_ERROR) {
-		// Loop: rewind and try once more.
-		bigtime_t t = 0;
-		if (s->track->SeekToTime(&t) == B_OK) {
-			s->eos = false;
-			const size_t got = (size_t)gotFrames * s->frameStride;
-			if (got < byteCount) {
-				uint8_t* tail = (uint8_t*)buffer + got;
-				int64 more = (byteCount - got) / s->frameStride;
-				int64 read = more;
-				if (s->track->ReadFrames(tail, &read) == B_OK
-						&& read > 0) {
-					gotFrames += read;
-				}
-			}
-		} else {
-			s->eos = true;
+	int64 gotFrames = 0;
+	bool rewound = false;
+	while (!s->eos && gotFrames < wantFrames) {
+		int64 frames = wantFrames - gotFrames;
+		status_t err = s->track->ReadFrames(
+			(uint8_t*)buffer + gotFrames * s->frameStride, &frames);
+		if (err == B_OK && frames > 0) {
+			gotFrames += frames;
+			rewound = false;
+			continue;
 		}
-	} else if (err != B_OK) {
-		memset(buffer, 0, byteCount);
-		return;
+		if (err != B_OK && err != B_LAST_BUFFER_ERROR)
+			break;
+
+		// A file that yields nothing after a rewind would spin here.
+		bigtime_t start = 0;
+		if (!s->looping || rewound || s->track->SeekToTime(&start) != B_OK)
+			s->eos = true;
+		rewound = true;
 	}
 
 	size_t got = (size_t)gotFrames * s->frameStride;

@@ -1,0 +1,7 @@
+# zink quirk table: force zink for the matching GPUs.
+#
+# Format: <vendor hex> <device-min hex> <device-max hex> [driver]
+# Opt into zink exactly on NVIDIA Turing (0x1e00) or newer.
+# Everything else stays on the native path.
+# Read by gl_load_zink_quirk_table (GlDeviceSelect.cpp).
+10de 1e00 ffff

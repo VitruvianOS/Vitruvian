@@ -71,6 +71,7 @@ public:
 	struct StreamInfo {
 		media_client_id	id;
 		BString			name;
+		BString			nodeName;
 		BString			mediaClass;
 		media_client_id	deviceId;
 		bool			isOutput;
@@ -83,6 +84,9 @@ public:
 										media_client_id deviceId);
 			status_t				SetStreamVolume(media_client_id streamId,
 										float volume, bool mute);
+			status_t				SetStreamChannelVolumes(
+										media_client_id streamId,
+										const float* volumes, size_t count);
 
 
 			status_t				GetDeviceVolume(media_client_id id,
@@ -126,6 +130,13 @@ public:
 										const BMessenger& target,
 										bigtime_t interval = 33333);
 			status_t				StopMeteringDevice(media_client_id id);
+
+			// Meters any node, a stream included.
+			status_t				StartMeteringNode(media_client_id id,
+										bool capture, const char* nodeName,
+										const BMessenger& target,
+										bigtime_t interval = 33333);
+			status_t				StopMeteringNode(media_client_id id);
 
 
 	struct ForeignNode {

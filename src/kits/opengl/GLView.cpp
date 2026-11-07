@@ -15,8 +15,10 @@
 #include <Directory.h>
 #include <Entry.h>
 #include <Path.h>
+#include <StringList.h>
 
 #include <GLRenderer.h>
+#include <GLRendererSelect.h>
 
 
 // Factory function type exported by renderer add-ons
@@ -27,8 +29,9 @@ typedef BGLRenderer* (*renderer_factory_t)(BGLView* view, ulong options,
 static const char* kRendererDir = "/system/add-ons/opengl";
 
 
-// Tried in this order. mesa_egl needs a DRM/GBM device; without one its
-// factory returns NULL and mesa_surfaceless (llvmpipe-capable) runs.
+// Fallback order when the selection engine (libhwaccel) is unavailable.
+// mesa_egl needs a DRM/GBM device; without one its factory returns NULL and
+// mesa_surfaceless (llvmpipe-capable) runs.
 static const char* kPreferredRenderers[] = {
 	"mesa_egl",
 	"mesa_surfaceless",
@@ -335,12 +338,26 @@ BGLView::_LoadRenderer()
 	char failedProbes[256];
 	failedProbes[0] = '\0';
 
-	// Preferred pass: strict order, so mesa_egl always wins when its
-	// DRM/GBM probe succeeds, and mesa_surfaceless is the silent fallback.
-	for (int32 i = 0; i < preferredCount; i++) {
+	// Engine-side selection gives the try order, winner first; keep the static
+	// list if the engine fails.
+	BStringList tryOrder;
+	GLRendererSelect::Selection selection;
+	if (GLRendererSelect::GetSelection(&selection) == B_OK
+		&& selection.order.CountStrings() > 0) {
+		tryOrder = selection.order;
+	} else {
+		for (int32 i = 0; i < preferredCount; i++)
+			tryOrder.Add(kPreferredRenderers[i]);
+	}
+
+	// Preferred pass: strict selection order, so mesa_egl always wins
+	// when its DRM/GBM probe succeeds, and mesa_surfaceless is the
+	// silent fallback.
+	for (int32 i = 0; i < tryOrder.CountStrings(); i++) {
+		BString name = tryOrder.StringAt(i);
 		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", kRendererDir,
-			kPreferredRenderers[i]);
+			name.String());
 
 		BEntry entry(path);
 		if (!entry.Exists() || !entry.IsFile())
@@ -353,10 +370,10 @@ BGLView::_LoadRenderer()
 			printf("BGLView: loaded renderer %s\n", path);
 			if (failedProbes[0] == '\0') {
 				syslog(LOG_INFO, "BGLView: using renderer %s "
-					"(preferred)", kPreferredRenderers[i]);
+					"(preferred)", name.String());
 			} else {
 				syslog(LOG_INFO, "BGLView: using renderer %s "
-					"(fallback after: %s)", kPreferredRenderers[i],
+					"(fallback after: %s)", name.String(),
 					failedProbes);
 			}
 			return;
@@ -365,7 +382,7 @@ BGLView::_LoadRenderer()
 		size_t used = strlen(failedProbes);
 		snprintf(failedProbes + used, sizeof(failedProbes) - used,
 			"%s%s: %s", used == 0 ? "" : "; ",
-			kPreferredRenderers[i], reason);
+			name.String(), reason);
 	}
 
 	// Anything else found in the renderer dir still gets a chance, so a
@@ -380,8 +397,8 @@ BGLView::_LoadRenderer()
 			continue;
 
 		bool preferred = false;
-		for (int32 i = 0; i < preferredCount; i++) {
-			if (strcmp(name, kPreferredRenderers[i]) == 0) {
+		for (int32 i = 0; i < tryOrder.CountStrings(); i++) {
+			if (name == tryOrder.StringAt(i)) {
 				preferred = true;
 				break;
 			}

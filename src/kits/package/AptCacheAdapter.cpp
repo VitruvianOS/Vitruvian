@@ -99,7 +99,8 @@ private:
 
 AptCacheAdapter::AptCacheAdapter()
 	:
-	fCache(NULL)
+	fCache(NULL),
+	fCancelFlag(NULL)
 {
 }
 
@@ -124,6 +125,13 @@ AptCacheAdapter::InvalidateCache()
 {
 	delete fCache;
 	fCache = NULL;
+}
+
+
+void
+AptCacheAdapter::SetCancelFlag(volatile bool* flag)
+{
+	fCancelFlag = flag;
 }
 
 
@@ -283,12 +291,19 @@ AptCacheAdapter::GetPackageList(BObjectList<apt_raw_package, true>* packages)
 		return B_BAD_VALUE;
 	if (!_EnsureCacheOpen())
 		return B_ERROR;
+	if (fCancelFlag != NULL && *fCancelFlag)
+		return B_INTERRUPTED;
 
 	pkgCache* cache = fCache->Cache();
 	pkgDepCache* depCache = fCache->DepCache();
 	pkgRecords* records = fCache->Records();
 
 	for (pkgCache::PkgIterator pkg = cache->PkgBegin(); !pkg.end(); ++pkg) {
+		// Checked per row: the record lookup below is what drags on
+		// large lists, and nothing else inside it can be interrupted.
+		if (fCancelFlag != NULL && *fCancelFlag)
+			return B_INTERRUPTED;
+
 		pkgCache::VerIterator curVer = pkg.CurrentVer();
 		pkgDepCache::StateCache& state = (*depCache)[pkg];
 		pkgCache::VerIterator candVer = state.CandidateVerIter(*cache);

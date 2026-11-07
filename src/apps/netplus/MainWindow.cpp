@@ -6,6 +6,7 @@
 
 #include "DownloadsWindow.h"
 #include "DeskbarEntry.h"
+#include "ExtensionsWindow.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
@@ -17,6 +18,7 @@
 #include "UrlInput.h"
 
 #include <WebDefs.h>
+#include <WebExtensions.h>
 #include <WebView.h>
 #include <WebBookmarks.h>
 #include <WebSettings.h>
@@ -25,17 +27,16 @@
 #include <Alert.h>
 #include <Application.h>
 #include <Button.h>
+#include <Clipboard.h>
 #include <Entry.h>
 #include <Invoker.h>
 #include <LayoutBuilder.h>
-#include <Menu.h>
-#include <MenuBar.h>
-#include <MenuItem.h>
 #include <Messenger.h>
 #include <Path.h>
 #include <Rect.h>
 #include <Screen.h>
 #include <String.h>
+#include <TextView.h>
 #include <View.h>
 #include <Window.h>
 
@@ -44,6 +45,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <string>
+#include <vector>
 
 // Built-in start page until the homepage becomes a setting.
 static const char* kHomePage = "vos-about:";
@@ -96,6 +100,30 @@ static const char* kInstallScript = (
 
 
 static std::string
+_HostFromURL(const char* url)
+{
+	if (url == NULL)
+		return std::string();
+	std::string value(url);
+	size_t schemeEnd = value.find("://");
+	if (schemeEnd == std::string::npos)
+		return std::string();
+	size_t authStart = schemeEnd + 3;
+	size_t pathStart = value.find('/', authStart);
+	std::string authority = pathStart == std::string::npos
+		? value.substr(authStart)
+		: value.substr(authStart, pathStart - authStart);
+	size_t at = authority.rfind('@');
+	if (at != std::string::npos)
+		authority = authority.substr(at + 1);
+	size_t colon = authority.rfind(':');
+	if (colon != std::string::npos)
+		authority = authority.substr(0, colon);
+	return authority;
+}
+
+
+static std::string
 _SelfPath()
 {
 	char buffer[1024];
@@ -137,11 +165,6 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fWebView(nullptr),
 	fToolbar(nullptr),
 	fStatusBar(nullptr),
-	fMenuBar(nullptr),
-	fBookmarksMenu(nullptr),
-	fRemoveBookmarkMenu(nullptr),
-	fBackItem(nullptr),
-	fForwardItem(nullptr),
 	fPrivateWindow(privateWindow),
 	fFullScreen(false),
 	fSavedFrame(frame),
@@ -165,80 +188,20 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	fWebView->SetTarget(BMessenger(this));
 	fWebView->AddUserScript(kInstallScript, false);
 	fWebView->AddScriptMessageHandler(kInstallHandler);
+	fWebView->SetExtensions(NetPlusApp::Extensions());
+
+	// SetSession() must run before attach; the bridge refuses a later swap.
+	BWebSettings* settings = NetPlusApp::Settings();
+	fWebView->SetSession(NULL,
+		fPrivateWindow || settings->PrivateBrowsing());
 
 	if (!fPwaMode) {
-		fMenuBar = new BMenuBar("menubar");
-
-		BMenu* fileMenu = new BMenu("File");
-		fileMenu->AddItem(new BMenuItem("Open Location" B_UTF8_ELLIPSIS,
-			new BMessage(MSG_OPEN_LOCATION), 'L'));
-		fileMenu->AddSeparatorItem();
-		fileMenu->AddItem(new BMenuItem("New Window",
-			new BMessage(MSG_OPEN_WINDOW), 'N'));
-		BMenuItem* privateItem = new BMenuItem("New Private Window",
-			new BMessage(MSG_OPEN_WINDOW), 'N', B_SHIFT_KEY);
-		privateItem->Message()->AddBool("private", true);
-		fileMenu->AddItem(privateItem);
-		fileMenu->AddSeparatorItem();
-		fileMenu->AddItem(new BMenuItem("Settings" B_UTF8_ELLIPSIS,
-			new BMessage(MSG_SHOW_SETTINGS)));
-		fileMenu->AddItem(new BMenuItem("Show Downloads",
-			new BMessage(MSG_SHOW_DOWNLOADS), 'J'));
-		fileMenu->AddSeparatorItem();
-		// Quit closes the whole application, like the legacy browser.
-		BMenuItem* quitItem = new BMenuItem("Quit",
-			new BMessage(B_QUIT_REQUESTED), 'Q');
-		quitItem->SetTarget(be_app);
-		fileMenu->AddItem(quitItem);
-		fMenuBar->AddItem(fileMenu);
-
-		BMenu* editMenu = new BMenu("Edit");
-		editMenu->AddItem(new BMenuItem("Cut",
-			new BMessage(B_WEB_EDIT_CUT), 'X'));
-		editMenu->AddItem(new BMenuItem("Copy",
-			new BMessage(B_WEB_EDIT_COPY), 'C'));
-		editMenu->AddItem(new BMenuItem("Paste",
-			new BMessage(B_WEB_EDIT_PASTE), 'V'));
-		editMenu->AddSeparatorItem();
-		editMenu->AddItem(new BMenuItem("Select All",
-			new BMessage(B_WEB_EDIT_SELECT_ALL), 'A'));
-		fMenuBar->AddItem(editMenu);
-
-		BMenu* goMenu = new BMenu("Go");
-		fBackItem = new BMenuItem("Back",
-			new BMessage(MSG_NAV_BACK), B_LEFT_ARROW);
-		fForwardItem = new BMenuItem("Forward",
-			new BMessage(MSG_NAV_FORWARD), B_RIGHT_ARROW);
-		goMenu->AddItem(fBackItem);
-		goMenu->AddItem(fForwardItem);
-		goMenu->AddSeparatorItem();
-		goMenu->AddItem(new BMenuItem("Reload",
-			new BMessage(MSG_NAV_RELOAD), 'R'));
-		goMenu->AddItem(new BMenuItem("Stop",
-			new BMessage(MSG_NAV_STOP), 0));
-		goMenu->AddItem(new BMenuItem("Home",
-			new BMessage(MSG_NAV_HOME), 'H'));
-		fMenuBar->AddItem(goMenu);
-
-		fBookmarksMenu = new BMenu("Bookmarks");
-		fBookmarksMenu->AddItem(new BMenuItem("Add Bookmark",
-			new BMessage(MSG_BOOKMARK_ADD), 'D'));
-		fRemoveBookmarkMenu = new BMenu("Remove Bookmark");
-		fBookmarksMenu->AddItem(fRemoveBookmarkMenu);
-		fBookmarksMenu->AddSeparatorItem();
-		fMenuBar->AddItem(fBookmarksMenu);
-
-		BMenu* helpMenu = new BMenu("Help");
-		helpMenu->AddItem(new BMenuItem("About NetPlus",
-			new BMessage(B_ABOUT_REQUESTED)));
-		fMenuBar->AddItem(helpMenu);
-
+		_AddShortcuts();
 
 		fToolbar   = new ToolbarView(viewRect, &fHistory);
 		fStatusBar = new StatusBarView(viewRect);
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
-			.Add(fMenuBar)
 			.Add(fToolbar)
 			.Add(fWebView, 1.0f)
 			.Add(fStatusBar);
@@ -259,13 +222,7 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 		BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 			.Add(fWebView, 1.0f);
 
-	BWebSettings* settings = NetPlusApp::Settings();
-
-	fWebView->SetSession(NULL,
-		fPrivateWindow || settings->PrivateBrowsing());
 	_ApplySettings();
-	if (!fPwaMode)
-		_RebuildBookmarksMenu();
 
 	const char* startup = (url != NULL && url[0] != '\0')
 		? url : settings->Homepage();
@@ -376,42 +333,34 @@ MainWindow::_UpdateNavState()
 		fToolbar->SetCanGoForward(canForward);
 		fToolbar->SetLoading(loading);
 	}
-	if (fBackItem != NULL)
-		fBackItem->SetEnabled(canBack);
-	if (fForwardItem != NULL)
-		fForwardItem->SetEnabled(canForward);
 }
 
 
 void
-MainWindow::_RebuildBookmarksMenu()
+MainWindow::_AddShortcuts()
 {
-	if (fBookmarksMenu == NULL || fRemoveBookmarkMenu == NULL)
-		return;
+	AddShortcut('L', B_COMMAND_KEY, new BMessage(MSG_OPEN_LOCATION));
+	AddShortcut('N', B_COMMAND_KEY, new BMessage(MSG_OPEN_WINDOW));
+	BMessage* privateWindow = new BMessage(MSG_OPEN_WINDOW);
+	privateWindow->AddBool("private", true);
+	AddShortcut('N', B_COMMAND_KEY | B_SHIFT_KEY, privateWindow);
 
-	BWebBookmarks* bookmarks = NetPlusApp::Bookmarks();
+	// No 'Q' here: a registered Ctrl+Q disables the kit's built-in quit.
 
-	// Keep the Add item and the separator before the list.
-	while (fBookmarksMenu->CountItems() > 3) {
-		delete fBookmarksMenu->RemoveItem((int32)3);
-	}
-	while (fRemoveBookmarkMenu->CountItems() > 0) {
-		delete fRemoveBookmarkMenu->RemoveItem((int32)0);
-	}
+	// Option+Q must target this window; cross-looper messages are not delivered.
+	AddShortcut('Q', B_OPTION_KEY, new BMessage(B_QUIT_REQUESTED));
 
-	for (int32 i = 0; i < bookmarks->Count(); i++) {
-		BMessage* goMessage = new BMessage(MSG_BOOKMARK_GO);
-		goMessage->AddString("url", bookmarks->URLAt(i));
-		fBookmarksMenu->AddItem(new BMenuItem(bookmarks->TitleAt(i),
-			goMessage));
+	AddShortcut(B_LEFT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_BACK));
+	AddShortcut(B_RIGHT_ARROW, B_COMMAND_KEY, new BMessage(MSG_NAV_FORWARD));
+	AddShortcut('R', B_COMMAND_KEY, new BMessage(MSG_NAV_RELOAD));
+	AddShortcut('H', B_COMMAND_KEY, new BMessage(MSG_NAV_HOME));
+	AddShortcut('D', B_COMMAND_KEY, new BMessage(MSG_BOOKMARK_ADD));
+	AddShortcut('J', B_COMMAND_KEY, new BMessage(MSG_SHOW_DOWNLOADS));
 
-		BMessage* removeMessage = new BMessage(MSG_BOOKMARK_REMOVE);
-		removeMessage->AddString("url", bookmarks->URLAt(i));
-		fRemoveBookmarkMenu->AddItem(new BMenuItem(bookmarks->TitleAt(i),
-			removeMessage));
-	}
-
-	fRemoveBookmarkMenu->SetEnabled(bookmarks->Count() > 0);
+	AddShortcut('X', B_COMMAND_KEY, new BMessage(B_WEB_EDIT_CUT));
+	AddShortcut('C', B_COMMAND_KEY, new BMessage(B_WEB_EDIT_COPY));
+	AddShortcut('V', B_COMMAND_KEY, new BMessage(B_WEB_EDIT_PASTE));
+	AddShortcut('A', B_COMMAND_KEY, new BMessage(B_WEB_EDIT_SELECT_ALL));
 }
 
 
@@ -428,8 +377,6 @@ MainWindow::_SetFullScreen(bool enter)
 		fSavedLook = Look();
 		GetSizeLimits(&fSavedLimits[0], &fSavedLimits[1], &fSavedLimits[2],
 			&fSavedLimits[3]);
-		if (fMenuBar != NULL)
-			fMenuBar->Hide();
 		if (fToolbar != NULL)
 			fToolbar->Hide();
 		if (fStatusBar != NULL)
@@ -448,8 +395,6 @@ MainWindow::_SetFullScreen(bool enter)
 			fSavedLimits[3]);
 		MoveTo(fSavedFrame.left, fSavedFrame.top);
 		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
-		if (fMenuBar != NULL)
-			fMenuBar->Show();
 		if (fToolbar != NULL)
 			fToolbar->Show();
 		if (fStatusBar != NULL)
@@ -532,13 +477,17 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 		"Ctrl+N");
 	model.AddActionRow(root, "Open Location" B_UTF8_ELLIPSIS,
 		MSG_OPEN_LOCATION, "Ctrl+L");
+	model.AddActionRow(root, "New Private Window", MSG_PANEL_NEW_PRIVATE,
+		"Ctrl+Shift+N");
 	model.AddSeparatorRow(root);
 
 	model.AddSectionLabelRow(root, "Page");
-	model.AddActionRow(root, "Back", MSG_NAV_BACK, "Alt+Left");
-	model.AddActionRow(root, "Forward", MSG_NAV_FORWARD, "Alt+Right");
+	model.AddActionRow(root, "Back", MSG_NAV_BACK, "Ctrl+Left");
+	model.AddActionRow(root, "Forward", MSG_NAV_FORWARD, "Ctrl+Right");
 	model.AddActionRow(root, "Reload", MSG_NAV_RELOAD, "Ctrl+R");
-	model.AddActionRow(root, "Home", MSG_NAV_HOME);
+	model.AddActionRow(root, "Stop", MSG_NAV_STOP);
+	model.AddActionRow(root, "Home", MSG_NAV_HOME, "Ctrl+H");
+	model.AddActionRow(root, "Reader Mode", MSG_READER_TOGGLE);
 	model.AddSeparatorRow(root);
 
 	model.AddSectionLabelRow(root, "Zoom");
@@ -569,14 +518,66 @@ MainWindow::_ShowAppMenu(BPoint anchor)
 	}
 
 	model.AddSeparatorRow(root);
+
+	BWebBookmarks* bookmarks = NetPlusApp::Bookmarks();
+	int32_t bookmarkPage = model.AddPage("Bookmarks");
+	model.AddSubPageRow(root, "Bookmarks", bookmarkPage);
+	model.AddActionRow(bookmarkPage, "Add Bookmark", MSG_BOOKMARK_ADD,
+		"Ctrl+D");
+	if (bookmarks->Count() > 0) {
+		int32_t removePage = model.AddPage("Remove Bookmark");
+		model.AddSubPageRow(bookmarkPage, "Remove Bookmark", removePage);
+		model.AddSeparatorRow(bookmarkPage);
+		for (int32 i = 0; i < bookmarks->Count(); i++) {
+			model.AddActionRow(bookmarkPage, bookmarks->TitleAt(i),
+				MSG_BOOKMARK_GO, NULL, bookmarks->URLAt(i));
+			model.AddActionRow(removePage, bookmarks->TitleAt(i),
+				MSG_BOOKMARK_REMOVE, NULL, bookmarks->URLAt(i));
+		}
+	}
+	model.AddSeparatorRow(root);
+
 	if (fManifest.IsValid()) {
 		model.AddSectionLabelRow(root, "Web app");
 		model.AddActionRow(root, "Install as app", MSG_INSTALL_APP);
 		model.AddSeparatorRow(root);
 	}
 
+	// Extensions for the current site: each row flips the
+	// disabled-on-this-site exception for that extension.
+	BWebExtensions* extensions = NetPlusApp::Extensions();
+	std::string siteHost = _HostFromURL(fWebView != NULL
+		? fWebView->CurrentURL() : NULL);
+	if (extensions != NULL && !siteHost.empty()) {
+		int32 activeCount = 0;
+		std::vector<WebExtensionInfo> list = extensions->List();
+		for (const auto& info : list) {
+			if (!info.enabled || !info.available)
+				continue;
+			activeCount++;
+			bool offHere = extensions->IsDisabledOnSite(
+				info.id.c_str(), siteHost.c_str());
+			BString label(info.name.c_str());
+			label << (offHere ? " (off on this site)"
+				: " (on for this site)");
+			model.AddActionRow(root, label.String(),
+				MSG_SITE_EXT_TOGGLE, NULL, info.id.c_str());
+		}
+		if (activeCount == 0)
+			model.AddSectionLabelRow(root, "No extensions enabled");
+		int32 blocked = fWebView->BlockedRequestCount();
+		if (blocked > 0) {
+			BString blockedLabel;
+			blockedLabel << blocked
+				<< " requests blocked or failed";
+			model.AddSectionLabelRow(root, blockedLabel.String());
+		}
+		model.AddSeparatorRow(root);
+	}
+
 	model.AddSectionLabelRow(root, "Application");
 	model.AddActionRow(root, "Downloads", MSG_SHOW_DOWNLOADS, "Ctrl+J");
+	model.AddActionRow(root, "Extensions" B_UTF8_ELLIPSIS, MSG_SHOW_EXTENSIONS);
 	model.AddActionRow(root, "Settings" B_UTF8_ELLIPSIS, MSG_SHOW_SETTINGS);
 	model.AddActionRow(root, "About NetPlus", B_ABOUT_REQUESTED);
 	model.AddActionRow(root, "Quit NetPlus", B_QUIT_REQUESTED, "Ctrl+Q");
@@ -728,6 +729,58 @@ MainWindow::MessageReceived(BMessage* message)
 			SettingsWindow::ShowWindow(Frame());
 			break;
 
+		case MSG_SHOW_EXTENSIONS:
+			ExtensionsWindow::ShowWindow(Frame());
+			break;
+
+		case MSG_EXTENSIONS_CHANGED:
+			// Same pointer, new contents: re-apply to the view.
+			if (fWebView != NULL)
+				fWebView->SetExtensions(NetPlusApp::Extensions());
+			break;
+
+		case MSG_SITE_EXT_TOGGLE:
+		{
+			const char* id = NULL;
+			BWebExtensions* extensions = NetPlusApp::Extensions();
+			if (extensions == NULL || fWebView == NULL
+				|| message->FindString("id", &id) != B_OK)
+				break;
+			std::string host = _HostFromURL(fWebView->CurrentURL());
+			if (host.empty())
+				break;
+			extensions->SetDisabledOnSite(id, host.c_str(),
+				!extensions->IsDisabledOnSite(id, host.c_str()));
+			break;
+		}
+
+		case MSG_READER_TOGGLE:
+			// The reader userscript installs the toggle; a page
+			// without it just ignores the call.
+			if (fWebView != NULL)
+				fWebView->EvaluateJavaScript(
+					"if (window.__netplusReader)"
+					" window.__netplusReader();",
+					BMessenger(), 0);
+			break;
+
+		case B_WEB_PAGE_BLOCKED_COUNT:
+		{
+			if (fStatusBar == NULL)
+				break;
+			int32 blocked = 0;
+			message->FindInt32(B_WEB_BLOCKED_COUNT_FIELD, &blocked);
+			if (blocked > 0) {
+				BString text(fStatusBase.String());
+				if (text.Length() > 0)
+					text << "  ";
+				text << blocked << " blocked or failed";
+				fStatusBar->SetStatusText(text.String());
+			} else
+				fStatusBar->SetStatusText(fStatusBase.String());
+			break;
+		}
+
 		case MSG_BOOKMARK_ADD:
 		{
 			BWebBookmarks* bookmarks = NetPlusApp::Bookmarks();
@@ -764,25 +817,45 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
-		case MSG_BOOKMARKS_CHANGED:
-			_RebuildBookmarksMenu();
-			break;
-
 		case B_WEB_EDIT_CUT:
-			if (fWebView) fWebView->Cut();
+		{
+			BTextView* text = dynamic_cast<BTextView*>(CurrentFocus());
+			if (text != NULL)
+				text->Cut(be_clipboard);
+			else if (fWebView)
+				fWebView->Cut();
 			break;
+		}
 
 		case B_WEB_EDIT_COPY:
-			if (fWebView) fWebView->Copy();
+		{
+			BTextView* text = dynamic_cast<BTextView*>(CurrentFocus());
+			if (text != NULL)
+				text->Copy(be_clipboard);
+			else if (fWebView)
+				fWebView->Copy();
 			break;
+		}
 
 		case B_WEB_EDIT_PASTE:
-			if (fWebView) fWebView->Paste();
+		{
+			BTextView* text = dynamic_cast<BTextView*>(CurrentFocus());
+			if (text != NULL)
+				text->Paste(be_clipboard);
+			else if (fWebView)
+				fWebView->Paste();
 			break;
+		}
 
 		case B_WEB_EDIT_SELECT_ALL:
-			if (fWebView) fWebView->SelectAll();
+		{
+			BTextView* text = dynamic_cast<BTextView*>(CurrentFocus());
+			if (text != NULL)
+				text->SelectAll();
+			else if (fWebView)
+				fWebView->SelectAll();
 			break;
+		}
 
 		case MSG_SET_ENGINE:
 		{
@@ -825,6 +898,10 @@ MainWindow::MessageReceived(BMessage* message)
 				fPrivateWindow);
 			break;
 		}
+
+		case MSG_PANEL_NEW_PRIVATE:
+			static_cast<NetPlusApp*>(be_app)->OpenWindow(NULL, true);
+			break;
 
 		case MSG_ZOOM_IN:
 		case MSG_ZOOM_OUT:

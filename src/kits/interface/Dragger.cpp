@@ -143,6 +143,8 @@ BDragger::BDragger(BView* target, uint32 flags)
 	fPopUp(NULL)
 {
 	_InitData();
+	// Without a frame the layout would give the bitmap no room.
+	SetExplicitSize(BSize(7, 7));
 }
 
 

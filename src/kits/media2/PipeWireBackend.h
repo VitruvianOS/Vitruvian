@@ -163,6 +163,7 @@ public:
 		struct StreamInfo {
 			uint32			id;
 			std::string		name;
+			std::string		nodeName;
 			std::string		mediaClass;
 			uint32			deviceId;
 			bool			isOutput;
@@ -176,6 +177,8 @@ public:
 									float* outVolume, bool* outMute);
 		status_t				SetStreamVolume(uint32 streamId,
 									float volume, bool mute);
+		status_t				SetStreamChannelVolumes(uint32 streamId,
+									const float* volumes, size_t count);
 
 		static const char* const kPeakMeterNodeName;
 
@@ -331,6 +334,7 @@ private:
 			void					_Teardown();
 
 			struct pw_node*			_BindNode(uint32 id);
+			struct pw_port*			_BindPort(uint32 id);
 
 			static void				_CoreDoneThunk(void* data, uint32 id, int seq);
 
@@ -343,6 +347,12 @@ private:
 			static void				_NodeParamThunk(void* data, int seq,
 										uint32 id, uint32 index, uint32 next,
 										const struct spa_pod* param);
+			status_t				_QueryNodeVolume(uint32 nodeId,
+										VolumeQuery& outQuery);
+			status_t				_SetStreamProps(uint32 streamId,
+										const float* volumes, size_t count,
+										bool haveMute, bool mute);
+			bool					_HasStream(uint32 streamId);
 
 			struct NodeControlQuery {
 				std::vector<NodeControlInfo>	info;
@@ -434,6 +444,23 @@ private:
 
 			std::vector<StreamInfo>	fStreams;
 			std::mutex				fStreamsLock;
+
+			// Props subscription per stream node; volume/mute live there.
+			struct StreamParamWatch {
+				PipeWireBackend*	backend;
+				uint32				nodeId;
+				struct pw_node*		proxy;
+				spa_hook			hook;
+			};
+			std::mutex				fStreamParamWatchesLock;
+			std::map<uint32, StreamParamWatch*>	fStreamParamWatches;
+			static void				_StreamParamThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+			void					_OnStreamParam(StreamParamWatch* watch,
+										uint32 id, const struct spa_pod* param);
+			void					_StartStreamParamWatch(uint32 nodeId);
+			void					_DestroyStreamParamWatch(uint32 nodeId);
 
 			std::vector<MidiNodeInfo>	fMidiNodes;
 			std::mutex				fMidiNodesLock;

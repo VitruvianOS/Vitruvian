@@ -13,7 +13,7 @@ Application(MediaPlayer
 		PlaylistItem.cpp
 		PlaylistWindow.cpp
 		VideoDisplay.cpp
-		VideoView.cpp
+		PlayerVideoView.cpp
 		interface/DurationView.cpp
 		interface/LocationStringView.cpp
 		interface/PeakView.cpp
@@ -30,6 +30,7 @@ Application(MediaPlayer
 target_include_directories(MediaPlayer PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/interface
+	${CMAKE_SOURCE_DIR}/src/kits/media2
 )
 UsePrivateHeaders(MediaPlayer interface shared)
 DoCatalogs("x-vnd.vos-MediaPlayer" apps/mediaplayer)

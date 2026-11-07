@@ -54,12 +54,17 @@ CameraPreviewView::DetachedFromWindow()
 void
 CameraPreviewView::SetCamera(BCameraSource* camera)
 {
+	BCameraSource* previous = NULL;
 	{
 		BAutolock _(fLock);
+		previous = fCamera;
 		fCamera = camera;
 		delete fBitmap;
 		fBitmap = NULL;
 	}
+	// The old camera must not post frames here.
+	if (previous != NULL && previous != camera)
+		previous->SetFrameTarget(BMessenger());
 	// No camera attached is a normal state, not an error.
 	if (fCamera != NULL && Window() != NULL)
 		fCamera->SetFrameTarget(BMessenger(this));

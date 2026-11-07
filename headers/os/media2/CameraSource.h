@@ -152,6 +152,8 @@ private:
 			BLocker				fFrameLock;
 			std::vector<uint8>	fLastFrame;
 			media_raw_video_format	fLastFormat;
+			// Requested mode; fLastFormat holds the negotiated one.
+			camera_mode			fChosenMode;
 			bool				fHaveFrame;
 			BMessenger			fFrameTarget;
 

@@ -118,6 +118,18 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	USB
+	LIBRARIES	"usb-1.0"
+	PACKAGES	"libusb-1.0-0-dev"
+	RUNTIMES	"libusb-1.0-0 (>= 2:1.0.26)"
+)
+
+DeclareDependency(
+	HWDATA
+	RUNTIMES	"hwdata | pci.ids"
+)
+
+DeclareDependency(
 	BLKID
 	LIBRARIES	"blkid"
 	PACKAGES	"libblkid-dev"
@@ -150,6 +162,13 @@ DeclareDependency(
 	LIBRARIES  "ssl;crypto"
 	PACKAGES  "libssl-dev"
 	RUNTIMES  "libssl3t64 (>= 3.0)"
+)
+
+DeclareDependency(
+	ARGON2
+	LIBRARIES  "argon2"
+	PACKAGES   "libargon2-dev"
+	RUNTIMES   "libargon2-1"
 )
 
 DeclareDependency(
@@ -258,6 +277,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	ALSA
+	LIBRARIES  "asound"
+	PACKAGES   "libasound2-dev"
+	RUNTIMES   "libasound2 (>= 1.2.2)"
+)
+
+DeclareDependency(
 	SPA
 	PACKAGES   "libspa-0.2-dev"
 	INCLUDES   "${HEADERS_PATH_BASE}/spa-0.2/"
@@ -356,6 +382,37 @@ DeclareDependency(
 	LIBRARIES  "wpe-webkit-2.0"
 	PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev;libwpebackend-fdo-1.0-dev"
 	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
+)
+
+# IMAP4/POP3/SMTP and MIME for the WebMail app.
+DeclareDependency(
+	LIBETPAN
+	LIBRARIES  "etpan"
+	PACKAGES   "libetpan-dev"
+	RUNTIMES   "libetpan20t64"
+)
+
+# SIP stack and VP8 codec for the telephony kit.
+DeclareDependency(
+	LIBRE
+	LIBRARIES  "re"
+	PACKAGES   "libre-dev"
+	RUNTIMES   "libre1"
+)
+
+DeclareDependency(
+	LIBVPX
+	LIBRARIES  "vpx"
+	PACKAGES   "libvpx-dev"
+	RUNTIMES   "libvpx9"
+)
+
+# HTTPS for the WebMail OAuth2 token exchange and ISPDB autoconfig.
+DeclareDependency(
+	CURL
+	LIBRARIES  "curl"
+	PACKAGES   "libcurl4-gnutls-dev"
+	RUNTIMES   "libcurl3t64-gnutls"
 )
 
 DeclareDependency(

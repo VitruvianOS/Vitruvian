@@ -1,9 +1,6 @@
 /*
  * Copyright 2026, Vitruvian Project.
- * Sounds section: system event -> sound file assignment, absorbed from
- * the standalone Sounds preflet (src/preferences/sounds/HWindow) as a
- * Media preferences section. Reuses HEventList/HEventRow and
- * SoundFilePanel unchanged; only the BWindow shell became a BGroupView.
+ * Sounds section: system event to sound file assignment.
  * Distributed under the terms of the MIT License.
  */
 
@@ -18,6 +15,7 @@
 
 class BButton;
 class BFileGameSound;
+class BMessageFilter;
 class HEventList;
 class SoundFilePanel;
 
@@ -28,17 +26,20 @@ public:
 	virtual					~SoundsSectionView();
 
 	virtual	void			AttachedToWindow();
+	virtual	void			DetachedFromWindow();
 	virtual	void			Pulse();
 	virtual	void			MessageReceived(BMessage* message);
 
 private:
 			void			_SetupMenuField();
+			void			_AssignDefaultSounds();
 
 			HEventList*		fEventList;
 			SoundFilePanel*	fFilePanel;
 			BButton*		fPlayButton;
 			BFileGameSound*	fPlayer;
 			entry_ref		fPathRef;
+			BMessageFilter*	fEventFilter;
 };
 
 

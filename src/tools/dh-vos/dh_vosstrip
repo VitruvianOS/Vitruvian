@@ -1,0 +1,36 @@
+#!/usr/bin/perl
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+
+=head1 NAME
+
+dh_vosstrip - dh_dwz and dh_strip, sparing files that carry resources
+
+=head1 DESCRIPTION
+
+xres appends resources after the ELF data. dh_dwz and dh_strip rewrite
+the file and drop them, so the files dh_vosattrs listed are excluded.
+
+=cut
+
+use strict;
+use warnings;
+use Debian::Debhelper::Dh_Lib;
+
+init();
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	my $list = tmpdir($package) . "/usr/share/vos/attrs/$package.list";
+	my @exclude;
+	if (-f $list) {
+		open(my $fh, '<', $list) or error("cannot read $list: $!");
+		while (my $line = <$fh>) {
+			chomp($line);
+			next unless length($line);
+			$line =~ s{^/}{};
+			push(@exclude, "-X$line");
+		}
+		close($fh);
+	}
+	doit('dh_dwz', '-p', $package, @exclude);
+	doit('dh_strip', '-p', $package, @exclude);
+}

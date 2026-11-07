@@ -35,8 +35,9 @@ status_t __flatten_process_args(const char* const* args, int32 argCount,
 			char*** _flatArgs, size_t* _flatSize);
 thread_id __load_image_at_path(const char* path, int32 argCount,
 			const char **args, const char **environ);
-thread_id __load_image_with_status(int32 argc, const char** argv,
-			const char** envp, int* execStatusFd);
+thread_id __load_image_etc_with_status(int32 argc, const char** argv,
+			const char** envp, uint32 flags, int* execStatusFd);
+status_t __kill_detached_child(thread_id id);
 status_t __wait_exec_status(int fd, bigtime_t timeout);
 status_t __loader_check_binary(const char* path, char* detail,
 			size_t detailSize);

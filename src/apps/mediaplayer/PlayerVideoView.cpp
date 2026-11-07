@@ -1,0 +1,351 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+#include "PlayerVideoView.h"
+
+#include <ControlLook.h>
+#include <Font.h>
+#include <Message.h>
+#include <OS.h>
+#include <String.h>
+#include <Window.h>
+#include <string.h>
+
+#include <media2/MediaDefs.h>
+#include <media2/MediaPlayer.h>
+
+#include <Bitmap.h>
+
+#include "MediaMessages.h"
+#include "VideoDisplay.h"
+#include "VideoFrameRing.h"
+
+
+// Frames lagging the presented audio sample by more than this are dropped.
+static const bigtime_t kFrameDropThreshold = 60000;
+// Full screen: ignore reveal requests closer together than this.
+static const bigtime_t kRevealCoalesce = 200000;
+static const float kRevealThreshold = 5.0f;
+
+
+PlayerVideoView::PlayerVideoView(BRect frame, const char* name, uint32 resizeMask)
+	:
+	BView(frame, name, resizeMask,
+		B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE | B_NAVIGABLE),
+	fVideoWidth(0),
+	fVideoHeight(0),
+	fParNum(0),
+	fParDen(0),
+	fRotation(0),
+	fBitmap(NULL),
+	fFullscreen(false),
+	fDragging(false),
+	fLastRevealTime(0)
+{
+	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+PlayerVideoView::~PlayerVideoView()
+{
+	delete fBitmap;
+}
+
+
+void
+PlayerVideoView::SetVideoFormat(uint32 width, uint32 height, uint32 pixelWidthAspect,
+	uint32 pixelHeightAspect, uint32 rotation)
+{
+	fVideoWidth = width;
+	fVideoHeight = height;
+	fParNum = pixelWidthAspect;
+	fParDen = pixelHeightAspect;
+	fRotation = rotation;
+	if (width == 0 || height == 0)
+		_ClearFrame();
+	Invalidate();
+}
+
+
+void
+PlayerVideoView::GetPreferredSize(float* width, float* height)
+{
+	if (!HasVideo()) {
+		if (width != NULL)
+			*width = 320;
+		if (height != NULL)
+			*height = 240;
+		return;
+	}
+	const video_display_size display = compute_video_display_size(
+		fVideoWidth, fVideoHeight, fParNum, fParDen, fRotation);
+	if (width != NULL)
+		*width = display.width;
+	if (height != NULL)
+		*height = display.height;
+}
+
+
+void
+PlayerVideoView::FrameResized(float width, float height)
+{
+	BView::FrameResized(width, height);
+	Invalidate();
+}
+
+
+void
+PlayerVideoView::SetFullscreenMode(bool fullscreen)
+{
+	fFullscreen = fullscreen;
+	if (Window() != NULL) {
+		if (fullscreen)
+			Window()->SetPulseRate(100000);
+		else
+			Window()->SetPulseRate(0);
+	}
+	if (fullscreen) {
+		SetFlags(Flags() | B_PULSE_NEEDED);
+	} else {
+		SetFlags(Flags() & ~B_PULSE_NEEDED);
+		fDragging = false;
+	}
+	Invalidate();
+}
+
+
+void
+PlayerVideoView::MouseDown(BPoint point)
+{
+	MakeFocus();
+	BMessage* message = Window()->CurrentMessage();
+	int32 buttons = 0;
+	int32 clickCount = 0;
+	message->FindInt32("buttons", &buttons);
+	message->FindInt32("clicks", &clickCount);
+
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		if (clickCount >= 2)
+			Window()->PostMessage(MSG_HIDE_INTERFACE);
+		else
+			Window()->PostMessage(MSG_CONTEXT_MENU);
+		return;
+	}
+
+	if ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0) {
+		if (clickCount >= 2) {
+			Window()->PostMessage(MSG_TOGGLE_FULLSCREEN);
+			return;
+		}
+		// Primary drag moves the window, giving the video a borderless feel.
+		fDragging = true;
+		fDragStart = ConvertToScreen(point);
+		fDragWindowOrigin = Window()->Frame().LeftTop();
+	}
+}
+
+
+void
+PlayerVideoView::MouseMoved(BPoint point, uint32 transit,
+	const BMessage* dragMessage)
+{
+	if (fDragging && (Window()->CurrentMessage() != NULL)) {
+		BMessage* message = Window()->CurrentMessage();
+		int32 buttons = 0;
+		message->FindInt32("buttons", &buttons);
+		if ((buttons & B_PRIMARY_MOUSE_BUTTON) == 0) {
+			fDragging = false;
+			return;
+		}
+		BPoint screen = ConvertToScreen(point);
+		BPoint delta = screen - fDragStart;
+		Window()->MoveTo(fDragWindowOrigin.x + delta.x,
+			fDragWindowOrigin.y + delta.y);
+		return;
+	}
+
+	if (!fFullscreen)
+		return;
+
+	// Reveal the controls after the mouse actually moves, coalesced.
+	BPoint moved = point - fLastMouse;
+	if ((moved.x * moved.x + moved.y * moved.y)
+			> kRevealThreshold * kRevealThreshold) {
+		bigtime_t now = system_time();
+		if (now - fLastRevealTime > kRevealCoalesce) {
+			fLastRevealTime = now;
+			Window()->PostMessage(MSG_REVEAL_CONTROLS);
+		}
+		fLastMouse = point;
+	}
+}
+
+
+void
+PlayerVideoView::MouseUp(BPoint point)
+{
+	fDragging = false;
+}
+
+
+// In full screen the window polls idle time to auto-hide the strip; the
+// reveal itself is driven from MouseMoved above.
+void
+PlayerVideoView::Pulse()
+{
+	if (fFullscreen)
+		Window()->PostMessage(MSG_FULLSCREEN_TICK);
+}
+
+
+void
+PlayerVideoView::MessageReceived(BMessage* message)
+{
+	if (message->what != BMediaPlayer::B_PLAYER_VIDEO_FRAME) {
+		BView::MessageReceived(message);
+		return;
+	}
+
+	void* bitmapPtr = NULL;
+	void* ringPtr = NULL;
+	int32 width = 0;
+	int32 slot = -1;
+	int64 sequence = -1;
+	int64 generation = -1;
+	bigtime_t startTime = 0;
+	bigtime_t audioTime = -1;
+	if (message->FindPointer("bitmap", &bitmapPtr) != B_OK
+			|| message->FindPointer("ring", &ringPtr) != B_OK
+			|| message->FindInt32("slot", &slot) != B_OK
+			|| message->FindInt64("sequence", &sequence) != B_OK
+			|| message->FindInt64("generation", &generation) != B_OK) {
+		return;
+	}
+	message->FindInt32("width", &width);
+	message->FindInt64("start_time", &startTime);
+	message->FindInt64("audio_time", &audioTime);
+
+	BBitmap* source = static_cast<BBitmap*>(bitmapPtr);
+	VideoFrameRing* ring = static_cast<VideoFrameRing*>(ringPtr);
+	if (source == NULL || ring == NULL || width <= 0)
+		return;
+	if (generation != ring->Generation() || !ring->ClaimSlot(slot, sequence))
+		return;
+
+	// Without an audio track there is nothing to compare against, so
+	// present every frame in order.
+	if (audioTime >= 0 && startTime >= 0
+			&& (audioTime - startTime) > kFrameDropThreshold) {
+		ring->ReleaseSlot(slot);
+		return;
+	}
+
+	_PresentFrame(source->Bits(), (uint32)width,
+		(uint32)source->Bounds().IntegerHeight() + 1,
+		(uint32)source->BytesPerRow());
+	ring->ReleaseSlot(slot);
+}
+
+
+// Rotation metadata is honoured here: the stored frame is rotated into
+// the bitmap so Draw only has to letterbox.
+void
+PlayerVideoView::_PresentFrame(const void* data, uint32 width, uint32 height,
+	uint32 stride)
+{
+	const bool swapAxes = fRotation == B_VIDEO_ROTATE_90
+		|| fRotation == B_VIDEO_ROTATE_270;
+	const uint32 bitmapWidth = swapAxes ? height : width;
+	const uint32 bitmapHeight = swapAxes ? width : height;
+
+	if (fBitmap == NULL
+			|| fBitmap->Bounds().IntegerWidth() + 1 != (int32)bitmapWidth
+			|| fBitmap->Bounds().IntegerHeight() + 1 != (int32)bitmapHeight) {
+		delete fBitmap;
+		fBitmap = new BBitmap(BRect(0, 0, bitmapWidth - 1, bitmapHeight - 1),
+			B_RGB32);
+		if (fBitmap == NULL || fBitmap->InitCheck() != B_OK) {
+			delete fBitmap;
+			fBitmap = NULL;
+			return;
+		}
+	}
+
+	uint8* bits = (uint8*)fBitmap->Bits();
+	const int32 bytesPerRow = fBitmap->BytesPerRow();
+	const uint8* src = (const uint8*)data;
+	const uint32 rowBytes = width * 4;
+	if (fRotation == B_VIDEO_TOP_LEFT_RIGHT) {
+		for (uint32 y = 0; y < height; y++)
+			memcpy(bits + (size_t)y * bytesPerRow, src + (size_t)y * stride,
+				rowBytes);
+	} else {
+		for (uint32 y = 0; y < bitmapHeight; y++) {
+			uint8* dstRow = bits + (size_t)y * bytesPerRow;
+			for (uint32 x = 0; x < bitmapWidth; x++) {
+				uint32 sx;
+				uint32 sy;
+				if (fRotation == B_VIDEO_ROTATE_90) {
+					sx = y;
+					sy = height - 1 - x;
+				} else if (fRotation == B_VIDEO_ROTATE_180) {
+					sx = width - 1 - x;
+					sy = height - 1 - y;
+				} else {
+					sx = width - 1 - y;
+					sy = x;
+				}
+				memcpy(dstRow + (size_t)x * 4,
+					src + (size_t)sy * stride + (size_t)sx * 4, 4);
+			}
+		}
+	}
+
+	fVideoWidth = width;
+	fVideoHeight = height;
+	Invalidate();
+}
+
+
+void
+PlayerVideoView::_ClearFrame()
+{
+	delete fBitmap;
+	fBitmap = NULL;
+}
+
+
+void
+PlayerVideoView::Draw(BRect updateRect)
+{
+	BRect bounds = Bounds();
+	FillRect(bounds, B_SOLID_LOW);
+
+	if (fBitmap == NULL || !HasVideo()) {
+		SetHighColor(0x60, 0x60, 0x60);
+		const char* text = "No video";
+		float width = StringWidth(text);
+		DrawString(text,
+			BPoint((bounds.Width() - width) / 2.0f, bounds.Height() / 2.0f));
+		return;
+	}
+
+	// Letterbox the frame into the current bounds at its display aspect:
+	// pixel aspect and rotation folded in (anamorphic and phone clips).
+	const video_display_size display = compute_video_display_size(
+		fVideoWidth, fVideoHeight, fParNum, fParDen, fRotation);
+	float scale = bounds.Width() / (float)display.width;
+	float scaleY = bounds.Height() / (float)display.height;
+	if (scaleY < scale)
+		scale = scaleY;
+	float targetW = display.width * scale;
+	float targetH = display.height * scale;
+	BRect videoFrame(0, 0, targetW, targetH);
+	videoFrame.OffsetTo(
+		(bounds.Width() - targetW) / 2.0f,
+		(bounds.Height() - targetH) / 2.0f);
+
+	DrawBitmap(fBitmap, fBitmap->Bounds(), videoFrame);
+}

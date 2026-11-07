@@ -37,7 +37,6 @@ public:
 
 	virtual	bool				QuitRequested();
 	virtual	void				MessageReceived(BMessage* message);
-	virtual	void				FrameResized(float width, float height);
 
 			void				HandleFrame(const uint8* bits, size_t size,
 									uint32 width, uint32 height);
@@ -113,6 +112,8 @@ private:
 			uint32				fHeight;
 			float				fFrameRate;
 			std::vector<camera_mode>	fModes;
+			// A size was remembered or picked, so no mode is auto-picked.
+			bool				fHasStoredSize;
 			bool				fGrid;
 			bool				fMirrorEnabled;
 			BPath				fLastPath;

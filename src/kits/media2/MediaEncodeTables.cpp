@@ -9,6 +9,8 @@
 
 #include <gst/pbutils/encoding-profile.h>
 
+#include "GStreamerBackend.h"
+
 
 namespace BPrivate { namespace media {
 
@@ -82,7 +84,7 @@ const EncodeCodecInfo kCodecs[] = {
 	{ B_CODEC_TYPE_THEORA, "theoraenc", { NULL, NULL, NULL },
 		"video/x-theora", false,
 		B_ENCODE_QUALITY_RANGE, "quality", 0.0f, 63.0f },
-	{ B_CODEC_TYPE_H264, "x264enc", { NULL, NULL, NULL },
+	{ B_CODEC_TYPE_H264, "x264enc", { "openh264enc", NULL, NULL },
 		"video/x-h264", false,
 		B_ENCODE_QUALITY_QUANTIZER, "quantizer", 0.0f, 51.0f }
 };
@@ -97,7 +99,7 @@ const EncodeFileFormat kFileFormats[] = {
 		"video/x-matroska", "Matroska", "video/x-matroska",
 		kMatroskaCodecs, 6 },
 	{ "qtmux", { "mp4mux", NULL }, "MP4", "mp4", "video/mp4",
-		"MP4", "video/mp4", kMp4Codecs, 2 },
+		"MP4", "video/quicktime, variant=(string)iso", kMp4Codecs, 2 },
 	{ "wavenc", { NULL, NULL }, "WAV", "wav", "audio/x-wav",
 		"WAV", NULL, kWavCodecs, 1 },
 	{ "flacenc", { NULL, NULL }, "FLAC", "flac", "audio/x-flac",
@@ -157,6 +159,8 @@ EncodeCodecAt(int32 index)
 GstElementFactory*
 FindEncodeFactory(const EncodeCodecInfo* codec)
 {
+	// Factory lookups need the registry; GetInstance runs gst_init once.
+	GStreamerBackend::GetInstance();
 	if (codec == NULL || codec->factory == NULL)
 		return NULL;
 	GstElementFactory* factory = gst_element_factory_find(codec->factory);
@@ -171,6 +175,7 @@ FindEncodeFactory(const EncodeCodecInfo* codec)
 GstElementFactory*
 FindEncodeFactory(const EncodeFileFormat* format)
 {
+	GStreamerBackend::GetInstance();
 	if (format == NULL || format->factory == NULL)
 		return NULL;
 	GstElementFactory* factory = gst_element_factory_find(format->factory);

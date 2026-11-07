@@ -3,6 +3,7 @@ set(
 
 	"headers/"
 	"headers/os"
+	"headers/os/account"
 	"headers/os/app"
 	"headers/os/drivers"
 	"headers/os/kernel"
@@ -23,16 +24,19 @@ set(
 	"headers/os/interface"
 	"headers/os/kernel"
 	"headers/os/locale/"
+	"headers/os/location"
 	"headers/os/locale/tools"
 	"headers/os/mail"
 	"headers/os/net"
 	"headers/os/storage"
 	"headers/os/support"
+	"headers/os/telephony"
 	"headers/os/posix/compat/sys"
 
 	"headers/os/add-ons/input_server"
 	"headers/os/add-ons/tracker"
 
+	"headers/os/hwaccel"
 	"headers/os/opengl"
 
 	"headers/os/media2"
@@ -53,6 +57,7 @@ set(
 	"headers/private/"
 
 	"headers/private/opengl"
+	"headers/private/hwaccel"
 	"headers/private/input"
 	"headers/private/shared"
 	"headers/private/storage"

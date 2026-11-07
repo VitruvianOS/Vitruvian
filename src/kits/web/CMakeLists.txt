@@ -9,6 +9,7 @@ find_package(PkgConfig)
 set(WEB_SOURCES
 	UrlNormalize.cpp
 	WebBookmarks.cpp
+	WebExtensions.cpp
 	WebSettings.cpp
 	WebView.cpp
 )
@@ -37,6 +38,7 @@ if(PKG_CONFIG_FOUND)
 			set(WEB_PRIVATE_SOURCES
 				private/ClipboardDragdrop.cpp
 			private/CompositorAdapter.cpp
+			private/ContentFilterStore.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
 			private/DownloadSanitizer.cpp
@@ -71,6 +73,7 @@ target_include_directories(web PRIVATE
 if(WEB_PRIVATE_SOURCES)
 	target_include_directories(web PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/private
+		${PROJECT_SOURCE_DIR}/headers/private/netservices
 		${VOS_WEBKIT2_INCLUDE_DIRS}
 		${VOS_LIBWPE_INCLUDE_DIRS}
 		${VOS_WPE_FDO_INCLUDE_DIRS}

@@ -16,6 +16,7 @@
 class BBox;
 class BButton;
 class BFilePanel;
+class BLayoutItem;
 class BMediaFile;
 class BMenuField;
 class BSlider;
@@ -77,6 +78,9 @@ public:
 private:
 			void				_UpdateLabels();
 			void				_UpdateBBoxLayoutInsets(BBox* box);
+			void				_UpdateOutputControls();
+			void				_SelectedTracks(bool* _hasAudio,
+									bool* _hasVideo);
 			void				_CreateMenu();
 			void				_DestroyMenu();
 			void				_SetOutputFolder(BEntry entry);
@@ -104,6 +108,9 @@ private:
 
 			BSlider*			fVideoQualitySlider;
 			BSlider*			fAudioQualitySlider;
+
+			BLayoutItem*		fAudioQualityItem;
+			BLayoutItem*		fVideoQualityItem;
 
 			int32				fVideoQuality;
 			int32				fAudioQuality;

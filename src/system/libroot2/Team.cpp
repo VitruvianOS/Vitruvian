@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 
 #include <new>
+#include <map>
 #include <set>
 #include <string>
 
@@ -52,28 +53,101 @@ static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
 static pthread_mutex_t gDevicesLock = PTHREAD_MUTEX_INITIALIZER;
 
-// Pids this team spawned via LoadImage(), reaped opportunistically so they
-// don't sit as zombies against RLIMIT_NPROC. Never touches pids we didn't
-// create ourselves, so it can't steal children waited on elsewhere (janus).
-static pthread_mutex_t gLoadedPidsLock = PTHREAD_MUTEX_INITIALIZER;
-static std::set<pid_t> gLoadedPids;
-static const size_t kMaxTrackedPids = 256;
+// Detached children are reaped on exit, joinable ones once joined.
+static pthread_mutex_t gDetachedPidsLock = PTHREAD_MUTEX_INITIALIZER;
+static std::set<pid_t> gDetachedPids;
+static bool gReaperRunning = false;
+static const bigtime_t kReapInterval = 500000;
 
 
-// Reaps already-exited tracked pids with WNOHANG. Called with gLoadedPidsLock held.
+// Called with gDetachedPidsLock held.
 static void
-ReapLoadedPidsLocked()
+ReapDetachedPidsLocked()
 {
-	for (std::set<pid_t>::iterator it = gLoadedPids.begin();
-			it != gLoadedPids.end(); ) {
+	std::set<pid_t>::iterator it = gDetachedPids.begin();
+	while (it != gDetachedPids.end()) {
 		int status;
-		pid_t result = waitpid(*it, &status, WNOHANG);
-		if (result == *it || (result == -1 && errno == ECHILD))
-			gLoadedPids.erase(it++);
-		else
+		pid_t reaped = waitpid(*it, &status, WNOHANG);
+		if (reaped == 0) {
 			++it;
+			continue;
+		}
+		gDetachedPids.erase(it++);
 	}
 }
+
+
+static void*
+ReaperThread(void*)
+{
+	pthread_mutex_lock(&gDetachedPidsLock);
+	while (!gDetachedPids.empty()) {
+		pthread_mutex_unlock(&gDetachedPidsLock);
+		snooze(kReapInterval);
+		pthread_mutex_lock(&gDetachedPidsLock);
+		ReapDetachedPidsLocked();
+	}
+	gReaperRunning = false;
+	pthread_mutex_unlock(&gDetachedPidsLock);
+	return NULL;
+}
+
+
+// Hold the reaper set across fork().
+static void
+LockDetachedPidsForFork()
+{
+	pthread_mutex_lock(&gDetachedPidsLock);
+}
+
+
+static void
+UnlockDetachedPidsAfterFork()
+{
+	pthread_mutex_unlock(&gDetachedPidsLock);
+}
+
+
+// Called with gDetachedPidsLock held.
+static void
+TrackDetachedPidLocked(pid_t pid)
+{
+	gDetachedPids.insert(pid);
+
+	if (!gReaperRunning) {
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+		pthread_t thread;
+		if (pthread_create(&thread, &attr, ReaperThread, NULL) == 0)
+			gReaperRunning = true;
+		pthread_attr_destroy(&attr);
+	}
+}
+
+
+// Kill a detached child if the reaper has not collected it.
+status_t
+kill_detached_child(thread_id id)
+{
+	pthread_mutex_lock(&gDetachedPidsLock);
+	bool ours = gDetachedPids.find(id) != gDetachedPids.end();
+	if (ours)
+		kill(id, SIGKILL);
+	pthread_mutex_unlock(&gDetachedPidsLock);
+	return ours ? B_OK : B_BAD_THREAD_ID;
+}
+
+
+bool
+loaded_pid_is_detached(pid_t pid)
+{
+	pthread_mutex_lock(&gDetachedPidsLock);
+	bool detached = gDetachedPids.find(pid) != gDetachedPids.end();
+	pthread_mutex_unlock(&gDetachedPidsLock);
+	return detached;
+}
+
 
 static void
 OpenNexusDevices()
@@ -180,7 +254,8 @@ Team::InitTeam()
 	static bool sAtForkRegistered = false;
 	if (!sAtForkRegistered) {
 		sAtForkRegistered = true;
-		pthread_atfork(NULL, NULL, &Team::ReinitChildAtFork);
+		pthread_atfork(&LockDetachedPidsForFork, &UnlockDetachedPidsAfterFork,
+			&Team::ReinitChildAtFork);
 	}
 
 	struct sigaction sa;
@@ -222,16 +297,6 @@ Team::InitTeam()
 
 int
 Team::GetNexusDescriptor()
-{
-	if (gNexus == -1)
-		OpenNexusDevices();
-
-	return gNexus;
-}
-
-
-int
-Team::GetSemDescriptor()
 {
 	if (gNexus == -1)
 		OpenNexusDevices();
@@ -332,15 +397,17 @@ Team::ReinitChildAtFork()
 
 	// Locks are inherited in whatever state they had at fork time; another
 	// thread may have held one, deadlocking the first user of it here.
-	pthread_mutex_init(&gLoadedPidsLock, NULL);
+	pthread_mutex_init(&gDetachedPidsLock, NULL);
 	pthread_mutex_init(&gDevicesLock, NULL);
+
+	ReinitSemsAfterFork();
 
 	// Enumeration handles belong to the parent's get_next_* calls.
 	proc_enum_reset_after_fork();
 
-	// Inherited pids belong to the parent's LoadImage() calls, not ours;
-	// waiting on them here would race the parent's own reaping.
-	gLoadedPids.clear();
+	// Inherited pids belong to the parent's LoadImage() calls.
+	gDetachedPids.clear();
+	gReaperRunning = false;
 
 	// Opening /dev/nexus creates our team; nothing to park on here.
 	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
@@ -356,7 +423,7 @@ Team::ReinitChildAtFork()
 
 thread_id
 Team::LoadImage(int32 argc, const char** argv, const char** envp,
-	int* _execStatusFd)
+	int* _execStatusFd, bool detached)
 {
 	if (argc < 1 || argv == NULL || argv[0] == NULL) {
 		TRACE("load_image: invalid arguments\n");
@@ -386,10 +453,6 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 
 	TRACE("LoadImage: about to clone(), gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 		gNexus, gNexusArea, gNexusNodeMonitor);
-
-	pthread_mutex_lock(&gLoadedPidsLock);
-	ReapLoadedPidsLocked();
-	pthread_mutex_unlock(&gLoadedPidsLock);
 
 	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid == -1) {
@@ -483,20 +546,19 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 		// The child may be parked for a resume that never comes.
 		printf("Fork failed\n");
 		kill(pid, SIGKILL);
-		pthread_mutex_lock(&gLoadedPidsLock);
-		if (gLoadedPids.size() < kMaxTrackedPids)
-			gLoadedPids.insert(pid);
-		pthread_mutex_unlock(&gLoadedPidsLock);
+		// Nothing joins it, so reap it.
+		pthread_mutex_lock(&gDetachedPidsLock);
+		TrackDetachedPidLocked(pid);
+		pthread_mutex_unlock(&gDetachedPidsLock);
 		CloseExecStatusPipe(statusPipe[0], -1);
 		return B_BAD_THREAD_ID;
 	}
 
-	pthread_mutex_lock(&gLoadedPidsLock);
-	if (gLoadedPids.size() >= kMaxTrackedPids)
-		ReapLoadedPidsLocked();
-	if (gLoadedPids.size() < kMaxTrackedPids)
-		gLoadedPids.insert(pid);
-	pthread_mutex_unlock(&gLoadedPidsLock);
+	if (detached) {
+		pthread_mutex_lock(&gDetachedPidsLock);
+		TrackDetachedPidLocked(pid);
+		pthread_mutex_unlock(&gDetachedPidsLock);
+	}
 
 	if (_execStatusFd != NULL)
 		*_execStatusFd = statusPipe[0];

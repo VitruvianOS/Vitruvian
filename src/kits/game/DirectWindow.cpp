@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include <Screen.h>
+#include <SharedEvent.h>
 
 #include <clipping.h>
 #include <AppServerLink.h>
@@ -28,14 +29,10 @@
 //#define OUTPUT	debug_printf
 
 
-// We don't need this kind of locking, since the directDaemonFunc
-// doesn't access critical shared data.
-#define DW_NEEDS_LOCKING 0
 
 enum dw_status_bits {
 	DW_STATUS_AREA_CLONED	 = 0x1,
-	DW_STATUS_THREAD_STARTED = 0x2,
-	DW_STATUS_SEM_CREATED	 = 0x4
+	DW_STATUS_THREAD_STARTED = 0x2
 };
 
 
@@ -464,19 +461,30 @@ int32
 BDirectWindow::_DirectDaemon()
 {
 	while (!fDaemonKiller) {
-		// This sem is released by the app_server when our
-		// clipping region changes, or when our window is moved,
-		// resized, etc. etc.
+		// Posted by the app_server when our clipping region changes,
+		// or when our window is moved, resized, etc. etc.
+		BSharedEvent disable(fDisableState);
+		disable.SetPeer(direct_window_server_liveness(fBufferDesc));
 		status_t status;
 		do {
-			status = acquire_sem(fDisableSem);
+			status = disable.Wait();
 		} while (status == B_INTERRUPTED);
 
+		if (status == B_BAD_SEM_ID) {
+			// The app_server marked the word dead, the window is gone and
+			// no stop notification will follow.
+			fConnectionEnable = false;
+			return 0;
+		}
 		if (status != B_OK) {
-			//fprintf(stderr, "DirectDaemon: failed to acquire direct sem: %s\n",
+			//fprintf(stderr, "DirectDaemon: failed to wait direct event: %s\n",
 				// strerror(status));
 			return -1;
 		}
+
+		// _DisposeData() posts once to end the loop, without a callback.
+		if (fDaemonKiller)
+			break;
 
 #if DEBUG
 		print_direct_buffer_info(*fBufferDesc);
@@ -515,14 +523,10 @@ BDirectWindow::_DirectDaemon()
 			_UnlockDirect();
 		}
 
-		// The app_server then waits (with a timeout) on this sem.
-		// If we aren't quick enough to release this sem, our app
+		// The app_server then waits (with a timeout) on this word.
+		// If we aren't quick enough to acknowledge, our app
 		// will be terminated by the app_server
-		if ((status = release_sem(fDisableSemAck)) != B_OK) {
-			//fprintf(stderr, "DirectDaemon: failed to release sem: %s\n",
-				//strerror(status));
-			return -1;
-		}
+		BSharedEvent(fAckState).Post();
 	}
 
 	return 0;
@@ -532,43 +536,14 @@ BDirectWindow::_DirectDaemon()
 bool
 BDirectWindow::_LockDirect() const
 {
-	// LockDirect() and UnlockDirect() are no-op on BeOS. I tried to call BeOS's
-	// version repeatedly, from the same thread and from different threads,
-	// nothing happened.
-	// They're not needed though, as the direct_daemon_thread doesn't change
-	// any shared data. They are probably here for future enhancements.
-	status_t status = B_OK;
-
-#if DW_NEEDS_LOCKING
-	BDirectWindow* casted = const_cast<BDirectWindow*>(this);
-
-	if (atomic_add(&casted->fDirectLock, 1) > 0) {
-		do {
-			status = acquire_sem(casted->fDirectSem);
-		} while (status == B_INTERRUPTED);
-	}
-
-	if (status == B_OK) {
-		casted->fDirectLockOwner = find_thread(NULL);
-		casted->fDirectLockCount++;
-	}
-#endif
-
-	return status == B_OK;
+	// A no-op, the direct daemon changes no shared data.
+	return true;
 }
 
 
 void
 BDirectWindow::_UnlockDirect() const
 {
-#if DW_NEEDS_LOCKING
-	BDirectWindow* casted = const_cast<BDirectWindow*>(this);
-
-	if (atomic_add(&casted->fDirectLock, -1) > 1)
-		release_sem(casted->fDirectSem);
-
-	casted->fDirectLockCount--;
-#endif
 }
 
 
@@ -591,20 +566,10 @@ BDirectWindow::_InitData()
 	if (status != B_OK)
 		return;
 
-#if DW_NEEDS_LOCKING
-	fDirectLock = 0;
-	fDirectLockCount = 0;
-	fDirectLockOwner = -1;
-	fDirectLockStack = NULL;
-	fDirectSem = create_sem(0, "direct sem");
-	if (fDirectSem > 0)
-		fInitStatus |= DW_STATUS_SEM_CREATED;
-#endif
 
 	fSourceDirectArea = syncData.area;
-	fDisableSem = syncData.disable_sem;
-	fDisableSemAck = syncData.disable_sem_ack;
 
+	// the ack word is written from here, so the clone needs write access
 	fClonedDirectArea = clone_area("cloned direct area", (void**)&fBufferDesc,
 		B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, fSourceDirectArea);
 
@@ -612,6 +577,12 @@ BDirectWindow::_InitData()
 
 	if (fClonedDirectArea > 0) {
 		fInitStatus |= DW_STATUS_AREA_CLONED;
+
+		fDisableState = direct_window_disable_state(fBufferDesc);
+		fAckState = direct_window_ack_state(fBufferDesc);
+
+		// The app_server watches this team while it waits for our ack.
+		shared_liveness_hold(direct_window_client_liveness(fBufferDesc));
 
 		fDirectDaemonId = spawn_thread(_daemon_thread, "direct daemon",
 			B_DISPLAY_PRIORITY, this);
@@ -640,20 +611,18 @@ BDirectWindow::_DisposeData()
 
 	if (fInitStatus & DW_STATUS_THREAD_STARTED) {
 		fDaemonKiller = true;
-		// delete this sem, otherwise the Direct daemon thread
-		// will wait forever on it
-		delete_sem(fDisableSem);
+		// The daemon rechecks fDaemonKiller after this post and exits
+		// without another DirectConnected() round.
+		BSharedEvent(fDisableState).Post();
 		status_t retVal;
 		wait_for_thread(fDirectDaemonId, &retVal);
 	}
 
-#if DW_NEEDS_LOCKING
-	if (fInitStatus & DW_STATUS_SEM_CREATED)
-		delete_sem(fDirectSem);
-#endif
 
-	if (fInitStatus & DW_STATUS_AREA_CLONED)
+	if (fInitStatus & DW_STATUS_AREA_CLONED) {
+		shared_liveness_release(direct_window_client_liveness(fBufferDesc));
 		delete_area(fClonedDirectArea);
+	}
 }
 
 

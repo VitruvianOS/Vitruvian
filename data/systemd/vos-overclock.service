@@ -1,0 +1,12 @@
+[Unit]
+Description=V\OS overclock settings at boot
+# Runs before the desktop so cpufreq, boost and power limits are in
+# place early; skips itself when no settings are persisted.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-overclock-apply --boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

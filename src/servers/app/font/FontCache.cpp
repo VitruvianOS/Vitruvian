@@ -28,7 +28,7 @@ FontCache::sDefaultInstance;
 
 // constructor
 FontCache::FontCache()
-	: MultiLocker("FontCache lock")
+	: BRWLocker("FontCache lock")
 	, fFontCacheEntries()
 {
 }

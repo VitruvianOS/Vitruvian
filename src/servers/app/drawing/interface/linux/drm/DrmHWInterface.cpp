@@ -127,6 +127,12 @@ DrmHWInterface::DrmHWInterface()
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
 	fNeedsFlip(false),
+	fDirectRender(false),
+	fFrameSerial(0),
+	fAgeSlotCount(0),
+	fPacingLockHeld(false),
+	fFlipIssueTime(0),
+	fLastFlipIssue(0),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
@@ -153,7 +159,7 @@ DrmHWInterface::DrmHWInterface()
 	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
-	pthread_mutex_init(&fDirtyMutex, NULL);
+	memset(fAgeFbIds, 0, sizeof(fAgeFbIds));
 	pthread_mutex_init(&fFlipMutex, NULL);
 	pthread_mutex_init(&fCursorBlendMutex, NULL);
 	// Recursive: SetMode() holds it and calls SetCursor(), which re-takes
@@ -343,11 +349,11 @@ DrmHWInterface::_OnSessionEnable()
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (modeset_create_back_fb(fFd, get_dev()) == 0) {
 		fBackBuffer      = new DrmBuffer(fFd, get_dev(), true);
@@ -409,6 +415,7 @@ DrmHWInterface::_OnSessionEnable()
 	modeset_create_cursor_fb(fFd, get_dev());
 
 	_ProbeCursor();
+	_SetupDirectRender();
 
 	fUdev = udev_new();
 	if (fUdev) {
@@ -539,11 +546,11 @@ DrmHWInterface::_OnSessionDisable()
 	fPageFlipPending = false;
 	pthread_mutex_unlock(&fFlipMutex);
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	// Clear while still DRM master, or the next VT/session owner scans
 	// out our stale sprite.
@@ -660,11 +667,16 @@ DrmHWInterface::_FinishFrameSwap(uint64_t generation)
 		return;
 	}
 
+	if (fDirectRender) {
+		_DirectFlipComplete();
+		return;
+	}
+
 	// Build the dirty region: union of this frame's accumulated damage
 	// with the previous frame's (covers double-buffer staleness). Then
 	// rotate: previous <- accumulated, accumulated <- empty.
 	BRegion toBlit;
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	if (fPreviousDirty.CountRects() > 0) {
 		toBlit.Include(&fPreviousDirty);
 		toBlit.Include(&fAccumulatedDirty);
@@ -675,7 +687,7 @@ DrmHWInterface::_FinishFrameSwap(uint64_t generation)
 	// Damage copied while this flip was in flight reached the buffer that
 	// just left the screen; ask for a follow-up flip.
 	fNeedsFlip = (fPreviousDirty.CountRects() > 0);
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 	pthread_mutex_unlock(&fFlipMutex);
 
 	if (toBlit.CountRects() > 0) {
@@ -718,6 +730,134 @@ DrmHWInterface::_FinishFrameSwap(uint64_t generation)
 		if (locked)
 			UnlockExclusiveAccess();
 	}
+}
+
+
+// Called with fFlipMutex held and the exclusive lock held by this thread;
+// releases the mutex. The painter wrote the frame into the buffer that was
+// just scanned out, so only the region the new write target is missing is
+// copied from the front buffer.
+void
+DrmHWInterface::_DirectFlipComplete()
+{
+	const int32 presentedSlot = _AgeSlotForFb(fFrontBuffer != NULL
+		? fFrontBuffer->GetFbId() : 0);
+	const int32 writeSlot = _AgeSlotForFb(fWriteTarget != NULL
+		? fWriteTarget->GetFbId() : 0);
+
+	BRegion stale;
+	fDirtyMutex.Lock();
+	fAgeTracker.AddDamage(fAccumulatedDirty);
+	const int32 pending = fAccumulatedDirty.CountRects();
+	fAccumulatedDirty.MakeEmpty();
+	fPreviousDirty.MakeEmpty();
+	fFrameSerial++;
+	fAgeTracker.CommitFrame(fFrameSerial, presentedSlot, writeSlot, &stale);
+	// Damage that arrived while the flip was in flight needs a follow-up.
+	fNeedsFlip = pending > 0;
+	fDirtyMutex.Unlock();
+
+	if (fAgeTracker.AgeOf(writeSlot) < 0) {
+		stale.MakeEmpty();
+		stale.Include(BRect(0, 0, fDisplayMode.virtual_width - 1,
+			fDisplayMode.virtual_height - 1));
+	}
+
+	RenderingBuffer* front = fFrontBuffer;
+	RenderingBuffer* target = fWriteTarget;
+	pthread_mutex_unlock(&fFlipMutex);
+
+	if (front != NULL && target != NULL) {
+		const int32 count = stale.CountRects();
+		for (int32 i = 0; i < count; i++)
+			_BlitRect(front, target, stale.RectAt(i));
+	}
+
+	_NotifyFrameBufferChanged();
+
+	if (fPacingLockHeld && find_thread(NULL) == fEventThread) {
+		fPacingLockHeld = false;
+		UnlockExclusiveAccess();
+	}
+}
+
+
+// Less one millisecond, so a flip event that lands on a real vblank never
+// misses the next one.
+bigtime_t
+DrmHWInterface::_FramePeriod() const
+{
+	const display_timing& t = fDisplayMode.timing;
+	bigtime_t period = 16667;
+	if (t.pixel_clock > 0 && t.h_total > 0 && t.v_total > 0) {
+		period = (bigtime_t)t.h_total * t.v_total * 1000
+			/ t.pixel_clock;
+	}
+	return period > 2000 ? period - 1000 : period;
+}
+
+
+int32
+DrmHWInterface::_AgeSlotForFb(uint32_t fbId) const
+{
+	for (int32 i = 0; i < fAgeSlotCount; i++) {
+		if (fAgeFbIds[i] == fbId)
+			return i;
+	}
+	return -1;
+}
+
+
+// Armed only for page flipped double buffering with a cursor plane: a
+// software cursor would be blended into the targets and trail.
+void
+DrmHWInterface::_SetupDirectRender()
+{
+	fDirectRender = false;
+	fAgeSlotCount = 0;
+	memset(fAgeFbIds, 0, sizeof(fAgeFbIds));
+
+	static const char* sDirect = getenv("VOS_DRM_DIRECT_RENDER");
+	if (sDirect == NULL || sDirect[0] != '1')
+		return;
+
+	if (!fPageFlipEnabled || fRenderBuffer == NULL || fBackBuffer == NULL
+			|| fFrontBuffer == NULL || fVblankPacedFlip)
+		return;
+
+	if (!_HardwareCursorUsable() || !fHardwareCursorEnabled)
+		return;
+
+	fAgeFbIds[0] = fFrontBuffer->GetFbId();
+	fAgeFbIds[1] = fBackBuffer->GetFbId();
+	fAgeSlotCount = 2;
+	fAgeTracker.Init(2);
+	fFrameSerial = 0;
+
+	fDirectRender = true;
+	printf("[drm] direct render into scanout buffers\n");
+}
+
+
+// Event thread, exclusive lock held, no flip pending. Hands the frame back
+// to the render buffer when the hardware cursor is lost.
+void
+DrmHWInterface::_LeaveDirectRender()
+{
+	fDirectRender = false;
+
+	const BRect full(0, 0, fDisplayMode.virtual_width - 1,
+		fDisplayMode.virtual_height - 1);
+	_BlitRect(fFrontBuffer, fRenderBuffer, full);
+	_BlitRect(fRenderBuffer, fWriteTarget, full);
+
+	fDirtyMutex.Lock();
+	fAccumulatedDirty.Include(full);
+	fPreviousDirty.MakeEmpty();
+	fNeedsFlip = true;
+	fDirtyMutex.Unlock();
+
+	_NotifyFrameBufferChanged();
 }
 
 
@@ -804,8 +944,13 @@ DrmHWInterface::_EventThreadMain()
 			continue;
 		}
 
-		// TODO this should be dynamic I think not 16ms hardcoded
-		int ret = poll(pfds, nfds, 16);
+		// A flip held back by the pacing below wakes when it is due.
+		int timeout = 16;
+		const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
+		const bigtime_t now = system_time();
+		if (fPageFlipEnabled && !fPageFlipPending && flipDue > now)
+			timeout = (int)((flipDue - now + 999) / 1000);
+		int ret = poll(pfds, nfds, timeout);
 		if (ret < 0) {
 			if (errno == EBADF || errno == EINVAL) {
 				acquire_sem_etc(fSessionSem, 1, B_RELATIVE_TIMEOUT, 100000);
@@ -848,14 +993,37 @@ DrmHWInterface::_EventThreadMain()
 		if (active && _CheckResume())
 			_OnResume();
 
+		// A wedged flip must not hold the pacing lock, and with it every
+		// drawing thread, forever.
+		if (fPacingLockHeld && (!fPageFlipPending
+				|| system_time() - fFlipIssueTime > 250000)) {
+			fPacingLockHeld = false;
+			UnlockExclusiveAccess();
+		}
+
+		if (active && fDirectRender && !fHardwareCursorEnabled
+				&& !fPageFlipPending && !fPacingLockHeld) {
+			if (LockExclusiveAccess()) {
+				if (fDirectRender && !fHardwareCursorEnabled
+						&& !fPageFlipPending && fFrontBuffer != NULL
+						&& fWriteTarget != NULL && fRenderBuffer != NULL)
+					_LeaveDirectRender();
+				UnlockExclusiveAccess();
+			}
+		}
+
 		// SetMode() deletes and recreates the buffers under the exclusive
 		// lock; reading fWriteTarget outside it used a freed buffer (#303).
 		bool flipLocked = false;
-		if (active && fPageFlipEnabled && !fPageFlipPending) {
+		// Without a real vblank (virtio-gpu) a flip completes at once and
+		// every client frame became a full upload. Issue at most one per
+		// refresh period.
+		if (active && fPageFlipEnabled && !fPageFlipPending
+				&& system_time() >= fLastFlipIssue + _FramePeriod()) {
 			// Idle frames must not drain the drawing threads every poll.
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 			if (wantFlip)
 				flipLocked = LockExclusiveAccess();
 		}
@@ -867,7 +1035,7 @@ DrmHWInterface::_EventThreadMain()
 			staged.valid = false;
 			BRegion damage;
 
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			bool hasDirty = (fAccumulatedDirty.CountRects() > 0)
 				|| fNeedsFlip || fStagedCursor.valid;
 			if (hasDirty && fAtomicBatch) {
@@ -878,7 +1046,7 @@ DrmHWInterface::_EventThreadMain()
 				damage.Include(&fAccumulatedDirty);
 				damage.Include(&fPreviousDirty);
 			}
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 
 			if (hasDirty && fVblankPacedFlip) {
 				_VblankPacedFlip();
@@ -934,16 +1102,24 @@ DrmHWInterface::_EventThreadMain()
 
 				if (r == 0) {
 					fFlipFailures = 0;
-					pthread_mutex_lock(&fDirtyMutex);
+					fLastFlipIssue = system_time();
+					if (fDirectRender && !fPacingLockHeld) {
+						// Keep the exclusive lock until the completion
+						// handler drops it.
+						fPacingLockHeld = true;
+						fFlipIssueTime = system_time();
+						flipLocked = false;
+					}
+					fDirtyMutex.Lock();
 					fNeedsFlip = false;
-					pthread_mutex_unlock(&fDirtyMutex);
+					fDirtyMutex.Unlock();
 				} else {
 					// The staged cursor did not ride this commit;
 					// keep it for the next tick's retry.
 					if (staged.valid) {
-						pthread_mutex_lock(&fDirtyMutex);
+						fDirtyMutex.Lock();
 						fStagedCursor = staged;
-						pthread_mutex_unlock(&fDirtyMutex);
+						fDirtyMutex.Unlock();
 					}
 				}
 				if (r != 0 && attempted) {
@@ -1081,7 +1257,6 @@ DrmHWInterface::~DrmHWInterface()
 
 	modeset_cleanup(fFd);
 
-	pthread_mutex_destroy(&fDirtyMutex);
 	pthread_mutex_destroy(&fFlipMutex);
 	pthread_mutex_destroy(&fCursorBlendMutex);
 	pthread_mutex_destroy(&fModesetMutex);
@@ -1262,11 +1437,11 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
 	fNeedsFlip = false;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (modeset_create_back_fb(fFd, dev) == 0) {
 		fBackBuffer = new DrmBuffer(fFd, dev, true);
@@ -1347,18 +1522,20 @@ DrmHWInterface::SetMode(const display_mode& mode)
 		SetCursor(fCursor);
 	}
 
+	_SetupDirectRender();
+
 	// Both scanout buffers were just rebuilt: re-present the whole frame
 	// through rotate_point(), or recycled pages keep the old rotation.
 	{
 		const BRect fullFrame(0, 0,
 			fDisplayMode.virtual_width - 1, fDisplayMode.virtual_height - 1);
 
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.MakeEmpty();
 		fPreviousDirty.MakeEmpty();
 		fAccumulatedDirty.Include(fullFrame);
 		fNeedsFlip = fPageFlipEnabled;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 
 		// Single-buffered has no flip to ride in on: present now, or the
 		// cleared buffers stay on screen until the first damage blit.
@@ -1818,9 +1995,9 @@ DrmHWInterface::_RepaintAfterDPMS()
 {
 	if (fDpmsState != B_DPMS_ON)
 		return;
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fNeedsFlip = true;
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 	if (fWakeFd >= 0) {
 		uint64_t v = 1;
 		write(fWakeFd, &v, sizeof(v));
@@ -2176,6 +2353,8 @@ RenderingBuffer*
 DrmHWInterface::BackBuffer() const
 {
 	CALLED();
+	if (fDirectRender && fWriteTarget != NULL)
+		return fWriteTarget;
 	if (fRenderBuffer != NULL)
 		return fRenderBuffer;
 	return fFrontBuffer;
@@ -2417,10 +2596,23 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 	if (fFrontBuffer == NULL)
 		return B_ERROR;
 
-	if (fPageFlipEnabled) {
-		pthread_mutex_lock(&fDirtyMutex);
+	if (fDirectRender) {
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.Include(frame);
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			ssize_t written = write(fWakeFd, &v, sizeof(v));
+			(void)written;
+		}
+		return B_OK;
+	}
+
+	if (fPageFlipEnabled) {
+		fDirtyMutex.Lock();
+		fAccumulatedDirty.Include(frame);
+		fDirtyMutex.Unlock();
 
 		// Snapshot the present targets under the flip mutex: the flip
 		// completion on the event thread swaps fWriteTarget between
@@ -2487,10 +2679,23 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 	if (count == 0)
 		return B_OK;
 
-	if (fPageFlipEnabled) {
-		pthread_mutex_lock(&fDirtyMutex);
+	if (fDirectRender) {
+		fDirtyMutex.Lock();
 		fAccumulatedDirty.Include(&region);
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			ssize_t written = write(fWakeFd, &v, sizeof(v));
+			(void)written;
+		}
+		return B_OK;
+	}
+
+	if (fPageFlipEnabled) {
+		fDirtyMutex.Lock();
+		fAccumulatedDirty.Include(&region);
+		fDirtyMutex.Unlock();
 
 		// Same torn-pair hazard as the BRect overload: fWriteTarget is
 		// swapped on the event thread without the parallel lock.
@@ -2788,14 +2993,14 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			// A second non-blocking commit on a CRTC with a flip in
 			// flight is answered with EBUSY; stage the update so it
 			// rides the next frame commit instead.
-			pthread_mutex_lock(&fDirtyMutex);
+			fDirtyMutex.Lock();
 			fStagedCursor.valid = true;
 			fStagedCursor.fb_id = dev->cursor_fb;
 			fStagedCursor.x = px;
 			fStagedCursor.y = py;
 			fStagedCursor.w = dev->cursor_w;
 			fStagedCursor.h = dev->cursor_h;
-			pthread_mutex_unlock(&fDirtyMutex);
+			fDirtyMutex.Unlock();
 
 			if (fWakeFd >= 0) {
 				uint64_t v = 1;
@@ -2816,9 +3021,9 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 				// A flip became pending between the check and
 				// this commit; stage the move so the next frame
 				// commit carries it instead of dropping it.
-				pthread_mutex_lock(&fDirtyMutex);
+				fDirtyMutex.Lock();
 				fStagedCursor = update;
-				pthread_mutex_unlock(&fDirtyMutex);
+				fDirtyMutex.Unlock();
 
 				if (fWakeFd >= 0) {
 					uint64_t v = 1;
@@ -2906,9 +3111,9 @@ DrmHWInterface::_PushCursorTrackDirty(int32 oldX, int32 oldY,
 	if (track.CountRects() == 0)
 		return;
 
-	pthread_mutex_lock(&fDirtyMutex);
+	fDirtyMutex.Lock();
 	fAccumulatedDirty.Include(&track);
-	pthread_mutex_unlock(&fDirtyMutex);
+	fDirtyMutex.Unlock();
 
 	if (fPageFlipEnabled && fWakeFd >= 0) {
 		uint64_t v = 1;
@@ -3027,9 +3232,9 @@ DrmHWInterface::_OnResume()
 	if (!LockExclusiveAccess()) {
 		// Mode lock unusable: at least re-arm the flip so a pending
 		// damage does not sit on screen forever.
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fNeedsFlip = true;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 		if (fWakeFd >= 0) {
 			uint64_t v = 1;
 			write(fWakeFd, &v, sizeof(v));
@@ -3070,9 +3275,9 @@ DrmHWInterface::_OnResume()
 				fDisplayMode.virtual_height - 1));
 		UnlockExclusiveAccess();
 
-		pthread_mutex_lock(&fDirtyMutex);
+		fDirtyMutex.Lock();
 		fNeedsFlip = true;
-		pthread_mutex_unlock(&fDirtyMutex);
+		fDirtyMutex.Unlock();
 		if (fWakeFd >= 0) {
 			uint64_t v = 1;
 			write(fWakeFd, &v, sizeof(v));

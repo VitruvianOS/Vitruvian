@@ -37,6 +37,17 @@ public:
 			status_t			Update();
 			status_t			Upgrade(bool full);
 
+			// Sources: all three run the corresponding vos-apt-helper
+			// verb under pkexec; uris is a space-separated list.
+			status_t			SourceAdd(const char* slug,
+									const char* types, const char* uris,
+									const char* suites,
+									const char* components,
+									const char* signedBy);
+			status_t			SourceRemove(const char* path);
+			status_t			SourceSetEnabled(const char* path,
+									int32 index, bool enabled);
+
 			status_t			SetChannel(package_channel channel);
 
 			apt_error			LastError() const

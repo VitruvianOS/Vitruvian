@@ -88,11 +88,18 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 		? B_CONTROL_ON : B_CONTROL_OFF);
 
 	fDeviceClassView = new BStringView("deviceClass", "");
+	fDeviceClassView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fPairableCheckBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fReceiveCheckBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+
+	BLayoutItem* menuBarItem = fLocalDevicesMenuField->CreateMenuBarLayoutItem();
+	menuBarItem->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BLayoutBuilder::Grid<>(this, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
+		.SetColumnWeight(1, 1.0f)
 		.Add(fLocalDevicesMenuField->CreateLabelLayoutItem(), 0, 0)
-		.Add(fLocalDevicesMenuField->CreateMenuBarLayoutItem(), 1, 0)
+		.Add(menuBarItem, 1, 0)
 
 		.Add(fInquiryTimeControl, 0, 1, 2)
 
@@ -103,6 +110,7 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 		.Add(new BStringView("classLabel", B_TRANSLATE("Identify host as:")),
 			0, 4)
 		.Add(fDeviceClassView, 1, 4)
+		.AddGlue(0, 5, 2)
 	.End();
 }
 
@@ -239,10 +247,13 @@ BluetoothSettingsView::_ApplyStatus(BMessage* message)
 		none->SetEnabled(false);
 		fLocalDevicesMenu->AddItem(none);
 		none->SetMarked(true);
+		fLocalDevicesMenuField->SetEnabled(false);
 		fSelectedAdapterPath = "";
 		_UpdateAdapterDependentControls();
 		return;
 	}
+
+	fLocalDevicesMenuField->SetEnabled(true);
 
 	// Prefer the remembered adapter if it's still present; otherwise fall
 	// back to the first one, same rule BluetoothWindow uses.

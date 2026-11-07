@@ -16,13 +16,16 @@ set -u
 PATH=/usr/bin:/bin
 export PATH LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive
 
+SOURCES_DIR=/etc/apt/sources.list.d
+KEYRINGS_DIR=/etc/apt/keyrings
+
 if [ "$(id -u)" -ne 0 ]; then
     echo "vos-apt-helper must run as root (invoke via pkexec)" >&2
     exit 1
 fi
 
 if [ $# -lt 1 ]; then
-    echo "usage: vos-apt-helper <verb> [name ...]" >&2
+    echo "usage: vos-apt-helper <verb> [args ...]" >&2
     exit 2
 fi
 
@@ -77,21 +80,435 @@ validate_name() {
     return 0
 }
 
-# Validate the WHOLE batch before doing anything. A partially-honoured
-# privileged request is how you get a surprise removal.
-for name in "$@"; do
-    if ! validate_name "$name"; then
-        echo "vos-apt-helper: rejected package name: $name" >&2
+# Validation failures print one line of reason plus the same "no action
+# taken" tail the package verbs use, so the app can show either.
+reject() {
+    echo "vos-apt-helper: $1" >&2
+    echo "vos-apt-helper: no action taken" >&2
+    exit 2
+}
+
+# The slug becomes the middle of the helper-owned file name; no dots or
+# slashes, so it cannot walk out of sources.list.d.
+validate_slug() {
+    _s="$1"
+
+    case "$_s" in
+        ""|-*|*/*|*.*)  return 1 ;;
+    esac
+
+    if [ "${#_s}" -gt 64 ]; then
+        return 1
+    fi
+
+    case "$_s" in
+        [a-z0-9]*) ;;
+        *) return 1 ;;
+    esac
+    case "$_s" in
+        *[!a-z0-9-]*) return 1 ;;
+    esac
+
+    return 0
+}
+
+# http(s) only. The character walk rejects whitespace, quotes, "#" and
+# backslash in one pass, so a URI can never carry a second line into
+# the file we write.
+validate_uri() {
+    _u="$1"
+
+    case "$_u" in
+        http://*)  _rest="${_u#http://}" ;;
+        https://*) _rest="${_u#https://}" ;;
+        *) return 1 ;;
+    esac
+
+    case "$_rest" in
+        ""|/*|//*) return 1 ;;
+    esac
+
+    # "]" stays out of the set: its first-position idiom is not
+    # portable across shells, and IPv6-literal URIs are not needed
+    # for apt sources. "&" needs a backslash or the shell parser
+    # treats it as a control operator before globbing sees it.
+    case "$_u" in
+        *[!A-Za-z0-9._~:/?@%+\&=,-]*) return 1 ;;
+    esac
+
+    return 0
+}
+
+# Space-separated list with no empty tokens: leading, trailing or
+# doubled spaces would shift the field value we write.
+validate_word_list() {
+    _w="$1"
+
+    [ -n "$_w" ] || return 1
+    case "$_w" in
+        " "*|*"  "*) return 1 ;;
+    esac
+    case "$_w" in
+        *" ") return 1 ;;
+    esac
+
+    return 0
+}
+
+validate_types() {
+    _t="$1"
+
+    validate_word_list "$_t" || return 1
+    case "$_t" in
+        *[!a-z\ -]*) return 1 ;;
+    esac
+
+    # Globbing is safe here: the charset walk above left only letters,
+    # "-" and single spaces.
+    for _tok in $_t; do
+        case "$_tok" in
+            deb|deb-src) ;;
+            *) return 1 ;;
+        esac
+    done
+
+    return 0
+}
+
+validate_suites() {
+    _s="$1"
+
+    validate_word_list "$_s" || return 1
+    case "$_s" in
+        *[!A-Za-z0-9._+/\ -]*) return 1 ;;
+    esac
+
+    return 0
+}
+
+validate_components() {
+    _c="$1"
+
+    [ -z "$_c" ] && return 0
+    validate_word_list "$_c" || return 1
+    case "$_c" in
+        *[!A-Za-z0-9._+/\ -]*) return 1 ;;
+    esac
+
+    return 0
+}
+
+# Empty omits the field; otherwise the path must stay inside the
+# keyrings directory and name an existing file. No "..", so the
+# prefix test cannot be sidestepped.
+validate_signed_by() {
+    _sb="$1"
+
+    [ -n "$_sb" ] || return 0
+
+    case "$_sb" in
+        "$KEYRINGS_DIR"/*) ;;
+        *) return 1 ;;
+    esac
+    case "$_sb" in
+        *..*) return 1 ;;
+    esac
+    [ -f "$_sb" ] || return 1
+
+    return 0
+}
+
+# source-add <slug> <types> <uris> <suites> <components> <signed-by>
+# <uris> holds one or more space-separated URIs. Writes only
+# $SOURCES_DIR/vos-user-<slug>.sources, replacing a previous file of
+# that same helper-owned name (that is the edit path); nothing else in
+# /etc/apt is ever opened for write by this verb.
+do_source_add() {
+    [ $# -eq 6 ] || {
+        echo "usage: vos-apt-helper source-add <slug> <types> <uris> <suites> <components> <signed-by>" >&2
+        exit 2
+    }
+
+    _slug="$1"
+    _types="$2"
+    _uris="$3"
+    _suites="$4"
+    _components="$5"
+    _signed_by="$6"
+
+    # Whole batch validated before any write.
+    validate_slug "$_slug" || reject "rejected slug: $_slug (lowercase letters, digits and '-')"
+    validate_types "$_types" || reject "rejected types: $_types (deb and/or deb-src)"
+    validate_suites "$_suites" || reject "rejected suites: $_suites"
+    validate_components "$_components" || reject "rejected components: $_components"
+    validate_signed_by "$_signed_by" \
+        || reject "rejected signed-by: $_signed_by (must be a file under $KEYRINGS_DIR/)"
+    [ -n "$_uris" ] || reject "rejected uris: at least one URI is required"
+
+    # Word-split the URI list with globbing off so "?" in a URI stays
+    # literal; IFS is pinned because the expansion is unquoted.
+    IFS=" 	
+"
+    set -f
+    for _uri in $_uris; do
+        validate_uri "$_uri" || reject "rejected uri: $_uri (http and https only)"
+    done
+    set +f
+
+    [ -d "$SOURCES_DIR" ] || reject "missing directory: $SOURCES_DIR"
+
+    _target="$SOURCES_DIR/vos-user-$_slug.sources"
+    [ ! -d "$_target" ] || reject "target is a directory: $_target"
+
+    _tmp=$(mktemp "$SOURCES_DIR/.vos-tmp-XXXXXX") || {
+        echo "vos-apt-helper: could not create a temporary file" >&2
+        exit 1
+    }
+
+    {
+        printf '# Written by vos-apt-helper; edit through Package Manager.\n'
+        printf 'Types: %s\n' "$_types"
+        printf 'URIs: %s\n' "$_uris"
+        printf 'Suites: %s\n' "$_suites"
+        if [ -n "$_components" ]; then
+            printf 'Components: %s\n' "$_components"
+        fi
+        if [ -n "$_signed_by" ]; then
+            printf 'Signed-By: %s\n' "$_signed_by"
+        fi
+    } > "$_tmp" || { rm -f "$_tmp"; exit 1; }
+
+    chmod 0644 "$_tmp" || { rm -f "$_tmp"; exit 1; }
+    if ! mv -f "$_tmp" "$_target"; then
+        rm -f "$_tmp"
+        echo "vos-apt-helper: could not write $_target" >&2
+        exit 1
+    fi
+}
+
+# source-remove <path>
+# Deletes only vos-user-*.sources inside sources.list.d. The argument
+# may be the bare file name or its full path; anything else, and any
+# system source, is refused.
+do_source_remove() {
+    [ $# -eq 1 ] || {
+        echo "usage: vos-apt-helper source-remove <path>" >&2
+        exit 2
+    }
+
+    _path="$1"
+    _base="${_path##*/}"
+
+    case "$_path" in
+        "$_base") ;;
+        "$SOURCES_DIR/$_base") ;;
+        *) reject "remove: refusing path outside $SOURCES_DIR: $_path" ;;
+    esac
+
+    _slug="${_base#vos-user-}"
+    _slug="${_slug%.sources}"
+    if [ "$_slug" = "$_base" ] || [ "$_base" != "vos-user-$_slug.sources" ] \
+        || ! validate_slug "$_slug"; then
+        reject "remove: not a helper-created source: $_base (system sources can be disabled, not removed)"
+    fi
+
+    _target="$SOURCES_DIR/$_base"
+    if [ -d "$_target" ] && [ ! -L "$_target" ]; then
+        reject "remove: not a file: $_base"
+    fi
+    if [ ! -e "$_target" ] && [ ! -L "$_target" ]; then
+        reject "remove: no such source: $_base"
+    fi
+
+    if ! rm -f -- "$_target"; then
+        echo "vos-apt-helper: could not remove $_target" >&2
+        exit 1
+    fi
+}
+
+# source-set-enabled <path> <index> <on|off>
+# <index> is the physical line number for one-line files and the
+# 1-based stanza number for .sources files. Enable refuses a stanza or
+# line that grants trusted=yes; disable is always allowed.
+do_source_set_enabled() {
+    [ $# -eq 3 ] || {
+        echo "usage: vos-apt-helper source-set-enabled <path> <index> <on|off>" >&2
+        exit 2
+    }
+
+    _path="$1"
+    _index="$2"
+    _state="$3"
+
+    case "$_index" in
+        ""|*[!0-9]*) reject "index: $_index" ;;
+    esac
+    [ "$_index" -ge 1 ] 2>/dev/null || reject "index: $_index"
+
+    case "$_state" in
+        on|off) ;;
+        *) reject "state: $_state (on or off only)" ;;
+    esac
+
+    case "$_path" in
+        *..*) reject "path: $_path" ;;
+        /etc/apt/sources.list) ;;
+        "$SOURCES_DIR"/*.sources|"$SOURCES_DIR"/*.list) ;;
+        *) reject "path: $_path (only /etc/apt/sources.list and $SOURCES_DIR/*.sources, *.list)" ;;
+    esac
+    [ -f "$_path" ] || reject "no such file: $_path"
+
+    _tmp=$(mktemp "$SOURCES_DIR/.vos-tmp-XXXXXX") || {
+        echo "vos-apt-helper: could not create a temporary file" >&2
+        exit 1
+    }
+
+    case "$_path" in
+        *.sources) _mode=stanza ;;
+        *)         _mode=line ;;
+    esac
+
+    if [ "$_mode" = stanza ]; then
+        awk -v target="$_index" -v act="$_state" '
+            { lines[NR] = $0 }
+            END {
+                n = 0; inStanza = 0; from = 0; to = 0
+                for (i = 1; i <= NR; i++) {
+                    if (lines[i] ~ /^[ \t]*$/) {
+                        inStanza = 0
+                        continue
+                    }
+                    if (!inStanza) {
+                        inStanza = 1
+                        n++
+                        if (n == target) { from = i; to = i }
+                        else if (n > target) break
+                    } else if (n == target) {
+                        to = i
+                    }
+                }
+                if (from == 0) {
+                    printf "vos-apt-helper: no stanza %d in file\n", target > "/dev/stderr"
+                    exit 2
+                }
+
+                enabledLine = 0
+                for (i = from; i <= to; i++) {
+                    if (tolower(lines[i]) ~ /^enabled[ \t]*:/) {
+                        enabledLine = i
+                        break
+                    }
+                }
+
+                if (act == "on") {
+                    for (i = from; i <= to; i++) {
+                        if (tolower(lines[i]) ~ /^trusted[ \t]*:/) {
+                            value = lines[i]
+                            sub(/^[^:]*:[ \t]*/, "", value)
+                            value = tolower(value)
+                            gsub(/[ \t]/, "", value)
+                            if (value == "yes" || value == "true" || value == "1") {
+                                printf "vos-apt-helper: stanza %d is Trusted: %s; refusing to enable\n", target, value > "/dev/stderr"
+                                exit 2
+                            }
+                        }
+                    }
+                    if (enabledLine > 0) {
+                        value = lines[enabledLine]
+                        sub(/^[^:]*:[ \t]*/, "", value)
+                        value = tolower(value)
+                        gsub(/[ \t]/, "", value)
+                        if (value == "no")
+                            delete lines[enabledLine]
+                    }
+                } else if (enabledLine > 0) {
+                    value = lines[enabledLine]
+                    sub(/^[^:]*:[ \t]*/, "", value)
+                    value = tolower(value)
+                    gsub(/[ \t]/, "", value)
+                    if (value != "no")
+                        lines[enabledLine] = "Enabled: no"
+                } else {
+                    for (i = NR; i >= from; i--)
+                        lines[i + 1] = lines[i]
+                    lines[from] = "Enabled: no"
+                    NR = NR + 1
+                }
+
+                for (i = 1; i <= NR; i++) {
+                    if (i in lines)
+                        print lines[i]
+                }
+            }
+        ' "$_path" > "$_tmp"
+    else
+        awk -v target="$_index" -v act="$_state" '
+            { lines[NR] = $0 }
+            END {
+                if (target > NR) {
+                    printf "vos-apt-helper: no line %d in file (%d lines)\n", target, NR > "/dev/stderr"
+                    exit 2
+                }
+                line = lines[target]
+                commented = (line ~ /^[ \t]*#[ \t]*deb(-src)?[ \t]/)
+                active = (line ~ /^[ \t]*deb(-src)?[ \t]/)
+
+                if (act == "on") {
+                    if (commented) {
+                        sub(/^[ \t]*#[ \t]*/, "", line)
+                        low = tolower(line)
+                        if (low ~ /(^|[ [])trusted[ \t]*=[ \t]*(yes|true|1)([] \t]|$)/) {
+                            printf "vos-apt-helper: line %d grants trusted=yes; refusing to enable\n", target > "/dev/stderr"
+                            exit 2
+                        }
+                        lines[target] = line
+                    } else if (!active) {
+                        printf "vos-apt-helper: line %d is not an apt source entry\n", target > "/dev/stderr"
+                        exit 2
+                    }
+                } else {
+                    if (active)
+                        lines[target] = "# " line
+                    else if (!commented) {
+                        printf "vos-apt-helper: line %d is not an apt source entry\n", target > "/dev/stderr"
+                        exit 2
+                    }
+                }
+
+                for (i = 1; i <= NR; i++)
+                    print lines[i]
+            }
+        ' "$_path" > "$_tmp"
+    fi
+
+    if [ $? -ne 0 ]; then
+        rm -f "$_tmp"
         echo "vos-apt-helper: no action taken" >&2
         exit 2
     fi
-done
+
+    chmod --reference="$_path" "$_tmp" 2>/dev/null || chmod 0644 "$_tmp"
+    if ! mv -f "$_tmp" "$_path"; then
+        rm -f "$_tmp"
+        echo "vos-apt-helper: could not write $_path" >&2
+        exit 1
+    fi
+}
 
 # Fixed verb table, never a lookup built from input. A verb that takes
 # no arguments and got some is a hard failure.
 case "$verb" in
     install|remove|purge)
         [ $# -ge 1 ] || { echo "vos-apt-helper: $verb needs at least one package" >&2; exit 2; }
+        # Validate the WHOLE batch before doing anything. A partially-honoured
+        # privileged request is how you get a surprise removal.
+        for name in "$@"; do
+            if ! validate_name "$name"; then
+                echo "vos-apt-helper: rejected package name: $name" >&2
+                echo "vos-apt-helper: no action taken" >&2
+                exit 2
+            fi
+        done
         exec apt-get -y \
             -o Dpkg::Options::=--force-confdef \
             -o Dpkg::Options::=--force-confold \
@@ -114,8 +531,19 @@ case "$verb" in
         [ $# -eq 0 ] || { echo "vos-apt-helper: configure-pending takes no packages" >&2; exit 2; }
         exec dpkg --configure -a
         ;;
+    source-add)
+        do_source_add "$@"
+        ;;
+    source-remove)
+        do_source_remove "$@"
+        ;;
+    source-set-enabled)
+        do_source_set_enabled "$@"
+        ;;
     *)
         echo "vos-apt-helper: unknown verb: $verb" >&2
         exit 2
         ;;
 esac
+
+exit 0

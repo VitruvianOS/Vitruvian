@@ -4,6 +4,7 @@ Application(
 	SOURCES
 	main.cpp
 	DownloadsWindow.cpp
+	ExtensionsWindow.cpp
 	MainWindow.cpp
 	SettingsWindow.cpp
 	DeskbarEntry.cpp

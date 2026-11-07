@@ -16,7 +16,11 @@
 #include <syslog.h>
 
 #include <Bitmap.h>
+#include <FrameRing.h>
 #include <GLView.h>
+#include <OS.h>
+#include <Screen.h>
+#include <Window.h>
 #include <Rect.h>
 
 #ifndef EGL_PLATFORM_SURFACELESS_MESA
@@ -32,6 +36,9 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	BGLDispatcher* dispatcher)
 	:
 	BGLRenderer(view, options, dispatcher),
+	fDeviceWhy("no device"),
+	fZinkMode(kGlZinkNative),
+	fZinkWhy("native"),
 	fDisplay(EGL_NO_DISPLAY),
 	fContext(EGL_NO_CONTEXT),
 	fConfig(NULL),
@@ -43,15 +50,29 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fContextMinor(0),
 	fDebug(false),
 	fFirstFrameDumped(false),
+	fReadBuffer(NULL),
+	fReadBufferSize(0),
 	fWidth(1),
 	fHeight(1),
 	fInitialized(false),
 	fFboReady(false),
-	fBitmap(NULL)
+	fRing(NULL),
+	fLatest(-1),
+	fDrawPending(false),
+	fHeldSlot(-1),
+	fLastSwap(0),
+	fFramePeriod(0)
 {
+	memset(&fDevice, 0, sizeof(fDevice));
 	fDebug = getenv("VOS_GL_DEBUG") != NULL;
 
-	pthread_mutex_init(&fBitmapLock, NULL);
+	for (int32 i = 0; i < kSlotCount; i++)
+		fSlots[i] = NULL;
+	fRing = new(std::nothrow) BPrivate::FrameRing;
+	if (fRing != NULL && fRing->SetSlotCount(kSlotCount) != B_OK) {
+		fRing->Release();
+		fRing = NULL;
+	}
 
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
@@ -75,7 +96,6 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 MesaSurfacelessRenderer::~MesaSurfacelessRenderer()
 {
 	_Cleanup();
-	pthread_mutex_destroy(&fBitmapLock);
 	pthread_mutex_destroy(&fContextLock);
 }
 
@@ -203,6 +223,7 @@ MesaSurfacelessRenderer::_LogGlStrings()
 {
 	const char* eglVendor = eglQueryString(fDisplay, EGL_VENDOR);
 	const char* eglVersion = eglQueryString(fDisplay, EGL_VERSION);
+	const char* glVendor = (const char*)glGetString(GL_VENDOR);
 	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
 	const char* glVersion = (const char*)glGetString(GL_VERSION);
 	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
@@ -212,8 +233,9 @@ MesaSurfacelessRenderer::_LogGlStrings()
 	printf("MesaSurfacelessRenderer: EGL %s vendor=%s\n",
 		eglVersion != NULL ? eglVersion : "?",
 		eglVendor != NULL ? eglVendor : "?");
-	printf("MesaSurfacelessRenderer: GL %s renderer=%s (%s%s)\n",
+	printf("MesaSurfacelessRenderer: GL %s vendor=%s renderer=%s (%s%s)\n",
 		glVersion != NULL ? glVersion : "?",
+		glVendor != NULL ? glVendor : "?",
 		glRenderer != NULL ? glRenderer : "?",
 		fIsGles ? "GLES" : "desktop GL",
 		hasCompat ? ", ARB_compatibility" : "");
@@ -229,13 +251,155 @@ MesaSurfacelessRenderer::_LogGlStrings()
 
 
 status_t
+MesaSurfacelessRenderer::_SelectDevice()
+{
+	gl_device devices[16];
+	int count = gl_enumerate_devices(devices, 16);
+	int policy = kGlPolicyAutomatic;
+	gl_load_policy(&policy);
+
+	const char* override = getenv("VOS_GL_DEVICE");
+	const char* why = NULL;
+	int pick = gl_select_device(devices, count, policy, override, &why);
+	if (pick < 0)
+		return B_ERROR;
+
+	fDevice = devices[pick];
+	fDeviceWhy = why;
+	printf("MesaSurfacelessRenderer: selected GPU %s (%s): %s\n",
+		fDevice.renderNode[0] != '\0' ? fDevice.renderNode
+			: fDevice.primaryNode,
+		fDevice.driver, why);
+
+	// Settle native versus zink before Mesa loads a driver; a quirk
+	// row may force zink for this GPU.
+	if (fZinkMode == kGlZinkNative) {
+		gl_zink_quirk quirks[GL_DEVICE_MAX_QUIRKS];
+		int quirkCount = gl_load_zink_quirk_table(quirks,
+			GL_DEVICE_MAX_QUIRKS);
+		gl_decide_zink(getenv("VOS_GL_ZINK"), quirks, quirkCount,
+			fDevice.vendorId, fDevice.deviceId, fDevice.driver,
+			false, &fZinkMode, &fZinkWhy);
+		if (fZinkMode != kGlZinkNative)
+			setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	return B_OK;
+}
+
+
+// Bind the EGL display to the selected GPU through
+// EGL_EXT_device_enumeration + EGL_EXT_platform_device. Returns
+// EGL_NO_DISPLAY when the extensions are missing or the device is not
+// among the enumerated ones; the caller falls back to surfaceless.
+EGLDisplay
+MesaSurfacelessRenderer::_BindDeviceDisplay()
+{
+	const char* extensions = eglQueryString(EGL_NO_DISPLAY,
+		EGL_EXTENSIONS);
+	if (extensions == NULL
+			|| strstr(extensions, "EGL_EXT_device_enumeration") == NULL
+			|| strstr(extensions, "EGL_EXT_platform_device") == NULL)
+		return EGL_NO_DISPLAY;
+
+	PFNEGLQUERYDEVICESEXTPROC queryDevices
+		= (PFNEGLQUERYDEVICESEXTPROC)eglGetProcAddress(
+			"eglQueryDevicesEXT");
+	PFNEGLQUERYDEVICESTRINGEXTPROC queryDeviceString
+		= (PFNEGLQUERYDEVICESTRINGEXTPROC)eglGetProcAddress(
+			"eglQueryDeviceStringEXT");
+	PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay
+		= (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
+			"eglGetPlatformDisplayEXT");
+	if (queryDevices == NULL || queryDeviceString == NULL
+			|| getPlatformDisplay == NULL)
+		return EGL_NO_DISPLAY;
+
+	EGLDeviceEXT eglDevices[16];
+	EGLint deviceCount = 0;
+	if (!queryDevices(16, eglDevices, &deviceCount) || deviceCount <= 0)
+		return EGL_NO_DISPLAY;
+
+	const char* want = fDevice.renderNode[0] != '\0'
+		? fDevice.renderNode : fDevice.primaryNode;
+	for (EGLint i = 0; i < deviceCount; i++) {
+		const char* file = queryDeviceString(eglDevices[i],
+			EGL_DRM_DEVICE_FILE_EXT);
+		if (file == NULL || strcmp(file, want) != 0)
+			continue;
+
+		EGLDisplay display = getPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+			eglDevices[i], NULL);
+		if (display != EGL_NO_DISPLAY) {
+			printf("MesaSurfacelessRenderer: bound EGL to %s\n",
+				file);
+			return display;
+		}
+	}
+
+	return EGL_NO_DISPLAY;
+}
+
+
+status_t
 MesaSurfacelessRenderer::_Init()
 {
+	// VOS_GL_ZINK=1 forces zink before any EGL call; the quirk-table
+	// decision needs the device and runs in _TryInit once it is known.
+	const char* zinkEnv = getenv("VOS_GL_ZINK");
+	if (zinkEnv != NULL && strcmp(zinkEnv, "1") == 0) {
+		fZinkMode = kGlZinkEnv;
+		fZinkWhy = "env override";
+		setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	status_t status = _TryInit();
+	if (status == B_OK)
+		return B_OK;
+
+	// Native failed once: retry the same init with zink over Vulkan,
+	// unless VOS_GL_ZINK=0 vetoes the fallback or zink already ran.
+	if (fZinkMode != kGlZinkNative
+			|| (zinkEnv != NULL && strcmp(zinkEnv, "0") == 0))
+		return B_ERROR;
+
+	fprintf(stderr, "MesaSurfacelessRenderer: native path failed, "
+		"retrying with zink\n");
+	_Cleanup();
+	setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	fZinkMode = kGlZinkFallback;
+	fZinkWhy = "zink fallback";
+	return _TryInit();
+}
+
+
+status_t
+MesaSurfacelessRenderer::_TryInit()
+{
+	// Selection is best-effort here: the surfaceless platform works
+	// without a DRM device, so a failed pick only loses the policy.
+	if (_SelectDevice() != B_OK) {
+		fprintf(stderr, "MesaSurfacelessRenderer: no GPU selected, "
+			"using the default device\n");
+		gl_zink_quirk quirks[GL_DEVICE_MAX_QUIRKS];
+		int quirkCount = gl_load_zink_quirk_table(quirks,
+			GL_DEVICE_MAX_QUIRKS);
+		gl_decide_zink(getenv("VOS_GL_ZINK"), quirks, quirkCount, 0, 0,
+			NULL, false, &fZinkMode, &fZinkWhy);
+		if (fZinkMode != kGlZinkNative)
+			setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	// Prefer binding the selected GPU explicitly; fall back to the
+	// platform surfaceless display when the EGL device extensions are
+	// missing or do not know the node.
+	fDisplay = _BindDeviceDisplay();
+
 	PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
 		(PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
 			"eglGetPlatformDisplayEXT");
 
-	if (getPlatformDisplay != NULL) {
+	if (fDisplay == EGL_NO_DISPLAY && getPlatformDisplay != NULL) {
 		fDisplay = getPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA,
 			EGL_DEFAULT_DISPLAY, NULL);
 	}
@@ -272,6 +436,8 @@ MesaSurfacelessRenderer::_Init()
 	}
 
 	_LogGlStrings();
+	_VerifyZink();
+	_PublishStatus();
 
 	_CreateFbo(fWidth, fHeight);
 
@@ -284,7 +450,41 @@ MesaSurfacelessRenderer::_Init()
 
 	fInitialized = true;
 	printf("MesaSurfacelessRenderer: ready %dx%d\n", fWidth, fHeight);
+	printf("MesaSurfacelessRenderer: driver path %s (%s) on %s (%s)\n",
+		fZinkMode == kGlZinkNative ? "native" : "zink", fZinkWhy,
+		fDevice.renderNode[0] != '\0' ? fDevice.renderNode
+			: fDevice.primaryNode,
+		fDeviceWhy);
 	return B_OK;
+}
+
+
+// Context must be current. Zink was chosen but the GL stack reported
+// something else: say so, and keep what we obtained either way.
+void
+MesaSurfacelessRenderer::_VerifyZink()
+{
+	if (fZinkMode == kGlZinkNative)
+		return;
+
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	if (glRenderer == NULL || strstr(glRenderer, "zink") == NULL) {
+		fprintf(stderr, "MesaSurfacelessRenderer: zink was requested "
+			"(%s) but GL_RENDERER is '%s'\n", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+		syslog(LOG_ERR, "MesaSurfacelessRenderer: zink requested (%s), "
+			"got renderer '%s'", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+	}
+}
+
+
+void
+MesaSurfacelessRenderer::_PublishStatus()
+{
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	gl_publish_gl_status(&fDevice, glRenderer, fZinkMode, fZinkWhy,
+		fDeviceWhy);
 }
 
 
@@ -349,8 +549,19 @@ MesaSurfacelessRenderer::_Cleanup()
 		eglTerminate(fDisplay);
 		fDisplay = EGL_NO_DISPLAY;
 	}
-	delete fBitmap;
-	fBitmap = NULL;
+	for (int32 i = 0; i < kSlotCount; i++) {
+		delete fSlots[i];
+		fSlots[i] = NULL;
+	}
+	fHeldSlot = -1;
+	fLatest = -1;
+	if (fRing != NULL) {
+		fRing->Release();
+		fRing = NULL;
+	}
+	free(fReadBuffer);
+	fReadBuffer = NULL;
+	fReadBufferSize = 0;
 }
 
 
@@ -377,49 +588,46 @@ MesaSurfacelessRenderer::UnlockGL()
 
 
 void
-MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
+MesaSurfacelessRenderer::SwapBuffers(bool vSync)
 {
 	if (!fInitialized || !fFboReady)
 		return;
 
-	glFinish();
+	if (fRing == NULL)
+		return;
 
-	pthread_mutex_lock(&fBitmapLock);
-
-	if (fBitmap == NULL
-			|| (int32)(fBitmap->Bounds().Width() + 1.0f) != fWidth
-			|| (int32)(fBitmap->Bounds().Height() + 1.0f) != fHeight) {
-		delete fBitmap;
-		fBitmap = new(std::nothrow) BBitmap(
-			BRect(0.0f, 0.0f, (float)(fWidth - 1), (float)(fHeight - 1)),
-			B_RGBA32);
+	const size_t rowBytes = (size_t)fWidth * 4;
+	const size_t readSize = rowBytes * fHeight;
+	if (fReadBufferSize < readSize) {
+		uint8* buffer = (uint8*)realloc(fReadBuffer, readSize);
+		if (buffer != NULL) {
+			fReadBuffer = buffer;
+			fReadBufferSize = readSize;
+		}
 	}
 
-	if (fBitmap != NULL && fBitmap->IsValid()) {
+	// The slot backing and these state transitions are where buffer layer
+	// allocations and fences plug in.
+	int32 slot = fRing->AcquireDecoderSlot();
+	BBitmap* bitmap = slot >= 0 ? _PrepareSlot(slot) : NULL;
+	if (slot >= 0 && bitmap == NULL)
+		fRing->ReleaseSlot(slot);
+
+	if (bitmap != NULL && fReadBufferSize >= readSize) {
+		// glReadPixels waits for the frame and returns it bottom-up. A
+		// packed read and one copy per row into the flipped position.
 		// GLES has no GL_BGRA readback: read RGBA and swizzle.
-		uint8* bits = (uint8*)fBitmap->Bits();
-		uint32 bpr  = (uint32)fBitmap->BytesPerRow();
+		uint8* bits = (uint8*)bitmap->Bits();
+		uint32 bpr  = (uint32)bitmap->BytesPerRow();
 		GLenum readFormat = fIsGles ? GL_RGBA : GL_BGRA;
 
 		glPixelStorei(GL_PACK_ALIGNMENT, 4);
-		if (!fIsGles || fContextMajor >= 3) {
-			glPixelStorei(GL_PACK_ROW_LENGTH,
-				(GLint)(bpr / 4));
-			glReadPixels(0, 0, fWidth, fHeight, readFormat,
-				GL_UNSIGNED_BYTE, bits);
-			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
-		} else {
-			// ES 2 has no GL_PACK_ROW_LENGTH; read row by row.
-			uint8* row = (uint8*)malloc((size_t)fWidth * 4);
-			if (row != NULL) {
-				for (int32 y = 0; y < fHeight; y++) {
-					glReadPixels(0, y, fWidth, 1, readFormat,
-						GL_UNSIGNED_BYTE, row);
-					memcpy(bits + y * bpr, row,
-						(size_t)fWidth * 4);
-				}
-				free(row);
-			}
+		glReadPixels(0, 0, fWidth, fHeight, readFormat, GL_UNSIGNED_BYTE,
+			fReadBuffer);
+
+		for (int32 y = 0; y < fHeight; y++) {
+			memcpy(bits + (fHeight - 1 - y) * bpr,
+				fReadBuffer + y * rowBytes, rowBytes);
 		}
 
 		if (fIsGles) {
@@ -430,15 +638,6 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 					row[x * 4] = row[x * 4 + 2];
 					row[x * 4 + 2] = tmp;
 				}
-			}
-		}
-
-		// glReadPixels returns bottom-up; flip in place.
-		for (int32 y = 0; y < fHeight / 2; y++) {
-			uint8_t* a = bits + y * bpr;
-			uint8_t* b = bits + (fHeight - 1 - y) * bpr;
-			for (uint32_t x = 0; x < bpr; x++) {
-				uint8_t t = a[x]; a[x] = b[x]; b[x] = t;
 			}
 		}
 
@@ -455,15 +654,87 @@ MesaSurfacelessRenderer::SwapBuffers(bool /*vSync*/)
 					pixel[0], pixel[1], pixel[2], pixel[3]);
 			}
 		}
-	}
 
-	pthread_mutex_unlock(&fBitmapLock);
+		int64 sequence = 0;
+		if (fRing->PublishSlot(slot, &sequence) == B_OK)
+			fLatest = sequence * kSlotCount + slot;
+	} else if (bitmap != NULL)
+		fRing->ReleaseSlot(slot);
 
+	// Latest frame wins: invalidate only when no draw is pending.
 	BGLView* view = GLView();
-	if (view != NULL && view->LockLooperWithTimeout(0) == B_OK) {
-		view->Invalidate();
-		view->UnlockLooper();
+	if (view != NULL && !fDrawPending.exchange(true)) {
+		if (view->LockLooperWithTimeout(0) == B_OK) {
+			view->Invalidate();
+			view->UnlockLooper();
+		} else
+			fDrawPending = false;
 	}
+
+	if (vSync)
+		_PaceToRefresh();
+}
+
+
+// Producer owns the slot, so it may swap the backing for a resized one.
+BBitmap*
+MesaSurfacelessRenderer::_PrepareSlot(int32 slot)
+{
+	BBitmap* bitmap = fSlots[slot];
+	if (bitmap != NULL
+			&& ((int32)(bitmap->Bounds().Width() + 1.0f) != fWidth
+				|| (int32)(bitmap->Bounds().Height() + 1.0f) != fHeight)) {
+		delete bitmap;
+		bitmap = NULL;
+	}
+	if (bitmap == NULL) {
+		bitmap = new(std::nothrow) BBitmap(
+			BRect(0.0f, 0.0f, (float)(fWidth - 1), (float)(fHeight - 1)),
+			B_RGBA32);
+	}
+	if (bitmap != NULL && !bitmap->IsValid()) {
+		delete bitmap;
+		bitmap = NULL;
+	}
+	fSlots[slot] = bitmap;
+	return bitmap;
+}
+
+
+void
+MesaSurfacelessRenderer::_PaceToRefresh()
+{
+	if (fFramePeriod == 0) {
+		fFramePeriod = 16667;
+		BGLView* view = GLView();
+		BWindow* window = view != NULL ? view->Window() : NULL;
+		display_mode mode;
+		bool haveMode = false;
+		if (window != NULL) {
+			BScreen screen(window);
+			haveMode = screen.IsValid() && screen.GetMode(&mode) == B_OK;
+		} else {
+			BScreen screen(B_MAIN_SCREEN_ID);
+			haveMode = screen.IsValid() && screen.GetMode(&mode) == B_OK;
+		}
+		if (haveMode && mode.timing.pixel_clock > 0) {
+			uint64 total = (uint64)mode.timing.h_total * mode.timing.v_total;
+			bigtime_t period = (bigtime_t)(total * 1000
+				/ mode.timing.pixel_clock);
+			if (period >= 2000 && period <= 100000)
+				fFramePeriod = period;
+		}
+	}
+
+	bigtime_t now = system_time();
+	bigtime_t deadline = fLastSwap + fFramePeriod;
+	if (now < deadline) {
+		snooze_until(deadline, B_SYSTEM_TIMEBASE);
+		now = deadline;
+	}
+
+	// No catch-up bursts when more than one period late.
+	fLastSwap = (now - deadline > fFramePeriod) ? now : deadline;
 }
 
 
@@ -536,10 +807,25 @@ MesaSurfacelessRenderer::Draw(BRect /*updateRect*/)
 	if (view == NULL)
 		return;
 
-	pthread_mutex_lock(&fBitmapLock);
-	if (fBitmap != NULL && fBitmap->IsValid())
-		view->DrawBitmap(fBitmap, BPoint(0.0f, 0.0f));
-	pthread_mutex_unlock(&fBitmapLock);
+	fDrawPending = false;
+	if (fRing == NULL)
+		return;
+
+	// Claim the newest frame and keep it held, so an expose with nothing
+	// new repaints it; the previous one goes back to the producer.
+	int64 latest = fLatest;
+	if (latest >= 0) {
+		int32 slot = (int32)(latest % kSlotCount);
+		if (slot != fHeldSlot
+				&& fRing->ClaimSlot(slot, latest / kSlotCount)) {
+			if (fHeldSlot >= 0)
+				fRing->ReleaseSlot(fHeldSlot);
+			fHeldSlot = slot;
+		}
+	}
+
+	if (fHeldSlot >= 0 && fSlots[fHeldSlot] != NULL)
+		view->DrawBitmap(fSlots[fHeldSlot], BPoint(0.0f, 0.0f));
 }
 
 
@@ -571,10 +857,11 @@ MesaSurfacelessRenderer::FrameResized(float width, float height)
 	_CreateFbo(fWidth, fHeight);
 	eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
-	pthread_mutex_lock(&fBitmapLock);
-	delete fBitmap;
-	fBitmap = NULL;
-	pthread_mutex_unlock(&fBitmapLock);
+	// Slots are rebuilt lazily by the producer at the new size.
+	fLatest = -1;
+	fHeldSlot = -1;
+	if (fRing != NULL)
+		fRing->Reset();
 
 	pthread_mutex_unlock(&fContextLock);
 }

@@ -55,7 +55,8 @@ enum {
 	kMsgMonitorClosed		= 'CMCL',
 	kMsgAddUnit			= 'CAUN',
 	kMsgLoadPlugin			= 'CLPL',
-	kMsgToggleRun			= 'CTRG'
+	kMsgToggleRun			= 'CTRG',
+	kMsgInsertUnit			= 'CINS'
 };
 
 
@@ -110,6 +111,7 @@ private:
 							void* arg);
 			void		_OpenVolume(media_client_id id, bool isStream,
 					const BString& title, float value);
+			void		_InsertUnit(int32 unitIndex);
 			void		_ReportStatus(const char* action, status_t status);
 			status_t	_ForeignPortById(uint32 nodeId, uint32 portId,
 					BMediaGraph::ForeignPort* outPort);

@@ -30,6 +30,8 @@
 
 #include <ServerProtocolStructs.h>
 
+#include <PointerControlCore.h>
+
 #include "CursorManager.h"
 #include "DelayedMessage.h"
 #include "DesktopListener.h"
@@ -37,7 +39,7 @@
 #include "DisplayChangeTracker.h"
 #include "EventDispatcher.h"
 #include "MessageLooper.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 #include "Screen.h"
 #include "ScreenManager.h"
 #include "ServerCursor.h"
@@ -116,7 +118,7 @@ public:
 			void				UnlockAllWindows()
 									{ fWindowLock.WriteUnlock(); }
 
-			const MultiLocker&	WindowLocker() { return fWindowLock; }
+			const BRWLocker&	WindowLocker() { return fWindowLock; }
 
 	// Mouse and cursor methods
 
@@ -161,7 +163,7 @@ public:
 			status_t			CancelScreenChange(team_id owner);
 			void				ScreenChangeOwnerDied(team_id owner);
 
-			MultiLocker&		ScreenLocker() { return fScreenLock; }
+			BRWLocker&		ScreenLocker() { return fScreenLock; }
 
 			status_t			LockDirectScreen(team_id team);
 			status_t			UnlockDirectScreen(team_id team);
@@ -271,6 +273,26 @@ public:
 			int32				ViewUnderMouse(const Window* window);
 
 			EventTarget*		KeyboardEventTarget();
+
+			// Pointer/keyboard grabs: one of each per desktop, owned by
+			// a team and anchored to one of its windows. The secure
+			// attention team suppresses both; VT chords never arrive
+			// because the keyboard add-on consumes them upstream.
+			status_t			AcquirePointerGrab(team_id team,
+									int32 token, EventTarget* target,
+									uint32 flags, const BRect& confineTo);
+			status_t			ReleasePointerGrab(team_id team);
+			status_t			AcquireKeyboardGrab(team_id team,
+									int32 token, EventTarget* target,
+									uint32 flags);
+			status_t			ReleaseKeyboardGrab(team_id team);
+			EventTarget*		PointerGrabTarget();
+			EventTarget*		KeyboardGrabTarget();
+			// While a secure-attention team holds the exclusive (the
+			// authentication dialog), grabs deliver nothing; the
+			// dispatcher falls back to the focus path, which the
+			// secure gate then redirects.
+			void				SetSecureAttentionTeam(team_id team);
 
 			void				SetFocusWindow(Window* window = NULL);
 			void				SetFocusLocked(const Window* window);
@@ -405,7 +427,7 @@ private:
 			int32				fShutdownCount;
 
 			::Workspace::Private fWorkspaces[kMaxWorkspaces];
-			MultiLocker			fScreenLock;
+			BRWLocker			fScreenLock;
 			BLocker				fDirectScreenLock;
 			team_id				fDirectScreenTeam;
 			int32				fCurrentWorkspace;
@@ -429,7 +451,7 @@ private:
 			ServerCursorReference fCursor;
 			ServerCursorReference fManagementCursor;
 
-			MultiLocker			fWindowLock;
+			BRWLocker			fWindowLock;
 
 			BRegion				fBackgroundRegion;
 			BRegion				fScreenRegion;
@@ -438,6 +460,15 @@ private:
 			const Window*		fWindowUnderMouse;
 			const Window*		fLockedFocusWindow;
 			int32				fViewUnderMouse;
+
+			BLocker				fGrabLock;
+			input_grab_state	fInputGrabs;
+			EventTarget*		fPointerGrabTarget;
+			EventTarget*		fKeyboardGrabTarget;
+			BRect				fPointerGrabRect;
+
+			void				_ReleaseGrabsForTarget(
+									EventTarget* target);
 			BPoint				fLastMousePosition;
 			int32				fLastMouseButtons;
 

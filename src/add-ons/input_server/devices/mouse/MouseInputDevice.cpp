@@ -53,6 +53,17 @@
 #include <keyboard_mouse_driver.h>
 #include <touchpad_settings.h>
 
+#include <PointerControlCore.h>
+#include <XVitruvianInputProtocol.h>
+
+// Present in linux/input-event-codes.h; guarded for older headers.
+#ifndef REL_WHEEL_HI_RES
+#define REL_WHEEL_HI_RES	0x0b
+#endif
+#ifndef REL_HWHEEL_HI_RES
+#define REL_HWHEEL_HI_RES	0x0c
+#endif
+
 
 #undef TRACE
 //#define TRACE_MOUSE_DEVICE
@@ -297,6 +308,17 @@ private:
 			BPoint				_TouchPoint(
 									struct libinput_event_touch* tev) const;
 
+			// XI2.2 touch event for the XVitruvian tap; one per slot.
+			void				_EmitTouch(struct libinput_event_touch* tev,
+									int32_t slot, uint32 what);
+
+			// XI2 device capability bits for the tap (XV_FIELD_DEVICE_FLAGS).
+			int32				_DeviceFlags() const;
+			// Applies the seat pointer constraint to a motion step;
+			// returns true when motion became delta-only (relative mode).
+			bool				_ConstrainMotion(BPoint& point, float dx,
+									float dy) const;
+
 private:
 			MouseInputDevice&	fTarget;
 			BString				fPath;
@@ -326,6 +348,13 @@ private:
 			// On touchscreens we synthesize B_MOUSE_DOWN/UP from TOUCH_DOWN/UP.
 			bool				fLibinputIsDirectTouch;
 			bool				fLibinputTouchSlot0Down;
+			// REL_*_HI_RES wheels carry 120 units per detent; keep them
+			// for the fractional (smooth) scroll valuators.
+			bool				fHasHiResWheel;
+			// Live direct-touch slots and their last positions; libinput
+			// invalidates coordinates on touch-up.
+			uint32				fTouchActiveSlots;
+			BPoint				fTouchPositions[16];
 
 			bigtime_t			fLastClickTime;
 			int32				fClickCount;
@@ -426,6 +455,8 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fLibinputLastClickButton(0),
 	fLibinputIsDirectTouch(false),
 	fLibinputTouchSlot0Down(false),
+	fHasHiResWheel(false),
+	fTouchActiveSlots(0),
 	fLastClickTime(0),
 	fClickCount(0),
 	fLastClickButtons(0),
@@ -618,6 +649,9 @@ MouseDevice::_Classify()
 		fFollowsPanel = libevdev_has_property(evdev, INPUT_PROP_DIRECT)
 			|| !libevdev_has_event_code(evdev, EV_KEY, BTN_TOOL_PEN);
 	}
+
+	fHasHiResWheel = libevdev_has_event_code(evdev, EV_REL,
+		REL_WHEEL_HI_RES);
 
 	// Clickpads, synaptics absolute pads and udev-classified touchpads
 	// all need the touchpad settings path and the touchpad subtype.
@@ -963,6 +997,7 @@ MouseDevice::_ControlThread()
 						fIsTouchpad
 							? B_TOUCHPAD_POINTING_DEVICE
 							: B_MOUSE_POINTING_DEVICE);
+					msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(msg);
 				}
 			}
@@ -1070,7 +1105,13 @@ MouseDevice::_ControlThread()
 
 			// Accumulate events; flush on EV_SYN SYN_REPORT
 			int32 xdelta = 0, ydelta = 0;
+			// Pre-acceleration snapshot for the raw-valuator fields the
+			// XVitruvian XI2 path needs; acceleration must not see this.
+			int32 rawX = 0, rawY = 0;
 			int32 wheel_xdelta = 0, wheel_ydelta = 0;
+			// Fractional detents (120 units each) from REL_*_HI_RES.
+			int32 hiResX = 0, hiResY = 0;
+			bool relativeMotion = false;
 			int32 currentAbsX = fLastAbsX, currentAbsY = fLastAbsY;
 			bool touchChanged = false;
 			bigtime_t timestamp = system_time();
@@ -1129,6 +1170,12 @@ MouseDevice::_ControlThread()
 						// Haiku be:wheel_delta_y positive = scroll down
 						case REL_WHEEL:  wheel_ydelta += -iev.value;  break;
 						case REL_HWHEEL: wheel_xdelta += iev.value;   break;
+						case REL_WHEEL_HI_RES:
+							hiResY += -iev.value;
+							break;
+						case REL_HWHEEL_HI_RES:
+							hiResX += iev.value;
+							break;
 					}
 				} else if (iev.type == EV_ABS) {
 					switch (iev.code) {
@@ -1180,6 +1227,8 @@ MouseDevice::_ControlThread()
 					std::min((float)(fScreenW - 1), fCursorPosition.x));
 				fCursorPosition.y = std::max(0.0f,
 					std::min((float)(fScreenH - 1), fCursorPosition.y));
+				// Absolute panels still honour a confinement rect.
+				_ConstrainMotion(fCursorPosition, 0.0f, 0.0f);
 				fLastAbsX = currentAbsX;
 				fLastAbsY = currentAbsY;
 				xdelta = 1; // non-zero to trigger movement message
@@ -1228,6 +1277,8 @@ MouseDevice::_ControlThread()
 				}
 
 				if (xdelta != 0 || ydelta != 0) {
+					rawX = xdelta;
+					rawY = ydelta;
 
 					float histX = 0, histY = 0;
 					mouse_movement mv;
@@ -1242,6 +1293,8 @@ MouseDevice::_ControlThread()
 						std::min((float)(fScreenW - 1), fCursorPosition.x));
 					fCursorPosition.y = std::max(0.0f,
 						std::min((float)(fScreenH - 1), fCursorPosition.y));
+					relativeMotion = _ConstrainMotion(fCursorPosition,
+						(float)dX, (float)dY);
 				}
 			}
 			// Write back to shared slot so the next device starts from here.
@@ -1256,7 +1309,8 @@ MouseDevice::_ControlThread()
 			uint32 changedButtons = lastButtons ^ currentButtons;
 
 			if (!hasMoved && changedButtons == 0
-					&& wheel_xdelta == 0 && wheel_ydelta == 0)
+					&& wheel_xdelta == 0 && wheel_ydelta == 0
+					&& hiResX == 0 && hiResY == 0)
 				continue;
 
 			uint32 remappedButtons = _RemapButtons(currentButtons);
@@ -1309,20 +1363,38 @@ MouseDevice::_ControlThread()
 				BMessage* message = _BuildMouseMessage(B_MOUSE_MOVED,
 					timestamp, remappedButtons);
 				if (message != NULL) {
+					// Pre-acceleration deltas: XI2 raw valuators.
+					message->AddFloat("be:raw_delta_x", (float)rawX);
+					message->AddFloat("be:raw_delta_y", (float)rawY);
+					if (relativeMotion)
+						message->AddBool(XV_FIELD_RELATIVE, true);
 					fTarget.EnqueueMessage(message);
 				}
 			}
 
 			// Scroll wheel
-			if (wheel_ydelta != 0 || wheel_xdelta != 0) {
-				float wx = (float)wheel_xdelta;
-				float wy = (float)wheel_ydelta;
+			if (wheel_ydelta != 0 || wheel_xdelta != 0
+				|| hiResX != 0 || hiResY != 0) {
+				float wx;
+				float wy;
+				// A hi-res wheel also reports whole detents; prefer the
+				// fractional stream or every notch arrives twice.
+				if (fHasHiResWheel && (hiResX != 0 || hiResY != 0)) {
+					wx = xv_wheel_detents(hiResX);
+					wy = xv_wheel_detents(hiResY);
+				} else {
+					wx = (float)wheel_xdelta;
+					wy = (float)wheel_ydelta;
+				}
 
 				BMessage* message = new BMessage(B_MOUSE_WHEEL_CHANGED);
 				if (message != NULL) {
 					message->AddInt64("when", timestamp);
 					message->AddFloat("be:wheel_delta_x", wx);
 					message->AddFloat("be:wheel_delta_y", wy);
+					message->AddInt32("be:device_id", fSerial);
+					message->AddString("be:device_name", fDeviceRef.name);
+					message->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(message);
 				}
 			}
@@ -1645,9 +1717,21 @@ MouseDevice::_BuildMouseMessage(uint32 what, uint64 when,
 		|| message->AddInt64("when", when) < B_OK
 		|| message->AddInt32("be:device_subtype",
 			fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
-				: B_MOUSE_POINTING_DEVICE) < B_OK) {
+				: B_MOUSE_POINTING_DEVICE) < B_OK
+		|| message->AddInt32("be:device_id", fSerial) < B_OK
+		|| message->AddString("be:device_name", fDeviceRef.name) < B_OK
+		|| message->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags()) < B_OK) {
 		delete message;
 		return NULL;
+	}
+
+	// Normalised axis position for XI2 valuator masking on absolute
+	// devices (tablets, panel digitizers, VM pointers).
+	if (fIsAbsolute || fIsAbsoluteTouchpad) {
+		message->AddFloat(XV_FIELD_ABS_X,
+			xv_axis_normalize(fLastAbsX, fAbsMinX, fAbsMaxX));
+		message->AddFloat(XV_FIELD_ABS_Y,
+			xv_axis_normalize(fLastAbsY, fAbsMinY, fAbsMaxY));
 	}
 
 	return message;
@@ -1719,6 +1803,83 @@ MouseDevice::_TouchPoint(struct libinput_event_touch* tev) const
 }
 
 
+int32
+MouseDevice::_DeviceFlags() const
+{
+	int32 flags = kXVDeviceHasPointer;
+	if (fIsAbsolute || fIsAbsoluteTouchpad)
+		flags |= kXVDeviceHasAbsAxes;
+	if (fLibinputIsDirectTouch)
+		flags |= kXVDeviceHasTouch | kXVDeviceHasAbsAxes
+			| kXVDeviceDirectTouch;
+	// Steam Input's uinput devices carry the vendor name prefix; the
+	// DDX and BJoystick need them flagged as virtual, not physical.
+	if (fDeviceRef.name != NULL
+		&& strncmp(fDeviceRef.name, "Steam ", 6) == 0)
+		flags |= kXVDeviceVirtual;
+	return flags;
+}
+
+
+bool
+MouseDevice::_ConstrainMotion(BPoint& point, float dx, float dy) const
+{
+	pointer_constraint constraint;
+	fTarget.GetPointerConstraint(&constraint);
+	if (!pointer_constraint_active(&constraint))
+		return false;
+
+	if ((constraint.flags & kPointerConstraintRelative) != 0) {
+		float x = 0;
+		float y = 0;
+		pointer_constraint_move_relative(&constraint, dx, dy, &x, &y);
+		point.x = x;
+		point.y = y;
+		return true;
+	}
+
+	pointer_constraint_clamp(&constraint, &point.x, &point.y);
+	return false;
+}
+
+
+void
+MouseDevice::_EmitTouch(struct libinput_event_touch* tev, int32_t slot,
+	uint32 what)
+{
+	if (slot < 0 || slot >= 16)
+		return;
+
+	BPoint where;
+	if (what == kXVTouchUp || what == kXVTouchCancel) {
+		// libinput invalidates coordinates once the contact lifts.
+		where = fTouchPositions[slot];
+	} else {
+		where = _TouchPoint(tev);
+		fTouchPositions[slot] = where;
+	}
+
+	uint32 mask = 1u << (uint32)slot;
+	if (what == kXVTouchDown)
+		fTouchActiveSlots |= mask;
+	else if (what == kXVTouchUp || what == kXVTouchCancel)
+		fTouchActiveSlots &= ~mask;
+
+	BMessage* msg = new BMessage(what);
+	if (msg == NULL)
+		return;
+	msg->AddInt64("when", system_time());
+	msg->AddPoint("where", where);
+	msg->AddInt32(XV_FIELD_TOUCH_ID, (int32)slot);
+	msg->AddFloat(XV_FIELD_PRESSURE,
+		(what == kXVTouchDown || what == kXVTouchMove) ? 1.0f : 0.0f);
+	msg->AddInt32("be:device_id", fSerial);
+	msg->AddString("be:device_name", fDeviceRef.name);
+	msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
+	fTarget.EnqueueMessage(msg);
+}
+
+
 void
 MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 {
@@ -1748,6 +1909,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				std::min((float)(fScreenW - 1), fLibinputLastPos.x));
 			fLibinputLastPos.y = std::max(0.0f,
 				std::min((float)(fScreenH - 1), fLibinputLastPos.y));
+			bool relativeMotion = _ConstrainMotion(fLibinputLastPos,
+				dx, dy);
 
 			// Write back to shared slot
 			if (fTarget.fCursorLock.Lock()) {
@@ -1770,6 +1933,16 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			msg->AddInt32("be:device_subtype",
 				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
 					: B_MOUSE_POINTING_DEVICE);
+			// XI2 raw valuators: unaccelerated deltas from libinput.
+			msg->AddFloat("be:raw_delta_x",
+				(float)libinput_event_pointer_get_dx_unaccelerated(pev));
+			msg->AddFloat("be:raw_delta_y",
+				(float)libinput_event_pointer_get_dy_unaccelerated(pev));
+			if (relativeMotion)
+				msg->AddBool(XV_FIELD_RELATIVE, true);
+			msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1790,6 +1963,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 
 			fLibinputLastPos.x = outU * (fScreenW - 1);
 			fLibinputLastPos.y = outV * (fScreenH - 1);
+			_ConstrainMotion(fLibinputLastPos, 0.0f, 0.0f);
 
 			// Sync shared cursor position
 			if (fTarget.fCursorLock.Lock()) {
@@ -1812,6 +1986,12 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			msg->AddInt32("be:device_subtype",
 				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
 					: B_MOUSE_POINTING_DEVICE);
+			// Normalised position: XI2 valuator mask for absolute devices.
+			msg->AddFloat(XV_FIELD_ABS_X, (float)u);
+			msg->AddFloat(XV_FIELD_ABS_Y, (float)v);
+			msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1875,6 +2055,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				msg->AddInt32("clicks", fLibinputClickCount);
 				msg->AddInt32("be:button", (int32)beButton);
 			}
+			msg->AddInt32("be:device_id", fSerial);
+			msg->AddString("be:device_name", fDeviceRef.name);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1977,6 +2159,16 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			break;
 		}
 
+		case LIBINPUT_EVENT_TOUCH_CANCEL:
+		{
+			struct libinput_event_touch* tev =
+				libinput_event_get_touch_event(event);
+			int32_t slot = libinput_event_touch_get_slot(tev);
+			if (fLibinputIsDirectTouch)
+				_EmitTouch(tev, slot, kXVTouchCancel);
+			break;
+		}
+
 		case LIBINPUT_EVENT_TOUCH_DOWN:
 		case LIBINPUT_EVENT_TOUCH_UP:
 		case LIBINPUT_EVENT_TOUCH_MOTION:
@@ -1984,6 +2176,17 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			struct libinput_event_touch* tev =
 				libinput_event_get_touch_event(event);
 			int32_t slot = libinput_event_touch_get_slot(tev);
+
+			// XI2.2 touch for the tap: every slot on a direct-touch
+			// screen, independent of the pointer synthesis below.
+			if (fLibinputIsDirectTouch) {
+				uint32 touchWhat = kXVTouchMove;
+				if (type == LIBINPUT_EVENT_TOUCH_DOWN)
+					touchWhat = kXVTouchDown;
+				else if (type == LIBINPUT_EVENT_TOUCH_UP)
+					touchWhat = kXVTouchUp;
+				_EmitTouch(tev, slot, touchWhat);
+			}
 
 			// Slot 1 = second finger: track for two-finger scroll
 			if (slot == 1) {
@@ -2076,6 +2279,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 						fIsTouchpad
 							? B_TOUCHPAD_POINTING_DEVICE
 							: B_MOUSE_POINTING_DEVICE);
+					move->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(move);
 
 					uint32 tapButton = _RemapButtons(0x1);
@@ -2090,6 +2294,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 						fIsTouchpad
 							? B_TOUCHPAD_POINTING_DEVICE
 							: B_MOUSE_POINTING_DEVICE);
+					msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_UP) {
@@ -2104,6 +2309,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 						fIsTouchpad
 							? B_TOUCHPAD_POINTING_DEVICE
 							: B_MOUSE_POINTING_DEVICE);
+					msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_MOTION) {
@@ -2141,6 +2347,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 						fIsTouchpad
 							? B_TOUCHPAD_POINTING_DEVICE
 							: B_MOUSE_POINTING_DEVICE);
+					msg->AddInt32(XV_FIELD_DEVICE_FLAGS, _DeviceFlags());
 					fTarget.EnqueueMessage(msg);
 				}
 			}
@@ -2167,6 +2374,9 @@ MouseInputDevice::MouseInputDevice()
 	fReflection(B_PANEL_REFLECTION_NONE)
 {
 	CALLED();
+
+	pointer_constraint_init(&fConstraint, 0, 0.0f, 0.0f, 0.0f, 0.0f,
+		0.0f, 0.0f);
 
 	StartMonitoringDevice(kMouseDevicesDirectory);
 	_RecursiveScan(kMouseDevicesDirectory);
@@ -2262,6 +2472,9 @@ MouseInputDevice::Control(const char* name, void* cookie,
 	if (command == B_SCREEN_BOUNDS_CHANGED)
 		return _UpdateScreenBounds(device, message);
 
+	if (command == B_POINTER_CONSTRAINT_CHANGED)
+		return _UpdatePointerConstraint(device, message);
+
 	if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
 		|| command == B_SYSTEM_RESUMED) {
 		// Add-on level: resume can recreate evdev nodes that the node
@@ -2314,6 +2527,55 @@ MouseInputDevice::_UpdateScreenBounds(MouseDevice* device, BMessage* message)
 
 	device->UpdateScreenBounds(frame, orientation, reflection);
 	return B_OK;
+}
+
+
+status_t
+MouseInputDevice::_UpdatePointerConstraint(MouseDevice* /*device*/,
+	BMessage* message)
+{
+	int32 flags = 0;
+	BRect rect;
+	BPoint where;
+	if (message == NULL
+		|| message->FindInt32("flags", &flags) != B_OK)
+		return B_BAD_VALUE;
+	message->FindRect("rect", &rect);
+	message->FindPoint("where", &where);
+
+	if (fConstraintLock.Lock()) {
+		pointer_constraint_init(&fConstraint, flags, rect.left, rect.top,
+			rect.right, rect.bottom, where.x, where.y);
+		fConstraintLock.Unlock();
+	}
+
+	// A new relative-mode lock point starts at the live cursor.
+	if ((flags & kPointerConstraintRelative) != 0
+		&& fCursorLock.Lock()) {
+		if (fConstraintLock.Lock()) {
+			fConstraint.lockX = fCursorPosition.x;
+			fConstraint.lockY = fCursorPosition.y;
+			fConstraintLock.Unlock();
+		}
+		fCursorLock.Unlock();
+	}
+
+	return B_OK;
+}
+
+
+void
+MouseInputDevice::GetPointerConstraint(pointer_constraint* out) const
+{
+	if (out == NULL)
+		return;
+
+	if (fConstraintLock.Lock()) {
+		*out = fConstraint;
+		fConstraintLock.Unlock();
+	} else
+		pointer_constraint_init(out, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+			0.0f);
 }
 
 

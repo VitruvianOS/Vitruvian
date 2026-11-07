@@ -24,6 +24,7 @@
 #include <Locale.h>
 #include <MenuField.h>
 #include <Message.h>
+#include <MessageRunner.h>
 #include <ObjectList.h>
 #include <Path.h>
 #include <PopUpMenu.h>
@@ -38,10 +39,11 @@
 
 #include "DeviceListView.h"
 #include "DeviceMixerView.h"
+#include "HardwareSectionView.h"
 #include "MediaMessages.h"
+#include "MixerSectionView.h"
 #include "SoundsSectionView.h"
 #include "StreamListView.h"
-
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "MediaWindow"
 
@@ -58,6 +60,7 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 	fCurrentSection(NULL),
 	fShownSection(kOutputSection),
 	fHasShownSection(false),
+	fMixerView(NULL),
 	fOutputView(NULL),
 	fInputView(NULL),
 	fStreamsView(NULL),
@@ -65,13 +68,7 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 	fSoundsView(NULL),
 	fStatusLabel(NULL),
 	fWatchingPipeWire(false),
-
-	fHardwareDeviceMenu(NULL),
-	fHardwareProfileList(NULL),
-	fHardwareStatus(NULL),
-	fHardwareSelectedDevice(0),
-	fHardwareActiveProfileIndex(-1),
-	fHardwareLastLocalWrite(0)
+	fWatchRetryRunner(NULL)
 {
 	SetLayout(new BGroupLayout(B_HORIZONTAL));
 
@@ -94,22 +91,18 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 	int32 initialRow = _RowForSection(initialSection);
 	if (initialRow < 0) {
 
-		initialSection = kOutputSection;
-		initialRow = _RowForSection(kOutputSection);
+		initialSection = kMixerSection;
+		initialRow = _RowForSection(kMixerSection);
 	}
 	fSidebar->Select(initialRow);
 	_ShowSection((Section)initialSection);
 
-	BMediaGraph* graph = BMediaGraph::Instance();
-	if (graph != NULL) {
-		fWatchingPipeWire =
-			graph->StartWatching(BMessenger(this)) == B_OK;
-	}
-
-	if (graph == NULL)
+	_TryStartWatching();
+	if (!fWatchingPipeWire) {
 		fStatusLabel->SetText(B_TRANSLATE("Audio backend unavailable"));
-	else
-		fStatusLabel->SetText("");
+		fWatchRetryRunner = new BMessageRunner(BMessenger(this),
+			new BMessage(kMsgRetryWatch), 2000000);
+	}
 
 	if (frame == BRect(100, 100, 880, 580))
 		CenterOnScreen();
@@ -118,6 +111,8 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 
 MediaWindow::~MediaWindow()
 {
+	delete fWatchRetryRunner;
+
 	BPath path;
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
 		path.Append(kMediaSettingsFile);
@@ -145,6 +140,8 @@ MediaWindow::_BuildSidebar()
 		B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE);
 	fSidebar->SetSelectionMessage(new BMessage(kMsgSectionChanged));
 	fSidebarSections.clear();
+	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Mixer")));
+	fSidebarSections.push_back(kMixerSection);
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Output")));
 	fSidebarSections.push_back(kOutputSection);
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Input")));
@@ -239,61 +236,27 @@ MediaWindow::_ShowSection(Section s)
 			break;
 		}
 
+		case kMixerSection:
+			if (fMixerView == NULL)
+				fMixerView = new MixerSectionView();
+			fMixerView->Refresh();
+			section = fMixerView;
+			break;
+
 		case kStreamsSection:
 			if (fStreamsView == NULL)
 				fStreamsView = new StreamListView();
-			((StreamListView*)fStreamsView)->Refresh();
+			fStreamsView->Refresh();
 			section = fStreamsView;
 			break;
 
 		case kHardwareSection:
-		{
-			if (fHardwareView == NULL) {
-				BGroupView* hw = new BGroupView(B_VERTICAL);
-				BLayoutBuilder::Group<>(hw)
-					.SetInsets(B_USE_SMALL_SPACING)
-					.Add(new BStringView("title",
-						B_TRANSLATE("Device profiles")))
-					.Add(new BStringView("desc",
-						B_TRANSLATE("Select a profile configuration for the audio device.")));
-
-				fHardwareDeviceMenu = new BPopUpMenu("device_menu");
-				BMenuField* deviceField = new BMenuField("device_field",
-					B_TRANSLATE("Device:"), fHardwareDeviceMenu);
-				deviceField->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
-					B_ALIGN_VERTICAL_CENTER));
-
-				fHardwareProfileList = new BListView("profile_list",
-					B_SINGLE_SELECTION_LIST);
-				fHardwareProfileList->SetInvocationMessage(
-					new BMessage(kMsgHardwareProfileSelected));
-				fHardwareProfileList->SetSelectionMessage(
-					new BMessage(kMsgHardwareProfileSelected));
-				fHardwareProfileList->SetTarget(this);
-				BScrollView* profileScroll = new BScrollView("profile_scroll",
-					fHardwareProfileList, 0, false, true, B_FANCY_BORDER);
-				const float scale = be_plain_font->Size() / 12.0f;
-				profileScroll->SetExplicitMinSize(BSize(200 * scale,
-					150 * scale));
-
-				fHardwareStatus = new BStringView("hardware_status", "");
-
-				BLayoutBuilder::Group<>(hw)
-					.Add(deviceField)
-					.Add(profileScroll)
-					.Add(fHardwareStatus)
-					.AddGlue();
-
-				fHardwareSelectedDevice = 0;
-				fHardwareActiveProfileIndex = -1;
-
-				_PopulateHardwareDeviceMenu();
-				fHardwareView = hw;
-			} else
-				_PopulateHardwareDeviceMenu();
+			if (fHardwareView == NULL)
+				fHardwareView = new HardwareSectionView();
+			else
+				fHardwareView->RefreshDevices();
 			section = fHardwareView;
 			break;
-		}
 
 		case kSoundsSection:
 			if (fSoundsView == NULL)
@@ -317,179 +280,55 @@ MediaWindow::_ShowSection(Section s)
 
 
 void
-MediaWindow::_PopulateHardwareDeviceMenu()
+MediaWindow::_OnPipeWireChanged(uint32 what, uint32 deviceId)
 {
-	if (fHardwareDeviceMenu == NULL)
-		return;
+	if (fOutputView)  fOutputView->Refresh();
+	if (fInputView)   fInputView->Refresh();
+	if (fStreamsView) fStreamsView->Refresh();
 
-	fHardwareDeviceMenu->RemoveItems(0, fHardwareDeviceMenu->CountItems());
+	if (fMixerView != NULL) {
+		if (what == BMediaGraph::B_MEDIA_CLIENT_ADDED
+				|| what == BMediaGraph::B_MEDIA_CLIENT_REMOVED
+				|| what == BMediaGraph::B_MEDIA_STREAMS_CHANGED)
+			fMixerView->Refresh();
+		else if (what == BMediaGraph::B_MEDIA_VOLUME_CHANGED
+				|| what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
+				|| what == kMsgDevicePortChanged)
+			fMixerView->HintAll();
+	}
+
+	if (fCurrentSection != NULL) {
+		DeviceMixerView* mixer = dynamic_cast<DeviceMixerView*>(
+			fCurrentSection->FindView("DeviceMixer"));
+		if (mixer != NULL && (what == BMediaGraph::B_MEDIA_VOLUME_CHANGED
+				|| what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
+				|| what == kMsgDevicePortChanged)) {
+			if (what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
+					|| deviceId == 0 || mixer->DeviceId() == deviceId)
+				mixer->ExternalChangeHint();
+		}
+	}
+
+	if (fHardwareView != NULL)
+		fHardwareView->NotifyChanged(what, deviceId);
+}
+
+
+void
+MediaWindow::_TryStartWatching()
+{
+	if (fWatchingPipeWire)
+		return;
 
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph == NULL)
 		return;
 
-	BObjectList<media_client_id, true> clients;
-	if (graph->GetClients(&clients) != B_OK)
-		return;
-
-	bool added = false;
-	for (int32 i = 0; i < clients.CountItems(); i++) {
-		media_client_id id = *clients.ItemAt(i);
-		BMessage info;
-		if (graph->GetClientInfo(id, &info) != B_OK)
-			continue;
-
-		bool isSink = false;
-		bool isSource = false;
-		if (info.FindBool("is.sink", &isSink) != B_OK)
-			isSink = false;
-		if (info.FindBool("is.source", &isSource) != B_OK)
-			isSource = false;
-
-		if (!isSink && !isSource)
-			continue;
-
-		BString name;
-		if (info.FindString("name", &name) != B_OK)
-			continue;
-
-		BMenuItem* item = new BMenuItem(name.String(),
-			new BMessage(kMsgHardwareDeviceSelected));
-		item->Message()->AddInt32("device_id", id);
-
-		if (isSink) {
-			fHardwareDeviceMenu->AddItem(item, 0);
-		} else {
-			fHardwareDeviceMenu->AddItem(item);
-		}
-
-		added = true;
-	}
-
-	if (!added) {
-		BMenuItem* noItem = new BMenuItem(
-			B_TRANSLATE("No audio devices found"), NULL);
-		noItem->SetEnabled(false);
-		fHardwareDeviceMenu->AddItem(noItem);
-	}
-	fHardwareDeviceMenu->SetTargetForItems(this);
-
-	if (!added)
-		return;
-
-	BMenuItem* toMark = NULL;
-	for (int32 i = 0; i < fHardwareDeviceMenu->CountItems(); i++) {
-		BMenuItem* item = fHardwareDeviceMenu->ItemAt(i);
-		int32 id = 0;
-		if (item->Message() == NULL
-				|| item->Message()->FindInt32("device_id", &id) != B_OK)
-			continue;
-		if ((media_client_id)id == fHardwareSelectedDevice) {
-			toMark = item;
-			break;
-		}
-		if (toMark == NULL)
-			toMark = item;
-	}
-	if (toMark == NULL)
-		return;
-
-	toMark->SetMarked(true);
-	int32 markedId = 0;
-	toMark->Message()->FindInt32("device_id", &markedId);
-	if ((media_client_id)markedId != fHardwareSelectedDevice) {
-		fHardwareSelectedDevice = (media_client_id)markedId;
-		_PopulateHardwareProfiles();
-	}
-}
-
-
-void
-MediaWindow::_PopulateHardwareProfiles()
-{
-	if (fHardwareProfileList == NULL || fHardwareStatus == NULL)
-		return;
-
-	fHardwareProfileList->RemoveItems(0, fHardwareProfileList->CountItems());
-	fHardwareStatus->SetText("");
-
-	if (fHardwareSelectedDevice == 0) {
-		fHardwareStatus->SetText(B_TRANSLATE("No device selected"));
-		return;
-	}
-
-	BMediaGraph* graph = BMediaGraph::Instance();
-	if (graph == NULL) {
-		fHardwareStatus->SetText(B_TRANSLATE("Media graph unavailable"));
-		return;
-	}
-
-	BObjectList<BMediaGraph::DeviceProfileInfo, true> profiles;
-	int32 activeIndex = -1;
-	status_t status = graph->GetDeviceProfiles(fHardwareSelectedDevice,
-		&profiles, &activeIndex);
-
-	if (status == B_NOT_SUPPORTED) {
-		fHardwareStatus->SetText(B_TRANSLATE("No profiles reported"));
-		return;
-	} else if (status != B_OK) {
-		fHardwareStatus->SetText(B_TRANSLATE("Failed to load profiles"));
-		return;
-	}
-
-	if (profiles.CountItems() == 0) {
-		fHardwareStatus->SetText(B_TRANSLATE("No profiles available"));
-		return;
-	}
-
-	fHardwareActiveProfileIndex = activeIndex;
-	fHardwareProfileIndices.clear();
-
-	for (int32 i = 0; i < profiles.CountItems(); i++) {
-		BMediaGraph::DeviceProfileInfo* info = profiles.ItemAt(i);
-		BString display = info->description;
-		if (!info->available)
-			display << " (" << B_TRANSLATE("unavailable") << ")";
-
-		BStringItem* item = new BStringItem(display.String());
-		fHardwareProfileList->AddItem(item);
-		fHardwareProfileIndices.push_back(info->index);
-
-		if (info->index == activeIndex) {
-			fHardwareProfileList->Select(i);
-			item->SetEnabled(false);
-		}
-	}
-}
-
-
-void
-MediaWindow::_OnPipeWireChanged(uint32 what, uint32 deviceId)
-{
-	if (fOutputView)  fOutputView->Refresh();
-	if (fInputView)   fInputView->Refresh();
-	if (fStreamsView) ((StreamListView*)fStreamsView)->Refresh();
-
-	if (what == BMediaGraph::B_MEDIA_VOLUME_CHANGED
-			|| what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
-			|| what == kMsgDevicePortChanged) {
-		if (fCurrentSection != NULL) {
-			DeviceMixerView* mixer = dynamic_cast<DeviceMixerView*>(
-				fCurrentSection->FindView("DeviceMixer"));
-			if (mixer != NULL
-					&& (what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
-						|| deviceId == 0 || mixer->DeviceId() == deviceId)) {
-				mixer->ExternalChangeHint();
-			}
-		}
-	}
-
-	if (what == kMsgDeviceProfileChanged || what == kMsgDevicePortChanged)
-		_PopulateHardwareProfiles();
-
-	if (what == BMediaGraph::B_MEDIA_CLIENT_ADDED
-			|| what == BMediaGraph::B_MEDIA_CLIENT_REMOVED) {
-		_PopulateHardwareDeviceMenu();
+	if (graph->StartWatching(BMessenger(this)) == B_OK) {
+		fWatchingPipeWire = true;
+		delete fWatchRetryRunner;
+		fWatchRetryRunner = NULL;
+		fStatusLabel->SetText("");
 	}
 }
 
@@ -529,45 +368,24 @@ MediaWindow::MessageReceived(BMessage* msg)
 			if (fInputView)  fInputView->Refresh();
 			break;
 
-		case kMsgHardwareDeviceSelected:
-		{
-			int32 id = 0;
-			if (msg->FindInt32("device_id", &id) != B_OK)
-				break;
-			fHardwareSelectedDevice = (media_client_id)id;
-			_PopulateHardwareProfiles();
-			break;
-		}
-
-		case kMsgHardwareProfileSelected:
-		{
-			int32 row = fHardwareProfileList != NULL
-				? fHardwareProfileList->CurrentSelection() : -1;
-			if (row < 0 || row >= (int32)fHardwareProfileIndices.size())
-				break;
-			int32 profileIndex = fHardwareProfileIndices[row];
-
-			if (profileIndex == fHardwareActiveProfileIndex)
-				break;
-
-			BMediaGraph* graph = BMediaGraph::Instance();
-			status_t status = graph != NULL
-				? graph->SetDeviceProfile(fHardwareSelectedDevice, profileIndex)
-				: B_DEVICE_NOT_FOUND;
-
-			_PopulateHardwareProfiles();
-			if (status != B_OK && fHardwareStatus != NULL) {
-				fHardwareStatus->SetText(
-					B_TRANSLATE("Failed to switch profile"));
+		case kMsgRetryWatch:
+			_TryStartWatching();
+			if (fWatchingPipeWire) {
+				if (fMixerView != NULL) fMixerView->Refresh();
+				if (fOutputView) fOutputView->Refresh();
+				if (fInputView)  fInputView->Refresh();
+				if (fStreamsView) fStreamsView->Refresh();
 			}
 			break;
-		}
 
 		case kMsgDeviceSelected:
 		{
 
 			DeviceListView* lv = NULL;
-			Section s = (Section)fSidebar->CurrentSelection();
+			int32 sel = fSidebar->CurrentSelection();
+			if (sel < 0 || sel >= (int32)fSidebarSections.size())
+				break;
+			Section s = (Section)fSidebarSections[sel];
 			if (s == kOutputSection) lv = fOutputView;
 			else if (s == kInputSection) lv = fInputView;
 			if (lv == NULL) break;

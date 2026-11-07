@@ -3,6 +3,7 @@ target_sources(root PRIVATE
 	exec_status.cpp
 
 	thread.cpp
+	rtkit.cpp
 	port.cpp
 	sem.cpp
 	area.cpp
@@ -20,6 +21,8 @@ target_sources(root PRIVATE
 	shutdown.cpp
 	system_info.cpp
 	system_revision.c
+	hardware_info.cpp
+	hardware_info_parse.cpp
 
 	SystemWatcher.cpp
 	KMessage.cpp

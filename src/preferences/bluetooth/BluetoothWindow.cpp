@@ -32,6 +32,7 @@
 #include <ScrollView.h>
 #include <String.h>
 #include <StringView.h>
+#include <TextView.h>
 #include <TabView.h>
 
 #include "BluetoothSettingsView.h"
@@ -83,7 +84,7 @@ using namespace Bluetooth;
 
 BluetoothWindow::BluetoothWindow()
 	:
-	BWindow(BRect(100, 100, 520, 480), B_TRANSLATE("Bluetooth"),
+	BWindow(BRect(100, 100, 575, 562), B_TRANSLATE("Bluetooth"),
 		B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fReplicantOpPending(false),
@@ -120,9 +121,15 @@ BluetoothWindow::BluetoothWindow()
 	fScrollView->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_USE_FULL_HEIGHT));
 
-	fEmptyStateView = new BStringView("empty_state", "");
+	fEmptyStateView = new BTextView("empty_state");
+	fEmptyStateView->MakeEditable(false);
+	fEmptyStateView->MakeSelectable(false);
+	fEmptyStateView->SetWordWrap(true);
 	fEmptyStateView->SetAlignment(B_ALIGN_CENTER);
-	fEmptyStateView->SetHighUIColor(B_LIST_ITEM_TEXT_COLOR, B_DARKEN_2_TINT);
+	fEmptyStateView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	rgb_color textColor = tint_color(ui_color(B_PANEL_TEXT_COLOR),
+		B_DARKEN_2_TINT);
+	fEmptyStateView->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
 
 	fAddButton = new BButton("add", B_TRANSLATE("Add" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgAdd));
@@ -153,19 +160,19 @@ BluetoothWindow::BluetoothWindow()
 			B_USE_DEFAULT_SPACING)
 		.Add(fScrollView)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
-			.Add(fAddButton)
-			.Add(fRemoveButton)
-			.AddGlue()
 			.Add(fPairButton)
 			.Add(fConnectDisconnectButton)
 			.Add(fTrustButton)
 			.Add(fBlockButton)
-			.Add(fRefreshButton)
+			.AddGlue()
 		.End()
 		.Add(fAlwaysAcceptCheckBox)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
-			.Add(fSendFilesButton)
+			.Add(fAddButton)
+			.Add(fRemoveButton)
 			.AddGlue()
+			.Add(fSendFilesButton)
+			.Add(fRefreshButton)
 		.End()
 		.View();
 
@@ -204,7 +211,11 @@ BluetoothWindow::BluetoothWindow()
 	fTabView->AddTab(devicesPage);
 	fTabView->AddTab(fSettingsView);
 
+	fTabView->SetBorder(B_NO_BORDER);
+	fTabView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
+		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, 0)
 		.Add(fTabView)
 	.End();
 

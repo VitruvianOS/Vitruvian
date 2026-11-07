@@ -1,0 +1,27 @@
+Adblock starter extension for NetPlus
+====================================
+
+rules1.json and rules2.json are Safari/WebKit content-blocker JSON,
+converted from the following filter lists by ublock-webkit-filters
+(GPL-3.0, https://github.com/bnema/ublock-webkit-filters), release
+v2026.10.28 generated 2026-10-28T04:11:38Z:
+
+- EasyList (https://easylist.to/easylist/easylist.txt), GPL-3.0
+- EasyPrivacy (https://easylist.to/easylist/easyprivacy.txt), GPL-3.0
+- Peter Lowe's ad and tracking server list
+  (https://pgl.yoyo.org/adservers/), permissive personal use
+- uBlock Origin filter lists
+  (https://github.com/gorhill/uAssets), GPL-3.0
+
+Checksums (sha256, of the upstream file names combined-part1.json
+and combined-part2.json from the v2026.10.28 release):
+
+5639a23cab75636b1acf4dbb9412e22117bdbd8d9cd5f61d1fc07375f65750d8
+  combined-part1.json (shipped as rules1.json)
+6b40b0edda4d62bd2df34a2b40b68de153318471b9e01293f8424bf83b5a066f
+  combined-part2.json (shipped as rules2.json)
+
+The upstream manifest for the conversion is in upstream-manifest.json,
+the release checksums in checksums.txt. The converted JSON is
+distributed under the GPL-3.0 terms of the source lists; see
+https://www.gnu.org/licenses/gpl-3.0.html.

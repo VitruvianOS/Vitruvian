@@ -203,6 +203,7 @@ CameraWindow::CameraWindow(BRect frame)
 	fWidth(640),
 	fHeight(480),
 	fFrameRate(30.0f),
+	fHasStoredSize(false),
 	fGrid(false),
 	fMirrorEnabled(true),
 	fQuitRequested(false)
@@ -291,8 +292,11 @@ CameraWindow::CameraWindow(BRect frame)
 	_RefreshFilterMenu();
 	_LoadSettings();
 
-	// No frame may ever arrive (no camera): fit the saved size once shown.
-	PostMessage(kMsgCameraFrameReshaped);
+	// Open at the final size: the mode picked above decides the picture's
+	// shape, and the first layout pass must not run at the default frame.
+	fView->SetAspect((float)fWidth / fHeight);
+	Layout(true);
+	_FitToPicture();
 }
 
 
@@ -455,6 +459,8 @@ CameraWindow::_FrameArrived(BMessage* message)
 	float rate = 0;
 	if (message->FindFloat("field_rate", &rate) == B_OK && rate > 0)
 		fFrameRate = rate;
+	// The size the device runs at is now the one to keep.
+	fHasStoredSize = true;
 	fReopens++;
 	_OpenCamera(fCameraIndex);
 }
@@ -499,6 +505,7 @@ CameraWindow::MessageReceived(BMessage* message)
 			fWidth = fModes[index].width;
 			fHeight = fModes[index].height;
 			fFrameRate = fModes[index].frameRate;
+			fHasStoredSize = true;
 			fReopens = 0;
 			_OpenCamera(fCameraIndex);
 			_StoreSettings();
@@ -667,27 +674,21 @@ CameraWindow::_SetMode(int32 mode)
 
 
 void
-CameraWindow::FrameResized(float width, float height)
-{
-	BWindow::FrameResized(width, height);
-	_FitToPicture();
-}
-
-
-void
 CameraWindow::_FitToPicture()
 {
 	// The layout centers the preview in whatever height the window has, so
 	// size the window to the picture, down to what the controls need.
-	float viewHeight;
-	fView->GetHeightForWidth(fView->Bounds().Width(), NULL, NULL, &viewHeight);
+	// The mode stands in for the picture: it is all there is before the
+	// first frame, and the device settles on it.
+	const float aspect = (float)fWidth / fHeight;
+	const float viewWidth = fView->Bounds().Width();
+	const float viewHeight = (viewWidth + 1) / aspect - 1;
 	// A picture shorter than the controls widens the window until its
 	// height matches them, so no band is left above or below it.
 	const float minHeight = GetLayout()->MinSize().height;
 	float width = Bounds().Width();
 	if (viewHeight < minHeight) {
-		const float aspect = (fView->Bounds().Width() + 1) / (viewHeight + 1);
-		width += (minHeight + 1) * aspect - 1 - fView->Bounds().Width();
+		width += (minHeight + 1) * aspect - 1 - viewWidth;
 	}
 	const float height = std::max(minHeight, viewHeight);
 	if (fabs(width - Bounds().Width()) >= 1
@@ -938,10 +939,41 @@ void
 CameraWindow::_LoadModes()
 {
 	fModes.clear();
-	if (fSource == NULL || fSource->GetModes(&fModes) != B_OK
-		|| fModes.empty()) {
+	const bool fromDevice = fSource != NULL
+		&& fSource->GetModes(&fModes) == B_OK && !fModes.empty();
+	if (!fromDevice) {
 		fModes.assign(kFallbackModes, kFallbackModes
 			+ sizeof(kFallbackModes) / sizeof(kFallbackModes[0]));
+		// Fallback modes only fill the menu, they never pick a size.
+		return;
+	}
+
+	// Nothing stored: the biggest mode at 30 fps or more, else the
+	// fastest. Slower modes stay in the menu.
+	if (!fHasStoredSize) {
+		size_t best = 0;
+		for (size_t i = 1; i < fModes.size(); i++) {
+			const camera_mode& m = fModes[i];
+			const camera_mode& b = fModes[best];
+			const bool mSmooth = m.frameRate >= 29.9f;
+			const bool bSmooth = b.frameRate >= 29.9f;
+			const int64 mArea = (int64)m.width * m.height;
+			const int64 bArea = (int64)b.width * b.height;
+			if (mSmooth != bSmooth) {
+				if (mSmooth)
+					best = i;
+			} else if (mSmooth) {
+				if (mArea > bArea)
+					best = i;
+			} else if (m.frameRate > b.frameRate
+				|| (m.frameRate == b.frameRate && mArea > bArea))
+				best = i;
+		}
+		fWidth = fModes[best].width;
+		fHeight = fModes[best].height;
+		fFrameRate = fModes[best].frameRate;
+		fHasStoredSize = true;
+		return;
 	}
 
 	// Keep the chosen size if the device has it, else the closest one with
@@ -1271,6 +1303,7 @@ CameraWindow::_LoadSettings()
 		fHeight = (uint32)height;
 		if (settings->FindFloat("fps", &rate) == B_OK && rate > 0)
 			fFrameRate = rate;
+		fHasStoredSize = true;
 	}
 
 	int32 mic = 0;

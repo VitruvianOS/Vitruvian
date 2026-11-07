@@ -14,6 +14,7 @@
 
 struct app_info;
 class Keyring;
+class SecretServiceBridge;
 
 typedef BObjectList<Keyring, true> KeyringList;
 
@@ -58,6 +59,7 @@ private:
 		Keyring*					fMasterKeyring;
 		KeyringList					fKeyrings;
 		BFile						fKeyStoreFile;
+		SecretServiceBridge*		fSecretService;
 };
 
 

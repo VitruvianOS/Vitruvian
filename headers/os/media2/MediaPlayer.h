@@ -80,10 +80,11 @@ public:
 
 			void				SetTarget(BMessenger target);
 
-			// B_PLAYER_VIDEO_FRAME to the view: width/height/stride (int32),
-			// start_time/audio_time (int64 us; -1 = no audio), frame (raw
-			// BGRx), delivered synchronously on the view's looper thread.
-			// Surface mode swaps the frame bytes for a dma-buf descriptor.
+			// B_PLAYER_VIDEO_FRAME to the view: width/height/stride/slot
+			// (int32), sequence/generation (int64), start_time/audio_time
+			// (int64 us; -1 = no audio) and the team-local bitmap and ring
+			// pointers, delivered synchronously on the view's looper thread.
+			// The pixels stay in the shared bitmap ring, see VideoView.h.
 			void				SetVideoView(BView* view);
 
 

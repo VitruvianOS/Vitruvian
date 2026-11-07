@@ -1,0 +1,41 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-overclock-apply: boot-time half of the overclock persistence.
+# Runs from vos-overclock.service (--boot) and vos-overclock-ok.service
+# (--boot-ok). The counter starts at 3 when settings are saved; every
+# boot decrements it, a boot that reaches multi-user resets it. Three
+# boots in a row that never reached the marker restore the snapshot
+# defaults and disable the units, so a bad overclock cannot brick a
+# machine past three power cycles (a machine that never starts the
+# kernel at all still needs manual recovery, same as any boot counter).
+set -eu
+
+. "${VOS_OVERCLOCK_COMMON:-/usr/libexec/vos-overclock-common.sh}"
+
+case "${1:-}" in
+    --boot)
+        count="$(oc_boot_count_read)"
+        case "$count" in ''|*[!0-9]*) count=0 ;; esac
+        if [ "$count" -le 0 ]; then
+            echo "overclock: failed-boot limit reached, reverting" >&2
+            oc_restore_defaults
+            rm -f "$CONF_FILE"
+            mkdir -p "$STATE_DIR"
+            echo "reverted=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                > "$STATE_DIR/last-revert"
+            oc_disable_units
+            exit 0
+        fi
+        oc_boot_count_set "$((count - 1))"
+        oc_conf_apply
+        ;;
+    --boot-ok)
+        oc_boot_count_set "$BOOT_COUNT_DEFAULT"
+        ;;
+    *)
+        echo "usage: vos-overclock-apply --boot|--boot-ok" >&2
+        exit 2
+        ;;
+esac

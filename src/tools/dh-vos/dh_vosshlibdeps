@@ -1,0 +1,32 @@
+#!/usr/bin/perl
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+
+=head1 NAME
+
+dh_vosshlibdeps - dh_shlibdeps for packages linking the V\OS libraries
+
+=head1 DESCRIPTION
+
+libbe, libroot and the other system libraries have unversioned sonames,
+which dpkg-shlibdeps cannot split into name and version; it warns once per
+lookup. That warning is dropped, and vos is added to ${shlibs:Depends}.
+Any other output, and the exit status, pass through.
+
+=cut
+
+use strict;
+use warnings;
+use Debian::Debhelper::Dh_Lib;
+
+init();
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	my $out = `dh_shlibdeps -p $package 2>&1`;
+	my $status = $?;
+	for my $line (split(/\n/, $out)) {
+		next if $line =~ /can't extract name and version from library name/;
+		print STDERR "$line\n";
+	}
+	error("dh_shlibdeps failed for $package") if $status != 0;
+	addsubstvar($package, 'shlibs:Depends', 'vos');
+}

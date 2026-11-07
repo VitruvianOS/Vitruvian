@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <Autolock.h>
+#include <Bitmap.h>
 #include <Handler.h>
 #include <Looper.h>
 #include <Message.h>
@@ -24,11 +25,15 @@
 #include <media2/MediaTrack.h>
 #include <media2/SimpleMediaNode.h>
 
+#include "VideoFrameRing.h"
 #include "VideoSync.h"
 
 
 namespace {
 
+
+// Decoder targets shared with the view: one decoding, one drawn, one spare.
+const int32 kVideoRingSlots = 3;
 
 const uint32 kMsgVideoPump = 'vpmp';
 
@@ -121,6 +126,10 @@ private:
 	void _FillFromTrack(void* buffer, size_t size,
 		const media_raw_audio_format& format);
 
+	void _ReleasePendingSlot();
+	status_t _CreateVideoRing();
+	void _DeleteVideoRing();
+
 	void _PumpVideoFrame(bool force = false);
 	void _StartVideoRunner();
 	void _StopVideoRunner();
@@ -154,8 +163,10 @@ private:
 	BMessageRunner*		fVideoRunner;
 	media_raw_video_format	fVideoFormat;
 	uint32				fVideoStride;
-	uint8*				fVideoBuffer;
-	size_t				fVideoBufferSize;
+	BBitmap*			fVideoRing[kVideoRingSlots];
+	VideoFrameRing*		fVideoSlots;
+	int32				fVideoPendingSlot;
+	uint8*				fVideoStaging;
 	bool				fVideoFramePending;
 	bigtime_t			fVideoPendingTime;
 	bigtime_t			fVideoClockBase;
@@ -203,8 +214,9 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fVideoRunner(NULL),
 	fVideoFormat(),
 	fVideoStride(0),
-	fVideoBuffer(NULL),
-	fVideoBufferSize(0),
+	fVideoSlots(new(std::nothrow) VideoFrameRing),
+	fVideoPendingSlot(-1),
+	fVideoStaging(NULL),
 	fVideoFramePending(false),
 	fVideoPendingTime(0),
 	fVideoClockBase(0),
@@ -225,6 +237,7 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 {
 	memset(fPeaks, 0, sizeof(fPeaks));
 	fFormat.SetToDefault();
+	memset(fVideoRing, 0, sizeof(fVideoRing));
 
 	fNode = new(std::nothrow) BSimpleMediaNode("BMediaPlayer",
 		B_MEDIA_RAW_AUDIO, B_MEDIA_PLAYER);
@@ -271,7 +284,9 @@ BMediaPlayer::Impl::~Impl()
 	}
 	delete fOutput;
 	delete fNode;
-	delete[] fVideoBuffer;
+	_DeleteVideoRing();
+	if (fVideoSlots != NULL)
+		fVideoSlots->Release();
 	delete fFile;	// BMediaFile owns the tracks
 }
 
@@ -322,9 +337,7 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	fFrameStride = 0;
 	_ResetClock(0);
 	fVideoStride = 0;
-	fVideoBufferSize = 0;
-	delete[] fVideoBuffer;
-	fVideoBuffer = NULL;
+	_DeleteVideoRing();
 	_ResetVideoPacing();
 
 	fFile = new(std::nothrow) BMediaFile(ref);
@@ -356,9 +369,7 @@ BMediaPlayer::Impl::SetTo(const BUrl& url)
 	fFrameStride = 0;
 	_ResetClock(0);
 	fVideoStride = 0;
-	fVideoBufferSize = 0;
-	delete[] fVideoBuffer;
-	fVideoBuffer = NULL;
+	_DeleteVideoRing();
 
 	fFile = new(std::nothrow) BMediaFile(url);
 	if (fFile == NULL)
@@ -376,9 +387,7 @@ BMediaPlayer::Impl::_FinishSetTo()
 	fTrack = NULL;
 	fVideoTrack = NULL;
 	fVideoStride = 0;
-	fVideoBufferSize = 0;
-	delete[] fVideoBuffer;
-	fVideoBuffer = NULL;
+	_DeleteVideoRing();
 
 	// Discovery stores tracks as encoded; the negotiated decoder output
 	// is what ReadFrames delivers through the union overlay.
@@ -404,6 +413,7 @@ BMediaPlayer::Impl::_FinishSetTo()
 			audioFmt = fmt;
 		} else if (fmt.IsRawVideo() && fVideoTrack == NULL) {
 			fVideoTrack = track;
+			fVideoTrack->_SetPollVideo(true);
 			videoFmt = fmt;
 		}
 		if (fTrack != NULL && fVideoTrack != NULL)
@@ -437,10 +447,9 @@ BMediaPlayer::Impl::_FinishSetTo()
 			return (fInitErr = B_ERROR);
 		fVideoFormat = rv;
 		fVideoStride = rv.width * 4;	// BGRx, packed rows
-		fVideoBufferSize = (size_t)fVideoStride * rv.height;
-		fVideoBuffer = new(std::nothrow) uint8_t[fVideoBufferSize];
-		if (fVideoBuffer == NULL)
-			return (fInitErr = B_NO_MEMORY);
+		status_t ringStatus = _CreateVideoRing();
+		if (ringStatus != B_OK)
+			return (fInitErr = ringStatus);
 		const bigtime_t videoDuration = fVideoTrack->Duration();
 		if (videoDuration > fDuration)
 			fDuration = videoDuration;
@@ -674,18 +683,33 @@ BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 		std::lock_guard<std::mutex> _(fLock);
 		if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING && !force)
 			return;
-		if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
+		if (fVideoTrack == NULL || fVideoView == NULL
+			|| fVideoSlots == NULL || fVideoRing[0] == NULL)
 			return;
 
 		const bool haveAudio = fTrack != NULL;
 		while (true) {
 			if (!fVideoFramePending) {
+				// A dropped frame keeps its slot for the next read.
+				if (fVideoPendingSlot < 0) {
+					fVideoPendingSlot = fVideoSlots->AcquireDecoderSlot();
+					if (fVideoPendingSlot < 0)
+						return;
+				}
+				BBitmap* bitmap = fVideoRing[fVideoPendingSlot];
+				if (bitmap == NULL || !bitmap->IsValid())
+					return;
+
+				// Padded bitmap rows stage once and repack below.
+				uint8* target = fVideoStaging != NULL
+					? fVideoStaging : (uint8*)bitmap->Bits();
 				int64 frames = 1;
 				media_header mh;
 				memset(&mh, 0, sizeof(mh));
-				status_t err = fVideoTrack->ReadFrames(fVideoBuffer,
+				status_t err = fVideoTrack->ReadFrames(target,
 					&frames, &mh);
 				if (err == B_LAST_BUFFER_ERROR) {
+					_ReleasePendingSlot();
 					_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 					_PostNotification(
 						BMediaPlayer::B_PLAYER_END_OF_STREAM);
@@ -693,6 +717,16 @@ BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 				}
 				if (err != B_OK || frames < 1)
 					return;
+				if (fVideoStaging != NULL) {
+					uint8* dst = (uint8*)bitmap->Bits();
+					const uint32 dstStride = (uint32)bitmap->BytesPerRow();
+					const uint8* src = fVideoStaging;
+					for (uint32 y = 0; y < fVideoFormat.height; y++) {
+						memcpy(dst, src, fVideoStride);
+						dst += dstStride;
+						src += fVideoStride;
+					}
+				}
 				fVideoPendingTime = mh.start_time;
 				fVideoFramePending = true;
 				if (mh.start_time == 0) {
@@ -747,16 +781,29 @@ BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 				}
 			}
 
-			// Surface presentation replaces the B_RAW_TYPE payload
-			// below with a dma-buf descriptor; the keys stay.
+			BBitmap* bitmap = fVideoRing[fVideoPendingSlot];
+			int64 sequence = 0;
+			if (fVideoSlots->PublishSlot(fVideoPendingSlot, &sequence)
+					!= B_OK) {
+				_ReleasePendingSlot();
+				fVideoFramePending = false;
+				return;
+			}
+
+			// The pixels stay in the shared ring. The pointers are team
+			// local, the view claims the slot by sequence.
 			msg.what = BMediaPlayer::B_PLAYER_VIDEO_FRAME;
 			msg.AddInt32("width", (int32)fVideoFormat.width);
 			msg.AddInt32("height", (int32)fVideoFormat.height);
-			msg.AddInt32("stride", (int32)fVideoStride);
+			msg.AddInt32("stride", (int32)bitmap->BytesPerRow());
+			msg.AddInt32("slot", fVideoPendingSlot);
+			msg.AddInt64("sequence", sequence);
+			msg.AddInt64("generation", fVideoSlots->Generation());
 			msg.AddInt64("start_time", (int64)fVideoPendingTime);
 			msg.AddInt64("audio_time", (int64)(haveAudio ? clockNow : -1));
-			msg.AddData("frame", B_RAW_TYPE, fVideoBuffer,
-				(uint32)fVideoBufferSize);
+			msg.AddPointer("bitmap", bitmap);
+			msg.AddPointer("ring", fVideoSlots);
+			fVideoPendingSlot = -1;
 			looper = fVideoLooper;
 			view = fVideoView;
 			fVideoFramePending = false;
@@ -807,8 +854,72 @@ BMediaPlayer::Impl::_StopVideoRunner()
 
 
 void
+BMediaPlayer::Impl::_ReleasePendingSlot()
+{
+	if (fVideoSlots != NULL && fVideoPendingSlot >= 0)
+		fVideoSlots->ReleaseSlot(fVideoPendingSlot);
+	fVideoPendingSlot = -1;
+}
+
+
+status_t
+BMediaPlayer::Impl::_CreateVideoRing()
+{
+	const uint32 width = fVideoFormat.width;
+	const uint32 height = fVideoFormat.height;
+	if (fVideoSlots == NULL)
+		return B_NO_MEMORY;
+	if (width == 0 || height == 0)
+		return B_BAD_VALUE;
+
+	status_t status = fVideoSlots->SetSlotCount(kVideoRingSlots);
+	if (status != B_OK)
+		return status;
+
+	for (int32 i = 0; i < kVideoRingSlots; i++) {
+		BBitmap* bitmap = new(std::nothrow) BBitmap(
+			BRect(0.0f, 0.0f, (float)(width - 1), (float)(height - 1)),
+			B_RGB32);
+		if (bitmap == NULL || !bitmap->IsValid()) {
+			delete bitmap;
+			_DeleteVideoRing();
+			return B_NO_MEMORY;
+		}
+		fVideoRing[i] = bitmap;
+	}
+
+	if ((uint32)fVideoRing[0]->BytesPerRow() != fVideoStride) {
+		fVideoStaging = new(std::nothrow) uint8_t[
+			(size_t)fVideoStride * height];
+		if (fVideoStaging == NULL) {
+			_DeleteVideoRing();
+			return B_NO_MEMORY;
+		}
+	}
+
+	return B_OK;
+}
+
+
+void
+BMediaPlayer::Impl::_DeleteVideoRing()
+{
+	for (int32 i = 0; i < kVideoRingSlots; i++) {
+		delete fVideoRing[i];
+		fVideoRing[i] = NULL;
+	}
+	delete[] fVideoStaging;
+	fVideoStaging = NULL;
+	fVideoPendingSlot = -1;
+	if (fVideoSlots != NULL)
+		fVideoSlots->Reset();
+}
+
+
+void
 BMediaPlayer::Impl::_ResetVideoPacing()
 {
+	_ReleasePendingSlot();
 	fVideoFramePending = false;
 	fVideoClockValid = false;
 	fVideoZeroStamps = 0;
@@ -898,8 +1009,7 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 	// Apply the player volume on the decoded float samples. GStreamer
 	// negotiates F32LE interleaved into this path (MediaFile OpenUri caps).
 	if (fVolume != 1.0f) {
-		if ((format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-				== media_raw_audio_format::B_AUDIO_FLOAT) {
+		if (format.format == media_raw_audio_format::B_AUDIO_FLOAT) {
 			const size_t sampleCount = (size_t)gotFrames
 				* format.channel_count;
 			float* samples = (float*)buffer;
@@ -918,8 +1028,7 @@ BMediaPlayer::Impl::_PostPeaks(const float* samples, int64 frames,
 	const media_raw_audio_format& format)
 {
 	if (!fHasTarget || frames <= 0
-		|| (format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-			!= media_raw_audio_format::B_AUDIO_FLOAT)
+		|| format.format != media_raw_audio_format::B_AUDIO_FLOAT)
 		return;
 
 	const uint32 channels = format.channel_count < 8 ? format.channel_count : 8;

@@ -20,6 +20,8 @@
 #define IS_GET_MOUSE_SPEED 				'Igms'
 #define IS_SET_MOUSE_SPEED 				'Isms'
 #define IS_SET_MOUSE_POSITION 			'Ismp'
+#define IS_SET_POINTER_CONSTRAINT		'Ispc'
+	// app_server relays grab state: "flags", "rect", "where"
 #define IS_GET_MOUSE_MAP 				'Igmm'
 #define IS_SET_MOUSE_MAP 				'Ismm'
 #define IS_GET_KEYBOARD_ID 				'Igid'

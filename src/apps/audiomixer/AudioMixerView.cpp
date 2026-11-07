@@ -392,11 +392,6 @@ AudioMixerView::MessageReceived(BMessage* message)
 				be_app->PostMessage(B_QUIT_REQUESTED);
 			break;
 
-		case kMsgOpenSoundPrefs:
-			_LaunchBySig("application/x-vnd.vos-Sounds",
-				"/system/preferences/Sounds");
-			break;
-
 		case B_ABOUT_REQUESTED:
 		{
 			// Heap, never the stack: Show() starts the window's own looper
@@ -570,9 +565,6 @@ AudioMixerView::_ShowContextMenu(BPoint where)
 	menu.AddItem(new BMenuItem(
 		B_TRANSLATE("Media preferences" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgOpenMediaPrefs)));
-	menu.AddItem(new BMenuItem(
-		B_TRANSLATE("Sounds preferences" B_UTF8_ELLIPSIS),
-		new BMessage(kMsgOpenSoundPrefs)));
 
 	menu.AddSeparatorItem();
 	menu.AddItem(new BMenuItem(B_TRANSLATE("About AudioMixer" B_UTF8_ELLIPSIS),

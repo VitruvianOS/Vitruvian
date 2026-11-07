@@ -46,6 +46,7 @@
 #include "CortexDeviceControls.h"
 #include "CortexGraphView.h"
 #include "CortexMonitor.h"
+#include "CortexMediaUnits.h"
 #include "CortexNodes.h"
 
 
@@ -205,7 +206,19 @@ CortexWindow::CortexWindow()
 	BMenuBar* menuBar = new BMenuBar("menu bar");
 	menuBar->AddItem(fileMenu);
 	menuBar->AddItem(fAddMenu);
+
+	BMenu* unitsMenu = new BMenu("Units");
+	for (int32 i = 0; i < CortexUnitCatalog::CountUnits(); i++) {
+		const CortexUnitInfo* info = CortexUnitCatalog::UnitInfoAt(i);
+		if (info == NULL)
+			continue;
+		BMessage* message = new BMessage(kMsgInsertUnit);
+		message->AddInt32("unit", i);
+		unitsMenu->AddItem(new BMenuItem(info->name, message));
+	}
+	menuBar->AddItem(unitsMenu);
 	fileMenu->SetTargetForItems(this);
+	unitsMenu->SetTargetForItems(this);
 
 	BRect graphFrame = bounds;
 	graphFrame.top += menuBar->Frame().Height() + 1.0f;
@@ -283,6 +296,14 @@ CortexWindow::MessageReceived(BMessage* message)
 			fRebuildPending = false;
 			_Rebuild();
 			break;
+
+		case kMsgInsertUnit:
+		{
+			int32 unitIndex = -1;
+			message->FindInt32("unit", &unitIndex);
+			_InsertUnit(unitIndex);
+			break;
+		}
 
 		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
 		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
@@ -552,6 +573,27 @@ CortexWindow::_GraphReady()
 
 	_LoadSettings();
 
+	_Rebuild();
+}
+
+
+void
+CortexWindow::_InsertUnit(int32 unitIndex)
+{
+	const CortexUnitInfo* info = CortexUnitCatalog::UnitInfoAt(unitIndex);
+	if (info == NULL) {
+		_ReportStatus("insert unit", B_BAD_VALUE);
+		return;
+	}
+
+	BMediaClient* client = CortexUnitCatalog::CreateUnit(unitIndex);
+	if (client == NULL) {
+		_ReportStatus("insert unit", B_ERROR);
+		return;
+	}
+
+	client->Start();
+	fOwnClients.AddItem(client);
 	_Rebuild();
 }
 

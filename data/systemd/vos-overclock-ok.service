@@ -1,0 +1,12 @@
+[Unit]
+Description=V\OS overclock: mark this boot healthy
+# Reached only when multi-user.target comes up; resets the failed-boot
+# counter vos-overclock.service decremented. A boot that dies before
+# this unit never resets the counter and eventually reverts.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-overclock-apply --boot-ok
+
+[Install]
+WantedBy=multi-user.target

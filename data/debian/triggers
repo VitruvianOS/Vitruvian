@@ -1,1 +1,2 @@
 activate-noawait update-initramfs
+interest-noawait /usr/share/vos/attrs

@@ -7,6 +7,7 @@ Application(
 	CortexDump.cpp
 	CortexGraphView.cpp
 	CortexMonitor.cpp
+	CortexMediaUnits.cpp
 	CortexNodes.cpp
 	CortexWindow.cpp
 	LIBS be shared localestub media2 tracker
@@ -17,4 +18,9 @@ UsePrivateHeaders(Cortex media2)
 
 target_include_directories(Cortex PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
+	${GSTREAMER_INCLUDES}
+)
+
+target_link_libraries(Cortex PRIVATE
+	${GSTREAMER_LIBRARIES}
 )

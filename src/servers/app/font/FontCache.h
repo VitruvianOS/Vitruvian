@@ -12,11 +12,11 @@
 #include "FontCacheEntry.h"
 #include "HashMap.h"
 #include "HashString.h"
-#include "MultiLocker.h"
+#include "BRWLocker.h"
 #include "ServerFont.h"
 
 
-class FontCache : public MultiLocker {
+class FontCache : public BRWLocker {
  public:
 								FontCache();
 	virtual						~FontCache();

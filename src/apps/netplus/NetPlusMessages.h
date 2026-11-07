@@ -20,17 +20,18 @@ enum {
 	MSG_SETTINGS_CHANGED = 'setc',
 	// Open a window; "url" string, "private" bool (optional).
 	MSG_OPEN_WINDOW		= 'nowi',
-	// Bookmarks menu items; "url" string.
+	// Bookmarks panel rows; "url" string.
 	MSG_BOOKMARK_GO		= 'bmgo',
 	MSG_BOOKMARK_ADD	= 'bmad',
 	MSG_BOOKMARK_REMOVE	= 'bmrm',
-	// Rebuild the Bookmarks menu after add/remove.
+	// Bookmarks changed in any window.
 	MSG_BOOKMARKS_CHANGED = 'bmcg',
 	MSG_SHOW_DOWNLOADS	= 'dlsr',
 	MSG_SHOW_SETTINGS	= 'stsw',
 	MSG_APP_MENU		= 'apmn',
 	MSG_PANEL_CLOSED	= 'pclz',
 	MSG_PANEL_NEW_WINDOW = 'pnwn',
+	MSG_PANEL_NEW_PRIVATE = 'pnpw',
 	MSG_OPEN_LOCATION	= 'oloc',
 	MSG_ZOOM_IN			= 'zmin',
 	MSG_ZOOM_OUT		= 'zmou',
@@ -41,7 +42,21 @@ enum {
 	MSG_INSTALL_APP		= 'inpa',
 	MSG_INSTALL_CONFIRM = 'incf',
 	MSG_ICON_FETCHED	= 'icfl',
-	MSG_ICON_FETCH_JS	= 'icjs'
+	MSG_ICON_FETCH_JS	= 'icjs',
+	// Extensions window and per-site toggles.
+	MSG_SHOW_EXTENSIONS = 'xtrw',
+	// The registry changed; re-apply to the view and refresh the
+	// extensions window if it is open.
+	MSG_EXTENSIONS_CHANGED = 'xtrc',
+	MSG_EXTENSION_TOGGLE = 'xttg',
+	MSG_EXTENSION_REMOVE = 'xtrm',
+	MSG_EXTENSION_INSTALL = 'xtin',
+	MSG_INSTALL_PANEL_DONE = 'xtpd',
+	// Per-site exception: "id" string; flips the disabled-on-this-
+	// site state for the window's current host.
+	MSG_SITE_EXT_TOGGLE = 'xtst',
+	// Reader mode: run the reader extension's toggle on the page.
+	MSG_READER_TOGGLE	= 'rdrm'
 };
 
 

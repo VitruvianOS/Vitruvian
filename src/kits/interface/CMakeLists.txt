@@ -66,6 +66,7 @@ target_sources(be PRIVATE
 	OptionControl.cpp
 	OptionPopUp.cpp
 	OutlineListView.cpp
+	OutputAddonCore.cpp
 	PictureButton.cpp
 	Picture.cpp
 	PictureDataWriter.cpp

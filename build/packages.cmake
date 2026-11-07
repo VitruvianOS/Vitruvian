@@ -192,6 +192,43 @@ set(CPACK_DEBIAN_DATA_PACKAGE_ARCHITECTURE "all")
 set(CPACK_DEBIAN_DATA_PACKAGE_DESCRIPTION
 	"V\\\\OS data and configuration: catalogs, fonts, MIME database and system settings")
 
+# NetPlus starter extensions: separate so the store can update the
+# lists without an OS upgrade. CPackDeb looks the settings up by the
+# uppercased component name with the dash kept; without an explicit
+# PACKAGE_NAME the deb silently falls back to vos-<component>.
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_NAME "netplus-extensions")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DEPENDS
+	"vos (= ${_vos_runtime_version})")
+set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_DESCRIPTION
+	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
+
+# Host build tools: rc, xres, resattr and linkcatkeys from the
+# BUILDTOOLS_MODE pass. Unlike the /bin copies they run without nexus, so
+# packages build in a plain chroot.
+set(CPACK_DEBIAN_BUILDTOOLS_PACKAGE_NAME "vos-buildtools")
+set(CPACK_DEBIAN_BUILDTOOLS_PACKAGE_DEPENDS "libc6, libstdc++6")
+set(CPACK_DEBIAN_BUILDTOOLS_DESCRIPTION
+	"V\\\\OS build tools that run without nexus: rc, xres, resattr, linkcatkeys")
+
+if(BUILDTOOLS_DIR)
+	install(PROGRAMS
+		"${BUILDTOOLS_DIR}/src/bin/rc/rc"
+		"${BUILDTOOLS_DIR}/src/bin/xres"
+		"${BUILDTOOLS_DIR}/src/bin/resattr"
+		"${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys"
+		DESTINATION /usr/lib/vos/buildtools
+		COMPONENT buildtools)
+endif()
+
+# debhelper add-on for port packages: dh $@ --with vos.
+set(CPACK_DEBIAN_DH-VOS_PACKAGE_NAME "dh-vos")
+set(CPACK_DEBIAN_DH-VOS_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_DH-VOS_PACKAGE_DEPENDS
+	"debhelper (>= 13), attr, vos-buildtools, vos-dev")
+set(CPACK_DEBIAN_DH-VOS_DESCRIPTION
+	"debhelper add-on and Makefile-Engine buildsystem for V\\\\OS packages")
+
 # These files used to ship in vos itself.
 set(CPACK_DEBIAN_DATA_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")
 set(CPACK_DEBIAN_DATA_PACKAGE_BREAKS "vos (<< ${_vos_runtime_version})")
@@ -208,6 +245,9 @@ set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-runtime.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dev.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-data.deb"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-netplus-extensions.deb"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-buildtools.deb"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dh-vos.deb"
 )
 
 # vos-dev component: public headers + pkg-config. The shared libraries are

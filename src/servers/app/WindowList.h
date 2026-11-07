@@ -12,6 +12,8 @@
 #include <SupportDefs.h>
 #include <Point.h>
 
+#include "ScreenRelayout.h"
+
 
 class Window;
 
@@ -57,6 +59,7 @@ struct window_anchor {
 	Window*	next;
 	Window*	previous;
 	BPoint	position;
+	relayout_placement placement;
 };
 
 extern const BPoint kInvalidWindowPosition;

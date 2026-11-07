@@ -1124,6 +1124,13 @@ ThermalDataSource::ShortLabel() const
 }
 
 
+bool
+ThermalDataSource::Primary() const
+{
+	return fPrimary;
+}
+
+
 void
 ThermalDataSource::Print(BString& text, int64 value) const
 {

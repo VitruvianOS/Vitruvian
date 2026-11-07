@@ -1,5 +1,6 @@
 # Target names (cmake-unique): used for ImageInclude and DEPENDS
 set(SYSTEM_PREFERENCES_TARGETS
+	Accounts
 	Appearance
 	Backgrounds
 	Bluetooth
@@ -7,10 +8,12 @@ set(SYSTEM_PREFERENCES_TARGETS
 	DataTranslations
 	Deskbar_prefs
 	FileTypes
+	Hardware
 	Input
 	Joysticks
 	Keymap
 	Locale
+	Location
 	Media
 	Network
 	Power
@@ -18,7 +21,6 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Screen
 	ScreenSaver
 	Shortcuts
-	Sounds
 	Time
 	Tracker_prefs
 	User
@@ -26,6 +28,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 
 # Installed binary names (OUTPUT_NAME where it differs): used for symlinks and staging
 set(SYSTEM_PREFERENCES
+	Accounts
 	Appearance
 	Backgrounds
 	Bluetooth
@@ -33,10 +36,12 @@ set(SYSTEM_PREFERENCES
 	DataTranslations
 	Deskbar
 	FileTypes
+	Hardware
 	Input
 	Joysticks
 	Keymap
 	Locale
+	Location
 	Media
 	Network
 	Power
@@ -44,7 +49,6 @@ set(SYSTEM_PREFERENCES
 	Screen
 	ScreenSaver
 	Shortcuts
-	Sounds
 	Time
 	Tracker
 	User

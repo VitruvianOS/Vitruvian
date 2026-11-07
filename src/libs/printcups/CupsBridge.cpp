@@ -678,6 +678,31 @@ CupsBridge::CancelJob(const char* queue, int32 jobId)
 }
 
 
+static int32
+NormalizedJobState(ipp_jstate_t state)
+{
+	// printcups_job.state is 0..6; cups_job_t carries the raw IPP enum.
+	switch (state) {
+		case IPP_JSTATE_PENDING:
+			return 0;
+		case IPP_JSTATE_HELD:
+			return 1;
+		case IPP_JSTATE_PROCESSING:
+			return 2;
+		case IPP_JSTATE_STOPPED:
+			return 3;
+		case IPP_JSTATE_CANCELED:
+			return 4;
+		case IPP_JSTATE_ABORTED:
+			return 5;
+		case IPP_JSTATE_COMPLETED:
+			return 6;
+		default:
+			return -1;
+	}
+}
+
+
 int
 CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 {
@@ -723,7 +748,7 @@ CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 		written++;
 	}
 
-	free(cupJobs);
+	cupsFreeJobs(count, cupJobs);
 	return written;
 }
 

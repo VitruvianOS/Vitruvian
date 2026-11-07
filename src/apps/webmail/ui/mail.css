@@ -1,0 +1,224 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+html, body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	font-family: sans-serif;
+	font-size: 14px;
+	background: #f4f4f4;
+	color: #202020;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+#app {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+#toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	background: #e8e8e8;
+	border-bottom: 1px solid #c8c8c8;
+}
+
+#toolbar .spacer { flex: 1; }
+
+#main {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+#folders {
+	width: 160px;
+	background: #efefef;
+	border-right: 1px solid #d0d0d0;
+	overflow-y: auto;
+}
+
+.folder {
+	padding: 6px 10px;
+	cursor: pointer;
+}
+
+.folder:hover { background: #e0e0e0; }
+.folder.selected { background: #cfe0f5; }
+
+#list-wrap {
+	width: 300px;
+	display: flex;
+	flex-direction: column;
+	border-right: 1px solid #d0d0d0;
+	background: #fafafa;
+}
+
+#headers {
+	flex: 1;
+	overflow-y: auto;
+}
+
+.header {
+	padding: 6px 10px;
+	border-bottom: 1px solid #e4e4e4;
+	cursor: pointer;
+}
+
+.header.unseen .subject { font-weight: bold; }
+.header:hover { background: #eef3fa; }
+.header.selected { background: #cfe0f5; }
+
+.header .from {
+	display: block;
+	font-size: 12px;
+	color: #505050;
+}
+
+.header .subject {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+#pager {
+	display: flex;
+	gap: 6px;
+	padding: 6px;
+	border-top: 1px solid #d0d0d0;
+	background: #f0f0f0;
+}
+
+#reader {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	background: #fff;
+}
+
+#reader-empty {
+	padding: 2em;
+	color: #808080;
+	text-align: center;
+}
+
+#reader-content {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+#reader-subject {
+	font-size: 18px;
+	font-weight: bold;
+	padding: 10px 14px 2px;
+}
+
+#reader-from {
+	padding: 0 14px 8px;
+	color: #505050;
+	border-bottom: 1px solid #e4e4e4;
+}
+
+#reader-attachments {
+	padding: 4px 14px;
+}
+
+.attachment {
+	display: inline-block;
+	margin-right: 8px;
+	padding: 2px 8px;
+	background: #eef3fa;
+	border-radius: 3px;
+	font-size: 12px;
+}
+
+#reader-frame-wrap {
+	flex: 1;
+	min-height: 0;
+}
+
+#reader-frame {
+	width: 100%;
+	height: 100%;
+	border: 0;
+}
+
+#reader-text {
+	flex: 1;
+	margin: 0;
+	padding: 10px 14px;
+	overflow: auto;
+	white-space: pre-wrap;
+	font-family: sans-serif;
+}
+
+#reader-actions {
+	display: flex;
+	gap: 8px;
+	padding: 8px 14px;
+	border-top: 1px solid #e4e4e4;
+	background: #f7f7f7;
+}
+
+#compose {
+	position: absolute;
+	top: 40px;
+	right: 20px;
+	width: 520px;
+	max-width: 80%;
+	background: #fff;
+	border: 1px solid #b0b0b0;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	z-index: 10;
+}
+
+#compose-head {
+	display: flex;
+	gap: 8px;
+}
+
+#compose input,
+#compose textarea {
+	border: 1px solid #c8c8c8;
+	padding: 5px;
+	font: inherit;
+}
+
+#compose textarea {
+	min-height: 200px;
+	resize: vertical;
+}
+
+#status {
+	padding: 3px 10px;
+	background: #e8e8e8;
+	border-top: 1px solid #c8c8c8;
+	font-size: 12px;
+	min-height: 16px;
+}
+
+button {
+	font: inherit;
+	padding: 4px 10px;
+	border: 1px solid #b0b0b0;
+	background: #f8f8f8;
+	cursor: pointer;
+}
+
+button:hover { background: #e8eef7; }

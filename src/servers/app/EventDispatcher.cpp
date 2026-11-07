@@ -15,6 +15,7 @@
 #include "EventStream.h"
 #include "HWInterface.h"
 #include "InputManager.h"
+#include "OutputAddonManager.h"
 #include "ServerBitmap.h"
 
 #include <MessagePrivate.h>
@@ -85,6 +86,17 @@ static const float kMouseMovedImportance = 0.1f;
 static const float kMouseTransitImportance = 1.0f;
 static const float kStandardImportance = 0.9f;
 static const float kListenerImportance = 0.8f;
+
+// Delivery deadline: 500 ms scaled by the importance factor. Standard
+// events (keys, buttons) wait without limit, the others are dropped so a
+// wedged client cannot freeze the dispatcher.
+static bigtime_t
+_deliveryTimeout(float importance)
+{
+	if (importance >= kStandardImportance)
+		return B_INFINITE_TIMEOUT;
+	return (bigtime_t)(500000 * importance);
+}
 
 
 EventTarget::EventTarget()
@@ -530,6 +542,22 @@ EventDispatcher::SendFakeMouseMoved(EventTarget& target, int32 viewToken)
 
 
 void
+EventDispatcher::InjectEvent(BMessage* event)
+{
+	if (event == NULL)
+		return;
+
+	BAutolock _(this);
+	if (fStream == NULL) {
+		delete event;
+		return;
+	}
+
+	fStream->InsertEvent(event);
+}
+
+
+void
 EventDispatcher::_SendFakeMouseMoved(BMessage* message)
 {
 	BMessenger target;
@@ -690,7 +718,14 @@ EventDispatcher::_SendMessage(BMessenger& messenger, BMessage* message,
 	// TODO: add failed messages to a queue, and start dropping them by importance
 	//	(and use the same mechanism in ServerWindow::SendMessageToClient())
 
-	status_t status = messenger.SendMessage(message, (BHandler*)NULL, 0);
+	// Events below kStandardImportance are dropped on timeout.
+	status_t status = messenger.SendMessage(message, (BHandler*)NULL,
+		_deliveryTimeout(importance));
+	if (status == B_TIMED_OUT) {
+		ETRACE(("events: dropped '%.4s', target did not accept it in time\n",
+			(char*)&message->what));
+		return true;
+	}
 	if (status != B_OK) {
 		printf("EventDispatcher: failed to send message '%.4s' to target: %s\n",
 			(char*)&message->what, strerror(status));
@@ -801,6 +836,11 @@ EventDispatcher::_EventLoop()
 	while (fStream->GetNextEvent(&event)) {
 		BAutolock _(this);
 		fLastUpdate = system_time();
+
+		// Pre-hit-test copy for output add-ons: remote desktops need the
+		// raw stream, not the routed per-window messages.
+		if (gOutputAddonManager != NULL)
+			gOutputAddonManager->PublishInput(*event);
 		if (atomic_get_and_set(&fDisplayAsleep, 0) != 0 && fHWInterface != NULL)
 			fHWInterface->SetDPMSMode(B_DPMS_ON);
 
@@ -860,21 +900,32 @@ EventDispatcher::_EventLoop()
 #endif
 				pointerEvent = true;
 
-				if (!fMouseFilter.IsSet())
-					break;
+				EventTarget* grabTarget = fDesktop != NULL
+					? fDesktop->PointerGrabTarget() : NULL;
 
 				EventTarget* mouseTarget = fPreviousMouseTarget;
 				int32 viewToken = B_NULL_TOKEN;
-				if (fMouseFilter->Filter(event, &mouseTarget, &viewToken,
-						fNextLatestMouseMoved) == B_SKIP_MESSAGE) {
-					// this is a work-around if the wrong B_MOUSE_UP
-					// event is filtered out
-					if (event->what == B_MOUSE_UP
-						&& event->FindInt32("buttons") == 0) {
-						fSuspendFocus = false;
-						_RemoveTemporaryListeners();
+				if (grabTarget != NULL) {
+					// A grab takes the events regardless of focus or
+					// hover; hit-testing belongs to the grabber, so
+					// the mouse filter must not redirect them.
+					mouseTarget = grabTarget;
+				} else {
+					if (!fMouseFilter.IsSet())
+						break;
+
+					if (fMouseFilter->Filter(event, &mouseTarget,
+							&viewToken, fNextLatestMouseMoved)
+							== B_SKIP_MESSAGE) {
+						// this is a work-around if the wrong B_MOUSE_UP
+						// event is filtered out
+						if (event->what == B_MOUSE_UP
+							&& event->FindInt32("buttons") == 0) {
+							fSuspendFocus = false;
+							_RemoveTemporaryListeners();
+						}
+						break;
 					}
-					break;
 				}
 
 				int32 buttons;
@@ -945,6 +996,25 @@ EventDispatcher::_EventLoop()
 				}
 
 				keyboardEvent = true;
+
+				{
+					EventTarget* keyGrabTarget = fDesktop != NULL
+						? fDesktop->KeyboardGrabTarget() : NULL;
+					if (keyGrabTarget != NULL) {
+						// The keyboard filter already ran so system
+						// chords (workspace switch, VT) keep working;
+						// the grab only redirects delivery.
+						if (_AddTokens(event, keyGrabTarget,
+								B_KEYBOARD_EVENTS)) {
+							addedTokens = true;
+							if (!fSuspendFocus)
+								_SetFeedFocus(event);
+						}
+						_SendMessage(keyGrabTarget->Messenger(), event,
+							kStandardImportance);
+						break;
+					}
+				}
 
 				if (fFocus != NULL && _AddTokens(event, fFocus,
 						B_KEYBOARD_EVENTS)) {

@@ -32,6 +32,7 @@ Controller::Controller(const BMessenger& target)
 	fAudioTrackCount(0),
 	fVideoTrackCount(0),
 	fHasVideo(false),
+	fAtEnd(false),
 	fVideoWidth(0),
 	fVideoHeight(0),
 	fVideoParNum(0),
@@ -258,6 +259,7 @@ status_t
 Controller::_SetToRef(const entry_ref& ref)
 {
 	_StopMidi();
+	fAtEnd = false;
 	status_t err = fPlayer.SetTo(&ref);
 	if (err != B_OK)
 		return err;
@@ -265,17 +267,24 @@ Controller::_SetToRef(const entry_ref& ref)
 	_ApplyVolume();
 	_NotifyState();
 	_Notify(MSG_CONTROLLER_DURATION);
-	if (fTarget.IsValid()) {
-		BMessage msg(MSG_CONTROLLER_VIDEO);
-		msg.AddBool("has_video", fHasVideo);
-		msg.AddInt32("width", (int32)fVideoWidth);
-		msg.AddInt32("height", (int32)fVideoHeight);
-		msg.AddInt32("par_num", (int32)fVideoParNum);
-		msg.AddInt32("par_den", (int32)fVideoParDen);
-		msg.AddInt32("rotation", (int32)fVideoRotation);
-		fTarget.SendMessage(&msg);
-	}
+	_NotifyVideo();
 	return B_OK;
+}
+
+
+void
+Controller::_NotifyVideo()
+{
+	if (!fTarget.IsValid())
+		return;
+	BMessage msg(MSG_CONTROLLER_VIDEO);
+	msg.AddBool("has_video", fHasVideo);
+	msg.AddInt32("width", (int32)fVideoWidth);
+	msg.AddInt32("height", (int32)fVideoHeight);
+	msg.AddInt32("par_num", (int32)fVideoParNum);
+	msg.AddInt32("par_den", (int32)fVideoParDen);
+	msg.AddInt32("rotation", (int32)fVideoRotation);
+	fTarget.SendMessage(&msg);
 }
 
 
@@ -283,6 +292,7 @@ status_t
 Controller::_SetToUrl(const BUrl& url)
 {
 	_StopMidi();
+	fAtEnd = false;
 	status_t err = fPlayer.SetTo(url);
 	if (err != B_OK)
 		return err;
@@ -384,8 +394,13 @@ Controller::OpenMidi(const entry_ref& ref)
 	}
 	fMidi->SetFinishedTarget(fTarget);
 	fPlayer.Stop();
+	fAtEnd = false;
+	fHasVideo = false;
+	fVideoWidth = 0;
+	fVideoHeight = 0;
 	_ApplyVolume();
 	_NotifyState();
+	_NotifyVideo();
 	return fMidi->Play();
 }
 
@@ -425,6 +440,7 @@ Controller::OpenCd(int32 track)
 status_t
 Controller::Play()
 {
+	_RewindIfAtEnd();
 	if (fMidi != NULL)
 		return fMidi->Play();
 	return fPlayer.Play();
@@ -455,10 +471,12 @@ Controller::TogglePlaying()
 	if (fMidi != NULL) {
 		if (fMidi->IsPlaying())
 			return fMidi->Pause();
+		_RewindIfAtEnd();
 		return fMidi->Play();
 	}
 	if (fPlayer.IsPlaying())
 		return fPlayer.Pause();
+	_RewindIfAtEnd();
 	return fPlayer.Play();
 }
 
@@ -466,6 +484,7 @@ Controller::TogglePlaying()
 status_t
 Controller::SeekTo(bigtime_t position, bool accurate)
 {
+	fAtEnd = false;
 	if (fMidi != NULL)
 		return fMidi->SeekTo(position);
 	status_t err = fPlayer.SeekTo(position,
@@ -560,10 +579,23 @@ Controller::HandleEOS()
 		}
 		return;
 	}
-	if (fPlaylist.CountItems() > 1)
-		SkipForward();
+	if (fPlaylist.CountItems() > 1 && SkipForward() == B_OK)
+		return;
+	fAtEnd = true;
+	_NotifyState();
+}
+
+
+void
+Controller::_RewindIfAtEnd()
+{
+	if (!fAtEnd)
+		return;
+	fAtEnd = false;
+	if (fMidi != NULL)
+		fMidi->SeekTo(0);
 	else
-		_NotifyState();
+		fPlayer.SeekTo(0);
 }
 
 

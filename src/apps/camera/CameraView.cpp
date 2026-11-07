@@ -5,6 +5,7 @@
 #include "CameraView.h"
 
 #include <Autolock.h>
+#include <Region.h>
 #include <Message.h>
 #include <Window.h>
 #include <Point.h>
@@ -74,10 +75,26 @@ CameraView::SetFrame(const uint8* bits, size_t size, uint32 width,
 }
 
 
+void
+CameraView::SetAspect(float aspect)
+{
+	if (aspect <= 0)
+		return;
+
+	BAutolock _(fLock);
+	// Once frames arrive they own the shape.
+	if (fFrame != NULL || fAspect == aspect)
+		return;
+
+	fAspect = aspect;
+	InvalidateLayout();
+}
+
+
 bool
 CameraView::HasHeightForWidth()
 {
-	return true;
+	return false;
 }
 
 
@@ -171,6 +188,11 @@ CameraView::Draw(BRect updateRect)
 	const BRect destination = _Destination();
 	const float scaledWidth = destination.Width();
 	const float scaledHeight = destination.Height();
+
+	BRegion bars(bounds);
+	bars.Exclude(destination);
+	SetLowColor(0, 0, 0);
+	FillRegion(&bars, B_SOLID_LOW);
 
 	PushState();
 	if (fMirrored) {

@@ -7,6 +7,7 @@ AddOn(
 
 	SOURCES
 	MouseInputDevice.cpp
+	../../../../kits/shared/PointerControlCore.cpp
 
 	INCLUDES
 	"./"

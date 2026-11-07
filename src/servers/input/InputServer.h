@@ -253,7 +253,7 @@ class InputServer : public BApplication {
 		BottomlineWindow*	fInputMethodWindow;
 		bool				fInputMethodAware;
 
-		sem_id 			fCursorSem;
+		BSharedEvent		fCursorEvent;
 		port_id			fAppServerPort;
 		team_id			fAppServerTeam;
 		area_id			fCursorArea;

@@ -17,6 +17,12 @@ target_sources(be PRIVATE
 	JobQueue.cpp
 	List.cpp
 	Locker.cpp
+	UserSemaphore.cpp
+	BFutexLocker.cpp
+	SharedLocker.cpp
+	SharedEvent.cpp
+	SharedLiveness.cpp
+	SharedRWLocker.cpp
 	PointerList.cpp
 	Referenceable.cpp
 	StopWatch.cpp
@@ -28,7 +34,7 @@ target_sources(be PRIVATE
 	ZstdCompressionAlgorithm.cpp
 )
 
-UsePrivateHeaders(be support)
+UsePrivateHeaders(be support shared)
 
 target_sources(be_bootstrap PRIVATE
 	#Architecture.cpp
@@ -45,6 +51,7 @@ target_sources(be_bootstrap PRIVATE
 	JobQueue.cpp
 	List.cpp
 	Locker.cpp
+	UserSemaphore.cpp
 	PointerList.cpp
 	Referenceable.cpp
 	StopWatch.cpp

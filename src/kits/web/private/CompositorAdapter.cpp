@@ -28,6 +28,7 @@
 // TODO: 60 Hz on GPU renderers; choose at runtime.
 static const unsigned int kActiveTickMs = 33;
 static const unsigned int kIdleTickMs = 200;
+static const unsigned int kFallbackMs = 50;
 #include <cstdlib>
 #include <cstring>
 
@@ -59,7 +60,9 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fFrameReady(false),
 	fClockRunning(false),
 	fLastActivity(0),
-	fClockSource(0)
+	fClockSource(0),
+	fOutstanding(false),
+	fFallbackSource(0)
 {
 	init_fdo_backend();
 
@@ -73,6 +76,8 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 			auto* self = static_cast<CompositorAdapter*>(data);
 			struct wl_shm_buffer* shmBuf =
 				wpe_fdo_shm_exported_buffer_get_shm_buffer(buffer);
+			// Set before the copy: a Draw that shows this frame must see it.
+			self->fOutstanding.store(true);
 			if (shmBuf) {
 				wl_shm_buffer_begin_access(shmBuf);
 				const uint8_t* pixels =
@@ -85,6 +90,7 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 			}
 			wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(
 				self->fExportable, buffer);
+			self->_ArmFallback();
 			self->ScheduleFrameComplete();
 		};
 
@@ -118,6 +124,8 @@ CompositorAdapter::~CompositorAdapter()
 	// Destroyed on the GLib thread, so the clock cannot be mid-tick.
 	if (fClockSource != 0)
 		g_source_remove(fClockSource);
+	if (fFallbackSource != 0)
+		g_source_remove(fFallbackSource);
 	// Owned by the WebView once ReleaseExportable() handed it over.
 	if (fExportable && fOwnsExportable)
 		wpe_view_backend_exportable_fdo_destroy(fExportable);
@@ -242,7 +250,8 @@ CompositorAdapter::ScheduleFrameComplete()
 CompositorAdapter::_ClockTick(void* data)
 {
 	auto* self = static_cast<CompositorAdapter*>(data);
-	if (self->fExportable != NULL)
+	// An exported frame completes on presentation or the fallback.
+	if (self->fExportable != NULL && !self->fOutstanding.load())
 		wpe_view_backend_exportable_fdo_dispatch_frame_complete(
 			self->fExportable);
 
@@ -254,6 +263,56 @@ CompositorAdapter::_ClockTick(void* data)
 	self->fClockRunning.store(false);
 	self->fClockSource = g_timeout_add(kIdleTickMs,
 		(GSourceFunc)&CompositorAdapter::_ClockTick, self);
+	return G_SOURCE_REMOVE;
+}
+
+
+void
+CompositorAdapter::NotifyPresented()
+{
+	if (!fOutstanding.load())
+		return;
+	ProcessManager::Instance().InvokeOnGLibThread([](void* data) -> gboolean {
+		static_cast<CompositorAdapter*>(data)->_CompleteExported();
+		return G_SOURCE_REMOVE;
+	}, this);
+}
+
+
+// GLib thread. Exactly one frame_complete per exported buffer.
+void
+CompositorAdapter::_CompleteExported()
+{
+	if (fFallbackSource != 0) {
+		g_source_remove(fFallbackSource);
+		fFallbackSource = 0;
+	}
+	if (fOutstanding.exchange(false) && fExportable != NULL)
+		wpe_view_backend_exportable_fdo_dispatch_frame_complete(fExportable);
+}
+
+
+void
+CompositorAdapter::_ArmFallback()
+{
+	// A hidden view never draws; complete anyway so the page cannot stall.
+	ProcessManager::Instance().InvokeOnGLibThread([](void* data) -> gboolean {
+		auto* self = static_cast<CompositorAdapter*>(data);
+		if (self->fFallbackSource != 0)
+			g_source_remove(self->fFallbackSource);
+		self->fFallbackSource = g_timeout_add(kFallbackMs,
+			(GSourceFunc)&CompositorAdapter::_FallbackTick, self);
+		return G_SOURCE_REMOVE;
+	}, this);
+}
+
+
+/* static */ int
+CompositorAdapter::_FallbackTick(void* data)
+{
+	auto* self = static_cast<CompositorAdapter*>(data);
+	self->fFallbackSource = 0;
+	self->_CompleteExported();
 	return G_SOURCE_REMOVE;
 }
 

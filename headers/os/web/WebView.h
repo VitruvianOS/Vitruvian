@@ -11,6 +11,9 @@
 #include <String.h>
 
 
+class BWebExtensions;
+
+
 // Whether media may start playing without a user gesture.
 enum web_autoplay_policy {
 	B_WEB_AUTOPLAY_ALLOW = 0,
@@ -117,6 +120,18 @@ public:
 			void				AddUserScript(const char* javascript,
 									bool atDocumentStart);
 			void				AddUserStyleSheet(const char* css);
+
+	// Serves a URI scheme from a directory of static files. Call
+	// before any view in the process is attached.
+	static	void				SetLocalSchemeDirectory(const char* scheme,
+									const char* path);
+
+	// NetPlus extensions: the app owns one registry for the whole
+	// process; the view applies the matching payloads per
+	// navigation. Call before the view is shown.
+			void				SetExtensions(BWebExtensions* extensions);
+	// Subresource requests blocked or failed on the current page.
+			int32				BlockedRequestCount() const;
 
 	// Full-screen video: the window calls this after it entered or
 	// left full-screen; the reply tells WebKit the transition done.

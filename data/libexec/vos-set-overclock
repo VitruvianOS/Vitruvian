@@ -1,0 +1,63 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-set-overclock: privileged overclock writes for the Hardware
+# Acceleration preflet, gated by pkexec (polkit action
+# org.vitruvian.overclock.set).
+#
+# Usage:
+#   vos-set-overclock status            print key=value state
+#   vos-set-overclock spd               print spd_<n>_hex=... lines
+#   vos-set-overclock apply  KEY=VALUE  apply now, nothing persisted
+#   vos-set-overclock persist KEY=VALUE apply now, keep for boot, arm
+#                                       the failed-boot revert counter
+#   vos-set-overclock revert            restore snapshot defaults, drop
+#                                       the persisted settings
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "must run as root" >&2
+    exit 1
+fi
+
+. "${VOS_OVERCLOCK_COMMON:-/usr/libexec/vos-overclock-common.sh}"
+
+[ $# -ge 1 ] || { echo "nothing to do" >&2; exit 2; }
+command="$1"
+shift
+
+case "$command" in
+    status)
+        oc_status
+        ;;
+    spd)
+        oc_spd || exit 1
+        ;;
+    apply)
+        [ $# -gt 0 ] || { echo "nothing to apply" >&2; exit 2; }
+        for arg in "$@"; do
+            oc_apply_kv "$arg"
+        done
+        ;;
+    persist)
+        [ $# -gt 0 ] || { echo "nothing to persist" >&2; exit 2; }
+        oc_conf_write "$@"
+        # New settings must not inherit an old counter.
+        oc_boot_count_set "$BOOT_COUNT_DEFAULT"
+        oc_enable_units
+        for arg in "$@"; do
+            oc_apply_kv "$arg" || echo "apply failed: $arg" >&2
+        done
+        ;;
+    revert)
+        oc_restore_defaults
+        rm -f "$CONF_FILE"
+        oc_boot_count_set "$BOOT_COUNT_DEFAULT"
+        oc_disable_units
+        ;;
+    *)
+        echo "unknown command: $command" >&2
+        exit 2
+        ;;
+esac

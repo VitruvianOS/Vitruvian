@@ -24,7 +24,6 @@ LevelMeterView::LevelMeterView(const char* name, float minDB, float maxDB,
 	fDecayRate(0.85f)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 
@@ -79,9 +78,7 @@ LevelMeterView::FrameResized(float, float)
 void
 LevelMeterView::_RecomputeBar()
 {
-
-	BRect b = Bounds().InsetByCopy(2.0f, 2.0f);
-	fBar = b;
+	fBar = Bounds().InsetByCopy(1.0f, 1.0f);
 }
 
 
@@ -97,45 +94,45 @@ DBToNorm(float db, float minDB, float maxDB)
 void
 LevelMeterView::Draw(BRect)
 {
-	if (fBar.IsValid() == false)
+	if (!fBar.IsValid())
 		_RecomputeBar();
 
-
-	SetHighColor(tint_color(LowColor(), B_DARKEN_2_TINT));
+	const rgb_color panel = ui_color(B_PANEL_BACKGROUND_COLOR);
+	SetHighColor(panel);
+	FillRect(Bounds());
+	SetHighColor(tint_color(panel, B_DARKEN_3_TINT));
+	StrokeRect(Bounds());
+	SetHighColor(make_color(24, 24, 24));
 	FillRect(fBar);
 
-
 	float db = fPeak > 0.0001f ? 20.0f * std::log10(fPeak) : fMinDB;
-	float norm = DBToNorm(db, fMinDB, fMaxDB);
+	const float norm = DBToNorm(db, fMinDB, fMaxDB);
 	if (norm <= 0.0f)
 		return;
 
-
-	const float greenMax  = DBToNorm(-6.0f, fMinDB, fMaxDB);
+	const float greenMax = DBToNorm(-12.0f, fMinDB, fMaxDB);
 	const float yellowMax = DBToNorm(-3.0f, fMinDB, fMaxDB);
+	const rgb_color green = make_color(116, 224, 0);
+	const rgb_color yellow = make_color(255, 200, 0);
+	const rgb_color red = make_color(255, 80, 0);
 
-	auto seg = [&](float loN, float hiN, rgb_color c) {
-		if (hiN <= loN) return;
+	// Lit segments with a one pixel gap, coloured by their level.
+	const float length = fVertical ? fBar.Height() : fBar.Width();
+	const float step = 4.0f;
+	const int32 count = std::max((int32)1, (int32)(length / step));
+	const int32 lit = (int32)ceilf(norm * count);
+	for (int32 i = 0; i < lit; i++) {
+		const float level = (i + 0.5f) / count;
+		SetHighColor(level > yellowMax ? red
+			: level > greenMax ? yellow : green);
 		BRect r = fBar;
 		if (fVertical) {
-			float top = fBar.bottom - fBar.Height() * hiN;
-			float bot = fBar.bottom - fBar.Height() * loN;
-			r.Set(fBar.left, top, fBar.right, bot);
+			r.bottom = fBar.bottom - i * step;
+			r.top = r.bottom - (step - 2.0f);
 		} else {
-			r.Set(fBar.left + fBar.Width() * loN, fBar.top,
-				fBar.left + fBar.Width() * hiN, fBar.bottom);
+			r.left = fBar.left + i * step;
+			r.right = r.left + (step - 2.0f);
 		}
-		SetHighColor(c);
 		FillRect(r);
-	};
-
-	rgb_color green = { 116, 224, 0, 255 };
-	rgb_color yellow = { 255, 200, 0, 255 };
-	rgb_color red    = { 255, 80,  0, 255 };
-
-	seg(0.0f,   std::min(norm, greenMax),  green);
-	if (norm > greenMax)
-		seg(greenMax, std::min(norm, yellowMax), yellow);
-	if (norm > yellowMax)
-		seg(yellowMax, norm, red);
+	}
 }

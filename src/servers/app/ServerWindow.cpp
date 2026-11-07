@@ -896,9 +896,8 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fDesktop->ResizeWindowBy(fWindow.Get(),
 					xResizeTo - fWindow->Frame().Width(),
 					yResizeTo - fWindow->Frame().Height());
-				fLink.StartMessage(B_OK);
 //			}
-			fLink.Flush();
+			// No reply, the client corrects itself from B_WINDOW_RESIZED.
 			break;
 		}
 		case AS_WINDOW_MOVE:
@@ -916,14 +915,13 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (fWindow->IsDragging()) {
 				// While the user moves the window, we ignore
 				// pragmatically set window positions
-				fLink.StartMessage(B_BUSY);
 			} else {
 				fDesktop->MoveWindowBy(fWindow.Get(),
 					xMoveTo - fWindow->Frame().left,
 					yMoveTo - fWindow->Frame().top);
-				fLink.StartMessage(B_OK);
 			}
-			fLink.Flush();
+			// No reply, B_WINDOW_MOVED corrects the client frame if the
+			// move was ignored above.
 			break;
 		}
 		case AS_SET_SIZE_LIMITS:
@@ -1373,6 +1371,50 @@ fDesktop->LockSingleWindow();
 			// TODO: support B_LOCK_WINDOW_FOCUS option in Desktop
 			break;
 		}
+		case AS_ACQUIRE_POINTER_GRAB:
+		{
+			uint32 flags = 0;
+			BRect confineTo;
+			link.Read<uint32>(&flags);
+			if (link.Read<BRect>(&confineTo) != B_OK)
+				break;
+
+			status_t status = fDesktop->AcquirePointerGrab(fClientTeam,
+				fServerToken, &fEventTarget, flags, confineTo);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_RELEASE_POINTER_GRAB:
+		{
+			status_t status = fDesktop->ReleasePointerGrab(fClientTeam);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_ACQUIRE_KEYBOARD_GRAB:
+		{
+			uint32 flags = 0;
+			link.Read<uint32>(&flags);
+
+			status_t status = fDesktop->AcquireKeyboardGrab(fClientTeam,
+				fServerToken, &fEventTarget, flags);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+		case AS_RELEASE_KEYBOARD_GRAB:
+		{
+			status_t status = fDesktop->ReleaseKeyboardGrab(fClientTeam);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
 		case AS_VIEW_MOVE_TO:
 		{
 			float x, y;
@@ -4503,7 +4545,7 @@ ServerWindow::MakeWindow(BRect frame, const char* name,
 void
 ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 {
-	ASSERT_MULTI_LOCKED(fDesktop->WindowLocker());
+	ASSERT_BRW_LOCKED(fDesktop->WindowLocker());
 
 	if (!fDirectWindowInfo.IsSet())
 		return;
@@ -4532,8 +4574,8 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 			App()->Signature(), strerror(status));
 		syslog(LOG_ERR, errorString);
 
-		// The client application didn't release the semaphore
-		// within the given timeout. Or something else went wrong.
+		// The client did not acknowledge within the timeout, or
+		// something else went wrong.
 		// Deleting this member should make it crash.
 		fDirectWindowInfo.Unset();
 	} else if ((bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_START)
@@ -4628,7 +4670,8 @@ ServerWindow::_MessageNeedsAllWindowsLocked(uint32 code) const
 		case AS_SET_SIZE_LIMITS:
 		case AS_SYSTEM_FONT_CHANGED:
 		case AS_SET_DECORATOR_SETTINGS:
-		case AS_GET_MOUSE:
+		// AS_GET_MOUSE only reads the last mouse state, so it stays
+		// under the read lock.
 		case AS_DIRECT_WINDOW_SET_FULLSCREEN:
 //		case AS_VIEW_SET_EVENT_MASK:
 //		case AS_VIEW_SET_MOUSE_EVENT_MASK:

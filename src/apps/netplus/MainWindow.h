@@ -52,7 +52,7 @@ public:
 private:
 			void				_ApplySettings();
 			void				_UpdateNavState();
-			void				_RebuildBookmarksMenu();
+			void				_AddShortcuts();
 			void				_SetFullScreen(bool enter);
 			void				_OpenURL(const char* text);
 			const char*			_SearchTemplate() const;
@@ -69,11 +69,6 @@ private:
 			BWebView*			fWebView;
 			ToolbarView*		fToolbar;
 			StatusBarView*		fStatusBar;
-			BMenuBar*			fMenuBar;
-			BMenu*				fBookmarksMenu;
-			BMenu*				fRemoveBookmarkMenu;
-			BMenuItem*			fBackItem;
-			BMenuItem*			fForwardItem;
 			bool				fPrivateWindow;
 			bool				fFullScreen;
 			BRect				fSavedFrame;

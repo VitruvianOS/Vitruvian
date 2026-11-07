@@ -21,6 +21,7 @@ class AptBackend;
 class PackageInfo;
 class VDependencyExpression;
 class VPackageRoster;
+struct source_job;
 
 
 // Transactions block in waitpid() for as long as apt takes, so they run
@@ -48,6 +49,7 @@ private:
 			void				_DoSimulate(BMessage* request);
 			void				_DoApplyChanges(BMessage* request);
 			void				_DoAptUpdate();
+			void				_DoSourceOp(BMessage* request);
 
 			void				_RunSimulate(
 									const BObjectList<BString, true>* install,
@@ -58,10 +60,12 @@ private:
 									const BObjectList<BString, true>* remove,
 									const BObjectList<BString, true>* purge);
 			void				_RunAptUpdate();
+			void				_RunSourceOp(source_job* job);
 
 	static	int32				_SimulateThread(void* data);
 	static	int32				_ApplyChangesThread(void* data);
 	static	int32				_AptUpdateThread(void* data);
+	static	int32				_SourceOpThread(void* data);
 
 			void				_OnPackageListReply(BMessage* message);
 			void				_OnPackageDetailsReply(BMessage* message);

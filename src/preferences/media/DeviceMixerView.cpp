@@ -92,11 +92,9 @@ DeviceMixerView::DeviceMixerView(uint32 deviceId, bool isOutput)
 
 	fMeter = new LevelMeterView("meter", -60.0f, 0.0f, true);
 	const float meterLine = ceilf(be_plain_font->Size() * 1.2f);
-	const float meterMinH = meterLine * 8.0f;
-	const float meterMinW = meterLine * 1.5f;
 	const float meterMaxW = meterLine * 4.0f;
-	fMeter->SetExplicitMinSize(BSize(meterMinW, meterMinH));
-	fMeter->SetExplicitMaxSize(BSize(meterMaxW, meterMinH));
+	fMeter->SetExplicitMinSize(BSize(meterLine * 0.7f, meterLine * 4.0f));
+	fMeter->SetExplicitMaxSize(BSize(meterLine * 0.7f, B_SIZE_UNLIMITED));
 
 	fDefaultButton = new BButton("default",
 		fIsOutput ? B_TRANSLATE("Set as Default Output")
@@ -149,8 +147,9 @@ DeviceMixerView::AttachedToWindow()
 	RefreshFromBackend();
 
 	BMediaGraph* g = BMediaGraph::Instance();
-	if (g != NULL)
-		g->StartMeteringDevice((media_client_id)fDeviceId, BMessenger(this));
+	if (g != NULL && g->StartMeteringDevice((media_client_id)fDeviceId,
+			BMessenger(this)) != B_OK && !fMeter->IsHidden(fMeter))
+		fMeter->Hide();
 }
 
 

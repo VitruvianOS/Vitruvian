@@ -26,6 +26,7 @@ class PackageInfo;
 class PackageInfoView;
 class PackageListView;
 class PackageWorker;
+class RepositoriesView;
 class WorkStatusView;
 
 
@@ -57,6 +58,11 @@ private:
 			void				_HandleError(BMessage* message);
 			bool				_RunExitGuard();
 
+			void				_OpenSourceDialog(bool edit);
+			void				_ConfirmSourceRemove();
+			void				_ToggleSource();
+			void				_DispatchSourceOp(BMessage* request);
+
 			void				_WatchDpkgStatus();
 			void				_ShowStaleHint(bool show);
 			void				_ShowEmptyListsHint(bool show);
@@ -77,6 +83,7 @@ private:
 			PackageListView*	fListView;
 			PackageInfoView*	fInfoView;
 			AptLogView*			fLogView;
+			RepositoriesView*	fRepositoriesView;
 			WorkStatusView*		fStatusView;
 			PackageWorker*		fWorker;
 

@@ -1,0 +1,35 @@
+
+resource app_signature "application/x-vnd.vos-hardware-prefs";
+
+resource app_name_catalog_entry "x-vnd.vos-hardware-prefs:System name:Hardware";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 2,
+
+	internal = 0,
+
+	short_info = "Hardware",
+	long_info  = "Hardware ©2026 Dario Casalinuovo"
+};
+
+resource vector_icon {
+	$"6E63696603012E3A4AFF016FB4E8FF01"
+	$"9AA5B1FF0A0A0434283828383034300A"
+	$"0448284C284C3048300A043450385038"
+	$"5834580A0448504C504C5848580A0428"
+	$"343034303828380A0428483048304C28"
+	$"4C0A0452345A345A3852380A0452485A"
+	$"485A4C524C0A042E2E522E52522E520A"
+	$"0438384838484838480A0A020100040A"
+	$"020101040A020102040A020103040A02"
+	$"0104040A020105040A020106040A0201"
+	$"07040A000108040A01010904"
+};

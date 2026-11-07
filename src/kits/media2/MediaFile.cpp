@@ -51,6 +51,7 @@ public:
 		fEOS(false),
 		fKind(kTrackAudio),
 		fStreamIndex(0),
+		fPollVideo(false),
 		fFrameStride(0),
 		fNextPts(0),
 		fCodecId(B_CODEC_TYPE_UNKNOWN),
@@ -122,6 +123,7 @@ public:
 	bool			fEOS;
 	int32			fKind;
 	int32			fStreamIndex;
+	bool			fPollVideo;
 	uint32			fFrameStride;
 	uint64			fNextPts;	// nanoseconds since stream start
 	int32			fCodecId;
@@ -221,10 +223,10 @@ public:
 		fAppSrc(NULL),
 		fInitErr(B_NO_INIT),
 		fWriteMode(false),
-		fHasSource(false),
 		fFormatInfo(NULL),
 		fCodecType(B_CODEC_TYPE_UNKNOWN),
-		fDurationNs(0)
+		fDurationNs(0),
+		fHasSource(false)
 	{
 	}
 
@@ -1118,6 +1120,33 @@ BMediaTrack::DecodedFormat(BMediaFormat* format)
 }
 
 
+// Callers size their buffers from the decoded format, so it must carry
+// the row and buffer sizes ReadFrames copies.
+static void
+_CompleteRawFormat(media_format* format)
+{
+	if (format->type == B_MEDIA_RAW_VIDEO) {
+		media_raw_video_format& video = format->u.raw_video;
+		if (video.width == 0)
+			video.width = video.display.line_width;
+		if (video.height == 0)
+			video.height = video.display.line_count;
+		video.display.format = B_RGB32;
+		video.display.line_width = video.width;
+		video.display.line_count = video.height;
+		video.display.bytes_per_row = video.width * 4;
+		if (video.height > 0)
+			video.last_active = video.height - 1;
+	} else if (format->type == B_MEDIA_RAW_AUDIO) {
+		media_raw_audio_format& audio = format->u.raw_audio;
+		const uint32 stride = (audio.format
+			& media_raw_audio_format::B_AUDIO_SIZE_MASK) * audio.channel_count;
+		if (audio.buffer_size == 0 && stride > 0)
+			audio.buffer_size = stride * 1024;
+	}
+}
+
+
 status_t
 BMediaTrack::DecodedFormat(media_format* format, uint32 /*flags*/)
 {
@@ -1130,6 +1159,7 @@ BMediaTrack::DecodedFormat(media_format* format, uint32 /*flags*/)
 		return B_NOT_SUPPORTED;
 	if (fImpl->fFormat.IsRawAudio() || fImpl->fFormat.IsRawVideo()) {
 		*format = fImpl->fFormat.format;
+		_CompleteRawFormat(format);
 		return B_OK;
 	}
 	// Track still holds the encoded view only; synthesise the raw side
@@ -1137,11 +1167,13 @@ BMediaTrack::DecodedFormat(media_format* format, uint32 /*flags*/)
 	if (fImpl->fEncodedFormat.IsEncodedAudio()) {
 		format->type = B_MEDIA_RAW_AUDIO;
 		format->u.raw_audio = fImpl->fEncodedFormat.format.u.encoded_audio.output;
+		_CompleteRawFormat(format);
 		return B_OK;
 	}
 	if (fImpl->fEncodedFormat.IsEncodedVideo()) {
 		format->type = B_MEDIA_RAW_VIDEO;
 		format->u.raw_video = fImpl->fEncodedFormat.format.u.encoded_video.output;
+		_CompleteRawFormat(format);
 		return B_OK;
 	}
 	return B_ERROR;
@@ -1272,6 +1304,24 @@ BMediaTrack::CurrentFrame() const
 }
 
 
+void
+BMediaTrack::_SetPollVideo(bool poll)
+{
+	if (fImpl == NULL)
+		return;
+	fImpl->fPollVideo = poll;
+	if (fImpl->fPlayBin != NULL) {
+		GstElement* vsink = NULL;
+		g_object_get(fImpl->fPlayBin, "video-sink", &vsink, NULL);
+		if (vsink != NULL) {
+			g_object_set_data(G_OBJECT(vsink), "vos-player",
+				GINT_TO_POINTER(poll ? 1 : 0));
+			gst_object_unref(vsink);
+		}
+	}
+}
+
+
 status_t
 BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 {
@@ -1293,10 +1343,21 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 			}
 		}
 	}
-	const int64 requested = *outFrameCount;
+	int64 requested = *outFrameCount;
 	*outFrameCount = 0;
-	if (requested <= 0)
-		return B_BAD_VALUE;
+	if (requested <= 0) {
+		// legacy callers pass no count: read one buffer's worth
+		requested = 1;
+		media_format decoded;
+		if (fImpl->fKind != kTrackVideo && DecodedFormat(&decoded) == B_OK) {
+			const media_raw_audio_format& raw = decoded.u.raw_audio;
+			const uint32 stride = (raw.format
+				& media_raw_audio_format::B_AUDIO_SIZE_MASK)
+				* raw.channel_count;
+			if (stride > 0 && raw.buffer_size >= stride)
+				requested = raw.buffer_size / stride;
+		}
+	}
 
 	if (fImpl->fPlayBin != NULL) {
 		GstElement* vsink = NULL;
@@ -1307,8 +1368,11 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 					GINT_TO_POINTER(1));
 			} else if (g_object_get_data(G_OBJECT(vsink), "vos-read")
 					== NULL) {
-				// Nobody pulls video: after 3s of audio, drop instead of
-				// letting the full video sink block the audio branch.
+				// Nobody pulls video: drop instead of letting the full video
+				// sink block the audio branch. The player gets 3s to start
+				// its video pulls.
+				if (g_object_get_data(G_OBJECT(vsink), "vos-player") == NULL)
+					g_object_set(vsink, "drop", TRUE, NULL);
 				gint64 now = g_get_monotonic_time();
 				gpointer first = g_object_get_data(G_OBJECT(vsink),
 					"vos-audio-first");
@@ -1353,9 +1417,10 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 	if (fImpl->fEOS)
 		return B_LAST_BUFFER_ERROR;
 
-	// Video is pulled from window threads: wait briefly, never forever. A
-	// frame that is not decoded yet is picked up on the next tick.
-	GstSample* sample = fImpl->fKind == kTrackVideo
+	// The player pulls video from window threads: wait briefly, never
+	// forever. A frame that is not decoded yet is picked up on the next tick.
+	const bool poll = fImpl->fKind == kTrackVideo && fImpl->fPollVideo;
+	GstSample* sample = poll
 		? gst_app_sink_try_pull_sample(sink, 20 * GST_MSECOND)
 		: gst_app_sink_pull_sample(sink);
 	if (sample == NULL) {
@@ -1363,7 +1428,7 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 			fImpl->fEOS = true;
 			return B_LAST_BUFFER_ERROR;
 		}
-		return fImpl->fKind == kTrackVideo ? B_WOULD_BLOCK : B_ERROR;
+		return poll ? B_WOULD_BLOCK : B_ERROR;
 	}
 
 	GstBuffer* gb = gst_sample_get_buffer(sample);

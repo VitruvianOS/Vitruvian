@@ -13,6 +13,8 @@
 #include <string.h>
 #include <vector>
 
+#include <Autolock.h>
+
 #include <File.h>
 #include <OS.h>
 #include <SupportDefs.h>
@@ -1950,21 +1952,27 @@ BMidiFilePlayerUnit::_LoadFile(const char* path)
 	if (outputEvents.size() > 500000)
 		outputEvents.resize(500000);
 
-	delete[] fEvents;
-	fEvents = NULL;
-	fEventCount = 0;
-
+	Event* events = NULL;
 	if (!outputEvents.empty()) {
-		fEvents = new(std::nothrow) Event[outputEvents.size()];
-		if (fEvents == NULL)
+		events = new(std::nothrow) Event[outputEvents.size()];
+		if (events == NULL)
 			return B_NO_MEMORY;
 		for (size_t i = 0; i < outputEvents.size(); i++) {
-			fEvents[i].time = outputEvents[i].time;
-			memcpy(fEvents[i].data, outputEvents[i].data, 3);
-			fEvents[i].length = outputEvents[i].length;
+			events[i].time = outputEvents[i].time;
+			memcpy(events[i].data, outputEvents[i].data, 3);
+			events[i].length = outputEvents[i].length;
 		}
-		fEventCount = (int32)outputEvents.size();
 	}
+
+	// ProcessCycle() reads fEvents; swap under the lock, free outside it.
+	fEventLock.Lock();
+	Event* old = fEvents;
+	fEvents = events;
+	fEventCount = (int32)outputEvents.size();
+	fPlaying = false;
+	fIndex = 0;
+	fEventLock.Unlock();
+	delete[] old;
 	return B_OK;
 }
 
@@ -1984,6 +1992,7 @@ BMidiFilePlayerUnit::ParameterChanged(int32 id)
 void
 BMidiFilePlayerUnit::_Rewind(bigtime_t performanceTime)
 {
+	BAutolock locker(fEventLock);
 	fIndex = 0;
 	fBaseTime = performanceTime;
 	fPlaying = fEventCount > 0;
@@ -2008,6 +2017,7 @@ BMidiFilePlayerUnit::HandleStop(bigtime_t performanceTime)
 void
 BMidiFilePlayerUnit::HandleSeek(bigtime_t mediaTime, bigtime_t performanceTime)
 {
+	BAutolock locker(fEventLock);
 	fBaseTime = performanceTime - mediaTime;
 	fIndex = 0;
 	while (fIndex < fEventCount && fEvents[fIndex].time < mediaTime)
@@ -2019,6 +2029,7 @@ BMidiFilePlayerUnit::HandleSeek(bigtime_t mediaTime, bigtime_t performanceTime)
 void
 BMidiFilePlayerUnit::ProcessCycle(uint32 /*frameCount*/)
 {
+	BAutolock locker(fEventLock);
 	if (!fPlaying || fOutput == NULL || fEvents == NULL)
 		return;
 

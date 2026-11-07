@@ -1,0 +1,11 @@
+{
+	"id": "reader-mode",
+	"name": "Reader Mode",
+	"version": "1.0",
+	"kind": "userscript",
+	"licence": "LGPL-2.1",
+	"description": "Article view of the current page; toggle it from the toolbar or the panel menu",
+	"match": ["<all_urls>"],
+	"default-enabled": true,
+	"script": "script.user.js"
+}

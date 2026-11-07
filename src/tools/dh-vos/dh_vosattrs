@@ -1,0 +1,68 @@
+#!/usr/bin/perl
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+
+=head1 NAME
+
+dh_vosattrs - list the files whose embedded resources become attributes
+
+=head1 DESCRIPTION
+
+Finds the ELF files of each package that carry resources (application
+signature, icon, version) and writes their installed paths to
+F</usr/share/vos/attrs/>I<package>F<.list>. The vos package's dpkg trigger
+on that directory turns the resources into file attributes on install.
+
+=cut
+
+use strict;
+use warnings;
+use File::Find;
+use Debian::Debhelper::Dh_Lib;
+
+my $resattr = '/usr/lib/vos/buildtools/resattr';
+
+init();
+
+sub is_elf {
+	my ($path) = @_;
+	open(my $fh, '<:raw', $path) or return 0;
+	my $magic = '';
+	read($fh, $magic, 4);
+	close($fh);
+	return $magic eq "\x7fELF";
+}
+
+sub has_resources {
+	my ($path, $probe) = @_;
+	open(my $fh, '>', $probe) or error("cannot create $probe: $!");
+	close($fh);
+	return 0 if system($resattr, '-O', '-o', $probe, $path) != 0;
+	my $attrs = `getfattr --absolute-names -d -m '^user\\.beos\\.' '$probe' 2>/dev/null`;
+	return $attrs =~ /^user\.beos\./m;
+}
+
+-x $resattr or error("$resattr not found (vos-buildtools)");
+
+foreach my $package (@{$dh{DOPACKAGES}}) {
+	my $tmp = tmpdir($package);
+	next unless -d $tmp;
+	my $probe = generated_file($package, 'vosattrs-probe');
+	my @files;
+	find({ no_chdir => 1, wanted => sub {
+		my $rel = substr($File::Find::name, length($tmp));
+		if (-d $_ && $rel =~ m{^/usr/share/(doc|man|vos/attrs)$}) {
+			$File::Find::prune = 1;
+			return;
+		}
+		return if -l $_ || ! -f $_;
+		push(@files, $rel) if is_elf($_) && has_resources($_, $probe);
+	}}, $tmp);
+	unlink($probe);
+	next unless @files;
+	install_dir("$tmp/usr/share/vos/attrs");
+	open(my $out, '>', "$tmp/usr/share/vos/attrs/$package.list")
+		or error("cannot write attrs list: $!");
+	print {$out} "$_\n" for sort @files;
+	close($out);
+	reset_perm_and_owner(0644, "$tmp/usr/share/vos/attrs/$package.list");
+}

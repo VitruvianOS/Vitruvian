@@ -199,6 +199,10 @@ BCameraSource::BCameraSource(const char* name)
 	fLastFormat.width = 640;
 	fLastFormat.height = 480;
 
+	fChosenMode.width = fLastFormat.width;
+	fChosenMode.height = fLastFormat.height;
+	fChosenMode.frameRate = fLastFormat.field_rate;
+
 	for (int32 i = 0; i < 12; i++)
 		fHaveStored[i] = false;
 
@@ -228,15 +232,19 @@ struct MjpegState {
 
 BCameraSource::~BCameraSource()
 {
+	// Detach the viewer before capture stops.
+	fFrameTarget = BMessenger();
+	SetControllable(NULL);
+
 	Stop();
 	_StopConnections();
 
 	if (CountOutputs() > 0)
 		UnregisterOutput(OutputAt(0));
 
+	// The controllable owns the parameter web.
 	delete fControllable;
 	fControllable = NULL;
-	delete (BParameterWeb*)fParameterWeb;
 	fParameterWeb = NULL;
 
 	_SaveControls();
@@ -365,9 +373,18 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 		int32 width = 0;
 		int32 height = 0;
 		float rate = 0;
-		// Stored width/height/rate were negotiated, not chosen: keep the
-		// 640x480 at 30 default so the lowest mode never sticks.
-		(void)width; (void)height; (void)rate;
+		// Reopen on the stored requested mode.
+		if (controls.FindInt32("width", &width) == B_OK
+			&& controls.FindInt32("height", &height) == B_OK
+			&& width > 0 && height > 0) {
+			fChosenMode.width = (uint32)width;
+			fChosenMode.height = (uint32)height;
+			if (controls.FindFloat("field_rate", &rate) == B_OK && rate > 0)
+				fChosenMode.frameRate = rate;
+			fLastFormat.width = fChosenMode.width;
+			fLastFormat.height = fChosenMode.height;
+			fLastFormat.field_rate = fChosenMode.frameRate;
+		}
 	}
 
 	if (fLastFormat.width == 0)
@@ -408,6 +425,9 @@ BCameraSource::SetMode(uint32 width, uint32 height, float frameRate)
 
 	{
 		BAutolock _(fFrameLock);
+		fChosenMode.width = width;
+		fChosenMode.height = height;
+		fChosenMode.frameRate = frameRate;
 		fLastFormat.width = width;
 		fLastFormat.height = height;
 		fLastFormat.field_rate = frameRate;
@@ -1021,6 +1041,12 @@ BCameraSource::_SaveControls()
 	info.stableId = fStableId;
 	info.location = fLocation;
 
+	camera_mode mode;
+	{
+		BAutolock _(fFrameLock);
+		mode = fChosenMode;
+	}
+
 	BMessage controls;
 	{
 		BAutolock _(fControlLock);
@@ -1034,9 +1060,9 @@ BCameraSource::_SaveControls()
 		controls.AddFloat("focus", fFocus);
 		controls.AddFloat("power_line_freq", fPowerLineFreq);
 		controls.AddBool("mirror", fMirror);
-		controls.AddInt32("width", (int32)fLastFormat.width);
-		controls.AddInt32("height", (int32)fLastFormat.height);
-		controls.AddFloat("field_rate", fLastFormat.field_rate);
+		controls.AddInt32("width", (int32)mode.width);
+		controls.AddInt32("height", (int32)mode.height);
+		controls.AddFloat("field_rate", mode.frameRate);
 	}
 
 	camera_device_info stored;

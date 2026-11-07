@@ -131,7 +131,7 @@ private:
 
 FontCacheEntry::FontCacheEntry()
 	:
-	MultiLocker("FontCacheEntry lock"),
+	BRWLocker("FontCacheEntry lock"),
 	fGlyphCache(new(std::nothrow) GlyphCachePool()),
 	fEngine(),
 	fLastUsedTime(LONGLONG_MIN),

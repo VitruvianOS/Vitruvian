@@ -36,6 +36,7 @@ extern "C" {
 #include <Message.h>
 #include <Messenger.h>
 #include <OS.h>
+#include <BFutexLocker.h>
 
 #include <device/DrmDeviceSelect.h>
 #include <kernel/util/KMessage.h>
@@ -66,6 +67,7 @@ static const KnownServer kFanOutServers[] = {
 	// re-attach the cursor channel it inherited from app_server at login.
 	{ "input_server",        "application/x-vnd.Be-input_server",       false, false },
 	{ "notification_server", "application/x-vnd.vos-notification_server", false, true },
+	{ "keystore_server",     "application/x-vnd.vos-keystore_server", false, false },
 	{ "vos-polkit-agent",    "application/x-vnd.vos-polkit-agent", false, false },
 	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false, true  },
 	{ "Tracker",             "application/x-vnd.Be-TRAK",               false, false },
@@ -281,7 +283,7 @@ struct JanusApp {
 #define JANUS_MAX_APPS 16
 static JanusApp        sApps[JANUS_MAX_APPS];
 static int              sAppCount = 0;
-static pthread_mutex_t  sAppsLock = PTHREAD_MUTEX_INITIALIZER;
+static BFutexLocker     sAppsLock;
 
 struct PendingLaunch {
 	bool      active;
@@ -385,7 +387,7 @@ invalidate_app_by_pid(pid_t pid, char* nameOut, size_t nameSize)
 	char signature[256] = "";
 	nameOut[0] = '\0';
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid == pid) {
 			strlcpy(nameOut, sApps[i].name, nameSize);
@@ -395,7 +397,7 @@ invalidate_app_by_pid(pid_t pid, char* nameOut, size_t nameSize)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (signature[0] != '\0')
 		unregister_app_with_supervisor(signature, pid);
@@ -438,11 +440,11 @@ unregister_app_with_supervisor(const char* signature, pid_t pid)
 static void
 send_seat_message(const char* signature, int32 what, bigtime_t timeout)
 {
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int idx = find_app_by_sig(signature);
 	port_id port = (idx >= 0) ? sApps[idx].port : -1;
 	pid_t   pid  = (idx >= 0) ? sApps[idx].pid  : -1;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (port < 0)
 		return;
@@ -469,19 +471,19 @@ handle_get_launch_data(BMessage* msg)
 		return;
 	}
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int idx = find_app_by_sig(signature);
 	if (idx >= 0 && sApps[idx].port >= 0) {
 		port_id port = sApps[idx].port;
 		pid_t   pid  = sApps[idx].pid;
-		pthread_mutex_unlock(&sAppsLock);
+		sAppsLock.Unlock();
 		BMessage reply(B_OK);
 		reply.AddInt32("port", (int32)port);
 		reply.AddInt32("team", (int32)pid);
 		msg->SendReply(&reply);
 		return;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	BMessage reply(B_NAME_NOT_FOUND);
 	msg->SendReply(&reply);
@@ -492,7 +494,7 @@ static bool
 wait_for_server_ready(const char* name, int timeout_ms)
 {
 	for (int waited = 0; waited < timeout_ms; waited += 50) {
-		pthread_mutex_lock(&sAppsLock);
+		sAppsLock.Lock();
 		bool ready = false;
 		for (int i = 0; i < sAppCount; i++) {
 			if (strcmp(sApps[i].name, name) == 0 && sApps[i].port > 0) {
@@ -500,7 +502,7 @@ wait_for_server_ready(const char* name, int timeout_ms)
 				break;
 			}
 		}
-		pthread_mutex_unlock(&sAppsLock);
+		sAppsLock.Unlock();
 		if (ready)
 			return true;
 		usleep(50 * 1000);
@@ -671,7 +673,7 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 	close(fds[1]);
 	free(groups);
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int app_idx = -1;
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid == -1 && strcmp(sApps[i].signature, ks->signature) == 0) {
@@ -687,7 +689,7 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 		sApps[app_idx].pid  = pid;
 		sApps[app_idx].port = -1;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	if (app_idx < 0) {
 		fprintf(stderr, "janus_session: sApps[] full\n");
@@ -804,10 +806,10 @@ check_pending_launches()
 				port = -1;
 		} else if (system_time() > sPending[i].deadline) {
 			char name[64];
-			pthread_mutex_lock(&sAppsLock);
+			sAppsLock.Lock();
 			strlcpy(name, sApps[sPending[i].app_idx].name,
 				sizeof(name));
-			pthread_mutex_unlock(&sAppsLock);
+			sAppsLock.Unlock();
 			fprintf(stderr, "janus_session: readiness timeout for %s\n",
 				name);
 			resolved = true;
@@ -837,7 +839,7 @@ check_pending_launches()
 		int idx = doneEntry->app_idx;
 
 		if (doneEntry->port >= 0) {
-			pthread_mutex_lock(&sAppsLock);
+			sAppsLock.Lock();
 			bool stale = sApps[idx].pid != doneEntry->pid;
 			if (!stale) {
 				sApps[idx].port = doneEntry->port;
@@ -846,7 +848,7 @@ check_pending_launches()
 				strlcpy(doneEntry->signature, sApps[idx].signature,
 					sizeof(doneEntry->signature));
 			}
-			pthread_mutex_unlock(&sAppsLock);
+			sAppsLock.Unlock();
 			if (stale)
 				doneEntry->port = -1;
 		}
@@ -1014,16 +1016,16 @@ janus_teardown_seat()
 	send_seat_message("application/x-vnd.Be-input_server", B_SEAT_DISABLED, 2000000LL);
 	send_seat_message("application/x-vnd.vos-app_server", B_SEAT_DISABLED, 2000000LL);
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int count = sAppCount;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	for (int i = 0; i < count; i++) {
-		pthread_mutex_lock(&sAppsLock);
+		sAppsLock.Lock();
 		const char* sig  = sApps[i].signature;
 		port_id     port = sApps[i].port;
 		pid_t       pid  = sApps[i].pid;
-		pthread_mutex_unlock(&sAppsLock);
+		sAppsLock.Unlock();
 
 		if (port < 0)
 			continue;
@@ -1045,15 +1047,15 @@ seat_enable_cb(struct libseat*, void*)
 	printf("janus_session: seat enabled\n");
 	sSessionActive = true;
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	int count = sAppCount;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	for (int i = 0; i < count; i++) {
-		pthread_mutex_lock(&sAppsLock);
+		sAppsLock.Lock();
 		port_id port = sApps[i].port;
 		pid_t   pid  = sApps[i].pid;
-		pthread_mutex_unlock(&sAppsLock);
+		sAppsLock.Unlock();
 		if (port < 0)
 			continue;
 		BMessenger app;
@@ -1140,12 +1142,21 @@ kernel_cmdline_has(const char* option)
 
 
 static void
+ownToUser(const char* path)
+{
+	int result = chown(path, sUserUid, sUserGid);
+	(void)result;
+}
+
+
+static void
 console_message(const char* text)
 {
 	int fd = open("/dev/console", O_WRONLY | O_NOCTTY | O_CLOEXEC);
 	if (fd < 0)
 		return;
-	(void)write(fd, text, strlen(text));
+	ssize_t written = write(fd, text, strlen(text));
+	(void)written;
 	close(fd);
 }
 
@@ -1342,12 +1353,12 @@ kill_fanout()
 	pid_t victims[JANUS_MAX_APPS];
 	int n = 0;
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid > 0)
 			victims[n++] = sApps[i].pid;
 	}
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 
 	for (int i = 0; i < n; i++)
 		kill(victims[i], SIGTERM);
@@ -1377,9 +1388,9 @@ kill_fanout()
 		}
 	}
 
-	pthread_mutex_lock(&sAppsLock);
+	sAppsLock.Lock();
 	sAppCount = 0;
-	pthread_mutex_unlock(&sAppsLock);
+	sAppsLock.Unlock();
 }
 
 
@@ -1424,8 +1435,8 @@ fanout_thread(void*)
 		// authentication agent for this logind session, and there is no
 		// authenticated subject before login.
 		static const char* const kFanOut[] = {
-			"input_server", "notification_server", "vos-polkit-agent",
-			"Deskbar", "Tracker", NULL
+			"input_server", "notification_server", "keystore_server",
+			"vos-polkit-agent", "Deskbar", "Tracker", NULL
 		};
 		for (int i = 0; kFanOut[i] != NULL; i++)
 			fire_launch(kFanOut[i]);
@@ -1521,15 +1532,15 @@ run_first_login_for_user()
 	char m[PATH_MAX + 32];
 	snprintf(m, sizeof(m), "%s/config", sUserHome);
 	mkdir(m, 0755);
-	chown(m, sUserUid, sUserGid);
+	ownToUser(m);
 	snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
 	mkdir(m, 0755);
-	chown(m, sUserUid, sUserGid);
+	ownToUser(m);
 	snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
 	int fd = open(m, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
 	if (fd >= 0) {
 		close(fd);
-		chown(m, sUserUid, sUserGid);
+		ownToUser(m);
 	}
 }
 
@@ -1845,7 +1856,7 @@ process_running(const char* name)
 				|| strlen(de->d_name) > 10)
 			continue;
 		char path[64];
-		snprintf(path, sizeof(path), "/proc/%s/comm", de->d_name);
+		snprintf(path, sizeof(path), "/proc/%.10s/comm", de->d_name);
 		int fd = open(path, O_RDONLY | O_CLOEXEC);
 		if (fd < 0)
 			continue;
@@ -1969,7 +1980,9 @@ daemon_loop()
 						libseat_dispatch(sSeat, 0);
 				} else {
 					uint64_t value;
-					(void)read(sSeatWakeFd, &value, sizeof(value));
+					ssize_t drained = read(sSeatWakeFd, &value,
+						sizeof(value));
+					(void)drained;
 				}
 			}
 		}

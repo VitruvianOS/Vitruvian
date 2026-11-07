@@ -14,10 +14,12 @@ extern "C" {
 
 #include <OS.h>
 #include <Region.h>
+#include <BFutexLocker.h>
 #include <pthread.h>
 #include <atomic>
 #include <vector>
 
+#include "BufferAgeTracker.h"
 #include "DrmBuffer.h"
 #include "HWInterface.h"
 #include "MallocBuffer.h"
@@ -192,6 +194,15 @@ private:
 			// completion would. Tearing possible, display usable.
 			void				_VblankPacedFlip();
 
+			// Direct render: the painter draws into the scanout buffers
+			// and the flip completion copies only the region the recycled
+			// target is missing. Opt-in with VOS_DRM_DIRECT_RENDER=1.
+			void				_SetupDirectRender();
+			void				_LeaveDirectRender();
+			int32				_AgeSlotForFb(uint32_t fbId) const;
+			void				_DirectFlipComplete();
+			bigtime_t			_FramePeriod() const;
+
 			void				_BlitRect(RenderingBuffer* src,
 									RenderingBuffer* dst,
 									const BRect& frame);
@@ -329,7 +340,7 @@ private:
 			BRegion				fAccumulatedDirty;
 			BRegion				fPreviousDirty;
 			bool				fNeedsFlip;
-			pthread_mutex_t		fDirtyMutex;
+			BFutexLocker		fDirtyMutex;
 
 			// Serialises _BlendCursor's write to the scanout buffer
 			// (fWriteTarget) between the main thread (CopyBackToFront,
@@ -338,6 +349,19 @@ private:
 			// has damage to present). A software cursor blended with no
 			// new damage races the main-thread blend otherwise.
 			mutable pthread_mutex_t	fCursorBlendMutex;
+
+			// Direct render state. fAgeTracker and the slot map are only
+			// touched under the exclusive lock. The pacing lock is the
+			// event thread's exclusive lock, held from flip issue to
+			// completion so no painter writes the scanned buffer.
+			BufferAgeTracker	fAgeTracker;
+			std::atomic<bool>	fDirectRender;
+			int64				fFrameSerial;
+			uint32_t			fAgeFbIds[2];
+			int32				fAgeSlotCount;
+			bool				fPacingLockHeld;
+			bigtime_t			fFlipIssueTime;
+			bigtime_t			fLastFlipIssue;
 
 			int					fWakeFd;
 

@@ -20,12 +20,28 @@ add_executable(test_display_change_tracker
 target_include_directories(test_display_change_tracker PRIVATE
 	${CMAKE_SOURCE_DIR}/src/servers/app)
 
-# Screen-change relayout policy (pure helpers, no window server).
-Application(test_screen_relayout
-	SOURCES test_screen_relayout.cpp
-		${CMAKE_SOURCE_DIR}/src/servers/app/ScreenRelayout.cpp
-	INCLUDES ${CMAKE_SOURCE_DIR}/src/servers/app)
-UsePrivateHeaders(test_screen_relayout interface)
+# Output add-on transport core (pure helpers, no window server).
+add_executable(test_output_addon_core
+	output_addon/output_addon_host_test.cpp
+	${CMAKE_SOURCE_DIR}/src/kits/interface/OutputAddonCore.cpp
+)
+target_include_directories(test_output_addon_core PRIVATE
+	${CMAKE_SOURCE_DIR}/headers/private/interface)
+set_target_properties(test_output_addon_core PROPERTIES COMPILE_FLAGS
+	"-include LinuxBuildCompatibility.h")
+
+# Pointer-constraint math, grab arbitration and the raw-event valuator
+# helpers (pure, the same sources input_server and app_server link).
+add_executable(test_input_control
+	input_control/input_control_host_test.cpp
+	${CMAKE_SOURCE_DIR}/src/kits/shared/PointerControlCore.cpp
+)
+target_include_directories(test_input_control PRIVATE
+	${CMAKE_SOURCE_DIR}/headers/private/input
+	${CMAKE_SOURCE_DIR}/headers/os/support)
+set_target_properties(test_input_control PROPERTIES COMPILE_FLAGS
+	"-include LinuxBuildCompatibility.h")
+
 
 # Panel orientation rules (header only, no window server).
 Application(test_panel_orientation

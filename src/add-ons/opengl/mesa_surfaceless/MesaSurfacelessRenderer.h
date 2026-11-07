@@ -11,12 +11,20 @@
 
 #include <GLRenderer.h>
 
+#include <atomic>
+
 #include <pthread.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
+
+#include <opengl/GlDeviceSelect.h>
+
+namespace BPrivate {
+class FrameRing;
+}
 
 class BBitmap;
 
@@ -42,15 +50,27 @@ public:
 
 private:
 	status_t					_Init();
+	status_t					_TryInit();
+	status_t					_SelectDevice();
+	EGLDisplay					_BindDeviceDisplay();
 	status_t					_ChooseEglConfig();
 	status_t					_CreateContext();
 	bool						_TryCreateContext(int major, int minor);
 	void						_LogGlStrings();
+	void						_VerifyZink();
+	void						_PublishStatus();
 	void						_Cleanup();
 	void						_CreateFbo(int32 width, int32 height);
 	void						_DestroyFbo();
+	void						_PaceToRefresh();
+	BBitmap*					_PrepareSlot(int32 slot);
 
 private:
+	gl_device					fDevice;
+	const char*					fDeviceWhy;
+	int							fZinkMode;
+	const char*					fZinkWhy;
+
 	EGLDisplay					fDisplay;
 	EGLContext					fContext;
 	EGLConfig					fConfig;
@@ -64,15 +84,25 @@ private:
 	int32						fContextMinor;
 	bool						fDebug;
 	bool						fFirstFrameDumped;
+	uint8*						fReadBuffer;
+	size_t						fReadBufferSize;
 
 	int32						fWidth;
 	int32						fHeight;
 	bool						fInitialized;
 	bool						fFboReady;
 
-	BBitmap*					fBitmap;
-	pthread_mutex_t				fBitmapLock;
+	// Swapchain: the render thread fills slots, the window thread draws.
+	static const int32			kSlotCount = 3;
+	BPrivate::FrameRing*		fRing;
+	BBitmap*					fSlots[kSlotCount];
+	std::atomic<int64>			fLatest;
+	std::atomic<bool>			fDrawPending;
+	int32						fHeldSlot;
 	pthread_mutex_t				fContextLock;
+
+	bigtime_t					fLastSwap;
+	bigtime_t					fFramePeriod;
 };
 
 

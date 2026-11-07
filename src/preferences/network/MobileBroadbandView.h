@@ -44,6 +44,8 @@ private:
 			void			_SetOperatorText(const BString& text);
 			void			_SetPINVisible(bool visible);
 			void			_EnableForm(bool enable);
+			void			_SuggestApnFromProviderInfo(
+								const char* operatorCode);
 			void			_FillFormFromProfile(BMessage& profile);
 			void			_RequestProfile();
 			void			_RequestMMStatus();
@@ -72,6 +74,9 @@ private:
 			BButton*		fDisconnectButton;
 			BButton*		fUnlockButton;
 			BButton*		fRefreshButton;
+			BCheckBox*		fRoamingCheck;
+			BCheckBox*		fDataCheck;
+			BString			fOperatorCode;
 
 			uint32			fSnapshotAPNHash;
 			uint32			fSnapshotUserHash;

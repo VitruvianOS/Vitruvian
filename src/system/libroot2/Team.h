@@ -9,6 +9,8 @@
 #include <OS.h>
 #include <libudev.h>
 
+#include <support/BranchHints.h>
+
 
 namespace BKernelPrivate {
 
@@ -19,7 +21,6 @@ public:
 	static void			InitTeam();
 
 	static int			GetNexusDescriptor();
-	static int			GetSemDescriptor();
 	static int			GetAreaDescriptor();
 	static int			GetVRefDescriptor(dev_t* dev = NULL);
 	static int			GetNodeMonitorDescriptor();
@@ -29,7 +30,8 @@ public:
 	static int32		GetCPUCount();
 
 	static thread_id	LoadImage(int32 argc, const char** argv,
-							const char** envp, int* _execStatusFd = NULL);
+							const char** envp, int* _execStatusFd = NULL,
+							bool detached = false);
 
 	static void 		ReinitChildAtFork();
 };
@@ -39,6 +41,15 @@ public:
 // Must be called first thing in Team::ReinitChildAtFork(), before any
 // code that may call find_thread(NULL) and re-cache the parent's tid.
 void ResetCachedThreadId();
+
+// Drops waiter counts copied from the parent.
+void ReinitSemsAfterFork();
+
+// True for a detached load_image child; wait_for_thread() refuses it.
+bool loaded_pid_is_detached(pid_t pid);
+
+// Kill a detached child if the reaper has not collected it.
+status_t kill_detached_child(thread_id id);
 
 
 }

@@ -6,9 +6,12 @@
 #define	_LOCKER_H
 
 
+#include <BeBuild.h>
 #include <OS.h>
 
 
+/* Host tools build against the fake libroot semaphores, so this keeps the
+ * legacy implementation with the same layout as the shipped BLocker. */
 class BLocker {
 public:
 								BLocker();
@@ -27,7 +30,9 @@ public:
 			bool				IsLocked() const;
 			int32				CountLocks() const;
 			int32				CountLockRequests() const;
-			sem_id				Sem() const;
+
+			// Deprecated, the shipped libbe returns B_ERROR.
+			sem_id				Sem() const _DEPRECATED;
 
 private:
 								BLocker(const char* name, bool benaphoreStyle,

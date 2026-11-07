@@ -6,6 +6,7 @@
 
 #include "webkit_bridge.h"
 #include "compositor_adapter.h"
+#include "ContentFilterStore.h"
 #include "domain_filter.h"
 #include "download_handler.h"
 #include "focus_and_cursor.h"
@@ -17,10 +18,17 @@
 #include "url_scheme_adapter.h"
 
 #include <Cursor.h>
+#include <DataIO.h>
+#include <OS.h>
+#include <Url.h>
+#include <UrlProtocolRoster.h>
+#include <UrlRequest.h>
+#include <HttpResult.h>
 #include <wpe/webkit.h>
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -54,7 +62,11 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 	fCachedCanGoBack(false),
 	fCachedCanGoForward(false),
 	fPendingSize(0),
-	fResizeScheduled(false)
+	fResizeScheduled(false),
+	fExtensionGeneration(0),
+	fBlockedCount(0),
+	fAlive(std::make_shared<std::atomic<bool> >(true)),
+	fGMExtensions(NULL)
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
@@ -180,7 +192,21 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	// 8. Web notifications.
 	notifications = std::make_unique<NotificationsBridge>();
 
-	// 9. Initial size dispatch.
+	// 9. Extensions: the filter cache lives in the shared profile.
+	if (session != NULL && !session->ProfileDir().empty())
+		ContentFilterStore::Instance().SetCacheDir(
+			session->ProfileDir() + "/content-filters");
+	{
+		WebKitUserContentManager* ucm
+			= webkit_web_view_get_user_content_manager(webView);
+		// GM.* calls answer synchronously through the reply API.
+		webkit_user_content_manager_register_script_message_handler_with_reply(
+			ucm, "netplusGM", nullptr);
+		g_signal_connect(ucm, "script-message-received-with-reply::netplusGM",
+			G_CALLBACK(_OnGMMessage), this);
+	}
+
+	// 10. Initial size dispatch.
 	struct SizeArgs { wpe_view_backend* b; uint32_t w, h; };
 	auto* sa = new SizeArgs{backend, (uint32_t)width, (uint32_t)height};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
@@ -190,7 +216,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		return G_SOURCE_REMOVE;
 	}, sa);
 
-	// 10. Connect GObject signals.
+	// 11. Connect GObject signals.
 	_ConnectSignals();
 
 	fValid = true;
@@ -201,9 +227,29 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 WebKitBridge::~WebKitBridge()
 {
 	log_info("WebKitBridge: destroying");
+	fAlive->store(false);
 	if (downloadHandler != nullptr)
 		downloadHandler->RemoveListener(this);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([this]() {
+		for (auto& entry : fPageScripts) {
+			if (entry.second != nullptr) {
+				webkit_user_content_manager_remove_script(
+					webkit_web_view_get_user_content_manager(webView),
+					entry.second);
+				webkit_user_script_unref(entry.second);
+			}
+		}
+		fPageScripts.clear();
+		for (auto& entry : fPageStyles) {
+			if (entry.second != nullptr)
+				webkit_user_style_sheet_unref(entry.second);
+		}
+		fPageStyles.clear();
+		for (auto& entry : fPageFilters) {
+			if (entry.second != nullptr)
+				webkit_user_content_filter_unref(entry.second);
+		}
+		fPageFilters.clear();
 		if (webView)
 			g_object_unref(webView);
 		if (context)
@@ -254,6 +300,10 @@ WebKitBridge::_ConnectSignals()
 		G_CALLBACK(_OnRunFileChooser), this);
 	g_signal_connect(webView, "show-notification",
 		G_CALLBACK(_OnShowNotification), this);
+	// Content-blocked and failed subresources both land here; the
+	// count is the page's "blocked or failed" tally.
+	g_signal_connect(webView, "resource-load-failed",
+		G_CALLBACK(_OnResourceLoadFailed), this);
 }
 
 
@@ -398,6 +448,17 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 		const char* uri = webkit_uri_request_get_uri(request);
 
 		if (uri) {
+			// mailto: is not something a view can display; surface it
+			// through the new-window callback so the host can hand it
+			// to a mail client (WebMail builds its compose URL from
+			// it). Net+ has no mail client and drops the link.
+			if (g_str_has_prefix(uri, "mailto:")) {
+				if (self->onNewWindowRequested)
+					self->onNewWindowRequested(uri);
+				webkit_policy_decision_ignore(decision);
+				return TRUE;
+			}
+
 			// Extract host from URI for domain blocking.
 			GUri* parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, nullptr);
 			if (parsed) {
@@ -414,6 +475,12 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 				g_uri_unref(parsed);
 			}
 		}
+
+		// Re-apply the extension set before the document loads: this
+		// runs on the GLib thread, ahead of the provisional load.
+		if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION
+			&& uri != nullptr && self->onNavigationStarting != nullptr)
+			self->onNavigationStarting(uri);
 
 		// Popups and target=_blank open in a host window: WebKit never
 		// creates the new view itself, so the decision is always ignored
@@ -946,6 +1013,380 @@ WebKitBridge::RegisterScriptMessageHandler(const std::string& name,
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, a);
+}
+
+
+//	#pragma mark - Extensions
+
+
+void
+WebKitBridge::SetGMExtensions(BWebExtensions* extensions)
+{
+	fGMExtensions = extensions;
+}
+
+
+void
+WebKitBridge::SetNavigationStartingHandler(
+	std::function<void(const std::string&)> fn)
+{
+	onNavigationStarting = fn;
+}
+
+
+void
+WebKitBridge::PreloadContentFilters(
+	const std::vector<WebExtensionFilter>& filters)
+{
+	if (!fValid)
+		return;
+	for (const auto& filter : filters) {
+		ContentFilterStore::Instance().Get(filter.id, filter.rulesPath,
+			[](WebKitUserContentFilter*) {});
+	}
+}
+
+
+void
+WebKitBridge::SetPageExtensions(
+	const std::vector<WebExtensionScript>& scripts,
+	const std::vector<WebExtensionStyle>& styles,
+	const std::vector<WebExtensionFilter>& filters)
+{
+	if (!fValid)
+		return;
+	// Always through the sync path: from the navigation handler we
+	// are already on the GLib thread and the re-sync must finish
+	// before the policy decision proceeds.
+	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+		_ApplyPageExtensions(scripts, styles, filters);
+	});
+}
+
+
+void
+WebKitBridge::_ApplyPageExtensions(
+	const std::vector<WebExtensionScript>& scripts,
+	const std::vector<WebExtensionStyle>& styles,
+	const std::vector<WebExtensionFilter>& filters)
+{
+	uint64_t generation = ++fExtensionGeneration;
+	fBlockedCount.store(0);
+	if (onBlockedCountChanged != nullptr)
+		onBlockedCountChanged(0);
+
+	WebKitUserContentManager* ucm
+		= webkit_web_view_get_user_content_manager(webView);
+
+	std::map<std::string, WebKitUserScript*> newScripts;
+	for (const auto& script : scripts) {
+		std::string key = "ext:" + script.id;
+		auto it = fPageScripts.find(key);
+		if (it != fPageScripts.end()) {
+			newScripts[key] = it->second;
+			fPageScripts.erase(it);
+			continue;
+		}
+		WebKitUserScript* userScript = webkit_user_script_new(
+			script.source.c_str(),
+			WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+			script.atDocumentStart
+				? WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START
+				: WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
+			nullptr, nullptr);
+		webkit_user_content_manager_add_script(ucm, userScript);
+		newScripts[key] = userScript;
+	}
+	for (auto& stale : fPageScripts) {
+		if (stale.second != nullptr) {
+			webkit_user_content_manager_remove_script(ucm,
+				stale.second);
+			webkit_user_script_unref(stale.second);
+		}
+	}
+	fPageScripts.swap(newScripts);
+
+	std::map<std::string, WebKitUserStyleSheet*> newStyles;
+	for (const auto& style : styles) {
+		std::string key = "ext:" + style.id;
+		auto it = fPageStyles.find(key);
+		if (it != fPageStyles.end()) {
+			newStyles[key] = it->second;
+			fPageStyles.erase(it);
+			continue;
+		}
+		WebKitUserStyleSheet* sheet = webkit_user_style_sheet_new(
+			style.css.c_str(),
+			WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+			WEBKIT_USER_STYLE_LEVEL_USER,
+			nullptr, nullptr);
+		webkit_user_content_manager_add_style_sheet(ucm, sheet);
+		newStyles[key] = sheet;
+	}
+	for (auto& stale : fPageStyles) {
+		if (stale.second != nullptr) {
+			webkit_user_content_manager_remove_style_sheet(ucm,
+				stale.second);
+			webkit_user_style_sheet_unref(stale.second);
+		}
+	}
+	fPageStyles.swap(newStyles);
+
+	// Filters: the attach set is rebuilt in full whenever it changes
+	// (remove_all_filters is the only removal the API offers).
+	std::map<std::string, std::string> wanted;
+	for (const auto& filter : filters)
+		wanted[filter.id] = filter.rulesPath;
+	bool changed = wanted.size() != fPageFilters.size();
+	if (!changed) {
+		for (const auto& entry : wanted) {
+			if (fPageFilters.find(entry.first) == fPageFilters.end()) {
+				changed = true;
+				break;
+			}
+		}
+	}
+	if (!changed)
+		return;
+	for (auto& stale : fPageFilters) {
+		if (stale.second != nullptr)
+			webkit_user_content_filter_unref(stale.second);
+	}
+	fPageFilters.clear();
+	webkit_user_content_manager_remove_all_filters(ucm);
+	for (const auto& entry : wanted) {
+		std::string id = entry.first;
+		ContentFilterStore::Instance().Get(entry.first, entry.second,
+			[this, generation, id](WebKitUserContentFilter* filter) {
+				if (filter == nullptr || !fAlive->load()
+					|| generation != fExtensionGeneration.load())
+					return;
+				WebKitUserContentManager* manager
+					= webkit_web_view_get_user_content_manager(webView);
+				webkit_user_content_manager_add_filter(manager, filter);
+				webkit_user_content_filter_ref(filter);
+				fPageFilters[id] = filter;
+			});
+	}
+}
+
+
+void
+WebKitBridge::_OnResourceLoadFailed(WebKitWebView*, WebKitWebResource*,
+	GError*, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	int32_t count = ++self->fBlockedCount;
+	if (self->onBlockedCountChanged != nullptr)
+		self->onBlockedCountChanged(count);
+}
+
+
+//	#pragma mark - GM.*
+
+
+using namespace BPrivate::Network;
+
+
+// Synchronous single-shot fetch for GM.xmlHttpRequest; runs on the
+// GLib thread and blocks it for the duration, like script dialogs.
+class _GMFetchListener : public BUrlProtocolListener {
+public:
+								_GMFetchListener()
+									:
+									fStatus(0),
+									fSuccess(false)
+								{
+									fDone = create_sem(0, "netplus-gm-xhr");
+								}
+
+								~_GMFetchListener()
+								{
+									delete_sem(fDone);
+								}
+
+	virtual	void				ResponseStarted(BUrlRequest* caller)
+								{
+									BHttpResult* result = dynamic_cast<
+										BHttpResult*>(const_cast<BUrlResult*>(
+										&caller->Result()));
+									if (result != NULL)
+										fStatus = result->StatusCode();
+								}
+
+	virtual	void				RequestCompleted(BUrlRequest*, bool success)
+								{
+									fSuccess = success;
+									release_sem(fDone);
+								}
+
+			sem_id				fDone;
+			int32				fStatus;
+			bool				fSuccess;
+};
+
+
+static std::string
+_GMEscapeJSON(const std::string& in)
+{
+	std::string out;
+	for (char c : in) {
+		switch (c) {
+			case '"': out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			default:
+				if ((unsigned char)c < 0x20) {
+					char buffer[8];
+					snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+					out += buffer;
+				} else
+					out += c;
+				break;
+		}
+	}
+	return out;
+}
+
+
+// Minimal reader for the flat {key: "string-or-number"} GM payloads.
+static std::string
+_GMJsonString(const std::string& body, const char* key, size_t from = 0)
+{
+	std::string needle = std::string("\"") + key + "\"";
+	size_t pos = body.find(needle, from);
+	if (pos == std::string::npos)
+		return std::string();
+	pos = body.find(':', pos + needle.size());
+	if (pos == std::string::npos)
+		return std::string();
+	pos++;
+	while (pos < body.size() && (body[pos] == ' ' || body[pos] == '\t'
+		|| body[pos] == '\n' || body[pos] == '\r'))
+		pos++;
+	if (pos >= body.size())
+		return std::string();
+	if (body[pos] == '"') {
+		std::string value;
+		pos++;
+		while (pos < body.size() && body[pos] != '"') {
+			if (body[pos] == '\\' && pos + 1 < body.size()) {
+				pos++;
+				switch (body[pos]) {
+					case 'n': value += '\n'; break;
+					case 'r': value += '\r'; break;
+					case 't': value += '\t'; break;
+					default: value += body[pos]; break;
+				}
+				pos++;
+				continue;
+			}
+			value += body[pos++];
+		}
+		return value;
+	}
+	size_t end = pos;
+	while (end < body.size() && body[end] != ',' && body[end] != '}'
+		&& body[end] != ' ' && body[end] != '\n' && body[end] != '\r')
+		end++;
+	return body.substr(pos, end - pos);
+}
+
+
+static std::string
+_GMPerformFetch(const std::string& body)
+{
+	std::string url = _GMJsonString(body, "url");
+	std::string method = _GMJsonString(body, "method");
+	std::string data = _GMJsonString(body, "data");
+	if (url.empty())
+		return "{\"ok\":false,\"error\":\"no url\"}";
+	if (!data.empty())
+		return "{\"ok\":false,\"error\":\"upload unsupported\"}";
+	if (!method.empty() && method != "GET" && method != "HEAD")
+		return "{\"ok\":false,\"error\":\"method unsupported\"}";
+
+	BMallocIO output;
+	BUrl requestUrl;
+	requestUrl.SetUrlString(BString(url.c_str()), true);
+	_GMFetchListener listener;
+	BUrlRequest* request = BUrlProtocolRoster::MakeRequest(requestUrl,
+		&output, &listener);
+	if (request == NULL)
+		return "{\"ok\":false,\"error\":\"unsupported url\"}";
+
+	if (request->Run() < B_OK) {
+		delete request;
+		return "{\"ok\":false,\"error\":\"start failed\"}";
+	}
+	// Ten seconds is the userscript-manager norm; a stuck fetch must
+	// not wedge the UI thread for longer.
+	status_t wait = acquire_sem_etc(listener.fDone, 1, B_TIMEOUT, 10000000);
+	if (wait != B_OK) {
+		request->Stop();
+		delete request;
+		return "{\"ok\":false,\"error\":\"timeout\"}";
+	}
+	std::string text(static_cast<const char*>(output.Buffer()),
+		output.BufferLength());
+	bool success = listener.fSuccess;
+	int32 status = listener.fStatus;
+	delete request;
+
+	char header[128];
+	snprintf(header, sizeof(header), "{\"ok\":%s,\"status\":%d,",
+		success ? "true" : "false", status);
+	return std::string(header) + "\"text\":\"" + _GMEscapeJSON(text)
+		+ "\"}";
+}
+
+
+std::string
+WebKitBridge::_HandleGMCall(const std::string& body)
+{
+	std::string method = _GMJsonString(body, "method");
+	std::string ext = _GMJsonString(body, "ext");
+	if (method.empty())
+		return "{\"ok\":false,\"error\":\"no method\"}";
+
+	if (method == "xmlHttpRequest")
+		return _GMPerformFetch(body);
+
+	if (fGMExtensions == NULL)
+		return "{\"ok\":false,\"error\":\"no storage\"}";
+	if (method == "getValue") {
+		std::string key = _GMJsonString(body, "key");
+		std::string value;
+		if (!fGMExtensions->GetValue(ext.c_str(), key.c_str(), &value))
+			return "{\"ok\":false,\"error\":\"missing\"}";
+		return "{\"ok\":true,\"value\":\"" + _GMEscapeJSON(value) + "\"}";
+	}
+	if (method == "setValue") {
+		std::string key = _GMJsonString(body, "key");
+		std::string value = _GMJsonString(body, "value");
+		fGMExtensions->SetValue(ext.c_str(), key.c_str(), value.c_str());
+		return "{\"ok\":true}";
+	}
+	return "{\"ok\":false,\"error\":\"unknown method\"}";
+}
+
+
+void
+WebKitBridge::_OnGMMessage(WebKitUserContentManager*,
+	WebKitScriptMessageReply* reply, JSCValue* value, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	gchar* text = jsc_value_to_string(value);
+	std::string response = self->_HandleGMCall(
+		text != nullptr ? text : "");
+	g_free(text);
+
+	JSCContext* context = jsc_value_get_context(value);
+	JSCValue* result = jsc_value_new_string(context, response.c_str());
+	webkit_script_message_reply_return_value(reply, result);
+	g_object_unref(result);
 }
 
 

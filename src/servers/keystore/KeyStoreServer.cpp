@@ -9,6 +9,7 @@
 #include "AppAccessRequestWindow.h"
 #include "KeyRequestWindow.h"
 #include "Keyring.h"
+#include "SecretServiceBridge.h"
 
 #include <KeyStoreDefs.h>
 
@@ -61,7 +62,8 @@ KeyStoreServer::KeyStoreServer()
 	:
 	BApplication(kKeyStoreServerSignature),
 	fMasterKeyring(NULL),
-	fKeyrings(20)
+	fKeyrings(20),
+	fSecretService(NULL)
 {
 	BPath path;
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
@@ -89,11 +91,19 @@ KeyStoreServer::KeyStoreServer()
 		fMasterKeyring = new(std::nothrow) Keyring(kMasterKeyringName);
 		fKeyrings.BinaryInsert(fMasterKeyring, &Keyring::Compare);
 	}
+
+	fSecretService = new SecretServiceBridge();
+	if (fSecretService->Start() != B_OK)
+		fprintf(stderr, "keystore_server: Secret Service bridge not started\n");
 }
 
 
 KeyStoreServer::~KeyStoreServer()
 {
+	if (fSecretService != NULL) {
+		fSecretService->Stop();
+		delete fSecretService;
+	}
 }
 
 

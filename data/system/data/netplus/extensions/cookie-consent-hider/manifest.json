@@ -1,0 +1,11 @@
+{
+	"id": "cookie-consent-hider",
+	"name": "Cookie Banner Hider",
+	"version": "1.0",
+	"kind": "user-style",
+	"licence": "LGPL-2.1",
+	"description": "Hides the consent pop-ups of the common cookie-banner toolkits",
+	"match": ["<all_urls>"],
+	"default-enabled": true,
+	"style": "style.css"
+}

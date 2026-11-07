@@ -42,7 +42,14 @@ class ScreenManager : public BLooper {
 		virtual ~ScreenManager();
 
 		Screen*			ScreenAt(int32 index) const;
+		Screen*			ScreenByID(int32 id) const;
 		int32			CountScreens() const;
+
+		// Headless outputs owned by the manager; ids never collide with
+		// or reuse the ids of other screens. Refused while acquired.
+		status_t		AddVirtualOutput(uint16 width, uint16 height,
+							const char* name, bool testPattern, int32* id);
+		status_t		RemoveVirtualOutput(int32 id);
 
 		status_t		AcquireScreens(ScreenOwner* owner, int32* wishList,
 							int32 wishCount, const char* target, bool force,
@@ -57,12 +64,14 @@ class ScreenManager : public BLooper {
 		struct screen_item {
 			ObjectDeleter<Screen>	screen;
 			ScreenOwner*			owner;
+			bool					isVirtual;
 			ObjectDeleter<HWInterfaceListener>
 									listener;
 		};
 
 		void			_ScanDrivers();
-		screen_item*	_AddHWInterface(HWInterface* interface);
+		screen_item*	_AddHWInterface(HWInterface* interface,
+							int32 id = -1);
 
 		BObjectList<screen_item, true>	fScreenList;
 };

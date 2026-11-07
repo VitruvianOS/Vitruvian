@@ -1,0 +1,109 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the LGPL License.
+ *
+ * Cosmetic filters for the common consent toolkits. The selectors
+ * name well-known container ids and classes only; each tool ships
+ * its own markup and this list tracks the container, not its text.
+ */
+
+/* OneTrust (Cookiebot's larger cousin used by news sites). */
+#onetrust-banner-sdk,
+#onetrust-consent-sdk,
+#onetrust-policy,
+.otCenter,
+.ot-sdk-container,
+
+/* Usercentrics Cookiebot. */
+#CybotCookiebotDialog,
+#CybotCookiebotDialogBodyUnderlay,
+#CookiebotWidgetBody,
+
+/* CookieYes. */
+#cookie-law-info-bar,
+.cli-modal-backdrop,
+.cli-settings-container,
+.cli-bar-container,
+
+/* Osano/Cookie Consent. */
+.osano-cm-window,
+.osano-cm-dialog,
+.osano-cm-drawer,
+
+/* Didomi. */
+#didomi-host,
+#didomi-popup,
+.didomi-popup-backdrop,
+
+/* Quantcast. */
+.qc-cmp2-container,
+.qc-cmp-cleanslate,
+
+/* Cookiebot's older inline bar. */
+.cookie-consent-banner,
+
+/* CookieConsent (osano legacy class). */
+.cc-window,
+.cc-banner,
+.cc-container,
+.cc-bottom,
+.cc-center,
+
+/* Facebook / Meta consent. */
+#fb_dialog_container,
+[data-testid="cookie-policy-manage-dialog"],
+
+/* Google Funding Choices. */
+.fc-consent-root,
+.fc-dialog-container,
+
+/* TrustArc. */
+.truste_box_overlay,
+.truste_overlay,
+#truste-consent-track,
+#consent_blackbar,
+
+/* Axeptio. */
+#axeptio_overlay,
+#axeptio_content,
+
+/* termly */
+#termly-code-snippet-support,
+
+/* Html */
+#ccc,
+#ccc-notify,
+#ccc-overlay,
+.ccc-notify,
+.ccc-ui,
+
+/* Iubenda */
+#iubenda-cs-banner,
+.iubenda-cs-overlay,
+
+/* Generic well-known ids and class families. */
+#cookie-banner,
+#cookieBanner,
+#cookiebanner,
+#cookie-notice,
+#cookieNotice,
+#cookiebar,
+.cookie-banner,
+.cookie-notice,
+.cookiebar,
+.gdpr-banner,
+#gdpr-banner,
+.cookieConsentBanner,
+.consent-banner,
+#consent-banner,
+.js-cookie-consent,
+#cookies-accept,
+#accept-cookies,
+.rodo,
+#rodo,
+.cybot-cookiebot-banner {
+	display: none !important;
+	visibility: hidden !important;
+	opacity: 0 !important;
+	pointer-events: none !important;
+}

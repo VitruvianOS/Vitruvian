@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mail</title>
+<link rel="stylesheet" href="mail.css">
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <button id="btn-folders" title="Folders">&#9776;</button>
+    <span id="account-name">Mail</span>
+    <span class="spacer"></span>
+    <input id="search" placeholder="Search mail">
+    <button id="btn-check">Check</button>
+    <button id="btn-compose">Compose</button>
+  </div>
+  <div id="main">
+    <div id="folders"></div>
+    <div id="list-wrap">
+      <div id="headers"></div>
+      <div id="pager">
+        <button id="btn-prev">Previous</button>
+        <button id="btn-next">Next</button>
+      </div>
+    </div>
+    <div id="reader">
+      <div id="reader-empty">Select a message</div>
+      <div id="reader-content" hidden>
+        <div id="reader-subject"></div>
+        <div id="reader-from"></div>
+        <div id="reader-attachments"></div>
+        <div id="reader-frame-wrap" hidden>
+          <iframe id="reader-frame" sandbox=""
+                  csp="default-src 'none'; img-src https: http:; style-src 'unsafe-inline'"></iframe>
+        </div>
+        <pre id="reader-text"></pre>
+        <div id="reader-actions">
+          <button id="btn-reply">Reply</button>
+          <button id="btn-reply-all">Reply All</button>
+          <button id="btn-forward">Forward</button>
+          <button id="btn-delete">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="compose" hidden>
+    <div id="compose-head">
+      <button id="btn-compose-close">Close</button>
+      <button id="btn-send">Send</button>
+      <button id="btn-draft">Save Draft</button>
+      <button id="btn-discard">Discard</button>
+    </div>
+    <input id="c-to" placeholder="To">
+    <input id="c-cc" placeholder="Cc">
+    <input id="c-bcc" placeholder="Bcc">
+    <input id="c-subject" placeholder="Subject">
+    <textarea id="c-body" placeholder="Message"></textarea>
+    <div id="c-attachments"></div>
+    <button id="btn-attach">Add Attachment&#8230;</button>
+  </div>
+  <div id="status"></div>
+</div>
+<script src="mail.js"></script>
+</body>
+</html>

@@ -2,6 +2,9 @@
  * Copyright 2008-2009, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
+ * Authors:
+ *		Stefano Ceccherini <stefano.ceccherini@gmail.com>
+ *		Axel Dörfler, axeld@pinc-software.de
  */
 #ifndef DIRECT_WINDOW_INFO_H
 #define DIRECT_WINDOW_INFO_H
@@ -9,6 +12,7 @@
 
 #include <Autolock.h>
 #include <DirectWindow.h>
+#include <SharedEvent.h>
 
 #include <DirectWindowPrivate.h>
 
@@ -43,8 +47,8 @@ private:
 			status_t			_SynchronizeWithClient();
 
 			direct_buffer_info*	fBufferInfo;
-			sem_id				fSem;
-			sem_id				fAcknowledgeSem;
+			BSharedEvent		fDisableEvent;
+			BSharedEvent		fAcknowledgeEvent;
 			area_id				fBufferArea;
 
 			BRect				fOriginalFrame;

@@ -113,6 +113,8 @@ BCameraSettings::SetDevice(const camera_device_info& info,
 	if (controls != NULL) {
 		float value = 0;
 		bool flag = false;
+		int32 width = 0;
+		int32 height = 0;
 		if (controls->FindFloat("brightness", &value) == B_OK)
 			device.AddFloat("brightness", value);
 		if (controls->FindFloat("contrast", &value) == B_OK)
@@ -133,6 +135,12 @@ BCameraSettings::SetDevice(const camera_device_info& info,
 			device.AddFloat("power_line_freq", value);
 		if (controls->FindBool("mirror", &flag) == B_OK)
 			device.AddBool("mirror", flag);
+		if (controls->FindInt32("width", &width) == B_OK)
+			device.AddInt32("width", width);
+		if (controls->FindInt32("height", &height) == B_OK)
+			device.AddInt32("height", height);
+		if (controls->FindFloat("field_rate", &value) == B_OK)
+			device.AddFloat("field_rate", value);
 	}
 
 	fDevices.RemoveName(info.stableId.String());

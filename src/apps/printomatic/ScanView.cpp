@@ -12,7 +12,7 @@
 
 ScanView::ScanView()
 	:
-	BView("scanView", B_WILL_DRAW | B_FRAME_EVENTS),
+	BView("scanView", B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE),
 	fBitmap(NULL),
 	fHasSelection(false),
 	fDragging(false)

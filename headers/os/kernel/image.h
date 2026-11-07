@@ -78,6 +78,11 @@ void terminate_after(image_id self);
 
 
 thread_id load_image(int32 argc, const char **argv, const char **environ);
+
+#define B_LOAD_IMAGE_DETACHED		0x0001
+	/* reaped on exit, nobody joins the image's thread */
+thread_id load_image_etc(int32 argc, const char **argv, const char **environ,
+				uint32 flags);
 image_id load_add_on(const char *path);
 status_t unload_add_on(image_id image);
 status_t get_image_symbol(image_id image, const char *name, int32 symbolType,

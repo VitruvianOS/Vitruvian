@@ -51,7 +51,7 @@
 #	define STRACE(x) ;
 #endif
 
-// IMPORTANT: nested LockSingleWindow()s are not supported (by MultiLocker)
+// IMPORTANT: nested LockSingleWindow()s are not supported (by BRWLocker)
 
 using std::nothrow;
 
@@ -677,7 +677,7 @@ void
 Window::SetScreen(const ::Screen* screen)
 {
 	// TODO this assert fails in Desktop::ShowWindow
-	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->ScreenLocker());
+	//ASSERT_BRW_WRITE_LOCKED(fDesktop->ScreenLocker());
 	fScreen = screen;
 }
 
@@ -686,7 +686,7 @@ const ::Screen*
 Window::Screen() const
 {
 	// TODO this assert also fails
-	//ASSERT_MULTI_READ_LOCKED(fDesktop->ScreenLocker());
+	//ASSERT_BRW_READ_LOCKED(fDesktop->ScreenLocker());
 	return fScreen;
 }
 
@@ -2117,7 +2117,7 @@ bool
 Window::DetachFromWindowStack(bool ownStackNeeded)
 {
 	// The lock must normally be held but is not held when closing the window.
-	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->WindowLocker());
+	//ASSERT_BRW_WRITE_LOCKED(fDesktop->WindowLocker());
 
 	if (!fCurrentStack.IsSet())
 		return false;
@@ -2163,7 +2163,7 @@ Window::DetachFromWindowStack(bool ownStackNeeded)
 bool
 Window::AddWindowToStack(Window* window)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fDesktop->WindowLocker());
+	ASSERT_BRW_WRITE_LOCKED(fDesktop->WindowLocker());
 
 	WindowStack* stack = GetWindowStack();
 	if (stack == NULL)

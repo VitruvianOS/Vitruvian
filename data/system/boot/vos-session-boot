@@ -29,5 +29,6 @@ systemctl --user --no-block start pipewire.socket wireplumber.service \
 "$LAUNCH" input_server
 "$LAUNCH" mount_server
 "$LAUNCH" notification_server
+"$LAUNCH" keystore_server
 "$LAUNCH" Deskbar
 "$LAUNCH" Tracker

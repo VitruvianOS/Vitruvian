@@ -41,6 +41,7 @@
 #include <media2/MediaGraph.h>
 
 #include "FormatConversion.h"
+#include "MixerParams.h"
 #include <ControllablePrivate.h>
 #include <MediaGraphPrivate.h>
 
@@ -373,6 +374,7 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		s.id         = id;
 		s.name       = (appName != NULL ? appName
 			: (mediaName != NULL ? mediaName : "stream"));
+		s.nodeName   = nodeName != NULL ? nodeName : "";
 		s.mediaClass = mediaClass;
 		s.isOutput   = isStreamOut;
 		s.deviceId   = 0;
@@ -385,6 +387,8 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 			std::lock_guard<std::mutex> _(fStreamsLock);
 			fStreams.push_back(s);
 		}
+		// The registry dict has no volume/mute; seed from the Props param.
+		_StartStreamParamWatch(id);
 		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 		return;
 	}
@@ -451,6 +455,8 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 			}
 		}
 	}
+	if (streamChanged)
+		_DestroyStreamParamWatch(id);
 
 	bool midiChanged = false;
 	if (!deviceChanged && !streamChanged) {
@@ -780,6 +786,9 @@ PipeWireBackend::_Teardown()
 	if (fThreadLoop != NULL)
 		pw_thread_loop_stop(fThreadLoop);
 
+	while (!fStreamParamWatches.empty())
+		_DestroyStreamParamWatch(fStreamParamWatches.begin()->first);
+
 	while (!fNodeParamWatches.empty())
 		_DestroyNodeParamWatch(fNodeParamWatches.begin()->first);
 
@@ -926,26 +935,29 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	// above is only for building the pod; the stream is not yet in the graph.
 	uint8_t buf[2048];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-	const spa_pod* params[3];
-	uint32 paramCount = 1;
+	const spa_pod* params[4];
+	uint32 paramCount = 0;
 	// Video offers YUY2/BGRx/I420 with size and rate ranges; most UVC
 	// webcams do not do BGRx only, so a single fixed format never links.
 	if (isVideo) {
-		// Exact preferred mode first, the full range as fallback.
-		params[0] = BuildVideoEnumFormat(&b, preferred, true);
-		params[1] = BuildVideoEnumFormat(&b, preferred);
-		paramCount = 2;
-		if (params[1] == NULL)
-			params[0] = NULL;
-		// Compressed fallback after raw, so raw wins when the device has it.
-		if (allowMjpeg && direction == PW_DIRECTION_INPUT) {
-			params[2] = BuildVideoEnumFormat(&b, preferred, false, true);
-			if (params[2] != NULL)
-				paramCount = 3;
+		// Exact modes first: PipeWire takes the first match, so a raw range
+		// would beat a size the device offers only as MJPEG.
+		const bool mjpeg = allowMjpeg && direction == PW_DIRECTION_INPUT;
+		const spa_pod* built[4] = {
+			BuildVideoEnumFormat(&b, preferred, true),
+			mjpeg ? BuildVideoEnumFormat(&b, preferred, true, true) : NULL,
+			BuildVideoEnumFormat(&b, preferred),
+			mjpeg ? BuildVideoEnumFormat(&b, preferred, false, true) : NULL
+		};
+		for (uint32 i = 0; i < 4; i++) {
+			if (built[i] != NULL)
+				params[paramCount++] = built[i];
 		}
-	} else
+	} else {
 		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
-	if (params[0] == NULL) {
+		paramCount = params[0] != NULL ? 1 : 0;
+	}
+	if (paramCount == 0) {
 		Lock();
 		pw_stream_destroy(stream);
 		Unlock();
@@ -1117,23 +1129,161 @@ PipeWireBackend::GetStreamVolume(uint32 streamId, float* outVolume,
 
 
 status_t
+PipeWireBackend::_QueryNodeVolume(uint32 nodeId, VolumeQuery& outQuery)
+{
+	outQuery = { {}, false, false, false };
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kNodeParamEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeParamThunk
+	};
+	pw_node_add_listener(node, &hook, &kNodeParamEvents, &outQuery);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::_SetStreamProps(uint32 streamId, const float* volumes,
+	size_t count, bool haveMute, bool mute)
+{
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	uint8_t buffer[512];
+	const spa_pod* param = MixerBuildVolumeProps(buffer, sizeof(buffer),
+		volumes, (uint32)count, haveMute, mute);
+	if (param == NULL)
+		return B_NO_MEMORY;
+
+	Lock();
+	struct pw_node* node = _BindNode(streamId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+	pw_node_set_param(node, SPA_PARAM_Props, 0, param);
+
+	VolumeQuery verify = { {}, false, false, false };
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kVerifyEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeParamThunk
+	};
+	pw_node_add_listener(node, &hook, &kVerifyEvents, &verify);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	// A stream that never reported its props accepts the write silently;
+	// only fail when the readback contradicts it.
+	if (!verify.volumes.empty()
+			&& fabsf(verify.volumes[0] - volumes[0]) >= 0.01f) {
+		fprintf(stderr, "PipeWireBackend: stream %u props not applied "
+			"(read back %.3f, wanted %.3f)\n", streamId,
+			verify.volumes[0], volumes[0]);
+		return B_ERROR;
+	}
+	if (haveMute && verify.haveMute && verify.mute != mute)
+		return B_ERROR;
+	return B_OK;
+}
+
+
+status_t
 PipeWireBackend::SetStreamVolume(uint32 streamId, float volume, bool mute)
 {
-	bool found = false;
+	if (!_HasStream(streamId))
+		return B_BAD_VALUE;
+
+	// Replicate the master over however many channels the node has.
+	VolumeQuery current = { {}, false, false, false };
+	_QueryNodeVolume(streamId, current);
+	const size_t channels = current.volumes.empty()
+		? 2 : current.volumes.size();
+	std::vector<float> volumes(channels, volume);
+
+	status_t status = _SetStreamProps(streamId, volumes.data(), channels,
+		true, mute);
+	if (status != B_OK)
+		return status;
+
 	{
 		std::lock_guard<std::mutex> _(fStreamsLock);
 		for (auto& s : fStreams) {
 			if (s.id == streamId) {
 				s.volume = volume;
 				s.mute   = mute;
-				found = true;
 				break;
 			}
 		}
 	}
-	if (found)
-		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
-	return found ? B_OK : B_BAD_VALUE;
+	_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::SetStreamChannelVolumes(uint32 streamId,
+	const float* volumes, size_t count)
+{
+	if (volumes == NULL || count == 0)
+		return B_BAD_VALUE;
+	if (!_HasStream(streamId))
+		return B_BAD_VALUE;
+
+	status_t status = _SetStreamProps(streamId, volumes, count, false, false);
+	if (status != B_OK)
+		return status;
+
+	float peak = 0.0f;
+	for (size_t i = 0; i < count; i++) {
+		if (volumes[i] > peak)
+			peak = volumes[i];
+	}
+	{
+		std::lock_guard<std::mutex> _(fStreamsLock);
+		for (auto& s : fStreams) {
+			if (s.id == streamId) {
+				s.volume = peak;
+				break;
+			}
+		}
+	}
+	_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
+	return B_OK;
+}
+
+
+bool
+PipeWireBackend::_HasStream(uint32 streamId)
+{
+	std::lock_guard<std::mutex> _(fStreamsLock);
+	for (auto& s : fStreams) {
+		if (s.id == streamId)
+			return true;
+	}
+	return false;
 }
 
 
@@ -1374,6 +1524,16 @@ PipeWireBackend::_BindNode(uint32 id)
 }
 
 
+struct pw_port*
+PipeWireBackend::_BindPort(uint32 id)
+{
+	if (fRegistry == NULL)
+		return NULL;
+	return (struct pw_port*)pw_registry_bind(fRegistry, id,
+		PW_TYPE_INTERFACE_Port, PW_VERSION_PORT, 0);
+}
+
+
 void
 PipeWireBackend::_CoreDoneThunk(void* data, uint32 id, int seq)
 {
@@ -1602,6 +1762,16 @@ _PickFrameRate(const spa_pod* value)
 }
 
 
+// Unbounded range maxima (INT_MAX) and empty sizes are not modes.
+static bool
+_IsUsableModeSize(uint32 width, uint32 height)
+{
+	const uint32 kMaxModeEdge = 16384;
+	return width > 0 && height > 0 && width <= kMaxModeEdge
+		&& height <= kMaxModeEdge;
+}
+
+
 /* static */ void
 PipeWireBackend::_NodeVideoModeThunk(void* data, int, uint32 id, uint32,
 	uint32, const struct spa_pod* param)
@@ -1627,20 +1797,21 @@ PipeWireBackend::_NodeVideoModeThunk(void* data, int, uint32 id, uint32,
 
 	const spa_rectangle* r = (const spa_rectangle*)SPA_POD_BODY(values);
 	// A range lists default, min, max; offer the default and the maximum.
-	uint32 first = 0;
+	// An enum lists the default first; the repeats are merged later.
 	uint32 last = count;
 	if (choice == SPA_CHOICE_Range || choice == SPA_CHOICE_Step) {
-		first = 0;
 		last = 1;
 		if (count >= 3 && (r[2].width != r[0].width
-				|| r[2].height != r[0].height)) {
+				|| r[2].height != r[0].height)
+				&& _IsUsableModeSize(r[2].width, r[2].height)) {
 			NodeVideoMode mode = { r[2].width, r[2].height, rate };
 			modes->push_back(mode);
 		}
-	} else if (choice == SPA_CHOICE_Enum && count > 1)
-		first = 1;
+	}
 
-	for (uint32 i = first; i < last; i++) {
+	for (uint32 i = 0; i < last; i++) {
+		if (!_IsUsableModeSize(r[i].width, r[i].height))
+			continue;
 		NodeVideoMode mode = { r[i].width, r[i].height, rate };
 		modes->push_back(mode);
 	}
@@ -1670,26 +1841,34 @@ PipeWireBackend::QueryNodeVideoModes(const char* nodeName,
 	if (nodeId == 0)
 		return B_ENTRY_NOT_FOUND;
 
+	// EnumFormat is a port parameter; the node answers nothing for it.
+	std::vector<uint32> portIds;
+	status_t status = ResolveNodePorts(nodeId, PW_DIRECTION_OUTPUT, portIds);
+	if (status != B_OK)
+		return status;
+	if (portIds.empty())
+		return B_ENTRY_NOT_FOUND;
+
 	std::vector<NodeVideoMode> found;
 	Lock();
-	struct pw_node* node = _BindNode(nodeId);
-	if (node == NULL) {
+	struct pw_port* port = _BindPort(portIds[0]);
+	if (port == NULL) {
 		Unlock();
 		return B_DEVICE_NOT_FOUND;
 	}
 
 	spa_hook listener;
 	memset(&listener, 0, sizeof(listener));
-	static const pw_node_events kModeEvents = {
-		PW_VERSION_NODE_EVENTS,
+	static const pw_port_events kModeEvents = {
+		PW_VERSION_PORT_EVENTS,
 		NULL,
 		&PipeWireBackend::_NodeVideoModeThunk
 	};
-	pw_node_add_listener(node, &listener, &kModeEvents, &found);
-	pw_node_enum_params(node, 0, SPA_PARAM_EnumFormat, 0, UINT32_MAX, NULL);
+	pw_port_add_listener(port, &listener, &kModeEvents, &found);
+	pw_port_enum_params(port, 0, SPA_PARAM_EnumFormat, 0, UINT32_MAX, NULL);
 	RoundtripLocked();
 	spa_hook_remove(&listener);
-	pw_proxy_destroy((struct pw_proxy*)node);
+	pw_proxy_destroy((struct pw_proxy*)port);
 	Unlock();
 
 	// One entry per size, keeping the best rate any pixel format gave it.
@@ -3128,6 +3307,138 @@ PipeWireBackend::DestroyLink(uint32 linkId)
 	RoundtripLocked(500000);
 	Unlock();
 	return B_OK;
+}
+
+
+void
+PipeWireBackend::_StartStreamParamWatch(uint32 nodeId)
+{
+	// Runs on the loop thread; a roundtrip would deadlock, so Props
+	// arrive asynchronously.
+	if (fRegistry == NULL)
+		return;
+	{
+		std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+		if (fStreamParamWatches.find(nodeId) != fStreamParamWatches.end())
+			return;
+	}
+
+	StreamParamWatch* watch = new(std::nothrow) StreamParamWatch();
+	if (watch == NULL)
+		return;
+	watch->backend = this;
+	watch->nodeId = nodeId;
+	watch->proxy = NULL;
+	memset(&watch->hook, 0, sizeof(watch->hook));
+
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		delete watch;
+		return;
+	}
+
+	static const pw_node_events kWatchEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_StreamParamThunk
+	};
+	pw_node_add_listener(node, &watch->hook, &kWatchEvents, watch);
+	uint32_t ids[1] = { SPA_PARAM_Props };
+	pw_node_subscribe_params(node, ids, 1);
+	watch->proxy = node;
+
+	std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+	fStreamParamWatches[nodeId] = watch;
+}
+
+
+void
+PipeWireBackend::_DestroyStreamParamWatch(uint32 nodeId)
+{
+	StreamParamWatch* watch = NULL;
+	{
+		std::lock_guard<std::mutex> _(fStreamParamWatchesLock);
+		auto it = fStreamParamWatches.find(nodeId);
+		if (it == fStreamParamWatches.end())
+			return;
+		watch = it->second;
+		fStreamParamWatches.erase(it);
+	}
+	if (watch == NULL)
+		return;
+	Lock();
+	if (watch->proxy != NULL) {
+		spa_hook_remove(&watch->hook);
+		pw_proxy_destroy((struct pw_proxy*)watch->proxy);
+	}
+	Unlock();
+	delete watch;
+}
+
+
+void
+PipeWireBackend::_StreamParamThunk(void* data, int seq, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	StreamParamWatch* watch = (StreamParamWatch*)data;
+	if (watch != NULL && watch->backend != NULL)
+		watch->backend->_OnStreamParam(watch, id, param);
+}
+
+
+void
+PipeWireBackend::_OnStreamParam(StreamParamWatch* watch, uint32 id,
+	const struct spa_pod* param)
+{
+	if (param == NULL || id != SPA_PARAM_Props)
+		return;
+
+	// Same parse as _NodeParamThunk: channelVolumes are linear 0..1 per
+	// channel, matching what SetStreamVolume writes back.
+	std::vector<float> volumes;
+	bool mute = false;
+	bool haveMute = false;
+
+	const spa_pod_prop* volProp = spa_pod_find_prop(param, NULL,
+		SPA_PROP_channelVolumes);
+	if (volProp != NULL) {
+		uint32 n = 0;
+		float* vals = (float*)spa_pod_get_array(&volProp->value, &n);
+		if (vals != NULL && n > 0)
+			volumes.assign(vals, vals + n);
+	}
+
+	const spa_pod_prop* muteProp = spa_pod_find_prop(param, NULL,
+		SPA_PROP_mute);
+	if (muteProp != NULL && spa_pod_get_bool(&muteProp->value, &mute) >= 0)
+		haveMute = true;
+
+	// The UI value mirrors SetStreamChannelVolumes: the loudest channel.
+	float volume = volumes.empty() ? 1.0f : volumes[0];
+	for (size_t i = 1; i < volumes.size(); i++) {
+		if (volumes[i] > volume)
+			volume = volumes[i];
+	}
+
+	bool changed = false;
+	{
+		std::lock_guard<std::mutex> _(fStreamsLock);
+		for (auto& stream : fStreams) {
+			if (stream.id != watch->nodeId)
+				continue;
+			if (!volumes.empty() && stream.volume != volume) {
+				stream.volume = volume;
+				changed = true;
+			}
+			if (haveMute && stream.mute != mute) {
+				stream.mute = mute;
+				changed = true;
+			}
+			break;
+		}
+	}
+	if (changed)
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, watch->nodeId);
 }
 
 

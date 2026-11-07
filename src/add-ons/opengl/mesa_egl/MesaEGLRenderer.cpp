@@ -35,6 +35,9 @@ MesaEGLRenderer::MesaEGLRenderer(BGLView* view, ulong options,
 	BGLRenderer(view, options, dispatcher),
 	fDrmFd(-1),
 	fOwnsDrmFd(false),
+	fDeviceWhy("no device"),
+	fZinkMode(kGlZinkNative),
+	fZinkWhy("native"),
 	fGbmDevice(NULL),
 	fGbmSurface(NULL),
 	fDisplay(EGL_NO_DISPLAY),
@@ -53,6 +56,7 @@ MesaEGLRenderer::MesaEGLRenderer(BGLView* view, ulong options,
 	fBitmap(NULL)
 {
 	fDevicePath[0] = '\0';
+	memset(&fDevice, 0, sizeof(fDevice));
 	fDebug = getenv("VOS_GL_DEBUG") != NULL;
 
 	pthread_mutex_init(&fBitmapLock, NULL);
@@ -105,6 +109,65 @@ MesaEGLRenderer::_ProbeGbmDevice()
 }
 
 
+bool
+MesaEGLRenderer::_TryOpenNode(const char* node)
+{
+	fDrmFd = open(node, O_RDWR | O_CLOEXEC);
+	if (fDrmFd < 0)
+		return false;
+	if (_ProbeGbmDevice()) {
+		fOwnsDrmFd = true;
+		snprintf(fDevicePath, sizeof(fDevicePath), "%s", node);
+		return true;
+	}
+	close(fDrmFd);
+	fDrmFd = -1;
+	return false;
+}
+
+
+status_t
+MesaEGLRenderer::_SelectDevice()
+{
+	gl_device devices[16];
+	int count = gl_enumerate_devices(devices, 16);
+	int policy = kGlPolicyAutomatic;
+	gl_load_policy(&policy);
+
+	const char* override = getenv("VOS_GL_DEVICE");
+	const char* why = NULL;
+	int pick = gl_select_device(devices, count, policy, override, &why);
+	if (pick < 0) {
+		// No GPU table: janus may still hand us an fd in _OpenDrmDevice.
+		if (getenv("JANUS_DRM_FD") != NULL)
+			return B_OK;
+		return B_ERROR;
+	}
+
+	fDevice = devices[pick];
+	fDeviceWhy = why;
+	printf("MesaEGLRenderer: selected GPU %s (%s): %s\n",
+		fDevice.renderNode[0] != '\0' ? fDevice.renderNode
+			: fDevice.primaryNode,
+		fDevice.driver, why);
+
+	// Settle native versus zink now that the device is known and
+	// before any Mesa driver load; a quirk row may force zink.
+	if (fZinkMode == kGlZinkNative) {
+		gl_zink_quirk quirks[GL_DEVICE_MAX_QUIRKS];
+		int quirkCount = gl_load_zink_quirk_table(quirks,
+			GL_DEVICE_MAX_QUIRKS);
+		gl_decide_zink(getenv("VOS_GL_ZINK"), quirks, quirkCount,
+			fDevice.vendorId, fDevice.deviceId, fDevice.driver,
+			false, &fZinkMode, &fZinkWhy);
+		if (fZinkMode != kGlZinkNative)
+			setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	return B_OK;
+}
+
+
 status_t
 MesaEGLRenderer::_OpenDrmDevice()
 {
@@ -127,24 +190,35 @@ MesaEGLRenderer::_OpenDrmDevice()
 		}
 	}
 
-	// On kmsro systems (RK3399) the GPU is on the render node.
-	static const char* kDevices[] = {
-		"/dev/dri/renderD128", "/dev/dri/renderD129",
-		"/dev/dri/card0",      "/dev/dri/card1",
-		NULL
-	};
-	for (int i = 0; kDevices[i] != NULL; i++) {
-		fDrmFd = open(kDevices[i], O_RDWR | O_CLOEXEC);
-		if (fDrmFd < 0)
+	const char* node = fDevice.renderNode[0] != '\0'
+		? fDevice.renderNode : fDevice.primaryNode;
+	if (node[0] != '\0' && _TryOpenNode(node))
+		return B_OK;
+	if (node[0] != '\0')
+		fprintf(stderr, "MesaEGLRenderer: selected GPU %s not usable, "
+			"falling back\n", node);
+
+	// Fall back across the rest, but never wake a runtime suspended
+	// dGPU the policy did not pick.
+	gl_device devices[16];
+	int count = gl_enumerate_devices(devices, 16);
+	for (int i = 0; i < count; i++) {
+		if (devices[i].runtimeSuspended)
 			continue;
-		if (_ProbeGbmDevice()) {
-			fOwnsDrmFd = true;
-			snprintf(fDevicePath, sizeof(fDevicePath), "%s",
-				kDevices[i]);
+		if (devices[i].renderNode[0] != '\0'
+				&& strcmp(devices[i].renderNode, node) != 0
+				&& _TryOpenNode(devices[i].renderNode)) {
+			fDevice = devices[i];
+			fDeviceWhy = "fallback after selected GPU failed";
 			return B_OK;
 		}
-		close(fDrmFd);
-		fDrmFd = -1;
+		if (devices[i].primaryNode[0] != '\0'
+				&& strcmp(devices[i].primaryNode, node) != 0
+				&& _TryOpenNode(devices[i].primaryNode)) {
+			fDevice = devices[i];
+			fDeviceWhy = "fallback after selected GPU failed";
+			return B_OK;
+		}
 	}
 
 	fprintf(stderr, "MesaEGLRenderer: no usable DRM device\n");
@@ -331,6 +405,7 @@ MesaEGLRenderer::_LogGlStrings()
 {
 	const char* eglVendor = eglQueryString(fDisplay, EGL_VENDOR);
 	const char* eglVersion = eglQueryString(fDisplay, EGL_VERSION);
+	const char* glVendor = (const char*)glGetString(GL_VENDOR);
 	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
 	const char* glVersion = (const char*)glGetString(GL_VERSION);
 	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
@@ -343,8 +418,9 @@ MesaEGLRenderer::_LogGlStrings()
 	printf("MesaEGLRenderer: EGL %s vendor=%s\n",
 		eglVersion != NULL ? eglVersion : "?",
 		eglVendor != NULL ? eglVendor : "?");
-	printf("MesaEGLRenderer: GL %s renderer=%s (%s%s)\n",
+	printf("MesaEGLRenderer: GL %s vendor=%s renderer=%s (%s%s)\n",
 		glVersion != NULL ? glVersion : "?",
+		glVendor != NULL ? glVendor : "?",
 		glRenderer != NULL ? glRenderer : "?",
 		fIsGles ? "GLES" : "desktop GL",
 		hasCompat ? ", ARB_compatibility" : "");
@@ -367,6 +443,44 @@ MesaEGLRenderer::_LogGlStrings()
 status_t
 MesaEGLRenderer::_Init()
 {
+	// VOS_GL_ZINK=1 forces zink before any EGL call; the quirk-table
+	// decision needs the device and runs in _TryInit once it is known.
+	const char* zinkEnv = getenv("VOS_GL_ZINK");
+	if (zinkEnv != NULL && strcmp(zinkEnv, "1") == 0) {
+		fZinkMode = kGlZinkEnv;
+		fZinkWhy = "env override";
+		setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	status_t status = _TryInit();
+	if (status == B_OK)
+		return B_OK;
+
+	// Native failed once: retry the same init with zink over Vulkan,
+	// unless VOS_GL_ZINK=0 vetoes the fallback or zink already ran.
+	if (fZinkMode != kGlZinkNative
+			|| (zinkEnv != NULL && strcmp(zinkEnv, "0") == 0))
+		return B_ERROR;
+
+	fprintf(stderr, "MesaEGLRenderer: native path failed, retrying "
+		"with zink\n");
+	_Cleanup();
+	setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	fZinkMode = kGlZinkFallback;
+	fZinkWhy = "zink fallback";
+	return _TryInit();
+}
+
+
+status_t
+MesaEGLRenderer::_TryInit()
+{
+	// Pick the GPU and settle the driver path before opening it: the
+	// GBM probe loads Mesa's driver, and the zink override is an
+	// in-process env var Mesa reads at driver load.
+	if (_SelectDevice() != B_OK)
+		return B_ERROR;
+
 	if (_OpenDrmDevice() != B_OK)
 		return B_ERROR;
 
@@ -428,12 +542,46 @@ MesaEGLRenderer::_Init()
 		return B_ERROR;
 	}
 	_LogGlStrings();
+	_VerifyZink();
+	_PublishStatus();
 	eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
 		EGL_NO_CONTEXT);
 
 	fInitialized = true;
 	printf("MesaEGLRenderer: ready %dx%d\n", fWidth, fHeight);
+	printf("MesaEGLRenderer: driver path %s (%s) on %s (%s)\n",
+		fZinkMode == kGlZinkNative ? "native" : "zink", fZinkWhy,
+		fDevicePath, fDeviceWhy);
 	return B_OK;
+}
+
+
+// Context must be current. Zink was chosen but the GL stack reported
+// something else: say so, and keep what we obtained either way.
+void
+MesaEGLRenderer::_VerifyZink()
+{
+	if (fZinkMode == kGlZinkNative)
+		return;
+
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	if (glRenderer == NULL || strstr(glRenderer, "zink") == NULL) {
+		fprintf(stderr, "MesaEGLRenderer: zink was requested (%s) but "
+			"GL_RENDERER is '%s'\n", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+		syslog(LOG_ERR, "MesaEGLRenderer: zink requested (%s), got "
+			"renderer '%s'", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+	}
+}
+
+
+void
+MesaEGLRenderer::_PublishStatus()
+{
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	gl_publish_gl_status(&fDevice, glRenderer, fZinkMode, fZinkWhy,
+		fDeviceWhy);
 }
 
 

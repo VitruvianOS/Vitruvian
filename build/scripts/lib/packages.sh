@@ -18,12 +18,12 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-$(get_kernel_flavour) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 libre1 libvpx9 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " pipewire pipewire-alsa pipewire-bin wireplumber rtkit libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
@@ -33,19 +33,20 @@ get_base_packages() {
                 " firmware-intel-graphics firmware-amd-graphics firmware-nvidia-graphics firmware-mediatek bluez-firmware" \
                 " firmware-sof-signed firmware-intel-sound firmware-cirrus intel-microcode amd64-microcode" \
                 " firmware-ti-connectivity firmware-intel-misc firmware-samsung firmware-siano firmware-zd1211 firmware-ath9k-htc firmware-carl9170" \
-                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
-                " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
+                " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
+                " gpsd" \
+                " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin hwdata"
             ;;
         arm64)
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 libre1 libvpx9 mobile-broadband-provider-info eg25-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " pipewire pipewire-alsa pipewire-bin wireplumber rtkit libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers libgl1-mesa-dri" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
@@ -53,17 +54,18 @@ get_base_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb libnss-mdns" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
                 " firmware-brcm80211 firmware-misc-nonfree firmware-realtek firmware-atheros firmware-libertas bluez-firmware" \
-                " grub-common grub2-common grub-efi-arm64-bin"
+                " gpsd" \
+                " grub-common grub2-common grub-efi-arm64-bin hwdata"
             ;;
         arm32)
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 libre1 libvpx9 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " pipewire pipewire-alsa pipewire-bin wireplumber rtkit libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
@@ -76,11 +78,11 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
-                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager libmm-glib0 libre1 libvpx9 mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire pipewire-alsa pipewire-bin wireplumber libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
+                " pipewire pipewire-alsa pipewire-bin wireplumber rtkit libspa-0.2-bluetooth gstreamer1.0-pipewire gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " alsa-ucm-conf alsa-topology-conf gstreamer1.0-gl mesa-va-drivers" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
@@ -102,59 +104,59 @@ get_dev_packages() {
             printf '%s' \
                 "linux-headers-$(get_kernel_flavour) pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev libargon2-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         arm64)
             printf '%s' \
                 "linux-headers-arm64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev libargon2-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         arm32)
             printf '%s' \
                 "linux-headers-armmp pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev libargon2-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         riscv64)
             printf '%s' \
                 "linux-headers-riscv64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
-                " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
+                " libevdev-dev libseat-dev libudev-dev libusb-1.0-0-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev libavif-dev libssl-dev libargon2-dev" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
-                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libsane-dev liblilv-dev libsuil-dev lv2-dev libasound2-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
+                " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev libetpan-dev libcurl4-gnutls-dev libre-dev libvpx-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

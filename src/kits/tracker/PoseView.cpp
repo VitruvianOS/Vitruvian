@@ -366,6 +366,10 @@ BPoseView::InitCommon()
 
 	// init things related to laying out items
 	SetIconPoseHeight();
+	if (IsDesktopView()) {
+		BRect deskbarFrame;
+		GetDeskbarFrame(&deskbarFrame);
+	}
 	GetLayoutInfo(ViewMode(), &fGrid, &fOffset);
 	ResetPosePlacementHint();
 
@@ -1119,6 +1123,12 @@ BPoseView::GetLayoutInfo(uint32 mode, BPoint* grid, BPoint* offset) const
 			offset->Set(labelSpacing - 1, labelSpacing - 1);
 			break;
 		}
+	}
+
+	// keep the first desktop row below a Deskbar spanning the screen top
+	if (IsDesktopView() && fDeskbarFrame.IsValid() && fDeskbarFrame.top <= 0
+		&& fDeskbarFrame.Width() >= BScreen(Window()).Frame().Width()) {
+		offset->y += fDeskbarFrame.bottom + 1;
 	}
 }
 
@@ -3943,8 +3953,11 @@ BPoseView::GetDeskbarFrame(BRect* frame)
 	bigtime_t now = system_time();
 	if (fLastDeskbarFrameCheckTime + 500000 < now) {
 		// it's time to check the Deskbar frame again
+		BRect oldFrame(fDeskbarFrame);
 		result = get_deskbar_frame(&fDeskbarFrame);
 		fLastDeskbarFrameCheckTime = now;
+		if (fDeskbarFrame != oldFrame)
+			GetLayoutInfo(ViewMode(), &fGrid, &fOffset);
 	}
 	*frame = fDeskbarFrame;
 

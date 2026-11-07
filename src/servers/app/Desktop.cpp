@@ -45,6 +45,7 @@
 #include <Roster.h>
 
 #include <PrivateScreen.h>
+#include <PointerGrab.h>
 #include <ServerProtocol.h>
 #include <ServerReadOnlyMemory.h>
 #include <ViewPrivate.h>
@@ -237,7 +238,8 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 		if (key == kEscapeKey && (modifiers & B_COMMAND_KEY) != 0
 			&& (modifiers & B_CONTROL_KEY) != 0
 			&& (modifiers & B_SHIFT_KEY) != 0) {
-			system("screenmode --fall-back &");
+			int result = system("screenmode --fall-back &");
+			(void)result;
 			return B_SKIP_MESSAGE;
 		}
 
@@ -498,6 +500,9 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 	fWindowUnderMouse(NULL),
 	fLockedFocusWindow(NULL),
 	fViewUnderMouse(B_NULL_TOKEN),
+	fGrabLock("window grab lock"),
+	fPointerGrabTarget(NULL),
+	fKeyboardGrabTarget(NULL),
 	fLastMousePosition(B_ORIGIN),
 	fLastMouseButtons(0),
 
@@ -511,6 +516,7 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 {
 	memset(fLastWorkspaceFocus, 0, sizeof(fLastWorkspaceFocus));
 	memset(&fScreenChangeSnapshot, 0, sizeof(fScreenChangeSnapshot));
+	input_grab_init(&fInputGrabs);
 
 	char name[B_OS_NAME_LENGTH];
 	Desktop::_GetLooperName(name, sizeof(name));
@@ -2271,6 +2277,9 @@ Desktop::RemoveWindow(Window *window)
 	if (!window->IsNormal())
 		fSubsetWindows.RemoveWindow(window);
 
+	// A grab anchored to a dying window must not outlive it.
+	_ReleaseGrabsForTarget(&window->EventTarget());
+
 	_ChangeWindowWorkspaces(window, window->Workspaces(), 0);
 
 	NotifyWindowRemoved(window);
@@ -2581,8 +2590,7 @@ Desktop::LockScreen()
 	if (!LockAllWindows())
 		return B_ERROR;
 
-	// Collect first: HideWindow() nests the write lock, which MultiLocker
-	// allows, but iterating while mutating is clearer this way.
+	// Collect first, HideWindow() changes the list being iterated.
 	BList toHide;
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -2699,6 +2707,126 @@ Desktop::KeyboardEventTarget()
 		return &FocusWindow()->EventTarget();
 
 	return NULL;
+}
+
+
+status_t
+Desktop::AcquirePointerGrab(team_id team, int32 token, EventTarget* target,
+	uint32 flags, const BRect& confineTo)
+{
+	if (team < 0 || token < 0 || target == NULL)
+		return B_BAD_VALUE;
+
+	{
+		BAutolock _(fGrabLock);
+		if (!input_grab_acquire_pointer(&fInputGrabs, team, token, flags))
+			return B_ERROR;
+		fPointerGrabTarget = target;
+		fPointerGrabRect = confineTo;
+	}
+
+	// Device-side confinement and relative mode: pre-acceleration
+	// deltas and the cursor clamp live in the pointing add-ons.
+	uint32 constraint = 0;
+	if ((flags & B_POINTER_GRAB_CONFINED) != 0)
+		constraint |= kPointerConstraintConfined;
+	if ((flags & B_POINTER_GRAB_RELATIVE) != 0)
+		constraint |= kPointerConstraintRelative;
+	if (gInputManager != NULL)
+		gInputManager->SetPointerConstraint(constraint, confineTo);
+
+	return B_OK;
+}
+
+
+status_t
+Desktop::ReleasePointerGrab(team_id team)
+{
+	{
+		BAutolock _(fGrabLock);
+		if (!input_grab_release_pointer(&fInputGrabs, team))
+			return B_ERROR;
+		fPointerGrabTarget = NULL;
+		fPointerGrabRect = BRect();
+	}
+
+	if (gInputManager != NULL)
+		gInputManager->SetPointerConstraint(0, BRect());
+	return B_OK;
+}
+
+
+status_t
+Desktop::AcquireKeyboardGrab(team_id team, int32 token, EventTarget* target,
+	uint32 flags)
+{
+	if (team < 0 || token < 0 || target == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock _(fGrabLock);
+	if (!input_grab_acquire_keyboard(&fInputGrabs, team, token, flags))
+		return B_ERROR;
+	fKeyboardGrabTarget = target;
+	return B_OK;
+}
+
+
+status_t
+Desktop::ReleaseKeyboardGrab(team_id team)
+{
+	BAutolock _(fGrabLock);
+	if (!input_grab_release_keyboard(&fInputGrabs, team))
+		return B_ERROR;
+	fKeyboardGrabTarget = NULL;
+	return B_OK;
+}
+
+
+EventTarget*
+Desktop::PointerGrabTarget()
+{
+	BAutolock _(fGrabLock);
+	if (fInputGrabs.secureAttentionTeam >= 0)
+		return NULL;
+	return fPointerGrabTarget;
+}
+
+
+EventTarget*
+Desktop::KeyboardGrabTarget()
+{
+	BAutolock _(fGrabLock);
+	if (fInputGrabs.secureAttentionTeam >= 0)
+		return NULL;
+	return fKeyboardGrabTarget;
+}
+
+
+void
+Desktop::SetSecureAttentionTeam(team_id team)
+{
+	BAutolock _(fGrabLock);
+	input_grab_set_secure_attention_team(&fInputGrabs, team);
+}
+
+
+void
+Desktop::_ReleaseGrabsForTarget(EventTarget* target)
+{
+	team_id pointerTeam = -1;
+	team_id keyboardTeam = -1;
+	{
+		BAutolock _(fGrabLock);
+		if (fPointerGrabTarget == target)
+			pointerTeam = fInputGrabs.pointerOwnerTeam;
+		if (fKeyboardGrabTarget == target)
+			keyboardTeam = fInputGrabs.keyboardOwnerTeam;
+	}
+
+	if (pointerTeam >= 0)
+		ReleasePointerGrab(pointerTeam);
+	if (keyboardTeam >= 0)
+		ReleaseKeyboardGrab(keyboardTeam);
 }
 
 
@@ -3619,7 +3747,7 @@ Desktop::AllWindows()
 Window*
 Desktop::WindowForClientLooperPort(port_id port)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -3832,7 +3960,7 @@ Desktop::_WindowCanHaveFocus(Window* window) const
 void
 Desktop::_WindowChanged(Window* window)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	BAutolock _(fWorkspacesLock);
 
@@ -3848,7 +3976,7 @@ Desktop::_WindowChanged(Window* window)
 void
 Desktop::_WindowRemoved(Window* window)
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	BAutolock _(fWorkspacesLock);
 
@@ -4231,7 +4359,7 @@ void
 Desktop::RebuildAndRedrawAfterWindowChange(Window* changedWindow,
 	BRegion& dirty)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 	if (!changedWindow->IsVisible() || dirty.CountRects() == 0)
 		return;
 
@@ -4273,7 +4401,7 @@ Desktop::RebuildAndRedrawAfterWindowChange(Window* changedWindow,
 void
 Desktop::_SuspendDirectFrameBufferAccess()
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -4287,7 +4415,7 @@ Desktop::_SuspendDirectFrameBufferAccess()
 void
 Desktop::_ResumeDirectFrameBufferAccess()
 {
-	ASSERT_MULTI_LOCKED(fWindowLock);
+	ASSERT_BRW_LOCKED(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
@@ -4319,7 +4447,7 @@ void
 Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 	const BRect& newFrame)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	if (oldFrame == newFrame)
 		return;
@@ -4338,33 +4466,45 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 				(int32)window->Feel(), window->Flags(), signature))
 			continue;
 
+		Window* topWindow = window->TopLayerStackWindow();
+		if (topWindow != NULL && topWindow != window)
+			continue;
+
 		const BRect frame = window->Frame();
 		if (RelayoutFillsScreen(frame, oldFrame))
 			continue;
 
-		// Live frame on the current workspace. Move through the stack's top
-		// window so the decorator and stacked siblings move once, with it.
-		const BPoint origin = RelayoutOrigin(frame, oldFrame, newFrame);
-		const BPoint delta = origin - frame.LeftTop();
-		Window* topWindow = window->TopLayerStackWindow();
-		if (delta != BPoint(0, 0) && (topWindow == NULL || topWindow == window))
-			window->MoveBy((int32)delta.x, (int32)delta.y);
+		BRect footprint = frame;
+		if (::Decorator* decorator = window->Decorator())
+			footprint = decorator->GetFootprint().Frame();
+		const BPoint inset = frame.LeftTop() - footprint.LeftTop();
 
-		// Other workspaces keep anchors; rewrite them so a shrink can't strand
-		// windows. The current workspace already moved its live frame.
-		for (int32 i = 0; i < kListCount; i++) {
-			if (i == window->CurrentWorkspace())
+		for (int32 i = 0; i < kMaxWorkspaces; i++) {
+			if (!window->InWorkspace(i))
 				continue;
 
 			window_anchor& anchor = window->Anchor(i);
-			if (anchor.position == kInvalidWindowPosition)
-				continue;
+			BRect placed = footprint;
+			if (i != fCurrentWorkspace) {
+				if (anchor.position == kInvalidWindowPosition
+					|| (window->Flags()
+						& B_SAME_POSITION_IN_ALL_WORKSPACES) != 0)
+					continue;
+				placed.OffsetTo(anchor.position - inset);
+			}
 
-			BRect anchorFrame(anchor.position.x, anchor.position.y,
-				anchor.position.x + frame.Width() - 1,
-				anchor.position.y + frame.Height() - 1);
-			anchor.position = RelayoutOrigin(anchorFrame, oldFrame,
-				newFrame);
+			relayout_placement& placement = anchor.placement;
+			if (!placement.valid || placement.placedAt != placed.LeftTop())
+				placement = RelayoutCapture(placed, oldFrame);
+
+			const BPoint origin = RelayoutOrigin(placement, placed, newFrame);
+			placement.placedAt = origin;
+
+			if (i == fCurrentWorkspace) {
+				window->MoveBy((int32)(origin.x - placed.left),
+					(int32)(origin.y - placed.top));
+			} else
+				anchor.position = origin + inset;
 		}
 	}
 }
@@ -4373,7 +4513,7 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 void
 Desktop::_ScreenChanged(Screen* screen)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	// item->frame is still the old size; Screen::Frame() is already the new.
 	const int32 screenIndex = fVirtualScreen.ScreenIndex(screen);
@@ -4464,7 +4604,7 @@ Desktop::_ActivateApp(team_id team)
 void
 Desktop::_SetCurrentWorkspaceConfiguration()
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	status_t status = fDirectScreenLock.LockWithTimeout(1000000L);
 	if (status != B_OK) {
@@ -4499,7 +4639,7 @@ Desktop::_SetCurrentWorkspaceConfiguration()
 void
 Desktop::_SetWorkspace(int32 index, bool moveFocusWindow)
 {
-	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
 	int32 previousIndex = fCurrentWorkspace;
 	rgb_color previousColor = fWorkspaces[fCurrentWorkspace].Color();

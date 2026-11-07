@@ -267,9 +267,13 @@ CameraWindow::_SelectDevice(media_client_id id)
 	fSelectedId = id;
 	fSelectedStableId = "";
 
-	delete fCamera;
-	fCamera = NULL;
+	// Detach the preview and stop capture before deleting.
 	fPreview->SetCamera(NULL);
+	if (fCamera != NULL) {
+		fCamera->Stop();
+		delete fCamera;
+		fCamera = NULL;
+	}
 
 	if (id == 0) {
 		fStatusLabel->SetText(B_TRANSLATE("No camera selected"));
@@ -365,10 +369,10 @@ CameraWindow::_SetEmptyState(bool empty)
 		fStatusLabel->SetText(B_TRANSLATE("No cameras found"));
 		fControlsBox->Hide();
 		if (fCamera != NULL) {
+			fPreview->SetCamera(NULL);
 			fCamera->Stop();
 			delete fCamera;
 			fCamera = NULL;
-			fPreview->SetCamera(NULL);
 		}
 		fSelectedId = 0;
 	} else {
@@ -424,6 +428,7 @@ bool
 CameraWindow::QuitRequested()
 {
 	if (fCamera != NULL) {
+		fPreview->SetCamera(NULL);
 		fCamera->Stop();
 		delete fCamera;
 		fCamera = NULL;

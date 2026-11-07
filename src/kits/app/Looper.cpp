@@ -36,6 +36,7 @@
 #include <MessagePrivate.h>
 #include <VRefCache.h>
 #include <TokenSpace.h>
+#include <UserSemaphore.h>
 
 
 // debugging
@@ -53,6 +54,24 @@ using BPrivate::gLooperList;
 using BPrivate::BLooperList;
 
 port_id _get_looper_port_(const BLooper* looper);
+
+// The lock outlives the looper while a thread still waits on it.
+struct looper_lock {
+	user_sem	sem;
+	int32		refs;
+};
+
+static_assert(sizeof(BLooper) == 240 || sizeof(void*) != 8,
+	"BLooper layout is fixed");
+
+
+static void
+_PutLock(looper_lock* lock)
+{
+	if (atomic_add(&lock->refs, -1) == 1)
+		delete lock;
+}
+
 
 enum {
 	BLOOPER_PROCESS_INTERNALLY = 0,
@@ -169,7 +188,12 @@ BLooper::~BLooper()
 	if (locked)
 		Unlock();
 	gLooperList.RemoveLooper(this);
-	delete_sem(fLockSem);
+	if (fLock != NULL) {
+		looper_lock* lock = fLock;
+		fLock = NULL;
+		user_sem_delete(&lock->sem);
+		_PutLock(lock);
+	}
 }
 
 
@@ -616,9 +640,11 @@ PRINT(("  fAtomicCount now: %ld\n", fAtomicCount));
 
 		// Check if anyone is waiting for a lock
 		// and release if it's the case
-		if (atomicCount > 1)
+		if (atomicCount > 1 && fLock != NULL)
+#else
+		if (fLock != NULL)
 #endif
-			release_sem(fLockSem);
+			user_sem_release(&fLock->sem);
 	}
 PRINT(("BLooper::Unlock() done\n"));
 }
@@ -690,7 +716,7 @@ BLooper::CountLockRequests() const
 sem_id
 BLooper::Sem() const
 {
-	return fLockSem;
+	return B_ERROR;
 }
 
 
@@ -932,7 +958,7 @@ BLooper::_Lock(BLooper* looper, port_id port, bigtime_t timeout)
 
 	thread_id currentThread = find_thread(NULL);
 	int32 oldCount;
-	sem_id sem;
+	looper_lock* lock;
 
 	{
 		AutoLocker<BLooperList> ListLock(gLooperList);
@@ -959,25 +985,29 @@ BLooper::_Lock(BLooper* looper, port_id port, bigtime_t timeout)
 			return B_OK;
 		}
 
-		// Cache the semaphore, so that we can safely access it after having
-		// unlocked the looper list
-		sem = looper->fLockSem;
-		if (sem < 0) {
+		// Take a reference on the lock, so that we can safely access it
+		// after having unlocked the looper list
+		lock = looper->fLock;
+		if (lock == NULL) {
 			PRINT(("BLooper::_Lock() done 6\n"));
 			return B_BAD_VALUE;
 		}
+		atomic_add(&lock->refs, 1);
 
 		// Bump the requested lock count (using fAtomicCount for this)
 		oldCount = atomic_add(&looper->fAtomicCount, 1);
 	}
 
-	return _LockComplete(looper, oldCount, currentThread, sem, timeout);
+	status_t status = _LockComplete(looper, oldCount, currentThread, lock,
+		timeout);
+	_PutLock(lock);
+	return status;
 }
 
 
 status_t
 BLooper::_LockComplete(BLooper* looper, int32 oldCount, thread_id thread,
-	sem_id sem, bigtime_t timeout)
+	looper_lock* lock, bigtime_t timeout)
 {
 	status_t err = B_OK;
 
@@ -985,7 +1015,7 @@ BLooper::_LockComplete(BLooper* looper, int32 oldCount, thread_id thread,
 	if (oldCount > 0) {
 #endif
 		do {
-			err = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, timeout);
+			err = user_sem_acquire(&lock->sem, timeout);
 		} while (err == B_INTERRUPTED);
 #if DEBUG < 1
 	}
@@ -1021,11 +1051,16 @@ BLooper::_InitData(const char* name, int32 priority, port_id port,
 	if (name == NULL)
 		name = "anonymous looper";
 
+	fLockSem = B_ERROR;
+	fLock = new(std::nothrow) looper_lock;
+	if (fLock != NULL) {
+		fLock->refs = 1;
 #if DEBUG
-	fLockSem = create_sem(1, name);
+		user_sem_init(&fLock->sem, 1);
 #else
-	fLockSem = create_sem(0, name);
+		user_sem_init(&fLock->sem, 0);
 #endif
+	}
 
 	if (portCapacity <= 0)
 		portCapacity = B_LOOPER_PORT_DEFAULT_CAPACITY;
@@ -1537,9 +1572,11 @@ BLooper::UnlockFully()
 #if DEBUG < 1
 	// There is now one less thread holding a lock on this looper
 	int32 atomicCount = atomic_add(&fAtomicCount, -1);
-	if (atomicCount > 1)
+	if (atomicCount > 1 && fLock != NULL)
+#else
+	if (fLock != NULL)
 #endif
-		release_sem(fLockSem);
+		user_sem_release(&fLock->sem);
 }
 
 

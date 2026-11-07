@@ -13,6 +13,9 @@ set(SYSTEMD_SERVICES
   data/systemd/vos-login.target
   data/systemd/vos-pdf-printer.service
   data/systemd/vos-fsck-failed.service
+  data/systemd/vos-overclock.service
+  data/systemd/vos-overclock-ok.service
+  data/systemd/vos-attrs-sync.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
@@ -23,6 +26,10 @@ install(PROGRAMS data/libexec/vos-firstboot-commit
 
 install(PROGRAMS data/libexec/vos-pdf-printer
   DESTINATION /usr/libexec/)
+
+install(PROGRAMS data/libexec/vos-attrs-sync
+  DESTINATION /usr/libexec/)
+install(DIRECTORY DESTINATION /usr/share/vos/attrs)
 
 install(PROGRAMS data/libexec/vos-install-helper
   DESTINATION /usr/libexec/)
@@ -86,6 +93,22 @@ install(PROGRAMS data/libexec/privilegedguy-helper
 install(FILES data/polkit-1/actions/org.vitruvian.privilegedguy.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
+install(PROGRAMS data/libexec/vos-hardware-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.hardware.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+
+# Overclock helpers: pkexec target for the Hardware preflet plus the
+# boot-time applier with its shared functions.
+install(PROGRAMS data/libexec/vos-set-overclock
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-overclock-apply
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-overclock-common.sh
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.overclock.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+
 install(PROGRAMS data/libexec/vos-apt-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.packagemanager.policy
@@ -110,6 +133,8 @@ install(FILES data/systemd/logind.conf.d/50-vos.conf
 
 install(FILES data/etc/security/pwquality.conf.d/50-vos.conf
   DESTINATION /etc/security/pwquality.conf.d/ COMPONENT data)
+install(FILES data/etc/security/limits.d/90-vos.conf
+  DESTINATION /etc/security/limits.d/ COMPONENT data)
 
 ImageIncludeFile("data/pam.d/vitruvian-session" "/etc/pam.d")
 ImageIncludeFile("data/pam.d/vitruvian-greeter" "/etc/pam.d")
@@ -149,6 +174,7 @@ ImageIncludeFile("data/system/settings/fresh_install" "/system/settings")
 
 # Data files
 ImageIncludeDir("data/system/data/fortunes" "/system/data/")
+ImageIncludeDir("data/system/data/opengl" "/system/data/")
 install(DIRECTORY "data/system/data/terminal_themes/" DESTINATION "/system/data/Terminal/Themes" COMPONENT data)
 ImageIncludeDir("data/system/data/network" "/system/data/")
 ImageIncludeDir("data/system/data/licenses" "/system/data/")
@@ -157,6 +183,12 @@ ImageIncludeDir("data/system/data/fonts" "/system/data/")
 ImageIncludeDir("data/system/data/samples" "/system/data/")
 ImageIncludeDir("data/system/data/KeyboardLayouts" "/system/data/")
 ImageIncludeDir("data/system/data/sounds" "/system/data/")
+
+# NetPlus starter extensions ship as their own apt package, so the
+# store can update them without an OS upgrade.
+install(DIRECTORY "data/system/data/netplus/extensions"
+	DESTINATION "/system/data/netplus"
+	COMPONENT netplus-extensions)
 
 install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork" COMPONENT data)
 

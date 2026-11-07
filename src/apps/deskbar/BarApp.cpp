@@ -1175,6 +1175,15 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size, BBitmap** _icon)
 		}
 	}
 
+	// no icon on the app file, try the signature's type
+	BMimeType sigMime(barInfo->sig);
+	if (sigMime.InitCheck() == B_OK
+		&& sigMime.GetIcon(icon, (icon_size)size) == B_OK) {
+		barInfo->iconCache[index] = *_icon = icon;
+
+		return B_OK;
+	}
+
 	// couldn't find the app icon
 	// fetch the generic 3 boxes icon and cache it
 	BMimeType defaultAppMime;

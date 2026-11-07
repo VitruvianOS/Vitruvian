@@ -61,7 +61,7 @@ _FlattenToPort(port_id port, BMessage& message)
 	if (size <= 0)
 		return;
 
-	char* flat = new char[size];
+	char* flat = new(std::nothrow) char[size];
 	if (flat == NULL)
 		return;
 
@@ -389,10 +389,15 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 		return;
 	}
 
-	BAutolock locker(fLock);
-
-	if (_FindSubscription(team, screenID) != NULL) {
+	port_info portInfo;
+	if (get_port_info(updatePort, &portInfo) != B_OK
+		|| (eventPort >= B_OK && get_port_info(eventPort, &portInfo) != B_OK)) {
 		_SendReply(message, B_BAD_VALUE);
+		return;
+	}
+
+	if (gScreenManager == NULL) {
+		_SendReply(message, B_NO_INIT);
 		return;
 	}
 
@@ -406,14 +411,34 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 		return;
 	}
 
+	// Lock order: interface, then fLock (the capture hook runs with the
+	// interface locked and takes fLock).
+	if (!interface->LockExclusiveAccess()) {
+		_SendReply(message, B_ERROR);
+		return;
+	}
+
+	BAutolock locker(fLock);
+
+	if (_FindSubscription(team, screenID) != NULL) {
+		interface->UnlockExclusiveAccess();
+		_SendReply(message, B_BAD_VALUE);
+		return;
+	}
+
 	RenderingBuffer* buffer = interface->DrawingBuffer();
-	if (buffer == NULL || buffer->InitCheck() != B_OK) {
+	if (buffer == NULL || buffer->InitCheck() != B_OK
+		|| buffer->Width() == 0 || buffer->Height() == 0
+		|| buffer->Width() > (uint32)kOutputAddonMaxWidth
+		|| buffer->Height() > (uint32)kOutputAddonMaxHeight) {
+		interface->UnlockExclusiveAccess();
 		_SendReply(message, B_NO_INIT);
 		return;
 	}
 
 	subscription* sub = new(std::nothrow) subscription;
 	if (sub == NULL) {
+		interface->UnlockExclusiveAccess();
 		_SendReply(message, B_NO_MEMORY);
 		return;
 	}
@@ -439,6 +464,7 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 	if (sub->area < B_OK || base == NULL) {
 		status_t status = sub->area < B_OK ? sub->area : B_NO_MEMORY;
 		delete sub;
+		interface->UnlockExclusiveAccess();
 		_SendReply(message, status);
 		return;
 	}
@@ -455,11 +481,16 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 	if (!fSubscriptions.AddItem(sub)) {
 		delete_area(sub->area);
 		delete sub;
+		interface->UnlockExclusiveAccess();
 		_SendReply(message, B_NO_MEMORY);
 		return;
 	}
 
 	interface->AddListener(this);
+	area_id area = sub->area;
+	int32 width = sub->width;
+	int32 height = sub->height;
+	int32 bytesPerRow = sub->bytesPerRow;
 	atomic_add(&fCaptureSubscribers, 1);
 	if (eventPort >= B_OK)
 		atomic_add(&fInputSubscribers, 1);
@@ -469,12 +500,14 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 	sub->pending.Set(BRect(0, 0, sub->width - 1, sub->height - 1));
 	_PublishLocked(sub);
 
+	interface->UnlockExclusiveAccess();
+
 	BMessage reply(message->what);
 	reply.AddInt32("status", B_OK);
-	reply.AddInt32("area", sub->area);
-	reply.AddInt32("width", sub->width);
-	reply.AddInt32("height", sub->height);
-	reply.AddInt32("bytes_per_row", sub->bytesPerRow);
+	reply.AddInt32("area", area);
+	reply.AddInt32("width", width);
+	reply.AddInt32("height", height);
+	reply.AddInt32("bytes_per_row", bytesPerRow);
 	reply.AddInt32("buffer_count", 2);
 
 	int32 replyPort = message->GetInt32("reply port", -1);
@@ -486,19 +519,14 @@ OutputAddonManager::_HandleAttach(BMessage* message)
 void
 OutputAddonManager::_DetachLocked(subscription* sub)
 {
-	fSubscriptions.RemoveItem(sub);
+	// The list owns its items; take it out without deleting. The
+	// interface keeps its listener entry: removing it needs the interface
+	// lock, and FrameCommitted() ignores outputs without subscriptions.
+	fSubscriptions.RemoveItem(sub, false);
 
 	atomic_add(&fCaptureSubscribers, -1);
 	if (sub->eventPort >= B_OK)
 		atomic_add(&fInputSubscribers, -1);
-
-	for (int32 i = 0; i < fSubscriptions.CountItems(); i++) {
-		if (fSubscriptions.ItemAt(i)->interface == sub->interface)
-			return;
-	}
-
-	// Last subscription on this output: stop capturing.
-	sub->interface->RemoveListener(this);
 
 	if (sub->area >= B_OK)
 		delete_area(sub->area);
@@ -585,21 +613,14 @@ OutputAddonManager::_HandleInjectInput(BMessage* message)
 		return;
 	}
 
-	const void* flatData = NULL;
-	ssize_t flatSize = 0;
-	if (message->FindData("event", B_MESSAGE_TYPE, &flatData, &flatSize)
-			!= B_OK) {
-		_SendReply(message, B_BAD_VALUE);
-		return;
-	}
-
 	BMessage event;
-	if (event.Unflatten((const char*)flatData) != B_OK) {
+	if (message->FindMessage("event", &event) != B_OK) {
 		_SendReply(message, B_BAD_VALUE);
 		return;
 	}
 
-	Desktop* desktop = fAppServer->DesktopForUser(message->SenderUid());
+	Desktop* desktop = fAppServer == NULL ? NULL
+		: fAppServer->DesktopForUser(message->SenderUid());
 	if (desktop == NULL) {
 		_SendReply(message, B_ENTRY_NOT_FOUND);
 		return;
@@ -680,7 +701,7 @@ OutputAddonManager::FrameCommitted(HWInterface* interface, const BRect& frame)
 		return;
 
 	BRegion dirty(frame);
-	for (int32 i = 0; i < fSubscriptions.CountItems(); i++) {
+	for (int32 i = fSubscriptions.CountItems(); i-- > 0;) {
 		subscription* sub = fSubscriptions.ItemAt(i);
 		if (sub->interface != interface)
 			continue;
@@ -785,7 +806,7 @@ OutputAddonManager::PublishInput(const BMessage& event)
 	if (size <= 0)
 		return;
 
-	char* flat = new char[size];
+	char* flat = new(std::nothrow) char[size];
 	if (flat == NULL)
 		return;
 

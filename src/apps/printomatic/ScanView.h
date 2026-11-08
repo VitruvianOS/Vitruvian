@@ -32,6 +32,7 @@ private:
 						const BMessage* dragMessage);
 
 			void	_TrackSelection(BPoint where);
+			BPoint	_ViewToBitmap(BPoint where) const;
 
 			BBitmap*	fBitmap;
 			bool		fHasSelection;

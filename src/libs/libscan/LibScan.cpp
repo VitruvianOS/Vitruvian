@@ -128,6 +128,16 @@ struct ScanSession {
 };
 
 
+// Declared here (rather than just above their original batch-only call
+// sites) so libscan_preview_start() can also check gBatchActive: a batch
+// session keeps the device open between ADF pages (so the feeder isn't
+// reset), and starting a preview's own sane_open() on that same device
+// while it's held open is what triggers the SANE_STATUS_INVAL this guards
+// against.
+static ScanSession gBatchSession;
+static bool gBatchActive = false;
+
+
 static status_t
 OpenDevice(const char* name, ScanSession* session)
 {
@@ -438,8 +448,13 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 	else if (params.format == SANE_FRAME_GRAY && params.depth == 1)
 		space = B_RGB32;
 
+	// No B_BITMAP_NO_SERVER_LINK: this bitmap is handed to ScanView's
+	// DrawBitmap() for the live preview, which only ever sends the
+	// server-side token over to app_server, never the pixels themselves
+	// (see BView::DrawBitmapAsync(), View.cpp). A no-server-link bitmap
+	// never gets a token -- app_server silently draws nothing for it.
 	BRect bounds(0, 0, params.pixels_per_line - 1, params.lines - 1);
-	BBitmap* bitmap = new BBitmap(bounds, B_BITMAP_NO_SERVER_LINK, space);
+	BBitmap* bitmap = new BBitmap(bounds, 0, space);
 	if (bitmap->InitCheck() == B_BAD_VALUE) {
 		delete bitmap;
 		SetError("scan image format or size is not supported");
@@ -457,6 +472,7 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 
 	gCancel = false;
 	int32 rowsDone = 0;
+	int32 rowFill = 0;
 	while (rowsDone < params.lines) {
 		if (gCancel) {
 			sane_cancel(handle);
@@ -466,8 +482,9 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 			return B_CANCELED;
 		}
 
-		SANE_Status status = sane_read(handle, line,
-			params.bytes_per_line, NULL);
+		SANE_Int bytesRead = 0;
+		SANE_Status status = sane_read(handle, line + rowFill,
+			params.bytes_per_line - rowFill, &bytesRead);
 		if (status == SANE_STATUS_EOF)
 			break;
 		if (status != SANE_STATUS_GOOD) {
@@ -476,6 +493,13 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 			SetStepError("reading scan data", sane_strstatus(status));
 			return B_ERROR;
 		}
+		if (bytesRead <= 0)
+			continue;
+
+		rowFill += bytesRead;
+		if (rowFill < params.bytes_per_line)
+			continue;
+		rowFill = 0;
 
 		uint8* dst = bits + (size_t)rowsDone * rowBytes;
 		if (params.format == SANE_FRAME_RGB) {
@@ -623,8 +647,7 @@ libscan_get_options(const char* name, BMessage* options)
 			(desc = sane_get_option_descriptor(session.handle, index))
 				!= NULL;
 			index++) {
-		if ((desc->cap & SANE_CAP_INACTIVE) != 0
-			|| (desc->cap & SANE_CAP_SOFT_DETECT) == 0)
+		if ((desc->cap & SANE_CAP_INACTIVE) != 0)
 			continue;
 
 		if (TitleMatches(desc->title, "Resolution")
@@ -827,6 +850,10 @@ ScanEntry(void* data)
 	libscan_options* opts = reinterpret_cast<libscan_options*>(
 		reinterpret_cast<char*>(data) + 256);
 
+	// ApplyOptions() tolerates a backend rejecting one setting but still
+	// records its message; don't let it pass for this scan's own error.
+	SetError("");
+
 	ScanSession session;
 	if (OpenDevice(name, &session) != B_OK) {
 		gScanActive = false;
@@ -885,6 +912,13 @@ libscan_preview_start(const char* name, const libscan_options* opts,
 		SetError("another scan is still running");
 		return B_BUSY;
 	}
+	// An ADF batch keeps its own sane_open() on this device between pages;
+	// a second one here is what many network/eSCL backends answer with
+	// SANE_STATUS_INVAL instead of "device busy". The UI already disables
+	// the Preview button during a batch (PrintOMaticWindow::_UpdateButtons),
+	// but libscan guards itself too rather than relying only on that.
+	if (gBatchActive)
+		return B_BUSY;
 
 	libscan_options preview = *opts;
 	if (preview.resolution_dpi <= 0 || preview.resolution_dpi > 150)
@@ -1011,10 +1045,6 @@ libscan_last_error()
 {
 	return gLastError.String();
 }
-
-
-static ScanSession gBatchSession;
-static bool gBatchActive = false;
 
 
 status_t

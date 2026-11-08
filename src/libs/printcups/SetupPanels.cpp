@@ -58,13 +58,40 @@ private:
 };
 
 
+// The queue the panels describe: the one chosen in the settings, else the
+// default.
+static const char*
+CurrentQueue(const BMessage* settings)
+{
+	const char* printer = NULL;
+	if (settings != NULL
+		&& settings->FindString(PSRV_FIELD_CURRENT_PRINTER, &printer) == B_OK
+		&& printer != NULL) {
+		return printer;
+	}
+	return "";
+}
+
+
+static status_t
+LoadQueueInfo(const char* queue, printcups_queue_info* info)
+{
+	CupsBridge bridge;
+	if (queue != NULL && queue[0] != '\0')
+		return bridge.QueueInfo(queue, info);
+
+	char name[256];
+	if (bridge.DefaultQueue(name, sizeof(name)) != B_OK)
+		return B_ERROR;
+	return bridge.QueueInfo(name, info);
+}
+
+
 static BRect
-PaperRectForMedia(const char* media, bool* ok)
+PaperRectForMedia(const char* queue, const char* media, bool* ok)
 {
 	printcups_queue_info info;
-	CupsBridge bridge;
-	if (bridge.DefaultQueue(info.name, sizeof(info.name)) != B_OK
-		|| bridge.QueueInfo(info.name, &info) != B_OK) {
+	if (LoadQueueInfo(queue, &info) != B_OK) {
 		*ok = false;
 		return BRect(0, 0, 595, 841);
 	}
@@ -97,12 +124,10 @@ PaperRectForMedia(const char* media, bool* ok)
 
 
 static BRect
-PrintableRectFor(const BRect& paper, const char* media)
+PrintableRectFor(const char* queue, const BRect& paper, const char* media)
 {
 	printcups_queue_info info;
-	CupsBridge bridge;
-	if (bridge.DefaultQueue(info.name, sizeof(info.name)) != B_OK
-		|| bridge.QueueInfo(info.name, &info) != B_OK)
+	if (LoadQueueInfo(queue, &info) != B_OK)
 		return BRect(18, 18, paper.right - 18, paper.bottom - 18);
 
 	return BRect(info.margin_left, info.margin_top,
@@ -203,9 +228,10 @@ PageSetupWindow::PageSetupWindow(BMessage* settings, bool* canceled,
 	};
 	for (int32 i = 0; kMediaNames[i] != NULL; i++) {
 		bool ok = false;
-		BRect paper = PaperRectForMedia(kMediaNames[i], &ok);
+		BRect paper = PaperRectForMedia(CurrentQueue(settings),
+			kMediaNames[i], &ok);
 		PaperItem* item = new PaperItem(kMediaNames[i], kMediaNames[i], paper,
-			PrintableRectFor(paper, kMediaNames[i]));
+			PrintableRectFor(CurrentQueue(settings), paper, kMediaNames[i]));
 		fPaperMenu->AddItem(item);
 		if (media != NULL && strcasecmp(media, kMediaNames[i]) == 0)
 			item->SetMarked(true);
@@ -342,7 +368,7 @@ PageSetupWindow::_UpdateSettings()
 		fSettings->AddRect(PSRV_FIELD_PAPER_RECT, paper);
 		fSettings->RemoveName(PSRV_FIELD_PRINTABLE_RECT);
 		fSettings->AddRect(PSRV_FIELD_PRINTABLE_RECT,
-			PrintableRectFor(paper, item->Media()));
+			PrintableRectFor(CurrentQueue(fSettings), paper, item->Media()));
 		fSettings->RemoveName("media");
 		fSettings->AddString("media", item->Media());
 	}
@@ -379,6 +405,7 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 	fCanceled(canceled),
 	fDone(done),
 	fFinished(false),
+	fPrinterMenu(NULL),
 	fCopiesField(NULL),
 	fFirstField(NULL),
 	fLastField(NULL)
@@ -396,11 +423,38 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 		settings->FindInt32(PSRV_FIELD_LAST_PAGE, &last);
 	}
 
-	BStringView* printerLabel = new BStringView("printerLabel",
-		B_TRANSLATE("Printer:"));
-	BStringView* printerName = new BStringView("printerName",
-		printer != NULL && printer[0] != '\0'
-			? printer : B_TRANSLATE("(default)"));
+	// One entry per queue, the current one marked. Without any queue the
+	// menu stays empty and the dialog falls back to the default.
+	fPrinterMenu = new BPopUpMenu("printer");
+	{
+		CupsBridge bridge;
+		const int32 kMaxQueues = 64;
+		printcups_queue_info* queues = new printcups_queue_info[kMaxQueues];
+		int count = (int)bridge.ListQueues(queues, kMaxQueues);
+
+		char defaultName[256];
+		defaultName[0] = '\0';
+		if (printer == NULL || printer[0] == '\0')
+			bridge.DefaultQueue(defaultName, sizeof(defaultName));
+		const char* current = (printer != NULL && printer[0] != '\0')
+			? printer : defaultName;
+
+		for (int i = 0; i < count; i++) {
+			BMenuItem* item = new BMenuItem(queues[i].name,
+				new BMessage(kMsgJobSetupPrinter));
+			fPrinterMenu->AddItem(item);
+			if (strcmp(queues[i].name, current) == 0)
+				item->SetMarked(true);
+		}
+		delete[] queues;
+		if (fPrinterMenu->CountItems() > 0 && fPrinterMenu->FindMarked() == NULL)
+			fPrinterMenu->ItemAt(0)->SetMarked(true);
+		fPrinterMenu->SetTargetForItems(this);
+	}
+	BMenuField* printerField = new BMenuField("printerField",
+		B_TRANSLATE("Printer:"), fPrinterMenu);
+	if (fPrinterMenu->CountItems() == 0)
+		printerField->SetEnabled(false);
 
 	BString text;
 	text << (copies > 0 ? copies : 1);
@@ -428,8 +482,7 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGrid()
-			.Add(printerLabel, 0, 0)
-			.Add(printerName, 1, 0)
+			.AddMenuField(printerField, 0, 0)
 			.AddTextControl(fCopiesField, 0, 1)
 			.AddTextControl(fFirstField, 0, 2)
 			.AddTextControl(fLastField, 0, 3)
@@ -503,6 +556,19 @@ JobSetupWindow::_UpdateSettings()
 {
 	if (fSettings == NULL)
 		return;
+
+	// A different printer brings its own paper, margins, resolution and
+	// media, so refresh those from it. The page setup choice for the old
+	// printer is replaced on purpose: its paper may not exist on the new one.
+	BMenuItem* chosen = fPrinterMenu->FindMarked();
+	if (chosen != NULL) {
+		const char* previous = CurrentQueue(fSettings);
+		if (strcmp(previous, chosen->Label()) != 0) {
+			fSettings->RemoveName(PSRV_FIELD_CURRENT_PRINTER);
+			fSettings->AddString(PSRV_FIELD_CURRENT_PRINTER, chosen->Label());
+			printcups_default_settings(fSettings);
+		}
+	}
 
 	int32 copies = atoi(fCopiesField->Text());
 	int32 first = atoi(fFirstField->Text());

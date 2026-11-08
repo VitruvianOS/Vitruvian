@@ -32,12 +32,16 @@
 #include <RadioButton.h>
 #include <Rect.h>
 #include <Roster.h>
+#include <ScrollView.h>
 #include <StringList.h>
 #include <StringView.h>
 #include <TextControl.h>
+#include <TabView.h>
 #include <TranslatorFormats.h>
 #include <TranslatorRoster.h>
 #include <View.h>
+
+
 
 #include <PrintJob.h>
 
@@ -212,8 +216,12 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 		B_TRANSLATE("Resolution:"), fResolutionMenu);
 
 	fPreviewView = new ScanView();
+	fPreviewView->SetExplicitSize(BSize(400, 400));
+	BScrollView* previewScroller = new BScrollView("previewScroller",
+		fPreviewView, 0, false, true);
 
 	fPageList = new BListView("pages", B_SINGLE_SELECTION_LIST);
+	fPageList->SetSelectionMessage(new BMessage(kMsgPageSelected));
 	fDeletePageButton = new BButton("deletePage",
 		B_TRANSLATE("Delete"), new BMessage(kMsgDeletePage));
 	fMoveUpButton = new BButton("moveUp", B_TRANSLATE("Move Up"),
@@ -288,33 +296,37 @@ PrintOMaticWindow::PrintOMaticWindow(const BRect& frame, const char* scanner)
 			.AddGlue()
 		.End();
 
-	BLayoutBuilder::Group<>(this, B_VERTICAL)
+	BTabView* tabView = new BTabView("tabView");
+	tabView->AddTab(previewScroller);
+	tabView->TabAt(0)->SetLabel(B_TRANSLATE("Preview"));
+
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.AddGroup(B_HORIZONTAL)
-			.Add(fDeviceField)
-			.Add(fRefreshButton)
-			.AddGlue()
+		.AddGroup(B_VERTICAL, B_USE_DEFAULT_SPACING, 1)
+			.AddGroup(B_HORIZONTAL)
+				.Add(fDeviceField)
+				.Add(fRefreshButton)
+				.AddGlue()
+			.End()
+			.AddGroup(B_HORIZONTAL)
+				.Add(fSourceField)
+				.Add(fModeField)
+				.Add(fResolutionField)
+				.AddGlue()
+			.End()
+			.Add(pagesBox)
+			.Add(destinationBox)
+			.AddGroup(B_HORIZONTAL)
+				.Add(fPreviewButton)
+				.Add(fScanButton)
+				.Add(fCancelButton)
+				.AddGlue()
+				.Add(fPrintButton)
+				.Add(fSaveButton)
+			.End()
+			.Add(fStatusView)
 		.End()
-		.AddGroup(B_HORIZONTAL)
-			.Add(fSourceField)
-			.Add(fModeField)
-			.Add(fResolutionField)
-			.AddGlue()
-		.End()
-		.AddGroup(B_HORIZONTAL)
-			.Add(fPreviewView, 3)
-			.Add(pagesBox, 1)
-		.End()
-		.Add(destinationBox)
-		.AddGroup(B_HORIZONTAL)
-			.Add(fPreviewButton)
-			.Add(fScanButton)
-			.Add(fCancelButton)
-			.AddGlue()
-			.Add(fPrintButton)
-			.Add(fSaveButton)
-		.End()
-		.Add(fStatusView);
+		.Add(tabView, 4);
 
 	// Hidden helper for print/PDF page rendering.
 	fPageDrawView = new PageDrawView();
@@ -512,6 +524,10 @@ PrintOMaticWindow::MessageReceived(BMessage* message)
 
 		case kMsgDeletePage:
 			_RemoveSelectedPages();
+			break;
+
+		case kMsgPageSelected:
+			_ShowSelectedPage();
 			break;
 
 		case kMsgMoveUp:
@@ -776,7 +792,14 @@ PrintOMaticWindow::_UpdateButtons()
 	fModeField->SetEnabled(!fBusy && hasDevice);
 	fResolutionField->SetEnabled(!fBusy && hasDevice);
 
-	fPreviewButton->SetEnabled(!fBusy && hasDevice);
+	// Preview always calls libscan_preview_start(), which opens the device
+	// itself -- during an ADF batch the device is already held open by
+	// gBatchSession (kept open between pages so the feeder isn't reset),
+	// and a second sane_open() on it is what many network/eSCL backends
+	// answer with SANE_STATUS_INVAL ("Invalid argument") instead of
+	// "device busy". Scan doesn't need the same guard: _RunScan() already
+	// continues the open batch session instead of reopening the device.
+	fPreviewButton->SetEnabled(!fBusy && hasDevice && !fBatchActive);
 	fScanButton->SetEnabled(!fBusy && hasDevice);
 	fCancelButton->SetEnabled(fBusy);
 	fPrintButton->SetEnabled(!fBusy && hasPages && hasPrinters
@@ -847,6 +870,21 @@ PrintOMaticWindow::_MoveSelectedPage(bool up)
 }
 
 
+void
+PrintOMaticWindow::_ShowSelectedPage()
+{
+	int32 index = fPageList->CurrentSelection();
+	if (index < 0 || index >= fPages.CountItems())
+		return;
+
+	BBitmap* source = static_cast<BBitmap*>(fPages.ItemAt(index));
+	if (source == NULL)
+		return;
+
+	fPreviewView->SetBitmap(new BBitmap(*source));
+}
+
+
 libscan_options
 PrintOMaticWindow::_BuildOptions(bool preview)
 {
@@ -887,16 +925,19 @@ PrintOMaticWindow::_BuildOptions(bool preview)
 
 	// The preview is scanned at 75 dpi over the whole page; the area
 	// selection maps through that scale into inches.
-	float pageWidth = fDeviceOptions.GetFloat("max-width", 8.5f);
-	float pageHeight = fDeviceOptions.GetFloat("max-height", 11.0f);
-	if (pageWidth <= 0)
+	float pageWidth, pageHeight;
+	bool haveDeviceArea = fDeviceOptions.FindFloat("max-width", &pageWidth)
+			== B_OK
+		&& fDeviceOptions.FindFloat("max-height", &pageHeight) == B_OK
+		&& pageWidth > 0 && pageHeight > 0;
+	if (!haveDeviceArea) {
 		pageWidth = 8.5f;
-	if (pageHeight <= 0)
 		pageHeight = 11.0f;
+	}
 	opts.tl_x = 0;
 	opts.tl_y = 0;
-	opts.br_x = pageWidth;
-	opts.br_y = pageHeight;
+	opts.br_x = 0;
+	opts.br_y = 0;
 
 	BBitmap* previewBitmap = fPreviewView->Bitmap();
 	if (previewBitmap != NULL && fPreviewView->HasSelection()) {
@@ -912,7 +953,14 @@ PrintOMaticWindow::_BuildOptions(bool preview)
 			opts.br_y = selection.bottom / bounds.Height()
 				* pageHeight;
 		}
+	} else if (haveDeviceArea) {
+		// No selection: request the device's own full area -- safe
+		// since these numbers came from the device, not a guess.
+		opts.br_x = pageWidth;
+		opts.br_y = pageHeight;
 	}
+	// Else: tl/br stay at 0 (br_x == tl_x), so ApplyOptions() skips
+	// setting any area at all and the device's own default applies.
 
 	return opts;
 }

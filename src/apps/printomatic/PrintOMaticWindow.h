@@ -42,7 +42,8 @@ enum {
 	kMsgScanFailed		= 'PmFl',
 	kMsgScanProgress	= 'PmPg',
 	kMsgDevicesLoaded	= 'PmDl',
-	kMsgPrintersLoaded	= 'PmPl'
+	kMsgPrintersLoaded	= 'PmPl',
+	kMsgPageSelected	= 'PmPs'
 };
 
 
@@ -69,6 +70,7 @@ private:
 			void	_AppendPage(BBitmap* bitmap);
 			void	_RemoveSelectedPages();
 			void	_MoveSelectedPage(bool up);
+			void	_ShowSelectedPage();
 
 			void	_StartPreview();
 			void	_StartScan();

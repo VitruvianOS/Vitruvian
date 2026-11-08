@@ -363,21 +363,85 @@ static void
 cb_draw_pixels(void* user, BRect src, BRect dest, int32 width, int32 height,
 	int32 bytesPerRow, int32 pixelFormat, int32 flags, const void* data)
 {
-	(void)user;
 	(void)src;
-	(void)width;
-	(void)height;
-	(void)bytesPerRow;
-	(void)pixelFormat;
 	(void)flags;
-	(void)data;
-	// Unmapped: leave dest as a light grey placeholder so layout stays
-	// visible. BBitmap fallback is used when PrintJob supplies one.
 	CairoState* s = static_cast<CairoState*>(user);
-	cairo_set_source_rgb(s->cairo, 0.85, 0.85, 0.85);
-	cairo_rectangle(s->cairo, ToX(s, dest.left), ToY(s, dest.top),
-		dest.Width() * s->scale, dest.Height() * s->scale);
-	cairo_fill(s->cairo);
+
+	if (data == NULL || width <= 0 || height <= 0 || bytesPerRow <= 0
+			|| dest.Width() <= 0 || dest.Height() <= 0) {
+		return;
+	}
+
+	cairo_surface_t* image = cairo_image_surface_create(
+		CAIRO_FORMAT_RGB24, width, height);
+	if (cairo_surface_status(image) != CAIRO_STATUS_SUCCESS) {
+		cairo_surface_destroy(image);
+		return;
+	}
+
+	unsigned char* dstBase = cairo_image_surface_get_data(image);
+	int32 dstStride = cairo_image_surface_get_stride(image);
+	const unsigned char* srcBase = static_cast<const unsigned char*>(data);
+	bool handled = true;
+
+	switch (pixelFormat) {
+		case B_RGB32:
+		case B_RGBA32:
+			// Both store B,G,R,[A|-] per pixel on little-endian -- the
+			// same byte order CAIRO_FORMAT_RGB24/ARGB32 use -- so a
+			// straight per-row copy (respecting each side's own stride)
+			// is all that's needed; no per-pixel conversion.
+			for (int32 y = 0; y < height; y++) {
+				memcpy(dstBase + y * dstStride, srcBase + y * bytesPerRow,
+					width * 4);
+			}
+			break;
+
+		case B_GRAY8:
+			for (int32 y = 0; y < height; y++) {
+				const unsigned char* srow = srcBase + y * bytesPerRow;
+				uint32* drow = reinterpret_cast<uint32*>(
+					dstBase + y * dstStride);
+				for (int32 x = 0; x < width; x++) {
+					unsigned char v = srow[x];
+					drow[x] = (0xffu << 24) | ((uint32)v << 16)
+						| ((uint32)v << 8) | (uint32)v;
+				}
+			}
+			break;
+
+		default:
+			// Unmapped format: leave dest as a light grey placeholder so
+			// layout stays visible, same as before any format had real
+			// support. LibScan only ever produces B_RGB32/B_GRAY8 today,
+			// but this callback is shared by every printed bitmap, not
+			// just the scan path.
+			handled = false;
+			break;
+	}
+
+	if (!handled) {
+		cairo_surface_destroy(image);
+		cairo_set_source_rgb(s->cairo, 0.85, 0.85, 0.85);
+		cairo_rectangle(s->cairo, ToX(s, dest.left), ToY(s, dest.top),
+			dest.Width() * s->scale, dest.Height() * s->scale);
+		cairo_fill(s->cairo);
+		return;
+	}
+
+	cairo_surface_mark_dirty(image);
+
+	cairo_save(s->cairo);
+	cairo_translate(s->cairo, ToX(s, dest.left), ToY(s, dest.top));
+	cairo_scale(s->cairo, (dest.Width() * s->scale) / width,
+		(dest.Height() * s->scale) / height);
+	cairo_translate(s->cairo, 0, height);
+	cairo_scale(s->cairo, 1, -1);
+	cairo_set_source_surface(s->cairo, image, 0, 0);
+	cairo_paint(s->cairo);
+	cairo_restore(s->cairo);
+
+	cairo_surface_destroy(image);
 }
 
 

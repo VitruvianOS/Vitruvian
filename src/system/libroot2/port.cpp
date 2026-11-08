@@ -488,6 +488,30 @@ read_port_with_caps(port_id id, int32* msgCode,
 }
 
 
+int
+port_to_fd(port_id id)
+{
+	CALLED();
+
+	if (unlikely(id < 0))
+		return B_BAD_PORT_ID;
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (unlikely(nexus < 0))
+		return B_BAD_PORT_ID;
+
+	struct nexus_port_to_fd exchange;
+	memset(&exchange, 0, sizeof(exchange));
+	exchange.id = id;
+
+	if (unlikely(nexus_io(nexus, NEXUS_PORT_TO_FD, &exchange) < 0))
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
+	return exchange.fd;
+}
+
+
 status_t
 set_port_owner(port_id id, team_id team)
 {

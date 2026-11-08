@@ -7,6 +7,8 @@
 
 #include <AppMisc.h>
 #include <Message.h>
+#include <MessagePrivate.h>
+#include <TokenSpace.h>
 
 #include <new>
 #include <string.h>
@@ -128,12 +130,14 @@ status_t
 OutputAddonClient::_Request(BMessage& request, BMessage* reply)
 {
 	request.AddInt32("reply port", fReplyPort);
+	// A raw port write has no target, the server looper would drop it.
+	BMessage::Private(request).SetTarget(B_PREFERRED_TOKEN);
 
 	ssize_t size = request.FlattenedSize();
 	if (size <= 0)
 		return B_BAD_VALUE;
 
-	char* flat = new char[size];
+	char* flat = new(std::nothrow) char[size];
 	if (flat == NULL)
 		return B_NO_MEMORY;
 
@@ -247,23 +251,54 @@ OutputAddonClient::AttachOutput(int32 screen, bool wantInputEvents)
 		return status;
 	}
 
-	fArea = reply.GetInt32("area", -1);
-	fWidth = reply.GetInt32("width", 0);
-	fHeight = reply.GetInt32("height", 0);
-	fBytesPerRow = reply.GetInt32("bytes_per_row", 0);
+	area_id source = reply.GetInt32("area", -1);
+	int32 width = reply.GetInt32("width", 0);
+	int32 height = reply.GetInt32("height", 0);
+	int32 bytesPerRow = reply.GetInt32("bytes_per_row", 0);
 
-	if (fArea < B_OK || fWidth <= 0 || fHeight <= 0 || fBytesPerRow <= 0)
-		return B_NO_INIT;
+	status = B_OK;
+	if (source < B_OK || width <= 0 || height <= 0 || bytesPerRow <= 0)
+		status = B_NO_INIT;
 
-	status = clone_area("output addon frame", &fAreaBase, B_ANY_ADDRESS,
-		B_READ_AREA | B_WRITE_AREA, fArea);
-	if (status != B_OK)
+	if (status == B_OK) {
+		// Returns the new area id, not a status.
+		area_id clone = clone_area("output addon frame", &fAreaBase,
+			B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, source);
+		if (clone < B_OK)
+			status = clone;
+		else
+			fArea = clone;
+	}
+
+	if (status == B_OK) {
+		fHeader = (output_addon_fb_header*)fAreaBase;
+		if (fHeader->magic != OUTPUT_ADDON_MAGIC)
+			status = B_BAD_DATA;
+	}
+
+	if (status != B_OK) {
+		BMessage detach(kMsgOutputAddonDetach);
+		detach.AddInt32("team", fTeam);
+		detach.AddInt32("screen", screen);
+		_Request(detach, NULL);
+
+		if (fArea >= B_OK)
+			delete_area(fArea);
+		fArea = -1;
+		fAreaBase = NULL;
+		fHeader = NULL;
+		delete_port(fUpdatePort);
+		fUpdatePort = -1;
+		if (fEventPort >= B_OK) {
+			delete_port(fEventPort);
+			fEventPort = -1;
+		}
 		return status;
+	}
 
-	fHeader = (output_addon_fb_header*)fAreaBase;
-	if (fHeader->magic != OUTPUT_ADDON_MAGIC)
-		return B_BAD_DATA;
-
+	fWidth = width;
+	fHeight = height;
+	fBytesPerRow = bytesPerRow;
 	fScreen = screen;
 	return B_OK;
 }
@@ -384,7 +419,7 @@ OutputAddonClient::InjectInput(const BMessage& event)
 	if (size <= 0)
 		return B_BAD_VALUE;
 
-	char* flat = new char[size];
+	char* flat = new(std::nothrow) char[size];
 	if (flat == NULL)
 		return B_NO_MEMORY;
 

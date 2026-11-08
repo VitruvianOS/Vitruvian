@@ -1,0 +1,11 @@
+[Unit]
+Description=V\OS: icons of Deskbar launchers made without nexus
+ConditionPathExists=/var/lib/vos/desktop/pending
+After=systemd-modules-load.service vos-attrs-sync.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-desktop-sync
+
+[Install]
+WantedBy=multi-user.target

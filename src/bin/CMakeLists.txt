@@ -10,6 +10,7 @@ add_subdirectory(rc)
 add_subdirectory(jam)
 add_subdirectory(screen_blanker)
 add_subdirectory(vos-signature-migrate)
+add_subdirectory(xclientsig)
 # add_subdirectory(screenmode)      # missing private graphics headers
 
 UsePrivateHeaders(GLOBAL app interface libroot kernel shared storage support system tracker)
@@ -79,6 +80,8 @@ Application(diff_zip       SOURCES diff_zip.cpp)
 Application(mimeset        SOURCES mimeset.cpp          RDEF mimeset.rdef)
 Application(mountvolume    SOURCES mountvolume.cpp      RDEF mountvolume.rdef)
 Application(setmime        SOURCES setmime.cpp          RDEF setmime.rdef)
+Application(seticon       SOURCES seticon.cpp)
+Application(setapptype    SOURCES setapptype.cpp)
 Application(sysinfo        SOURCES sysinfo.cpp)
 Application(xres           SOURCES xres.cpp)
 

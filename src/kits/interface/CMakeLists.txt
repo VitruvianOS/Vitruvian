@@ -97,6 +97,7 @@ target_sources(be PRIVATE
 	StatusBar.cpp
 	StringItem.cpp
 	StringView.cpp
+	Surface.cpp
 	TabView.cpp
 	TextControl.cpp
 	TextInput.cpp

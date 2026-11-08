@@ -1,0 +1,23 @@
+#!/bin/sh
+# Adds the V\OS apt source on systems installed without one. An image
+# build writes its own, naming the suite; that one is left alone.
+set -e
+
+SRC=/etc/apt/sources.list.d/vitruvian.sources
+
+if [ "$1" = configure ] && [ ! -e "$SRC" ]; then
+	. /etc/os-release
+	case "${VERSION_CODENAME:-}" in
+		trixie) suite=trixie-nightly ;;
+		*) suite=testing-nightly ;;
+	esac
+	cat > "$SRC" <<EOF
+Types: deb
+URIs: https://repo.v-os.dev
+Suites: $suite
+Components: main
+Signed-By: /usr/share/keyrings/vitruvian-archive-keyring.asc
+EOF
+fi
+
+exit 0

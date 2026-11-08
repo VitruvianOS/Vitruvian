@@ -619,6 +619,28 @@ void
 TExpandoMenuBar::AddTeam(BList* team, BBitmap* icon, char* name,
 	char* signature)
 {
+	// A launch notice can arrive after a snapshot rebuild already listed the
+	// app. Merge instead of listing it twice.
+	int32 existing = CountItems();
+	for (int32 i = 0; i < existing; i++) {
+		TTeamMenuItem* known = dynamic_cast<TTeamMenuItem*>(ItemAt(i));
+		if (known == NULL || strcasecmp(known->Signature(), signature) != 0)
+			continue;
+
+		if (team != NULL) {
+			for (int32 j = 0; j < team->CountItems(); j++) {
+				void* id = team->ItemAt(j);
+				if (!known->Teams()->HasItem(id))
+					known->Teams()->AddItem(id);
+			}
+		}
+		delete team;
+		delete icon;
+		free(name);
+		free(signature);
+		return;
+	}
+
 	TTeamMenuItem* item = new TTeamMenuItem(team, icon, name, signature);
 
 	desk_settings* settings = static_cast<TBarApp*>(be_app)->Settings();

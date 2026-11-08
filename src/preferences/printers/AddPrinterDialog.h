@@ -16,8 +16,8 @@
 
 
 class BButton;
-class BPopUpMenu;
 class BRadioButton;
+class BTabView;
 class BTextControl;
 
 
@@ -48,23 +48,33 @@ private:
 class AddPrinterDialog : public BWindow {
 public:
 						AddPrinterDialog(const BMessenger& replyTo);
+	virtual				~AddPrinterDialog();
 
 	virtual void		MessageReceived(BMessage* message);
 
 private:
 	void				_UpdateButtons();
-	void				_LoadPpds(const BString& uri);
+	void				_LoadPpds();
+	void				_FillPpdList();
+	void				_ClearPpds();
 	BString				_SelectedModel();
 
 	BMessenger			fReplyTo;
-	BRadioButton*		fDiscoverRadio;
-	BRadioButton*		fManualRadio;
+
+	BTabView*			fTabs;
 	BColumnListView*	fDeviceList;
+	BButton*			fRefreshButton;
+
 	BTextControl*		fUriField;
 	BTextControl*		fNameField;
-	BPopUpMenu*			fModelMenu;
-	BList				fPpdNames;			// BString* per menu item
-	BButton*			fRefreshButton;
+
+	BRadioButton*		fDriverlessRadio;
+	BRadioButton*		fChooseDriverRadio;
+	BTextControl*		fDriverFilter;
+	BColumnListView*	fPpdList;
+	BList				fAllPpds;			// printcups_ppd*, owned
+	bool				fPpdsLoaded;
+
 	BButton*			fAddButton;
 	BButton*			fCancelButton;
 	bool				fBusy;

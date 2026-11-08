@@ -456,6 +456,7 @@ extern ssize_t		_kern_read_port_etc(port_id port, int32 *msgCode,
 						void *msgBuffer, size_t bufferSize, uint32 flags,
 						bigtime_t timeout);
 extern status_t		_kern_set_port_owner(port_id port, team_id team);
+extern int			_kern_port_to_fd(port_id port);
 extern status_t		_kern_write_port_etc(port_id port, int32 msgCode,
 						const void *msgBuffer, size_t bufferSize, uint32 flags,
 						bigtime_t timeout);

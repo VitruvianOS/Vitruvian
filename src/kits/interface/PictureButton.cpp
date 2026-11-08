@@ -191,11 +191,12 @@ BPictureButton::MakeFocus(bool focus)
 void
 BPictureButton::Draw(BRect updateRect)
 {
+	// Pictures are drawn at the origin: recording moves the pen.
 	if (IsEnabled()) {
 		if (Value() == B_CONTROL_ON)
-			DrawPicture(fEnabledOn);
+			DrawPicture(fEnabledOn, B_ORIGIN);
 		else
-			DrawPicture(fEnabledOff);
+			DrawPicture(fEnabledOff, B_ORIGIN);
 	} else {
 
 		if (fDisabledOff == NULL
@@ -203,9 +204,9 @@ BPictureButton::Draw(BRect updateRect)
 			debugger("Need to set the 'disabled' pictures for this BPictureButton ");
 
 		if (Value() == B_CONTROL_ON)
-			DrawPicture(fDisabledOn);
+			DrawPicture(fDisabledOn, B_ORIGIN);
 		else
-			DrawPicture(fDisabledOff);
+			DrawPicture(fDisabledOff, B_ORIGIN);
 	}
 
 	if (IsFocus()) {

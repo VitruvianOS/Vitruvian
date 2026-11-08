@@ -622,13 +622,19 @@ TRoster::HandleSetSignature(BMessage* request)
 	const char* signature;
 	if (request->FindInt32("team", &team) != B_OK)
 		error = B_BAD_VALUE;
-	if (request->FindString("signature", &signature) != B_OK)
+	bool hasSignature = request->FindString("signature", &signature) == B_OK;
+	uint32 flags;
+	bool hasFlags = request->FindInt32("flags", (int32*)&flags) == B_OK;
+	if (!hasSignature && !hasFlags)
 		error = B_BAD_VALUE;
-	// find the app and set the signature
+	// find the app and set the signature and flags
 	if (error == B_OK) {
-		if (RosterAppInfo* info = fRegisteredApps.InfoFor(team))
-			strcpy(info->signature, signature);
-		else
+		if (RosterAppInfo* info = fRegisteredApps.InfoFor(team)) {
+			if (hasSignature)
+				strcpy(info->signature, signature);
+			if (hasFlags)
+				info->flags = flags;
+		} else
 			SET_ERROR(error, B_REG_APP_NOT_REGISTERED);
 	}
 	// reply to the request

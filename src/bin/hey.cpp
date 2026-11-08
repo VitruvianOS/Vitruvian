@@ -293,8 +293,10 @@ main(int argc, char *argv[])
 	team_id teamid;
 	app_info appinfo;
 
-	teamid = atoi(argv[argapp]);
-	if (teamid > 0) {
+	// a team id is all digits; "8Dock" is an application name
+	char* end;
+	teamid = (team_id)strtol(argv[argapp], &end, 10);
+	if (teamid > 0 && *end == '\0') {
 		if (be_roster->GetRunningAppInfo(teamid, &appinfo) != B_OK)
 			return 1;
 		the_application=BMessenger(NULL, teamid);

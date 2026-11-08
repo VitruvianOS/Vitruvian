@@ -35,7 +35,30 @@ sub new {
 
 # mimeset needs nexus; the vos trigger runs it on install.
 sub _overrides {
-	return ("DEVEL_DIRECTORY=/", "MIMESET=true", "OBJ_DIR=obj");
+	my @o = ("DEVEL_DIRECTORY=/", "MIMESET=true", "OBJ_DIR=obj");
+	# executable shared object so the Deskbar can load the replicant
+	push(@o, "TYPE=SHARED") if $ENV{VOS_RUNNABLE_ADDON};
+	return @o;
+}
+
+# The .interp object runnable-addon.mk links in; ld emits PT_INTERP for a
+# -shared link only from an input object.
+sub _interp_object {
+	my $this = shift;
+	return unless $ENV{VOS_RUNNABLE_ADDON};
+	my $arch = `dpkg-architecture -qDEB_HOST_ARCH`;
+	chomp($arch);
+	my %interp = (
+		amd64 => "/lib64/ld-linux-x86-64.so.2",
+		arm64 => "/lib/ld-linux-aarch64.so.1",
+		riscv64 => "/lib/ld-linux-riscv64-lp64d.so.1");
+	my $path = $interp{$arch}
+		or die "Makefile-Engine: no interpreter for $arch\n";
+	$this->doit_in_sourcedir("sh", "-c",
+		'printf "%s\n" ".section .interp,\"a\"" ".asciz \"$1\"" '
+		. '".section .note.GNU-stack,\"\",%progbits" > runnable_addon_interp.S '
+		. '&& cc -c runnable_addon_interp.S -o runnable_addon_interp.o',
+		"sh", $path);
 }
 
 # Legacy apps rely on libbe pulling in libroot and libm; Debian's ld does
@@ -86,6 +109,7 @@ sub build {
 	my $this = shift;
 	my %env = $this->_env;
 	local @ENV{keys %env} = values %env;
+	$this->_interp_object;
 	$this->doit_in_builddir("make", $this->_overrides, @_);
 	# Catalogs straight from the shipped catkeys; the engine's own target
 	# would regenerate them with collectcatkeys.
@@ -116,6 +140,8 @@ sub clean {
 	my $this = shift;
 	my %env = $this->_env;
 	local @ENV{keys %env} = values %env;
+	$this->doit_in_sourcedir("rm", "-f", "runnable_addon_interp.S",
+		"runnable_addon_interp.o") if $ENV{VOS_RUNNABLE_ADDON};
 	# not every engine makefile has a clean target
 	return 1 unless $this->_has_clean;
 	$this->doit_in_builddir("make", $this->_overrides, "clean");

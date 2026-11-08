@@ -398,6 +398,9 @@ enum {
 		// uint32 flags
 	AS_RELEASE_KEYBOARD_GRAB,
 
+	// team_id (BSurface: team the window is listed under)
+	AS_SET_WINDOW_TEAM,
+
 	AS_LAST_CODE
 };
 

@@ -62,6 +62,8 @@ class BRoster::Private {
 
 		status_t SetSignature(team_id team, const char *mimeSig) const
 			{ return fRoster->_SetSignature(team, mimeSig); }
+		void SetAppFlags(team_id team, uint32 flags) const
+			{ fRoster->_SetAppFlags(team, flags); }
 
 		status_t CompleteRegistration(team_id team, thread_id thread,
 					port_id port) const

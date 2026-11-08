@@ -1,2 +1,5 @@
 activate-noawait update-initramfs
 interest-noawait /usr/share/vos/attrs
+interest-noawait /usr/share/applications
+interest-noawait /usr/local/share/applications
+interest-noawait /var/lib/flatpak/exports/share/applications

@@ -3322,7 +3322,7 @@ BTextView::_HandleBackspace(int32 modifiers)
 	bool optionKeyDown  = (modifiers & B_OPTION_KEY)  != 0;
 	bool commandKeyDown = (modifiers & B_COMMAND_KEY) != 0;
 
-	if ((commandKeyDown || optionKeyDown) && !controlKeyDown) {
+	if ((commandKeyDown || controlKeyDown) && !optionKeyDown) {
 		fSelStart = _PreviousWordStart(fCaretOffset - 1);
 		fSelEnd = fCaretOffset;
 	}
@@ -3390,7 +3390,7 @@ BTextView::_HandleArrowKey(uint32 arrowKey, int32 modifiers)
 			else if (fSelStart != fSelEnd && !shiftKeyDown)
 				fCaretOffset = fSelStart;
 			else {
-				if ((commandKeyDown || optionKeyDown) && !controlKeyDown)
+				if ((commandKeyDown || controlKeyDown) && !optionKeyDown)
 					fCaretOffset = _PreviousWordStart(fCaretOffset - 1);
 				else
 					fCaretOffset = _PreviousInitialByte(fCaretOffset);
@@ -3417,7 +3417,7 @@ BTextView::_HandleArrowKey(uint32 arrowKey, int32 modifiers)
 			else if (fSelStart != fSelEnd && !shiftKeyDown)
 				fCaretOffset = fSelEnd;
 			else {
-				if ((commandKeyDown || optionKeyDown) && !controlKeyDown)
+				if ((commandKeyDown || controlKeyDown) && !optionKeyDown)
 					fCaretOffset = _NextWordEnd(fCaretOffset);
 				else
 					fCaretOffset = _NextInitialByte(fCaretOffset);
@@ -3552,7 +3552,7 @@ BTextView::_HandleDelete(int32 modifiers)
 	bool optionKeyDown  = (modifiers & B_OPTION_KEY)  != 0;
 	bool commandKeyDown = (modifiers & B_COMMAND_KEY) != 0;
 
-	if ((commandKeyDown || optionKeyDown) && !controlKeyDown) {
+	if ((commandKeyDown || controlKeyDown) && !optionKeyDown) {
 		fSelStart = fCaretOffset;
 		fSelEnd = _NextWordEnd(fCaretOffset) + 1;
 	}
@@ -5282,52 +5282,6 @@ BTextView::_Activate()
 			Window()->AddShortcut(B_BACKSPACE, B_COMMAND_KEY, message, this);
 
 			fInstalledRemoveCommandWordwiseShortcuts = true;
-		}
-
-		if (!Window()->HasShortcut(B_LEFT_ARROW, B_OPTION_KEY)
-			&& !Window()->HasShortcut(B_RIGHT_ARROW, B_OPTION_KEY)) {
-			message = new BMessage(kMsgNavigateArrow);
-			message->AddInt32("key", B_LEFT_ARROW);
-			message->AddInt32("modifiers", B_OPTION_KEY);
-			Window()->AddShortcut(B_LEFT_ARROW, B_OPTION_KEY, message, this);
-
-			message = new BMessage(kMsgNavigateArrow);
-			message->AddInt32("key", B_RIGHT_ARROW);
-			message->AddInt32("modifiers", B_OPTION_KEY);
-			Window()->AddShortcut(B_RIGHT_ARROW, B_OPTION_KEY, message, this);
-
-			fInstalledNavigateOptionWordwiseShortcuts = true;
-		}
-		if (!Window()->HasShortcut(B_LEFT_ARROW, B_OPTION_KEY | B_SHIFT_KEY)
-			&& !Window()->HasShortcut(B_RIGHT_ARROW,
-				B_OPTION_KEY | B_SHIFT_KEY)) {
-			message = new BMessage(kMsgNavigateArrow);
-			message->AddInt32("key", B_LEFT_ARROW);
-			message->AddInt32("modifiers", B_OPTION_KEY | B_SHIFT_KEY);
-			Window()->AddShortcut(B_LEFT_ARROW, B_OPTION_KEY | B_SHIFT_KEY,
-				message, this);
-
-			message = new BMessage(kMsgNavigateArrow);
-			message->AddInt32("key", B_RIGHT_ARROW);
-			message->AddInt32("modifiers", B_OPTION_KEY | B_SHIFT_KEY);
-			Window()->AddShortcut(B_RIGHT_ARROW, B_OPTION_KEY | B_SHIFT_KEY,
-				message, this);
-
-			fInstalledSelectOptionWordwiseShortcuts = true;
-		}
-		if (!Window()->HasShortcut(B_DELETE, B_OPTION_KEY)
-			&& !Window()->HasShortcut(B_BACKSPACE, B_OPTION_KEY)) {
-			message = new BMessage(kMsgRemoveWord);
-			message->AddInt32("key", B_DELETE);
-			message->AddInt32("modifiers", B_OPTION_KEY);
-			Window()->AddShortcut(B_DELETE, B_OPTION_KEY, message, this);
-
-			message = new BMessage(kMsgRemoveWord);
-			message->AddInt32("key", B_BACKSPACE);
-			message->AddInt32("modifiers", B_OPTION_KEY);
-			Window()->AddShortcut(B_BACKSPACE, B_OPTION_KEY, message, this);
-
-			fInstalledRemoveOptionWordwiseShortcuts = true;
 		}
 
 		if (!Window()->HasShortcut(B_UP_ARROW, B_OPTION_KEY)

@@ -227,8 +227,13 @@ fill_argv_message(BMessage &message)
 	int32 argc = __libc_argc;
 	const char* const *argv = __libc_argv;
 
-	// add argc
-	message.AddInt32("argc", argc);
+	// The program may have compacted argv already; count what is left.
+	int32 count = 0;
+	for (int32 i = 0; i < argc; i++) {
+		if (argv[i] != NULL)
+			count++;
+	}
+	message.AddInt32("argc", count);
 
 	// add argv
 	for (int32 i = 0; i < argc; i++) {
@@ -260,6 +265,15 @@ BApplication::BApplication(const char* signature, status_t* _error)
 	BLooper(kDefaultLooperName)
 {
 	_InitData(signature, true, _error);
+}
+
+
+BApplication::BApplication(const char* signature, status_t* _error,
+	uint32 appFlags)
+	:
+	BLooper(kDefaultLooperName)
+{
+	_InitData(signature, true, _error, &appFlags);
 }
 
 
@@ -351,7 +365,8 @@ BApplication::~BApplication()
 
 
 void
-BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
+BApplication::_InitData(const char* signature, bool initGUI, status_t* _error,
+	const uint32* flags)
 {
 	DBG(OUT("BApplication::InitData(`%s', %p)\n", signature, _error));
 	// check whether there exists already an application
@@ -403,6 +418,8 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 		fInitError = fileInfo.SetTo(&file);
 		if (fInitError == B_OK) {
 			fileInfo.GetAppFlags(&appFlags);
+			if (flags != NULL)
+				appFlags = *flags;
 			char appFileSignature[B_MIME_TYPE_LENGTH];
 			// compare the file signature and the supplied signature
 			if (fileInfo.GetSignature(appFileSignature) == B_OK
@@ -445,6 +462,9 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 		// check the signature and correct it, if necessary, also the case
 		if (strcmp(appInfo.signature, fAppName))
 			BRoster::Private().SetSignature(team, fAppName);
+		// The launcher registered the file's flags.
+		if (flags != NULL && appInfo.flags != *flags)
+			BRoster::Private().SetAppFlags(team, *flags);
 		// complete the registration
 		fInitError = BRoster::Private().CompleteRegistration(team, thread,
 						appInfo.port);

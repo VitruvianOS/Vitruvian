@@ -28,7 +28,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb libnss-mdns" \
                 " firmware-iwlwifi firmware-atheros firmware-realtek firmware-libertas firmware-brcm80211 firmware-misc-nonfree" \
                 " firmware-intel-graphics firmware-amd-graphics firmware-nvidia-graphics firmware-mediatek bluez-firmware" \
                 " firmware-sof-signed firmware-intel-sound firmware-cirrus intel-microcode amd64-microcode" \
@@ -51,7 +51,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb libnss-mdns" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " firmware-brcm80211 firmware-misc-nonfree firmware-realtek firmware-atheros firmware-libertas bluez-firmware" \
                 " gpsd" \
@@ -70,7 +70,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb libnss-mdns" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " gpsd" \
                 " grub-common hwdata"
@@ -88,7 +88,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb libnss-mdns" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " gpsd" \
                 " grub-common grub2-common grub-efi-riscv64-bin hwdata"

@@ -31,6 +31,35 @@ qemu_eject() {
 # Debian suite for the chroot and board rootfs; only trixie is proven.
 : "${VOS_BASE_SUITE:=trixie}"
 
+# The V\OS apt source. The public key ships in the tree (and in
+# vos-archive). The suite pairs the Debian base with the channel:
+# VOS_CHANNEL=release gives trixie/testing, nightly (the default)
+# trixie-nightly/testing-nightly. VOS_REPO_SUITE overrides both.
+vos_repo_source()
+{
+    _root="$1"
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    : "${VOS_REPO_KEY:=$LIB_DIR/../../../data/keys/vitruvian-archive-keyring.asc}"
+    case "${VOS_CHANNEL:=nightly}" in
+        release) : "${VOS_REPO_SUITE:=$VOS_BASE_SUITE}" ;;
+        nightly) : "${VOS_REPO_SUITE:=$VOS_BASE_SUITE-nightly}" ;;
+        *) die "VOS_CHANNEL='$VOS_CHANNEL' is not release or nightly" ;;
+    esac
+    [ -f "$VOS_REPO_KEY" ] || die "V\\OS repo key not found: $VOS_REPO_KEY"
+    sudo install -d -m 755 "$_root/usr/share/keyrings" \
+        "$_root/etc/apt/sources.list.d"
+    sudo install -m 644 "$VOS_REPO_KEY" \
+        "$_root/usr/share/keyrings/vitruvian-archive-keyring.asc"
+    sudo tee "$_root/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /usr/share/keyrings/vitruvian-archive-keyring.asc
+VOSSRC
+    log_info "V\\OS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+}
+
 # Persistent per-arch .deb cache shared across chroot regenerations.
 chroot_cache_dir() {
     echo "$1/deb"
@@ -185,27 +214,7 @@ deb $DEBIAN_MIRROR $VOS_BASE_SUITE-updates main contrib non-free non-free-firmwa
 deb $DEBIAN_SECURITY_MIRROR $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 EOF
 
-    # Written only when a key is supplied: an unverifiable repo fails the
-    # whole apt update, taking Debian access down with it.
-    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
-        # No default suite on purpose: a stale default once resolved to a retired suite.
-        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
-        sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
-        sudo install -m 644 "$VOS_REPO_KEY" \
-            "$_chroot_dir/etc/apt/keyrings/vitruvian-archive-keyring.asc"
-        sudo install -d -m 755 "$_chroot_dir/etc/apt/sources.list.d"
-        sudo tee "$_chroot_dir/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSEOF
-Types: deb
-URIs: $VOS_REPO_URL
-Suites: $VOS_REPO_SUITE
-Components: main
-Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
-VOSEOF
-        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
-    else
-        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
-    fi
+    vos_repo_source "$_chroot_dir"
 
     log_step "Verifying mount points before second-stage..."
     log_info "Checking proc: mountpoint=$(mountpoint -q "$_chroot_dir/proc" 2>/dev/null && echo yes || echo no), stat=$([ -f "$_chroot_dir/proc/1/stat" ] && echo exists || echo missing)"

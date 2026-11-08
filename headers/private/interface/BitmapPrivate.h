@@ -25,6 +25,7 @@ class BBitmap::Private {
 public:
 								Private(BBitmap* bitmap);
 			void				ReconnectToAppServer();
+			int32				ServerToken() const;
 private:
 			BBitmap*			fBitmap;
 };

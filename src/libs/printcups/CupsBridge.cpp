@@ -500,17 +500,21 @@ CupsBridge::DefaultQueue(char* name, size_t size)
 	if (count <= 0)
 		return B_ERROR;
 
-	const char* def = cupsGetDefault();
-	if (def != NULL)
-		strlcpy(name, def, size);
-	else {
-		for (int i = 0; i < count; i++) {
-			if (dests[i].is_default) {
-				strlcpy(name, dests[i].name, size);
-				break;
-			}
+	// cupsGetDests() marks the default the way lpstat does: the user's own
+	// default (~/.cups/lpoptions, CUPS_PRINTER, LPDEST, PRINTER) first, then
+	// the server's. cupsGetDefault() only asks the server, so on its own it
+	// ignores the user's choice.
+	for (int i = 0; i < count; i++) {
+		if (dests[i].is_default) {
+			strlcpy(name, dests[i].name, size);
+			break;
 		}
-		if (name[0] == '\0' && count > 0)
+	}
+	if (name[0] == '\0') {
+		const char* def = cupsGetDefault();
+		if (def != NULL)
+			strlcpy(name, def, size);
+		else
 			strlcpy(name, dests[0].name, size);
 	}
 

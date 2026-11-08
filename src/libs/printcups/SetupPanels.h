@@ -17,6 +17,7 @@ const uint32 kMsgPageSetupOk		= 'PSOk';
 const uint32 kMsgPageSetupCancel	= 'PSCa';
 const uint32 kMsgJobSetupOk			= 'JSOk';
 const uint32 kMsgJobSetupCancel		= 'JSCa';
+const uint32 kMsgJobSetupPrinter	= 'JSPr';
 
 
 class PageSetupWindow : public BWindow {
@@ -61,6 +62,7 @@ private:
 	bool*			fCanceled;
 	sem_id			fDone;
 	bool			fFinished;
+	class BPopUpMenu*	fPrinterMenu;
 	class BTextControl*	fCopiesField;
 	class BTextControl*	fFirstField;
 	class BTextControl*	fLastField;

@@ -79,6 +79,12 @@ if(NOT BUILDTOOLS_MODE STREQUAL "1")
     set(VITRUVIAN_EFFECTIVE_ARCH "${VITRUVIAN_TARGET_ARCH}")
     message(STATUS "Target architecture: ${VITRUVIAN_EFFECTIVE_ARCH}")
 
+    # Pin the ISA baseline: some host compilers default to x86-64-v3.
+    if(VITRUVIAN_EFFECTIVE_ARCH STREQUAL "amd64")
+        set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=x86-64 -mtune=generic")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64 -mtune=generic")
+    endif()
+
     # Chroot / sysroot configuration
     include(${CMAKE_SOURCE_DIR}/build/chroot.cmake)
 endif()

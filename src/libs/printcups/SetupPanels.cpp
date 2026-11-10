@@ -9,13 +9,20 @@
 #include "SetupPanels.h"
 
 #include <Box.h>
+#include <Alert.h>
+#include <Application.h>
 #include <Button.h>
+#include <Entry.h>
+#include <FilePanel.h>
+#include <FindDirectory.h>
 #include <Catalog.h>
 #include <LayoutBuilder.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <Message.h>
+#include <Path.h>
 #include <PopUpMenu.h>
+#include <Roster.h>
 #include <Rect.h>
 #include <String.h>
 #include <StringView.h>
@@ -397,7 +404,7 @@ PageSetupWindow::_UpdatePreview()
 JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 	sem_id done)
 	:
-	BWindow(BRect(0, 0, 100, 100), B_TRANSLATE("Print"),
+	BWindow(BRect(0, 0, 380, 100), B_TRANSLATE("Print"),
 		B_TITLED_WINDOW_LOOK, B_MODAL_APP_WINDOW_FEEL,
 		B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE
 			| B_AUTO_UPDATE_SIZE_LIMITS | B_CLOSE_ON_ESCAPE),
@@ -406,6 +413,9 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 	fDone(done),
 	fFinished(false),
 	fPrinterMenu(NULL),
+	fSaveField(NULL),
+	fChooseButton(NULL),
+	fSavePanel(NULL),
 	fCopiesField(NULL),
 	fFirstField(NULL),
 	fLastField(NULL)
@@ -440,8 +450,10 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 			? printer : defaultName;
 
 		for (int i = 0; i < count; i++) {
-			BMenuItem* item = new BMenuItem(queues[i].name,
-				new BMessage(kMsgJobSetupPrinter));
+			BMessage* itemMessage = new BMessage(kMsgJobSetupPrinter);
+			itemMessage->AddBool("pdf",
+				strncasecmp(queues[i].uri, "cups-pdf:", 9) == 0);
+			BMenuItem* item = new BMenuItem(queues[i].name, itemMessage);
 			fPrinterMenu->AddItem(item);
 			if (strcmp(queues[i].name, current) == 0)
 				item->SetMarked(true);
@@ -474,6 +486,17 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 		text.String(), NULL);
 	fLastField->SetToolTip(B_TRANSLATE("Leave empty to print to the end."));
 
+	// Where the PDF goes when the chosen printer is the virtual PDF one;
+	// otherwise cups-pdf drops it in ~/PDF under a name the user never sees.
+	fSaveField = new BTextControl("save", B_TRANSLATE("Save as:"),
+		_DefaultSavePath().String(), NULL);
+	// Without a minimum the box shrinks to a few characters and the path is
+	// cut off, so the user cannot tell where the PDF will end up.
+	fSaveField->SetExplicitMinSize(BSize(380, B_SIZE_UNSET));
+	fSaveField->SetToolTip(fSaveField->Text());
+	fChooseButton = new BButton("choose", B_TRANSLATE("Choose" B_UTF8_ELLIPSIS),
+		new BMessage(kMsgJobSetupChoose));
+
 	BButton* okButton = new BButton("ok", B_TRANSLATE("Print"),
 		new BMessage(kMsgJobSetupOk));
 	BButton* cancelButton = new BButton("cancel", B_TRANSLATE("Cancel"),
@@ -486,6 +509,8 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 			.AddTextControl(fCopiesField, 0, 1)
 			.AddTextControl(fFirstField, 0, 2)
 			.AddTextControl(fLastField, 0, 3)
+			.AddTextControl(fSaveField, 0, 4)
+			.Add(fChooseButton, 2, 4)
 		.End()
 		.AddGroup(B_HORIZONTAL)
 			.AddGlue()
@@ -494,7 +519,77 @@ JobSetupWindow::JobSetupWindow(BMessage* settings, bool* canceled,
 		.End();
 
 	okButton->MakeDefault(true);
+	_UpdateSaveControls();
 	CenterOnScreen();
+}
+
+
+JobSetupWindow::~JobSetupWindow()
+{
+	delete fSavePanel;
+}
+
+
+bool
+JobSetupWindow::_PdfPrinterSelected() const
+{
+	BMenuItem* item = fPrinterMenu->FindMarked();
+	bool pdf = false;
+	if (item != NULL && item->Message() != NULL)
+		item->Message()->FindBool("pdf", &pdf);
+	return pdf;
+}
+
+
+void
+JobSetupWindow::_UpdateSaveControls()
+{
+	bool pdf = _PdfPrinterSelected();
+	fSaveField->SetEnabled(pdf);
+	fChooseButton->SetEnabled(pdf);
+}
+
+
+BString
+JobSetupWindow::_DefaultSavePath() const
+{
+	BString name("Untitled");
+	app_info info;
+	if (be_app != NULL && be_app->GetAppInfo(&info) == B_OK
+		&& info.ref.name != NULL) {
+		name = info.ref.name;
+	}
+
+	BPath home;
+	if (find_directory(B_USER_DIRECTORY, &home) != B_OK)
+		return BString(name) << ".pdf";
+
+	BString path(home.Path());
+	path << "/" << name << ".pdf";
+	return path;
+}
+
+
+void
+JobSetupWindow::_ChooseFile()
+{
+	if (fSavePanel == NULL) {
+		BMessenger target(this);
+		fSavePanel = new BFilePanel(B_SAVE_PANEL, &target, NULL, B_FILE_NODE,
+			false, NULL, NULL, true);
+	}
+
+	BPath current(fSaveField->Text());
+	BPath parent;
+	if (current.InitCheck() == B_OK && current.GetParent(&parent) == B_OK) {
+		BEntry directory(parent.Path());
+		entry_ref ref;
+		if (directory.GetRef(&ref) == B_OK)
+			fSavePanel->SetPanelDirectory(&ref);
+	}
+	fSavePanel->SetSaveText(current.Leaf() != NULL
+		? current.Leaf() : "Untitled.pdf");
+	fSavePanel->Show();
 }
 
 
@@ -502,7 +597,37 @@ void
 JobSetupWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case kMsgJobSetupPrinter:
+			_UpdateSaveControls();
+			break;
+
+		case kMsgJobSetupChoose:
+			_ChooseFile();
+			break;
+
+		case B_SAVE_REQUESTED:
+		{
+			entry_ref directory;
+			const char* name = NULL;
+			if (message->FindRef("directory", &directory) == B_OK
+				&& message->FindString("name", &name) == B_OK
+				&& name != NULL) {
+				BPath path(&directory);
+				if (path.Append(name) == B_OK) {
+					fSaveField->SetText(path.Path());
+					fSaveField->SetToolTip(path.Path());
+				}
+			}
+			break;
+		}
+
 		case kMsgJobSetupOk:
+			// Printing to PDF needs a destination; ask for one rather than
+			// writing somewhere the user did not pick.
+			if (_PdfPrinterSelected() && fSaveField->Text()[0] == '\0') {
+				_ChooseFile();
+				break;
+			}
 			_UpdateSettings();
 			_Finish(false);
 			break;
@@ -567,6 +692,18 @@ JobSetupWindow::_UpdateSettings()
 			fSettings->RemoveName(PSRV_FIELD_CURRENT_PRINTER);
 			fSettings->AddString(PSRV_FIELD_CURRENT_PRINTER, chosen->Label());
 			printcups_default_settings(fSettings);
+		}
+	}
+
+	fSettings->RemoveName(PRINTCUPS_FIELD_SAVE_PATH);
+	if (_PdfPrinterSelected()) {
+		BString path(fSaveField->Text());
+		path.Trim();
+		if (!path.IsEmpty()) {
+			if (path.Length() < 4
+				|| path.IFindLast(".pdf") != path.Length() - 4)
+				path << ".pdf";
+			fSettings->AddString(PRINTCUPS_FIELD_SAVE_PATH, path.String());
 		}
 	}
 

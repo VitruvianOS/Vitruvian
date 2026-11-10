@@ -358,6 +358,45 @@ printcups_job_setup(BMessage* settings, bool* canceled)
 }
 
 
+// Moves the rendered PDF to dest. rename() cannot cross file systems, so
+// fall back to a copy.
+static status_t
+SaveRenderedPdf(const char* source, const char* dest)
+{
+	if (rename(source, dest) == 0)
+		return B_OK;
+
+	FILE* in = fopen(source, "rb");
+	if (in == NULL) {
+		unlink(source);
+		return B_ERROR;
+	}
+	FILE* out = fopen(dest, "wb");
+	if (out == NULL) {
+		fclose(in);
+		unlink(source);
+		return B_ERROR;
+	}
+
+	status_t status = B_OK;
+	char buffer[16384];
+	size_t count;
+	while ((count = fread(buffer, 1, sizeof(buffer), in)) > 0) {
+		if (fwrite(buffer, 1, count, out) != count) {
+			status = B_ERROR;
+			break;
+		}
+	}
+	if (fclose(out) != 0)
+		status = B_ERROR;
+	fclose(in);
+	unlink(source);
+	if (status != B_OK)
+		unlink(dest);
+	return status;
+}
+
+
 status_t
 printcups_submit_spool(const char* spoolPath, BMessage* settings,
 	const char* jobName, int32* jobId)
@@ -451,6 +490,17 @@ printcups_submit_spool(const char* spoolPath, BMessage* settings,
 
 	if (status != B_OK)
 		return B_ERROR;
+
+	// The print dialog asked for a destination for the virtual PDF printer:
+	// hand the rendered file over as it is, cups-pdf would only drop it in
+	// ~/PDF under its own name.
+	const char* savePath = NULL;
+	if (settings->FindString(PRINTCUPS_FIELD_SAVE_PATH, &savePath) == B_OK
+		&& savePath != NULL && savePath[0] != '\0'
+		&& strncasecmp(info.uri, "cups-pdf:", 9) == 0) {
+		*jobId = 0;
+		return SaveRenderedPdf(pdfPath.String(), savePath);
+	}
 
 	merged.RemoveName("job_name");
 	if (jobName != NULL && jobName[0] != '\0')

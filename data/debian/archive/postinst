@@ -8,7 +8,7 @@ SRC=/etc/apt/sources.list.d/vitruvian.sources
 if [ "$1" = configure ] && [ ! -e "$SRC" ]; then
 	. /etc/os-release
 	case "${VERSION_CODENAME:-}" in
-		trixie) suite=trixie-nightly ;;
+		trixie) suite=trixie ;;
 		*) suite=testing-nightly ;;
 	esac
 	cat > "$SRC" <<EOF

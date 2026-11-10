@@ -23,6 +23,7 @@ AddOn(
 		${CAIRO_LIBRARIES}
 		be
 		root
+		tracker
 		localestub
 )
 

@@ -86,6 +86,12 @@ public:
 			status_t		Allocate(uint32 width, uint32 height,
 								uint32 fourcc, uint32 bpp,
 								color_space space);
+			// Scans out an imported dma-buf; the fd stays with the caller.
+			// sharedHandle is a GEM handle the exporter already holds on
+			// this device fd and must not be closed here.
+			status_t		Adopt(int dmabufFd, uint32 width, uint32 height,
+								uint32 fourcc, uint32 stride,
+								color_space space, uint32 sharedHandle = 0);
 			void			Free();
 			status_t		Reapply();
 
@@ -107,6 +113,8 @@ private:
 			PlaneProps		fProps;
 			uint32_t		fHandle;
 			uint32_t		fFbId;
+			bool			fAdopted;
+			bool			fCloseHandle;
 			uint8_t*		fBits;
 			uint32			fSize;
 			uint32			fStride;
@@ -231,6 +239,9 @@ public:
 									uint32 width, uint32 height,
 									OverlayPlane** _plane);
 	virtual	void				ReleaseOverlayPlane(OverlayPlane* plane);
+	virtual	status_t			AcquireOverlayPlaneForBitmap(
+									ServerBitmap* bitmap,
+									OverlayPlane** _plane);
 	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
 	virtual	bool				CheckOverlayRestrictions(int32 width,
@@ -503,6 +514,11 @@ private:
 			};
 			std::vector<DrmOverlayBuffer*>	fOverlayBuffers;
 
+			status_t			_ClaimOverlayPlane(uint32 width, uint32 height,
+									uint32 fourcc, uint32 bpp,
+									color_space space, int dmabufFd,
+									uint32 stride, uint32 sharedHandle,
+									OverlayPlane** _plane);
 			void				_RearmOverlayPlanes();
 			void				_ReleaseOverlayPlanes();
 			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t planeId);

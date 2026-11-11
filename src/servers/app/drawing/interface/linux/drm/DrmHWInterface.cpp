@@ -5,11 +5,13 @@
 
 #include "DrmHWInterface.h"
 
+#include "ClientMemoryAllocator.h"
 #include "DrmBuffer.h"
 #include "DrmCompat.h"
 #include "DrmFlipPolicy.h"
 #include "LibEvdevEventStream.h"
 #include "Overlay.h"
+#include "ServerBitmap.h"
 #include "PanelOrientationTransform.h"
 
 #include <algorithm>
@@ -4230,6 +4232,15 @@ _DestroyDumb(int fd, uint32_t handle)
 }
 
 
+static void
+_CloseGem(int fd, uint32 handle)
+{
+	struct drm_gem_close close = {};
+	close.handle = handle;
+	drmIoctl(fd, DRM_IOCTL_GEM_CLOSE, &close);
+}
+
+
 DrmOverlayPlane::DrmOverlayPlane(DrmHWInterface* interface, uint32_t planeId,
 	const PlaneProps& props)
 	:
@@ -4239,6 +4250,8 @@ DrmOverlayPlane::DrmOverlayPlane(DrmHWInterface* interface, uint32_t planeId,
 	fProps(props),
 	fHandle(0),
 	fFbId(0),
+	fAdopted(false),
+	fCloseHandle(false),
 	fBits(NULL),
 	fSize(0),
 	fStride(0),
@@ -4310,6 +4323,43 @@ DrmOverlayPlane::Allocate(uint32 width, uint32 height, uint32 fourcc,
 }
 
 
+status_t
+DrmOverlayPlane::Adopt(int dmabufFd, uint32 width, uint32 height,
+	uint32 fourcc, uint32 stride, color_space space, uint32 sharedHandle)
+{
+	if (dmabufFd < 0 || width == 0 || height == 0 || stride == 0
+			|| fFbId != 0)
+		return B_BAD_VALUE;
+
+	uint32 handle = 0;
+	if (drmPrimeFDToHandle(fFd, dmabufFd, &handle) < 0)
+		return B_ERROR;
+
+	bool closeHandle = handle != sharedHandle;
+
+	uint32 handles[4] = { handle, 0, 0, 0 };
+	uint32 pitches[4] = { stride, 0, 0, 0 };
+	uint32 offsets[4] = { 0, 0, 0, 0 };
+	uint32 fbId = 0;
+	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
+			offsets, &fbId, 0) < 0) {
+		if (closeHandle)
+			_CloseGem(fFd, handle);
+		return B_ERROR;
+	}
+
+	fHandle = handle;
+	fFbId = fbId;
+	fAdopted = true;
+	fCloseHandle = closeHandle;
+	fStride = stride;
+	fWidth = width;
+	fHeight = height;
+	fColorSpace = space;
+	return B_OK;
+}
+
+
 void
 DrmOverlayPlane::Free()
 {
@@ -4324,7 +4374,13 @@ DrmOverlayPlane::Free()
 		fBits = NULL;
 		fSize = 0;
 	}
-	_DestroyDumb(fFd, fHandle);
+	if (fAdopted) {
+		if (fCloseHandle)
+			_CloseGem(fFd, fHandle);
+		fAdopted = false;
+		fCloseHandle = false;
+	} else
+		_DestroyDumb(fFd, fHandle);
 	fHandle = 0;
 	fStride = 0;
 	fWidth = 0;
@@ -4476,17 +4532,55 @@ DrmHWInterface::AcquireOverlayPlane(color_space space, uint32 width,
 		return B_BAD_VALUE;
 	*_plane = NULL;
 
+	uint32 fourcc = 0;
+	uint32 bpp = 0;
+	if (!_FourccForColorSpace(space, &fourcc, &bpp))
+		return B_UNSUPPORTED;
+
+	return _ClaimOverlayPlane(width, height, fourcc, bpp, space, -1, 0, 0,
+		_plane);
+}
+
+
+status_t
+DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
+	OverlayPlane** _plane)
+{
+	if (_plane == NULL)
+		return B_BAD_VALUE;
+	*_plane = NULL;
+
+#ifdef HAVE_GBM
+	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
+	if (memory == NULL)
+		return B_UNSUPPORTED;
+
+	int fd = memory->ExportFd();
+	if (fd < 0)
+		return B_ERROR;
+
+	status_t status = _ClaimOverlayPlane(memory->Width(), memory->Height(),
+		memory->Format(), 0, bitmap->ColorSpace(), fd, memory->Stride(),
+		memory->Handle(), _plane);
+	close(fd);
+	return status;
+#else
+	return B_UNSUPPORTED;
+#endif
+}
+
+
+status_t
+DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
+	uint32 bpp, color_space space, int dmabufFd, uint32 stride,
+	uint32 sharedHandle, OverlayPlane** _plane)
+{
 	if (fFd < 0 || !fInitialized)
 		return B_NO_INIT;
 
 	// See DrmOverlayPlane::Configure(): a rotated or reflected output
 	// would scan the plane out untransformed.
 	if (fPanelOrientation != PANEL_ORIENTATION_NORMAL || fPanelReflection != 0)
-		return B_UNSUPPORTED;
-
-	uint32 fourcc = 0;
-	uint32 bpp = 0;
-	if (!_FourccForColorSpace(space, &fourcc, &bpp))
 		return B_UNSUPPORTED;
 
 	pthread_mutex_lock(&fOverlayMutex);
@@ -4509,7 +4603,11 @@ DrmHWInterface::AcquireOverlayPlane(color_space space, uint32 width,
 			pthread_mutex_unlock(&fOverlayMutex);
 			return B_NO_MEMORY;
 		}
-		if (plane->Allocate(width, height, fourcc, bpp, space) != B_OK) {
+		status_t status = dmabufFd >= 0
+			? plane->Adopt(dmabufFd, width, height, fourcc, stride, space,
+				sharedHandle)
+			: plane->Allocate(width, height, fourcc, bpp, space);
+		if (status != B_OK) {
 			delete plane;
 			continue;
 		}

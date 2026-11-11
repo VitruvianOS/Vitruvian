@@ -22,6 +22,7 @@
 
 class BitmapManager;
 class HWInterface;
+class GbmMemory;
 class Overlay;
 class ServerApp;
 
@@ -61,6 +62,8 @@ public:
 								{ return fToken; }
 
 			area_id			Area() const;
+			// NULL unless the bitmap is backed by a GBM buffer.
+			GbmMemory*		GbmBuffer() const;
 			size_t			AreaOffset() const;
 
 			void			SetOverlay(::Overlay* overlay);

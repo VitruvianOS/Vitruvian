@@ -171,6 +171,10 @@ public:
 									uint32 width, uint32 height,
 									OverlayPlane** _plane);
 	virtual void				ReleaseOverlayPlane(OverlayPlane* plane);
+	// Scans a GBM-backed bitmap out on a plane without copying.
+	virtual status_t			AcquireOverlayPlaneForBitmap(
+									ServerBitmap* bitmap,
+									OverlayPlane** _plane);
 
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);

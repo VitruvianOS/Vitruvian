@@ -421,6 +421,16 @@ HWInterface::AcquireOverlayPlane(color_space /*space*/, uint32 /*width*/,
 }
 
 
+status_t
+HWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* /*bitmap*/,
+	OverlayPlane** _plane)
+{
+	if (_plane != NULL)
+		*_plane = NULL;
+	return B_UNSUPPORTED;
+}
+
+
 void
 HWInterface::ReleaseOverlayPlane(OverlayPlane* /*plane*/)
 {

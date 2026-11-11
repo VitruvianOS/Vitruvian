@@ -129,6 +129,15 @@ public:
 
 			struct gbm_bo*		BufferObject() const { return fBo; }
 
+			// dma-buf export; the caller closes the returned fd.
+			int					ExportFd() const;
+			uint32				Width() const;
+			uint32				Height() const;
+			uint32				Stride() const;
+			uint32				Format() const;
+			// GEM handle of the buffer object on the gbm device fd.
+			uint32				Handle() const;
+
 private:
 			struct gbm_bo*		fBo;
 			void*				fMapData;

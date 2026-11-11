@@ -484,4 +484,46 @@ GbmMemory::AreaOffset()
 	return 0;
 }
 
+
+int
+GbmMemory::ExportFd() const
+{
+	return fBo != NULL ? gbm_bo_get_fd(fBo) : -1;
+}
+
+
+uint32
+GbmMemory::Width() const
+{
+	return fBo != NULL ? gbm_bo_get_width(fBo) : 0;
+}
+
+
+uint32
+GbmMemory::Height() const
+{
+	return fBo != NULL ? gbm_bo_get_height(fBo) : 0;
+}
+
+
+uint32
+GbmMemory::Stride() const
+{
+	return fBo != NULL ? gbm_bo_get_stride(fBo) : 0;
+}
+
+
+uint32
+GbmMemory::Format() const
+{
+	return fBo != NULL ? gbm_bo_get_format(fBo) : 0;
+}
+
+
+uint32
+GbmMemory::Handle() const
+{
+	return fBo != NULL ? gbm_bo_get_handle(fBo).u32 : 0;
+}
+
 #endif	// HAVE_GBM

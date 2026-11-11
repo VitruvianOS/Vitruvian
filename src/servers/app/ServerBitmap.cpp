@@ -165,6 +165,17 @@ ServerBitmap::Area() const
 }
 
 
+GbmMemory*
+ServerBitmap::GbmBuffer() const
+{
+#ifdef HAVE_GBM
+	return dynamic_cast<GbmMemory*>(fMemory);
+#else
+	return NULL;
+#endif
+}
+
+
 size_t
 ServerBitmap::AreaOffset() const
 {

@@ -176,7 +176,7 @@ void FractalView::CreateDisplayBitmap(uint16 width,uint16 height)
 	fDisplayBitmap = NULL;
 	TRACE("width %u height %u\n",width,height);
 	BRect rect(0, 0, width, height);
-	fDisplayBitmap = new BBitmap(rect, B_RGB24);
+	fDisplayBitmap = new BBitmap(rect, B_RGB32);
 }
 
 

@@ -117,7 +117,7 @@ void FractalEngine::MessageReceived(BMessage* msg)
 		fWidth = msg->GetUInt16("width", 320);
 		fHeight = msg->GetUInt16("height", 240);
 
-		fRenderBufferLen = fWidth * fHeight * 3;
+		fRenderBufferLen = fWidth * fHeight * 4;
 		fRenderBuffer = new uint8[fRenderBufferLen];
 		TRACE("New buffer width %u height %u ptr = %p\n",
 			  fWidth, fHeight, fRenderBuffer);
@@ -174,8 +174,8 @@ void FractalEngine::WriteToBitmap(BBitmap* bitmap)
 	}
 	TRACE("Drawing from = %p\n",fRenderBuffer);
 	bitmap->ImportBits(fRenderBuffer,
-		fRenderBufferLen, fWidth * 3, 0,
-		B_RGB24);
+		fRenderBufferLen, fWidth * 4, 0,
+		B_RGB32);
 	Unlock();
 }
 
@@ -321,10 +321,11 @@ void FractalEngine::RenderPixel(uint32 x, uint32 y)
 	}
 
 
-	uint32 offsetBase = fWidth * y * 3 + x * 3;
+	uint32 offsetBase = fWidth * y * 4 + x * 4;
 	fRenderBuffer[offsetBase + 2] = totalR / nSamples; // fRenderBuffer is BGR
 	fRenderBuffer[offsetBase + 1] = totalG / nSamples;
 	fRenderBuffer[offsetBase + 0] = totalB / nSamples;
+	fRenderBuffer[offsetBase + 3] = 255;
 }
 
 

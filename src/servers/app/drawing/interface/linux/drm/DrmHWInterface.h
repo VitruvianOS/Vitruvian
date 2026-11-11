@@ -23,6 +23,7 @@ extern "C" {
 #include "DrmBuffer.h"
 #include "HWInterface.h"
 #include "MallocBuffer.h"
+#include "OverlayPlane.h"
 #include "TTy.h"
 
 #ifdef HAVE_GBM
@@ -70,6 +71,65 @@ struct CursorUpdate {
 	uint32_t	fb_id;
 	int32_t		x, y;
 	uint32_t	w, h;
+};
+
+class DrmHWInterface;
+
+// DRM implementation of a claimed overlay plane; owns a dumb buffer
+// bound to the plane until released.
+class DrmOverlayPlane : public OverlayPlane {
+public:
+							DrmOverlayPlane(DrmHWInterface* interface,
+								uint32_t planeId, const PlaneProps& props);
+	virtual					~DrmOverlayPlane();
+
+			status_t		Allocate(uint32 width, uint32 height,
+								uint32 fourcc, uint32 bpp,
+								color_space space);
+			void			Free();
+			status_t		Reapply();
+
+	virtual	void*			Bits() const;
+	virtual	uint32			BytesPerRow() const;
+	virtual	uint32			Width() const;
+	virtual	uint32			Height() const;
+	virtual	color_space		ColorSpace() const;
+	virtual	status_t		Configure(const BRect& source,
+								const BRect& destination);
+	virtual	void			Disable();
+
+			uint32_t		PlaneId() const { return fPlaneId; }
+
+private:
+			DrmHWInterface*	fInterface;
+			int				fFd;
+			uint32_t		fPlaneId;
+			PlaneProps		fProps;
+			uint32_t		fHandle;
+			uint32_t		fFbId;
+			uint8_t*		fBits;
+			uint32			fSize;
+			uint32			fStride;
+			uint32			fWidth;
+			uint32			fHeight;
+			color_space		fColorSpace;
+			bool			fArmed;
+			bool			fHasGeometry;
+			BRect			fSource;
+			BRect			fDestination;
+};
+
+// One discovered DRM_PLANE_TYPE_OVERLAY plane plus its claim state.
+struct OverlayPlaneInfo {
+	uint32_t				planeId;
+	PlaneProps				props;
+	uint32					possibleCrtcs;
+	uint32					minWidth;
+	uint32					maxWidth;
+	uint32					minHeight;
+	uint32					maxHeight;
+	std::vector<uint32_t>	formats;
+	DrmOverlayPlane*		claimed;
 };
 
 // Values match the kernel's "panel orientation" connector property
@@ -165,10 +225,27 @@ public:
 									int* leaseFd);
 			void				RevokeLease(int leaseFd);
 
+	virtual	overlay_token		AcquireOverlayChannel();
+	virtual	void				ReleaseOverlayChannel(overlay_token token);
+	virtual	status_t			AcquireOverlayPlane(color_space space,
+									uint32 width, uint32 height,
+									OverlayPlane** _plane);
+	virtual	void				ReleaseOverlayPlane(OverlayPlane* plane);
+	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
+									overlay_restrictions* restrictions);
+	virtual	bool				CheckOverlayRestrictions(int32 width,
+									int32 height, color_space colorSpace);
+	virtual	const overlay_buffer* AllocateOverlayBuffer(int32 width,
+									int32 height, color_space space);
+	virtual	void				FreeOverlayBuffer(const overlay_buffer* buffer);
+	virtual	void				ConfigureOverlay(Overlay* overlay);
+	virtual	void				HideOverlay(Overlay* overlay);
+
 			status_t			InitCheck() const;
 
 private:
 	struct FlipToken;
+	friend class				DrmOverlayPlane;
 
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
@@ -413,6 +490,23 @@ private:
 			struct PlaneProps	fCursorPlaneProps;
 			struct CrtcProps	fCrtcProps;
 			struct ConnProps	fConnProps;
+
+			// Overlay planes: discovery list, claim state, and the
+			// legacy channel/buffer shims Overlay goes through.
+			std::vector<OverlayPlaneInfo>	fOverlayPlanes;
+			pthread_mutex_t		fOverlayMutex;
+			int32				fOverlayChannelCounter;
+			std::vector<overlay_token>	fOverlayChannels;
+			struct DrmOverlayBuffer {
+				overlay_buffer	buffer;
+				DrmOverlayPlane*	plane;
+			};
+			std::vector<DrmOverlayBuffer*>	fOverlayBuffers;
+
+			void				_RearmOverlayPlanes();
+			void				_ReleaseOverlayPlanes();
+			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t planeId);
+			DrmOverlayBuffer*	_FindOverlayBuffer(const overlay_buffer* buffer);
 
 			bool				fVRRSupported;
 			bool				fVRREnabled;

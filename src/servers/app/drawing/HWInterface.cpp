@@ -412,6 +412,22 @@ HWInterface::ReleaseOverlayChannel(overlay_token token)
 
 
 status_t
+HWInterface::AcquireOverlayPlane(color_space /*space*/, uint32 /*width*/,
+	uint32 /*height*/, OverlayPlane** _plane)
+{
+	if (_plane != NULL)
+		*_plane = NULL;
+	return B_UNSUPPORTED;
+}
+
+
+void
+HWInterface::ReleaseOverlayPlane(OverlayPlane* /*plane*/)
+{
+}
+
+
+status_t
 HWInterface::GetOverlayRestrictions(const Overlay* overlay,
 	overlay_restrictions* restrictions)
 {

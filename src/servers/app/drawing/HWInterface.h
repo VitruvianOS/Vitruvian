@@ -31,6 +31,7 @@ class BString;
 class DrawingEngine;
 class EventStream;
 class Overlay;
+class OverlayPlane;
 class RenderingBuffer;
 class ServerBitmap;
 
@@ -162,6 +163,14 @@ public:
 	// overlay support
 	virtual overlay_token		AcquireOverlayChannel();
 	virtual void				ReleaseOverlayChannel(overlay_token token);
+
+	// Hardware overlay plane claim (DRM direct scanout). Returns
+	// B_UNSUPPORTED when the backend has no plane support, B_BUSY when
+	// every plane is taken; callers must fall back to CPU compositing.
+	virtual status_t			AcquireOverlayPlane(color_space space,
+									uint32 width, uint32 height,
+									OverlayPlane** _plane);
+	virtual void				ReleaseOverlayPlane(OverlayPlane* plane);
 
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);

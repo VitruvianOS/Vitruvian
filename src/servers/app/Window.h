@@ -438,6 +438,7 @@ protected:
 			// and consistent update session
 			bool				fUpdateRequested : 1;
 			bool				fInUpdate : 1;
+			bool				fResized : 1;
 			bool				fUpdatesEnabled : 1;
 
 			bool				fHidden : 1;

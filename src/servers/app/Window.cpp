@@ -103,6 +103,7 @@ Window::Window(const BRect& frame, const char *name,
 	fPendingUpdateSession(&fUpdateSessions[1]),
 	fUpdateRequested(false),
 	fInUpdate(false),
+	fResized(false),
 	fUpdatesEnabled(false),
 
 	// Windows start hidden
@@ -457,6 +458,7 @@ Window::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion, bool resizeStack)
 
 	fFrame.right += x;
 	fFrame.bottom += y;
+	fResized = true;
 
 	fContentRegionValid = false;
 	fEffectiveDrawingRegionValid = false;
@@ -876,6 +878,10 @@ Window::RedrawDirtyRegion()
 		BRegion* exposeContentRegion = fRegionPool.GetRegion(VisibleContentRegion());
 		dirtyContentRegion->IntersectWith(&fDirtyRegion);
 		exposeContentRegion->IntersectWith(&fExposeRegion);
+		// client behind on a resize: paint backgrounds now, not only on expose
+		if (fResized && (fUpdateRequested || fInUpdate))
+			exposeContentRegion->Include(dirtyContentRegion);
+		fResized = false;
 
 		_TriggerContentRedraw(*dirtyContentRegion, *exposeContentRegion);
 

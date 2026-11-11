@@ -35,7 +35,8 @@ private:
 			bool				_HasAlphaMask();
 
 			void				_ConvertColorSpace(ObjectDeleter<BBitmap>&
-									convertedBitmapDeleter);
+									convertedBitmapDeleter,
+										bool visibleOnly = false);
 
 			template<typename sourcePixel>
 			void				_TransparentMagicToAlpha(sourcePixel *buffer,
@@ -54,6 +55,7 @@ private:
 			uint32					fOptions;
 
 			BRect					fDestinationRect;
+			BRect					fSourceRect;
 			double					fScaleX;
 			double					fScaleY;
 			BPoint					fOffset;

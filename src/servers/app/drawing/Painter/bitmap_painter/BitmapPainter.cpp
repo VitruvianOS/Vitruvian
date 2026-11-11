@@ -130,7 +130,9 @@ Painter::BitmapPainter::Draw(const BRect& sourceRect,
 	}
 
 	ObjectDeleter<BBitmap> convertedBitmapDeleter;
-	_ConvertColorSpace(convertedBitmapDeleter);
+	_ConvertColorSpace(convertedBitmapDeleter,
+		(fOptions & B_TILE_BITMAP) == 0 && !_HasAffineTransform()
+			&& _HasScale());
 
 	if ((fOptions & B_TILE_BITMAP) == 0) {
 		// optimized version if there is no scale
@@ -251,6 +253,7 @@ Painter::BitmapPainter::_DetermineTransform(BRect sourceRect,
 		fScaleY = 1.0;
 	}
 
+	fSourceRect = sourceRect;
 	fOffset.x = fDestinationRect.left - sourceRect.left;
 	fOffset.y = fDestinationRect.top - sourceRect.top;
 
@@ -281,7 +284,7 @@ Painter::BitmapPainter::_HasAlphaMask()
 
 void
 Painter::BitmapPainter::_ConvertColorSpace(
-	ObjectDeleter<BBitmap>& convertedBitmapDeleter)
+	ObjectDeleter<BBitmap>& convertedBitmapDeleter, bool visibleOnly)
 {
 	if (fColorSpace == B_RGBA32)
 		return;
@@ -301,8 +304,24 @@ Painter::BitmapPainter::_ConvertColorSpace(
 		return;
 	}
 
-	BBitmap* conversionBitmap = new(std::nothrow) BBitmap(fBitmapBounds,
-		B_BITMAP_NO_SERVER_LINK, B_RGBA32);
+	// convert only the sampled part, padded for the filter
+	int32 x0 = 0;
+	int32 y0 = 0;
+	int32 width = (int32)fBitmap.width();
+	int32 height = (int32)fBitmap.height();
+	if (visibleOnly) {
+		int32 x1 = min_c(width - 1, (int32)ceilf(fSourceRect.right) + 2);
+		int32 y1 = min_c(height - 1, (int32)ceilf(fSourceRect.bottom) + 2);
+		x0 = max_c(0, (int32)floorf(fSourceRect.left) - 2);
+		y0 = max_c(0, (int32)floorf(fSourceRect.top) - 2);
+		if (x1 < x0 || y1 < y0)
+			return;
+		width = x1 - x0 + 1;
+		height = y1 - y0 + 1;
+	}
+
+	BBitmap* conversionBitmap = new(std::nothrow) BBitmap(
+		BRect(0, 0, width - 1, height - 1), B_BITMAP_NO_SERVER_LINK, B_RGBA32);
 	if (conversionBitmap == NULL) {
 		fprintf(stderr, "BitmapPainter::_ConvertColorSpace() - "
 			"out of memory for creating temporary conversion bitmap\n");
@@ -311,8 +330,8 @@ Painter::BitmapPainter::_ConvertColorSpace(
 	convertedBitmapDeleter.SetTo(conversionBitmap);
 
 	status_t err = conversionBitmap->ImportBits(fBitmap.buf(),
-		fBitmap.height() * fBitmap.stride(),
-		fBitmap.stride(), 0, fColorSpace);
+		fBitmap.height() * fBitmap.stride(), fBitmap.stride(), fColorSpace,
+		BPoint(x0, y0), B_ORIGIN, BSize(width - 1, height - 1));
 	if (err < B_OK) {
 		fprintf(stderr, "BitmapPainter::_ConvertColorSpace() - "
 			"colorspace conversion failed: %s\n", strerror(err));
@@ -324,8 +343,9 @@ Painter::BitmapPainter::_ConvertColorSpace(
 	// make transparent in our RGBA32 bitmap again.
 	switch (fColorSpace) {
 		case B_RGB32:
-			_TransparentMagicToAlpha((uint32 *)fBitmap.buf(),
-				fBitmap.width(), fBitmap.height(),
+			_TransparentMagicToAlpha((uint32 *)(fBitmap.buf()
+					+ y0 * fBitmap.stride() + x0 * 4),
+				width, height,
 				fBitmap.stride(), B_TRANSPARENT_MAGIC_RGBA32,
 				conversionBitmap);
 			break;
@@ -336,8 +356,9 @@ Painter::BitmapPainter::_ConvertColorSpace(
 		// when importing the bitmap. Maybe it applies to
 		// B_RGB16 though?
 		case B_RGB15:
-			_TransparentMagicToAlpha((uint16 *)fBitmap.buf(),
-				fBitmap.width(), fBitmap.height(),
+			_TransparentMagicToAlpha((uint16 *)(fBitmap.buf()
+					+ y0 * fBitmap.stride() + x0 * 2),
+				width, height,
 				fBitmap.stride(), B_TRANSPARENT_MAGIC_RGBA15,
 				conversionBitmap);
 			break;
@@ -350,10 +371,10 @@ Painter::BitmapPainter::_ConvertColorSpace(
 	if (convertedBits == NULL)
 		return;
 
-	fBitmap.attach(convertedBits,
-		(uint32)fBitmapBounds.IntegerWidth() + 1,
-		(uint32)fBitmapBounds.IntegerHeight() + 1,
+	fBitmap.attach(convertedBits, width, height,
 		conversionBitmap->BytesPerRow());
+	fOffset.x += x0;
+	fOffset.y += y0;
 }
 
 

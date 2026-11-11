@@ -44,6 +44,11 @@ enum BCursorID {
 };
 
 
+namespace BPrivate {
+	class BSurface;
+}
+
+
 class BCursor : BArchivable {
 public:
 								BCursor(const void* cursorData);
@@ -77,6 +82,7 @@ private:
 private:
 	friend class BApplication;
 	friend class BView;
+	friend class BPrivate::BSurface;
 
 			int32				fServerToken;
 			bool				fNeedToFree;

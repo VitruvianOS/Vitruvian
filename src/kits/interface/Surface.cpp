@@ -12,6 +12,7 @@
 #include <AppServerLink.h>
 #include <ApplicationPrivate.h>
 #include <Bitmap.h>
+#include <Cursor.h>
 #include <BitmapPrivate.h>
 #include <Message.h>
 #include <PortLink.h>
@@ -340,6 +341,26 @@ BSurface::SetEventMask(uint32 mask, uint32 options)
 	fLink->Attach<uint32>(mask);
 	fLink->Attach<uint32>(options);
 	fLink->Flush();
+}
+
+
+void
+BSurface::SetCursor(const BCursor* cursor)
+{
+	if (cursor == NULL || fInitStatus != B_OK)
+		return;
+
+	ViewSetViewCursorInfo info;
+	info.cursorToken = cursor->fServerToken;
+	info.viewToken = fViewToken;
+	info.sync = true;
+
+	// The server keeps the cursor alive; wait so the caller may delete it.
+	AppServerLink link;
+	link.StartMessage(AS_SET_VIEW_CURSOR);
+	link.Attach<ViewSetViewCursorInfo>(info);
+	int32 code;
+	link.FlushWithReply(code);
 }
 
 

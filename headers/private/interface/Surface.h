@@ -12,6 +12,7 @@
 
 
 class BBitmap;
+class BCursor;
 class BMessage;
 
 namespace BPrivate {
@@ -55,6 +56,9 @@ public:
 			void				Minimize(bool minimize);
 			// B_POINTER_EVENTS delivers pointer events outside the surface.
 			void				SetEventMask(uint32 mask, uint32 options = 0);
+
+			// Shown while the pointer is over the surface; NULL is ignored.
+			void				SetCursor(const BCursor* cursor);
 
 			BRect				Frame() const;
 

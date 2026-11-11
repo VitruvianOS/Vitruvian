@@ -976,8 +976,13 @@ DrmHWInterface::_EventThreadMain()
 			if (wake_idx >= 0 && (pfds[wake_idx].revents & POLLIN)) {
 				uint64_t v;
 				read(fWakeFd, &v, sizeof(v));
-				// Cleared before the damage is looked at below.
-				fWakeQueued = false;
+				// Damage waiting for its frame is woken for by the timeout;
+				// further draws must not wake the thread again.
+				fDirtyMutex.Lock();
+				if (!(fPageFlipEnabled && (fAccumulatedDirty.CountRects() > 0
+						|| fNeedsFlip || fStagedCursor.valid)))
+					fWakeQueued = false;
+				fDirtyMutex.Unlock();
 			}
 			if (udev_idx >= 0 && (pfds[udev_idx].revents & POLLIN)) {
 				_HandleHotplug();
@@ -1036,6 +1041,8 @@ DrmHWInterface::_EventThreadMain()
 			const bool hasDirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid;
 			if (hasDirty) {
+				// Draws from here on wake the thread again.
+				fWakeQueued = false;
 				if (fAtomicBatch) {
 					staged = fStagedCursor;
 					fStagedCursor.valid = false;

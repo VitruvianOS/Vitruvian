@@ -4,7 +4,7 @@
 get_kernel_flavour() {
     if [ -n "${VOS_KERNEL_FLAVOUR:-}" ]; then
         printf '%s' "$VOS_KERNEL_FLAVOUR"
-    elif [ "${VOS_BASE_SUITE:-trixie}" = "trixie" ]; then
+    elif [ "${VOS_BASE_SUITE:-testing}" = "trixie" ]; then
         printf 'rt-amd64'
     else
         printf 'amd64'
@@ -42,7 +42,7 @@ get_kernel_packages() {
 
 # Debian renamed the VP8 runtime in testing: libvpx9 on trixie, libvpx12 after.
 get_libvpx_runtime() {
-    if [ "${VOS_BASE_SUITE:-trixie}" = "trixie" ]; then
+    if [ "${VOS_BASE_SUITE:-testing}" = "trixie" ]; then
         printf '%s' 'libvpx9'
     else
         printf '%s' 'libvpx12'

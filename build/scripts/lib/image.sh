@@ -921,7 +921,7 @@ create_raspberry() {
     sudo mkdir -p "$_mnt/boot/firmware"
     sudo mount "$_boot_part" "$_mnt/boot/firmware"
 
-    : "${VOS_BASE_SUITE:=trixie}"
+    : "${VOS_BASE_SUITE:=testing}"
     log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $(board_config "$_board" label)..."
     # Same debootstrap cache the base chroot uses.
     _dbcache="$_basedir/deb/archives"
@@ -1233,7 +1233,7 @@ create_uboot_board() {
     sudo mkdir -p "$_mnt/boot"
     sudo mount "$_boot_part" "$_mnt/boot"
 
-    : "${VOS_BASE_SUITE:=trixie}"
+    : "${VOS_BASE_SUITE:=testing}"
     log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $_label..."
     # Reuse the tree's debootstrap cache; see create_raspberry for why.
     _dbcache="$_basedir/deb/archives"

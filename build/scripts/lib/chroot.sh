@@ -28,8 +28,9 @@ qemu_eject() {
 # Debian mirror for debootstrap/apt in the chroot; override with DEBIAN_MIRROR.
 : "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
 
-# Debian suite for the chroot and board rootfs; only trixie is proven.
-: "${VOS_BASE_SUITE:=trixie}"
+# Debian suite for the chroot and board rootfs; VOS_BASE_SUITE=trixie
+# selects the stable base.
+: "${VOS_BASE_SUITE:=testing}"
 
 # The V\OS apt source. The public key ships in the tree (and in
 # vos-archive). The suite pairs the Debian base with the channel:

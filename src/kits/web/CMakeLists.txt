@@ -29,6 +29,8 @@ if(PKG_CONFIG_FOUND)
 	# Prefixes must not collide with the WPE_WEBKIT DeclareDependency in
 	# build/deps.cmake, which clobbers same-named variables at include time.
 	pkg_check_modules(VOS_WEBKIT2 wpe-webkit-2.0 QUIET)
+	# Newer WPE splits wpe-platform out; absent on older releases.
+	pkg_check_modules(VOS_WPE_PLATFORM wpe-platform-2.0 QUIET)
 	pkg_check_modules(VOS_LIBWPE wpe-1.0 QUIET)
 	pkg_check_modules(VOS_WPE_FDO wpebackend-fdo-1.0 QUIET)
 	pkg_check_modules(VOS_GLIB glib-2.0 QUIET)
@@ -75,6 +77,7 @@ if(WEB_PRIVATE_SOURCES)
 		${CMAKE_CURRENT_SOURCE_DIR}/private
 		${PROJECT_SOURCE_DIR}/headers/private/netservices
 		${VOS_WEBKIT2_INCLUDE_DIRS}
+		${VOS_WPE_PLATFORM_INCLUDE_DIRS}
 		${VOS_LIBWPE_INCLUDE_DIRS}
 		${VOS_WPE_FDO_INCLUDE_DIRS}
 		${VOS_GLIB_INCLUDE_DIRS}
@@ -83,6 +86,7 @@ if(WEB_PRIVATE_SOURCES)
 	target_compile_definitions(web PRIVATE HAS_WPE=1)
 	target_compile_options(web PRIVATE
 		${VOS_WEBKIT2_CFLAGS_OTHER}
+		${VOS_WPE_PLATFORM_CFLAGS_OTHER}
 		${VOS_LIBWPE_CFLAGS_OTHER}
 		${VOS_WPE_FDO_CFLAGS_OTHER}
 		${VOS_GLIB_CFLAGS_OTHER}

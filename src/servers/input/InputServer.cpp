@@ -333,12 +333,14 @@ InputServer::_SaveKeymap(bool isDefault)
 		((uint32*)&fKeys)[i] = B_HOST_TO_BENDIAN_INT32(((uint32*)&fKeys)[i]);
 	}
 
-	if ((err = file.Write(&fKeys, sizeof(fKeys))) < (ssize_t)sizeof(fKeys))
-		return err;
+	err = file.Write(&fKeys, sizeof(fKeys));
 
 	for (uint32 i = 0; i < sizeof(fKeys) / sizeof(uint32); i++) {
 		((uint32*)&fKeys)[i] = B_BENDIAN_TO_HOST_INT32(((uint32*)&fKeys)[i]);
 	}
+
+	if (err < (ssize_t)sizeof(fKeys))
+		return err < 0 ? err : B_IO_ERROR;
 
 	uint32 size = B_HOST_TO_BENDIAN_INT32(fCharsSize);
 

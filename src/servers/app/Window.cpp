@@ -18,6 +18,7 @@
 
 #include <new>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <Debug.h>
 
@@ -33,6 +34,8 @@
 #include "Desktop.h"
 #include "DrawingEngine.h"
 #include "HWInterface.h"
+#include "OverlayPlane.h"
+#include "Screen.h"
 #include "MessagePrivate.h"
 #include "PortLink.h"
 #include "ServerApp.h"
@@ -77,6 +80,7 @@ Window::Window(const BRect& frame, const char *name,
 	fTitle(name),
 	fFrame(frame),
 	fScreen(NULL),
+	fOverlayPlane(NULL),
 
 	fVisibleRegion(),
 	fVisibleContentRegion(),
@@ -169,6 +173,8 @@ Window::Window(const BRect& frame, const char *name,
 
 Window::~Window()
 {
+	ReleaseOverlay();
+
 	if (fTopView.IsSet()) {
 		fTopView->DetachedFromWindow();
 	}
@@ -202,6 +208,93 @@ Window::SetClipping(BRegion* stillAvailableOnScreen)
 
 	fVisibleContentRegionValid = false;
 	fEffectiveDrawingRegionValid = false;
+
+	if (fOverlayPlane != NULL) {
+		// moved, resized, hidden or partly covered: back to composition
+		BRegion uncovered(fOverlayRect);
+		uncovered.Exclude(&VisibleContentRegion());
+		if (fFrame != fOverlayFrame || !IsVisible()
+				|| uncovered.CountRects() > 0)
+			ReleaseOverlay(true);
+	}
+}
+
+
+bool
+Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
+	const BRect& source, const BRect& screenRect)
+{
+	static const bool enabled = getenv("VOS_OVERLAY_GL") != NULL
+		&& atoi(getenv("VOS_OVERLAY_GL")) == 1;
+
+	if (!enabled || bitmap == NULL || bitmap->GbmBuffer() == NULL
+			|| IsOffscreenWindow() || fScreen == NULL || !IsVisible())
+		return false;
+
+	// whole bitmap, unscaled, on whole pixels
+	const BRect bounds(0, 0, bitmap->Width() - 1, bitmap->Height() - 1);
+	bool eligible = source == bounds
+		&& screenRect.Width() == bounds.Width()
+		&& screenRect.Height() == bounds.Height()
+		&& screenRect.left == floorf(screenRect.left)
+		&& screenRect.top == floorf(screenRect.top);
+
+	// nothing of the view's rect may be clipped or covered
+	if (eligible) {
+		if (!fContentRegionValid)
+			_UpdateContentRegion();
+		BRegion visible(VisibleContentRegion());
+		visible.IntersectWith(&view->ScreenAndUserClipping(&fContentRegion));
+		BRegion uncovered(screenRect);
+		uncovered.Exclude(&visible);
+		eligible = uncovered.CountRects() == 0;
+	}
+
+	if (!eligible) {
+		ReleaseOverlay(false);
+		return false;
+	}
+
+	if (fOverlayPlane != NULL) {
+		if (fOverlayBitmap.Get() == bitmap && fOverlayRect == screenRect
+				&& fOverlayFrame == fFrame)
+			return true;
+		ReleaseOverlay(false);
+	}
+
+	::HWInterface* hw = fScreen->HWInterface();
+	OverlayPlane* plane = NULL;
+	if (hw == NULL || hw->AcquireOverlayPlaneForBitmap(bitmap, &plane) != B_OK)
+		return false;
+	if (plane->Configure(source, screenRect) != B_OK) {
+		hw->ReleaseOverlayPlane(plane);
+		return false;
+	}
+
+	fOverlayPlane = plane;
+	fOverlayBitmap.SetTo(bitmap);
+	fOverlayRect = screenRect;
+	fOverlayFrame = fFrame;
+	return true;
+}
+
+
+void
+Window::ReleaseOverlay(bool redraw)
+{
+	if (fOverlayPlane == NULL)
+		return;
+
+	::HWInterface* hw = fScreen != NULL ? fScreen->HWInterface() : NULL;
+	if (hw != NULL)
+		hw->ReleaseOverlayPlane(fOverlayPlane);
+	fOverlayPlane = NULL;
+	fOverlayBitmap.Unset();
+
+	if (redraw) {
+		BRegion dirty(fOverlayRect);
+		MarkContentDirtyAsync(dirty);
+	}
 }
 
 

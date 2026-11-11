@@ -718,9 +718,13 @@ MesaEGLRenderer::SwapBuffers(bool vSync)
 			|| (int32)(fBitmap->Bounds().Width() + 1.0f) != fWidth
 			|| (int32)(fBitmap->Bounds().Height() + 1.0f) != fHeight) {
 		delete fBitmap;
+		// the server can scan a GBM-backed bitmap out on a plane
+		const char* overlay = getenv("VOS_OVERLAY_GL");
+		uint32 flags = (overlay != NULL && atoi(overlay) == 1)
+			? B_BITMAP_SUPPORTS_GBM : 0;
 		fBitmap = new(std::nothrow) BBitmap(
 			BRect(0.0f, 0.0f, (float)(fWidth - 1), (float)(fHeight - 1)),
-			B_RGBA32);
+			flags, B_RGBA32);
 	}
 
 	if (fBitmap != NULL && fBitmap->IsValid()) {

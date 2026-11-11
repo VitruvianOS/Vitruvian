@@ -2838,6 +2838,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 //				if ((info.options & B_WAIT_FOR_RETRACE) != 0)
 //					fDesktop->HWInterface()->WaitForRetrace(20000);
 
+				if (info.options == 0 && fWindow->TryOverlayBitmap(fCurrentView,
+						bitmap, info.bitmapRect, info.viewRect))
+					break;
+
 				drawingEngine->DrawBitmap(bitmap, info.bitmapRect,
 					info.viewRect, info.options);
 			}

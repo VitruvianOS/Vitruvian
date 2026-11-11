@@ -17,6 +17,7 @@
 
 
 #include "RegionPool.h"
+#include "ServerBitmap.h"
 #include "ServerWindow.h"
 #include "View.h"
 #include "WindowList.h"
@@ -74,6 +75,7 @@ class Decorator;
 class Desktop;
 class DrawingEngine;
 class EventDispatcher;
+class OverlayPlane;
 class Screen;
 class WindowBehaviour;
 class WorkspacesView;
@@ -142,6 +144,15 @@ public:
 			void				GetEffectiveDrawingRegion(View* view,
 									BRegion& region);
 			bool				DrawingRegionChanged(View* view) const;
+
+			// VOS_OVERLAY_GL: a fully visible, unscaled GBM bitmap scans out
+			// on a plane. True when the plane shows it and the caller must
+			// not draw it. Call with the desktop window lock held.
+			bool				TryOverlayBitmap(View* view,
+									ServerBitmap* bitmap,
+									const BRect& source,
+									const BRect& screenRect);
+			void				ReleaseOverlay(bool redraw = false);
 
 			// generic version, used by the Desktop
 			void				ProcessDirtyRegion(const BRegion& dirtyRegion,
@@ -344,6 +355,11 @@ protected:
 			// TODO: no fp rects anywhere
 			BRect				fFrame;
 			const ::Screen*		fScreen;
+
+			OverlayPlane*		fOverlayPlane;
+			BReference<ServerBitmap> fOverlayBitmap;
+			BRect				fOverlayRect;
+			BRect				fOverlayFrame;
 
 			window_anchor		fAnchor[kListCount];
 

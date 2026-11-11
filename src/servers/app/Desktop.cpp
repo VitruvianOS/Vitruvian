@@ -4535,6 +4535,13 @@ Desktop::_ScreenChanged(Screen* screen)
 		screen->HWInterface()->PanelScanoutOrientation(),
 		screen->HWInterface()->PanelReflection());
 
+	// planes are bound to the old mode
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() == screen)
+			window->ReleaseOverlay(true);
+	}
+
 	BRegion background;
 	_RebuildClippingForAllWindows(background);
 

@@ -121,10 +121,6 @@ DrmHWInterface::DrmHWInterface()
 	fUdevMonitor(NULL),
 	fUdevFd(-1),
 	fLastSuspendCheck(0),
-#ifdef HAVE_GBM
-	fGbmDevice(NULL),
-	fUseGbm(false),
-#endif
 	fRenderBuffer(NULL),
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
@@ -339,13 +335,6 @@ DrmHWInterface::_OnSessionEnable()
 	struct modeset_dev *iter;
 	for (iter = get_dev(); iter; iter = iter->next)
 		iter->saved_crtc = drmModeGetCrtc(fFd, iter->crtc);
-
-#ifdef HAVE_GBM
-	fGbmDevice = gbm_create_device(fFd);
-	fUseGbm = (fGbmDevice != NULL);
-	if (!fUseGbm)
-		fprintf(stderr, "GBM unavailable; OpenGL kit will be inactive\n");
-#endif
 
 	_SelectPresentMode();
 
@@ -1247,13 +1236,6 @@ DrmHWInterface::~DrmHWInterface()
 	fBackBuffer = NULL;
 	delete fRenderBuffer;
 	fRenderBuffer = NULL;
-
-#ifdef HAVE_GBM
-	if (fGbmDevice) {
-		gbm_device_destroy(fGbmDevice);
-		fGbmDevice = NULL;
-	}
-#endif
 
 	if (fBacklight) {
 		backlight_destroy(fBacklight);

@@ -299,10 +299,6 @@ private:
 			int					fUdevFd;
 			bigtime_t			fLastSuspendCheck;
 
-#ifdef HAVE_GBM
-			struct gbm_device*  fGbmDevice;
-			bool				fUseGbm;
-#endif
 
 			MallocBuffer*		fRenderBuffer;
 

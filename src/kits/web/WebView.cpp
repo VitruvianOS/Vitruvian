@@ -333,6 +333,7 @@ struct BWebView::WebViewImpl {
 	EventAdapter*		fEventAdapter;
 	WebKitBridge*		fBridge;
 	int					fPixelWidth;
+	rgb_color			fBackColor;
 	int					fPixelHeight;
 	int32				fResizeGeneration;
 	ClipboardDragDrop*	fClipboard;
@@ -380,6 +381,7 @@ struct BWebView::WebViewImpl {
 		fEventAdapter(NULL),
 		fBridge(NULL),
 		fPixelWidth(0),
+		fBackColor(ui_color(B_PANEL_BACKGROUND_COLOR)),
 		fPixelHeight(0),
 		fResizeGeneration(0),
 		fClipboard(NULL),
@@ -644,6 +646,12 @@ BWebView::AttachedToWindow()
 	fImpl->fHostView = this;
 
 #ifdef HAS_WPE
+	// The server must not erase the view before each Draw.
+	rgb_color color = ViewColor();
+	if (color != B_TRANSPARENT_COLOR)
+		fImpl->fBackColor = color;
+	SetViewColor(B_TRANSPARENT_COLOR);
+
 	// Start the GLib event loop if not already running.
 	ProcessManager::Instance().StartGLibLoop();
 
@@ -675,7 +683,7 @@ BWebView::AttachedToWindow()
 	fImpl->fEventAdapter = new EventAdapter(fImpl->fBridge->backend);
 	fImpl->fEventAdapter->SetViewSize(w, h);
 	{
-		rgb_color c = ViewColor();
+		rgb_color c = fImpl->fBackColor;
 		fImpl->fCompositor->SetFillColor(0xFF000000 | (c.red << 16)
 			| (c.green << 8) | c.blue);
 	}
@@ -1573,11 +1581,14 @@ BWebView::Draw(BRect updateRect)
 				src.bottom = src.top + dst.Height();
 				DrawBitmap(front, src, dst);
 			}
-			SetLowColor(ViewColor());
+			SetLowColor(fImpl->fBackColor);
 			BRegion rest(Bounds());
 			if (dst.IsValid())
 				rest.Exclude(dst);
 			FillRegion(&rest, B_SOLID_LOW);
+		} else {
+			SetLowColor(fImpl->fBackColor);
+			FillRect(updateRect, B_SOLID_LOW);
 		}
 		fImpl->fCompositor->ReleaseFront();
 		Flush();

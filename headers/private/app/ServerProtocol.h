@@ -409,6 +409,10 @@ enum {
 	kAllocator			= 0x1,
 	kFramebuffer		= 0x2,
 	kHeap				= 0x4,
+	kGbm				= 0x8,
+		// The bits live in a GBM buffer object mapping; like
+		// kFramebuffer the reply carries the real bytes-per-row and
+		// the area maps the dma-buf pages directly.
 };
 
 #endif	// APP_SERVER_PROTOCOL_H

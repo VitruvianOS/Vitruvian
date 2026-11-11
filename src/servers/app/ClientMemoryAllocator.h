@@ -108,4 +108,33 @@ private:
 };
 
 
+#ifdef HAVE_GBM
+/*! Backs a ServerBitmap with a GBM buffer object. The buffer is CPU
+	mapped for the server, exported as a dma-buf, and the dma-buf pages
+	are placed in a cloneable area so the client maps them zero-copy
+	through the ordinary bitmap area protocol. Owns the buffer object,
+	the mapping cookie and the area.
+ */
+class GbmMemory : public AreaMemory {
+public:
+								GbmMemory();
+	virtual						~GbmMemory();
+
+			status_t			Adopt(struct gbm_bo* bo, area_id area,
+									uint8* base, void* mapData);
+
+	virtual	area_id				Area();
+	virtual	uint8*				Address();
+	virtual	size_t				AreaOffset();
+
+			struct gbm_bo*		BufferObject() const { return fBo; }
+
+private:
+			struct gbm_bo*		fBo;
+			void*				fMapData;
+			area_id				fArea;
+			uint8*				fBase;
+};
+#endif	// HAVE_GBM
+
 #endif	/* CLIENT_MEMORY_ALLOCATOR_H */

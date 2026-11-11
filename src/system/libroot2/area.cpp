@@ -8,6 +8,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <GbmArea.h>
 #include <KernelExport.h>
 #include <OS.h>
 
@@ -224,6 +225,7 @@ create_area(const char* name, void** startAddr, uint32 addrSpec,
 	create.size = size;
 	create.lock = lock;
 	create.protection = protection;
+	create.kind = NEXUS_AREA_DEFAULT;
 
 	if (nexus_io(nexus, NEXUS_AREA_CREATE, &create) < 0
 			|| create.ret != B_OK) {
@@ -239,6 +241,79 @@ create_area(const char* name, void** startAddr, uint32 addrSpec,
 	local.size = size;
 	local.protection = protection;
 	local.memfd = memfd;
+	BKernelPrivate::AreaPool::Get().Add(local);
+
+	if (startAddr)
+		*startAddr = address;
+
+	return create.area;
+}
+
+
+area_id
+_kern_create_gbm_area(const char* name, void** startAddr, uint32 addrSpec,
+	size_t size, uint32 lock, uint32 protection, int fd)
+{
+	if (name == NULL || name[0] == '\0' || size == 0 || fd < 0)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
+	if (nexus < 0)
+		return B_ERROR;
+
+	// The area closes its descriptor when it is deleted; keep the
+	// caller's ownership untouched.
+	int areaFd = dup(fd);
+	if (areaFd < 0)
+		return B_NO_MEMORY;
+
+	// TODO if pageSize != B_PAGE_SIZE emit warning
+	// See also #130
+	size_t pageSize = sysconf(_SC_PAGESIZE);
+	size = (size + pageSize - 1) & ~(pageSize - 1);
+
+	int prot = BKernelPrivate::protection_to_prot(protection);
+	int flags = MAP_SHARED;
+	void* hint = (startAddr && *startAddr) ? *startAddr : NULL;
+
+	if (addrSpec == B_EXACT_ADDRESS && hint)
+		flags |= MAP_FIXED;
+
+	// the module only accepts a foreign descriptor for the GBM kind
+	void* address = mmap(hint, size, prot, flags, areaFd, 0);
+	if (address == MAP_FAILED) {
+		close(areaFd);
+		return B_NO_MEMORY;
+	}
+
+	if (addrSpec == B_EXACT_ADDRESS && hint && address != hint) {
+		munmap(address, size);
+		close(areaFd);
+		return B_BAD_VALUE;
+	}
+
+	struct nexus_area_create create = {};
+	create.fd = areaFd;
+	strncpy(create.name, name, B_OS_NAME_LENGTH - 1);
+	create.size = size;
+	create.lock = lock;
+	create.protection = protection;
+	create.kind = NEXUS_AREA_GBM;
+
+	if (nexus_io(nexus, NEXUS_AREA_CREATE, &create) < 0
+			|| create.ret != B_OK) {
+		munmap(address, size);
+		close(areaFd);
+		return create.ret != B_OK ? create.ret : B_ERROR;
+	}
+
+	BKernelPrivate::LocalArea local;
+	local.id = create.area;
+	local.name = name;
+	local.address = address;
+	local.size = size;
+	local.protection = protection;
+	local.memfd = areaFd;
 	BKernelPrivate::AreaPool::Get().Add(local);
 
 	if (startAddr)

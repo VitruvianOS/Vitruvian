@@ -105,6 +105,10 @@ public:
 	virtual	int32				PanelReflection() const;
 	virtual	status_t			SetPanelReflection(int32 reflection);
 
+#ifdef HAVE_GBM
+	virtual	struct gbm_device*	GbmDevice();
+#endif
+
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);
 	virtual status_t			GetMonitorInfo(monitor_info* info);
 	virtual status_t			GetFrameBufferConfig(
@@ -299,6 +303,10 @@ private:
 			int					fUdevFd;
 			bigtime_t			fLastSuspendCheck;
 
+#ifdef HAVE_GBM
+			// Created on the first GBM buffer request, never at init.
+			struct gbm_device*	fGbmDevice;
+#endif
 
 			MallocBuffer*		fRenderBuffer;
 

@@ -34,6 +34,8 @@ class Overlay;
 class RenderingBuffer;
 class ServerBitmap;
 
+struct gbm_device;
+
 
 class HWInterfaceListener {
 public:
@@ -171,6 +173,12 @@ public:
 
 	virtual void				ConfigureOverlay(Overlay* overlay);
 	virtual void				HideOverlay(Overlay* overlay);
+
+	// The GBM device of the driving DRM fd, when the backend has one.
+	// BitmapManager uses it to back B_BITMAP_SUPPORTS_GBM bitmaps with
+	// buffer objects; NULL means "no GBM", and allocation falls through
+	// to shared memory.
+	virtual	struct gbm_device*	GbmDevice() { return NULL; }
 
 	// frame buffer access (you need to ReadLock!)
 			RenderingBuffer*	DrawingBuffer() const;

@@ -769,7 +769,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fLink.Attach<area_id>(bitmap->Area());
 				fLink.Attach<ssize_t>(bitmap->AreaOffset());
 
-				if ((allocationFlags & kFramebuffer) != 0)
+				if ((allocationFlags & (kFramebuffer | kGbm)) != 0)
 					fLink.Attach<int32>(bitmap->BytesPerRow());
 			} else {
 				fLink.StartMessage(B_NO_MEMORY);

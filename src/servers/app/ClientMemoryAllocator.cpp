@@ -24,6 +24,11 @@
 #include <stdlib.h>
 
 #include <Autolock.h>
+#include <OS.h>
+
+#ifdef HAVE_GBM
+#include <gbm.h>
+#endif
 
 #include "ServerApp.h"
 #include "ServerMemoryAllocator.h"
@@ -413,3 +418,70 @@ ClonedAreaMemory::AreaOffset()
 {
 	return fOffset;
 }
+
+
+#ifdef HAVE_GBM
+
+GbmMemory::GbmMemory()
+	:
+	fBo(NULL),
+	fMapData(NULL),
+	fArea(-1),
+	fBase(NULL)
+{
+}
+
+
+GbmMemory::~GbmMemory()
+{
+	if (fArea >= 0)
+		delete_area(fArea);
+
+	if (fBo != NULL) {
+		if (fMapData != NULL)
+			gbm_bo_unmap(fBo, fMapData);
+
+		gbm_bo_destroy(fBo);
+	}
+}
+
+
+/*!	Takes ownership of the buffer object, its mapping cookie and the
+	dma-buf backed area. Any NULL input aborts the adoption and the
+	caller keeps ownership of what was not adopted.
+*/
+status_t
+GbmMemory::Adopt(struct gbm_bo* bo, area_id area, uint8* base, void* mapData)
+{
+	if (fBo != NULL || bo == NULL || area < B_OK || base == NULL)
+		return B_BAD_VALUE;
+
+	fBo = bo;
+	fArea = area;
+	fBase = base;
+	fMapData = mapData;
+	return B_OK;
+}
+
+
+area_id
+GbmMemory::Area()
+{
+	return fArea;
+}
+
+
+uint8*
+GbmMemory::Address()
+{
+	return fBase;
+}
+
+
+size_t
+GbmMemory::AreaOffset()
+{
+	return 0;
+}
+
+#endif	// HAVE_GBM

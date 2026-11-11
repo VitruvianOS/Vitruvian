@@ -121,6 +121,9 @@ DrmHWInterface::DrmHWInterface()
 	fUdevMonitor(NULL),
 	fUdevFd(-1),
 	fLastSuspendCheck(0),
+#ifdef HAVE_GBM
+	fGbmDevice(NULL),
+#endif
 	fRenderBuffer(NULL),
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
@@ -1182,6 +1185,20 @@ DrmHWInterface::_EventThreadMain()
 }
 
 
+#ifdef HAVE_GBM
+struct gbm_device*
+DrmHWInterface::GbmDevice()
+{
+	fDirtyMutex.Lock();
+	if (fGbmDevice == NULL && fFd >= 0)
+		fGbmDevice = gbm_create_device(fFd);
+	struct gbm_device* device = fGbmDevice;
+	fDirtyMutex.Unlock();
+	return device;
+}
+#endif
+
+
 DrmHWInterface::~DrmHWInterface()
 {
 	CALLED();
@@ -1236,6 +1253,13 @@ DrmHWInterface::~DrmHWInterface()
 	fBackBuffer = NULL;
 	delete fRenderBuffer;
 	fRenderBuffer = NULL;
+
+#ifdef HAVE_GBM
+	if (fGbmDevice != NULL) {
+		gbm_device_destroy(fGbmDevice);
+		fGbmDevice = NULL;
+	}
+#endif
 
 	if (fBacklight) {
 		backlight_destroy(fBacklight);

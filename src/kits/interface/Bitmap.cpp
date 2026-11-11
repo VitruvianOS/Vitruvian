@@ -1189,10 +1189,12 @@ BBitmap::_InitObject(BRect bounds, color_space colorSpace, uint32 flags,
 					if (error == B_OK)
 						fBasePointer += fAreaOffset;
 
-					if ((allocationFlags & kFramebuffer) != 0) {
+					if ((allocationFlags & (kFramebuffer | kGbm)) != 0) {
 						// The base pointer will now point to an overlay_client_data
 						// structure bytes per row might be modified to match
-						// hardware constraints
+						// hardware constraints. For kGbm the area maps the
+						// dma-buf pages of the buffer object directly, and the
+						// device supplied stride may exceed the format minimum.
 						link.Read<int32>(&bytesPerRow);
 						size = bytesPerRow * (bounds.IntegerHeight() + 1);
 					}

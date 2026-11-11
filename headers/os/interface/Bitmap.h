@@ -39,6 +39,13 @@ enum {
 		// Cheap to create, object will manage memory itself,
 		// no BApplication needs to run, but one can't draw such
 		// a BBitmap.
+	B_BITMAP_SUPPORTS_GBM				= 0x00000200,
+		// Hint to the app_server that it may back this bitmap with a
+		// GBM buffer object (dma-buf exportable) when the platform can
+		// map one into the client, enabling zero-copy GL texture upload
+		// and, later, direct scanout. Allocation falls through to the
+		// regular shared-memory path when GBM is unavailable, so the
+		// bitmap behaves exactly like an unflagged one either way.
 };
 
 #define B_ANY_BYTES_PER_ROW	-1

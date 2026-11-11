@@ -25,6 +25,7 @@
 #include "ServerTokenSpace.h"
 
 #include <BitmapPrivate.h>
+#include <GbmArea.h>
 #include <ObjectList.h>
 #include <video_overlay.h>
 
@@ -33,16 +34,119 @@
 #include <Bitmap.h>
 #include <Message.h>
 
+#ifdef HAVE_GBM
+#include <gbm.h>
+#endif
+
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 using std::nothrow;
 
 
 //! The one and only bitmap manager for the server, created by the AppServer
 BitmapManager *gBitmapManager = NULL;
+
+
+#ifdef HAVE_GBM
+/*!	Attempts to back the bitmap with a GBM buffer object: CPU mapped for
+	the server, dma-buf exported into a cloneable area so the client
+	maps the very same pages through the ordinary bitmap area protocol.
+	Returns the buffer pointer on success (and hands the GbmMemory to
+	the caller), or NULL when any step fails — including devices that
+	cannot give a linear, CPU mappable buffer — so the caller can fall
+	through to the shared-memory path. The flag stays a hint.
+*/
+static uint8*
+_AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
+	GbmMemory** _memory, uint32* _stride)
+{
+	struct gbm_device* device = hwInterface.GbmDevice();
+	if (device == NULL)
+		return NULL;
+
+	uint32 format;
+	switch (bitmap->ColorSpace()) {
+		case B_RGBA32:
+			// BGRA byte order in memory on little endian
+			format = GBM_FORMAT_ARGB8888;
+			break;
+		case B_RGB32:
+			format = GBM_FORMAT_XRGB8888;
+			break;
+		default:
+			// No GBM format for this color space; fall through
+			return NULL;
+	}
+
+	int32 width = bitmap->Width();
+	int32 height = bitmap->Height();
+	if (width <= 0 || height <= 0)
+		return NULL;
+
+	// LINEAR keeps the server blitters and the client CPU access valid
+	// through the map. No WRITE: Mesa takes it as a dumb cursor buffer
+	// request and refuses anything else. SCANOUT lets planes take it.
+	struct gbm_bo* bo = gbm_bo_create(device, width, height, format,
+		GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+	if (bo == NULL) {
+		bo = gbm_bo_create(device, width, height, format,
+			GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
+	}
+	if (bo == NULL)
+		return NULL;
+
+	uint32 stride = 0;
+	void* mapData = NULL;
+	void* map = gbm_bo_map(bo, 0, 0, (uint32)width, (uint32)height,
+		GBM_BO_TRANSFER_READ | GBM_BO_TRANSFER_WRITE, &stride, &mapData);
+	if (map == NULL) {
+		gbm_bo_destroy(bo);
+		return NULL;
+	}
+
+	int fd = gbm_bo_get_fd(bo);
+	if (fd < 0) {
+		gbm_bo_unmap(bo, mapData);
+		gbm_bo_destroy(bo);
+		return NULL;
+	}
+
+	size_t size = (size_t)stride * (size_t)height;
+	void* areaBase = NULL;
+	area_id area = _kern_create_gbm_area("bitmap gbm buffer", &areaBase,
+		B_ANY_ADDRESS, size, B_NO_LOCK,
+		B_READ_AREA | B_WRITE_AREA | B_CLONEABLE_AREA, fd);
+
+	// The area keeps its own reference on the dma-buf
+	close(fd);
+
+	if (area < B_OK) {
+		gbm_bo_unmap(bo, mapData);
+		gbm_bo_destroy(bo);
+		return NULL;
+	}
+
+	GbmMemory* memory = new(std::nothrow) GbmMemory;
+	if (memory == NULL || memory->Adopt(bo, area, (uint8*)map, mapData)
+			!= B_OK) {
+		delete memory;
+		delete_area(area);
+		gbm_bo_unmap(bo, mapData);
+		gbm_bo_destroy(bo);
+		return NULL;
+	}
+
+	// The device supplied stride may exceed the format minimum, the
+	// same way the overlay path adopts the hardware bytes-per-row.
+	*_stride = stride;
+	*_memory = memory;
+	return (uint8*)map;
+}
+#endif	// HAVE_GBM
 
 
 int
@@ -116,7 +220,30 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 
 	uint8* buffer = NULL;
 
-	if (flags & B_BITMAP_WILL_OVERLAY) {
+#ifdef HAVE_GBM
+	// GBM-backed bitmap (zero-copy dma-buf pages mapped into the client
+	// through the ordinary area protocol). Any failure leaves buffer
+	// NULL and the allocation falls through to the paths below, so the
+	// flag is a hint, never a hard requirement.
+	GbmMemory* gbmMemory = NULL;
+	if ((flags & B_BITMAP_SUPPORTS_GBM) != 0
+		&& (flags & B_BITMAP_WILL_OVERLAY) == 0) {
+		uint32 gbmStride = 0;
+		buffer = _AllocateGbmBuffer(hwInterface, bitmap, &gbmMemory,
+			&gbmStride);
+		if (buffer != NULL) {
+			bitmap->fMemory = gbmMemory;
+			bitmap->fBytesPerRow = (int32)gbmStride;
+
+			if (_allocationFlags)
+				*_allocationFlags = kGbm;
+		}
+	}
+#endif
+
+	if (buffer != NULL) {
+		// already backed above (GBM path)
+	} else if (flags & B_BITMAP_WILL_OVERLAY) {
 		Overlay* overlay = new(std::nothrow) Overlay(hwInterface, bitmap,
 			overlayToken);
 
@@ -178,8 +305,12 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 		// NOTE: the client handles clearing to white in case the flags
 		// indicate this is needed
 	} else {
-		// Allocation failed for buffer or bitmap list
-		free(buffer);
+		// Allocation failed for buffer or bitmap list. Only the
+		// plain heap path owns a malloc'd buffer; area- and
+		// GBM-backed buffers are released with their memory object
+		// when the bitmap is deleted.
+		if (bitmap->fMemory == NULL)
+			free(buffer);
 		delete bitmap;
 		bitmap = NULL;
 	}

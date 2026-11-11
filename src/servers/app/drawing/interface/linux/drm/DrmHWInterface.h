@@ -186,13 +186,25 @@ private:
 	static	void				_PageFlipHandler(int fd, unsigned int frame,
 									unsigned int sec, unsigned int usec,
 									void* data);
-			// Front/back swap + damage rotation, flip event or paced flip.
+			// Front/back swap, flip event or paced flip.
 			// Entered with fFlipMutex held; releases it.
-			void				_FinishFrameSwap(uint64_t generation);
+			void				_FinishFrameSwap();
 			// Fallback for drivers whose page flip never works: wait a
 			// vblank, drmModeSetCrtc the back fb, then swap as a flip
 			// completion would. Tearing possible, display usable.
-			void				_VblankPacedFlip();
+			bool				_VblankPacedFlip();
+
+			void				_SelectPresentMode();
+			void				_DamageAll();
+			void				_Wake();
+			// Event thread, exclusive lock held: brings fWriteTarget up
+			// to the render buffer over region.
+			void				_ComposeFrame(const BRegion& region);
+			status_t			_DirtyFlush(uint32_t fb_id,
+									const BRegion& damage);
+			// Logical damage as physical clips inside the framebuffer.
+			uint32				_DamageClips(const BRegion& damage,
+									drm_mode_rect* clips, uint32 max) const;
 
 			// Direct render: the painter draws into the scanout buffers
 			// and the flip completion copies only the region the recycled
@@ -245,10 +257,6 @@ private:
 
 			status_t			_AtomicModeset(uint32_t fb_id,
 									drmModeModeInfo* mode);
-		status_t			_AtomicFlip(uint32_t fb_id,
-								FlipToken* token,
-								const BRect* dirty_rects,
-								uint32_t nrects);
 			// One request: primary fb (+damage clips) and cursor plane.
 			status_t			_AtomicCommitFrame(uint32_t fb_id,
 								const BRegion* damage,
@@ -332,22 +340,25 @@ private:
 			// (SetMode, resize) are already serialized by the mode lock.
 			pthread_mutex_t		fModesetMutex;
 
-			// Dirty-rect accumulator (replaces fixed fFlipDirtyRects array).
-			// fAccumulatedDirty collects damage between flips. On flip
-			// completion the union of accumulated + previous is blitted
-			// (covering double-buffer staleness), then previous <- current
-			// and current is cleared.
+			// fAccumulatedDirty collects damage until the event thread
+			// composes a frame. fBackStale is what fWriteTarget still
+			// misses: the damage of the frame composed while it was on
+			// screen. Each buffer is brought up to date only when it is
+			// about to be shown.
 			BRegion				fAccumulatedDirty;
-			BRegion				fPreviousDirty;
+			BRegion				fBackStale;
 			bool				fNeedsFlip;
 			BFutexLocker		fDirtyMutex;
 
-			// Serialises _BlendCursor's write to the scanout buffer
-			// (fWriteTarget) between the main thread (CopyBackToFront,
-			// under the parallel lock) and the DRM event thread
-			// (_PageFlipHandler, under the exclusive lock only when it
-			// has damage to present). A software cursor blended with no
-			// new damage races the main-thread blend otherwise.
+			// One scanout buffer flushed by damage, for drivers that
+			// upload on commit: they ignore damage clips across a
+			// framebuffer change, so every flip would upload the screen.
+			bool				fDamageFlush;
+			// A wake is already in the eventfd; saves a write per draw.
+			std::atomic<bool>	fWakeQueued;
+
+			// Serialises _BlendCursor's writes to the scanout buffer when
+			// several threads present under the parallel lock (no flip).
 			mutable pthread_mutex_t	fCursorBlendMutex;
 
 			// Direct render state. fAgeTracker and the slot map are only

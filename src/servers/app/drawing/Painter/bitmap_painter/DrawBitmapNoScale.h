@@ -172,7 +172,8 @@ struct Rgb15Copy : public DrawBitmapNoScale<Rgb15Copy>
 			const uint32 r = (p >> 10) & 0x1f;
 			const uint32 g = (p >> 5) & 0x1f;
 			const uint32 b = p & 0x1f;
-			*d++ = 0xff000000 | (((r << 3) | (r >> 2)) << 16)
+			const uint32 a = p == B_TRANSPARENT_MAGIC_RGBA15 ? 0 : 0xff000000;
+			*d++ = a | (((r << 3) | (r >> 2)) << 16)
 				| (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
 		}
 	}

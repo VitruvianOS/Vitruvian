@@ -55,6 +55,7 @@ private:
 	void						_LogGlStrings();
 	void						_VerifyZink();
 	void						_PublishStatus();
+	void						_PaceToRefresh();
 	void						_Cleanup();
 	void						_RecreateSurface(int32 width, int32 height);
 
@@ -86,6 +87,8 @@ private:
 	bool						fInitialized;
 
 	BBitmap*					fBitmap;
+	bigtime_t					fLastSwap;
+	bigtime_t					fFramePeriod;
 	pthread_mutex_t				fBitmapLock;
 	pthread_mutex_t				fContextLock;
 };

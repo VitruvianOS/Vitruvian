@@ -130,6 +130,55 @@ struct Bgr32Copy : public DrawBitmapNoScale<Bgr32Copy>
 };
 
 
+struct Bgr24Copy : public DrawBitmapNoScale<Bgr24Copy>
+{
+	void BlendRow(uint8* dst, const uint8* src, int32 numPixels)
+	{
+		uint32* d = (uint32*)dst;
+		while (numPixels--) {
+			*d++ = 0xff000000 | (src[2] << 16) | (src[1] << 8) | src[0];
+			src += 3;
+		}
+	}
+};
+
+
+struct Rgb16Copy : public DrawBitmapNoScale<Rgb16Copy>
+{
+	void BlendRow(uint8* dst, const uint8* src, int32 numPixels)
+	{
+		uint32* d = (uint32*)dst;
+		const uint16* s = (const uint16*)src;
+		while (numPixels--) {
+			const uint32 p = *s++;
+			const uint32 r = (p >> 11) & 0x1f;
+			const uint32 g = (p >> 5) & 0x3f;
+			const uint32 b = p & 0x1f;
+			*d++ = 0xff000000 | (((r << 3) | (r >> 2)) << 16)
+				| (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+		}
+	}
+};
+
+
+struct Rgb15Copy : public DrawBitmapNoScale<Rgb15Copy>
+{
+	void BlendRow(uint8* dst, const uint8* src, int32 numPixels)
+	{
+		uint32* d = (uint32*)dst;
+		const uint16* s = (const uint16*)src;
+		while (numPixels--) {
+			const uint32 p = *s++;
+			const uint32 r = (p >> 10) & 0x1f;
+			const uint32 g = (p >> 5) & 0x1f;
+			const uint32 b = p & 0x1f;
+			*d++ = 0xff000000 | (((r << 3) | (r >> 2)) << 16)
+				| (((g << 3) | (g >> 2)) << 8) | ((b << 3) | (b >> 2));
+		}
+	}
+};
+
+
 struct Bgr32Over : public DrawBitmapNoScale<Bgr32Over>
 {
 	void BlendRow(uint8* dst, const uint8* src, int32 numPixels)

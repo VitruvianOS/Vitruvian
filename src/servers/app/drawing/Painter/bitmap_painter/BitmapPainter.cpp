@@ -100,6 +100,24 @@ Painter::BitmapPainter::Draw(const BRect& sourceRect,
 						fDestinationRect);
 					return;
 				}
+			} else if (fColorSpace == B_RGB24
+				&& fPainter->fDrawingMode == B_OP_COPY) {
+				DrawBitmapNoScale<Bgr24Copy> drawNoScale;
+				drawNoScale.Draw(fPainter->fInternal, fBitmap, 3, fOffset,
+					fDestinationRect);
+				return;
+			} else if (fColorSpace == B_RGB16
+				&& fPainter->fDrawingMode == B_OP_COPY) {
+				DrawBitmapNoScale<Rgb16Copy> drawNoScale;
+				drawNoScale.Draw(fPainter->fInternal, fBitmap, 2, fOffset,
+					fDestinationRect);
+				return;
+			} else if (fColorSpace == B_RGB15
+				&& fPainter->fDrawingMode == B_OP_COPY) {
+				DrawBitmapNoScale<Rgb15Copy> drawNoScale;
+				drawNoScale.Draw(fPainter->fInternal, fBitmap, 2, fOffset,
+					fDestinationRect);
+				return;
 			} else if (fColorSpace == B_RGB32) {
 				if (fPainter->fDrawingMode == B_OP_OVER) {
 					DrawBitmapNoScale<Bgr32Over> drawNoScale;

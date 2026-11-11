@@ -60,6 +60,10 @@ public:
 			// Shown while the pointer is over the surface; NULL is ignored.
 			void				SetCursor(const BCursor* cursor);
 
+			// Same units as BWindow::SetSizeLimits; the server may adjust them.
+			status_t			SetSizeLimits(float minWidth, float maxWidth,
+									float minHeight, float maxHeight);
+
 			BRect				Frame() const;
 
 			// B_RGB32, sized to the frame; reallocated on a size change.

@@ -364,6 +364,38 @@ BSurface::SetCursor(const BCursor* cursor)
 }
 
 
+status_t
+BSurface::SetSizeLimits(float minWidth, float maxWidth, float minHeight,
+	float maxHeight)
+{
+	if (fInitStatus != B_OK)
+		return fInitStatus;
+	if (minWidth > maxWidth || minHeight > maxHeight)
+		return B_BAD_VALUE;
+
+	fLink->StartMessage(AS_SET_SIZE_LIMITS);
+	fLink->Attach<float>(minWidth);
+	fLink->Attach<float>(maxWidth);
+	fLink->Attach<float>(minHeight);
+	fLink->Attach<float>(maxHeight);
+
+	// The reply carries the limits and frame the server really applied.
+	int32 code;
+	status_t status = fLink->FlushWithReply(code);
+	if (status != B_OK)
+		return status;
+	if (code != B_OK)
+		return code;
+
+	fLink->Read<BRect>(&fFrame);
+	fLink->Read<float>(&fMinWidth);
+	fLink->Read<float>(&fMaxWidth);
+	fLink->Read<float>(&fMinHeight);
+	fLink->Read<float>(&fMaxHeight);
+	return B_OK;
+}
+
+
 BRect
 BSurface::Frame() const
 {

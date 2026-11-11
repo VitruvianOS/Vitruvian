@@ -925,12 +925,23 @@ DrmHWInterface::_EventThreadMain()
 			continue;
 		}
 
-		// A flip held back by the pacing below wakes when it is due.
-		int timeout = 16;
-		const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
-		const bigtime_t now = system_time();
-		if (fPageFlipEnabled && !fPageFlipPending && flipDue > now)
-			timeout = (int)((flipDue - now + 999) / 1000);
+		// Idle unless a frame is in flight or waiting; one held back by
+		// the pacing below wakes when it is due.
+		int timeout = 500;
+		if (fPageFlipPending || fPacingLockHeld)
+			timeout = 16;
+		else if (fPageFlipEnabled) {
+			fDirtyMutex.Lock();
+			const bool dirty = fAccumulatedDirty.CountRects() > 0
+				|| fNeedsFlip || fStagedCursor.valid;
+			fDirtyMutex.Unlock();
+			if (dirty) {
+				const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
+				const bigtime_t now = system_time();
+				timeout = flipDue > now
+					? (int)((flipDue - now + 999) / 1000) : 16;
+			}
+		}
 		int ret = poll(pfds, nfds, timeout);
 		if (ret < 0) {
 			if (errno == EBADF || errno == EINVAL) {
@@ -956,8 +967,8 @@ DrmHWInterface::_EventThreadMain()
 					.page_flip_handler = DrmHWInterface::_PageFlipHandler,
 				};
 				// The handler swaps the buffer pointers; SetMode() replaces
-				// them under the same lock.
-				bool locked = LockExclusiveAccess();
+				// them under the same lock. A damage flush swaps nothing.
+				bool locked = !fDamageFlush && LockExclusiveAccess();
 				drmHandleEvent(fFd, &evctx);
 				if (locked)
 					UnlockExclusiveAccess();
@@ -2427,10 +2438,8 @@ DrmHWInterface::_BlitRect(RenderingBuffer* src, RenderingBuffer* dst,
 
 #if defined(__x86_64__) || defined(__i386__)
 	static bool sAvx2 = __builtin_cpu_supports("avx2");
-	if (sAvx2
-			&& ((uintptr_t)d % 32) == 0
-			&& (dstBpr % 32) == 0
-			&& bytes >= 64) {
+	// Streaming stores only pay off past the cache.
+	if (sAvx2 && bytes >= 64 && (int64)bytes * h >= 64 * 1024) {
 		_BlitRect_AVX2(s, d, srcBpr, dstBpr, bytes, h);
 		return;
 	}
@@ -2451,6 +2460,11 @@ DrmHWInterface::_BlitRect_AVX2(const uint8* s, uint8* d,
 		int32 r = bytes;
 		const uint8* sp = s;
 		uint8* dp = d;
+		const int32 head = (int32)(-(uintptr_t)dp & 31);
+		if (head > 0) {
+			memcpy(dp, sp, head);
+			sp += head; dp += head; r -= head;
+		}
 		while (r >= 64) {
 			__m256i v0 = _mm256_loadu_si256((const __m256i*)sp);
 			__m256i v1 = _mm256_loadu_si256((const __m256i*)(sp + 32));

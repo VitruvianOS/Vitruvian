@@ -73,6 +73,17 @@ struct CursorUpdate {
 	uint32_t	w, h;
 };
 
+// An overlay plane change held back until the next frame commit.
+struct PlaneUpdate {
+	uint32_t	planeId;
+	PlaneProps	props;
+	bool		enable;
+	uint32_t	fb_id;
+	int32_t		crtcX, crtcY;
+	uint32_t	crtcW, crtcH;
+	uint32_t	srcX, srcY, srcW, srcH;	// 16.16
+};
+
 class DrmHWInterface;
 
 // DRM implementation of a claimed overlay plane; owns a dumb buffer
@@ -107,6 +118,8 @@ public:
 			uint32_t		PlaneId() const { return fPlaneId; }
 
 private:
+			void			_UnbindNow();
+
 			DrmHWInterface*	fInterface;
 			int				fFd;
 			uint32_t		fPlaneId;
@@ -353,6 +366,7 @@ private:
 			status_t			_AtomicCommitFrame(uint32_t fb_id,
 								const BRegion* damage,
 								const CursorUpdate* cursor,
+								const std::vector<PlaneUpdate>* planes,
 								FlipToken* token);
 			status_t			_AtomicSetCursor(uint32_t fb_id,
 									uint32_t crtc_id,
@@ -488,6 +502,12 @@ private:
 			// request. Off keeps the legacy page-flip and cursor ioctls.
 			bool				fAtomicBatch;
 			CursorUpdate		fStagedCursor;
+			// Overlay plane changes for the next frame commit (fDirtyMutex).
+			std::vector<PlaneUpdate>	fStagedPlanes;
+			// False when the caller must apply the update itself.
+			bool				_StagePlane(const PlaneUpdate& update);
+			void				_DropStagedPlane(uint32_t planeId);
+			void				_SetPlaneNow(const PlaneUpdate& update);
 		// Armed once unsupported flip errors reach the limit: the
 		// driver has dumb buffers but no working page flip. Cleared
 		// on session enable; only flip-unsupported errnos count.

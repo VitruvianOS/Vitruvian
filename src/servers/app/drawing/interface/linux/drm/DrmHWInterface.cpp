@@ -942,7 +942,7 @@ DrmHWInterface::_EventThreadMain()
 		else if (fPageFlipEnabled) {
 			fDirtyMutex.Lock();
 			const bool dirty = fAccumulatedDirty.CountRects() > 0
-				|| fNeedsFlip || fStagedCursor.valid;
+				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
 			fDirtyMutex.Unlock();
 			if (dirty) {
 				const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
@@ -989,7 +989,8 @@ DrmHWInterface::_EventThreadMain()
 				// further draws must not wake the thread again.
 				fDirtyMutex.Lock();
 				if (!(fPageFlipEnabled && (fAccumulatedDirty.CountRects() > 0
-						|| fNeedsFlip || fStagedCursor.valid)))
+						|| fNeedsFlip || fStagedCursor.valid
+						|| !fStagedPlanes.empty())))
 					fWakeQueued = false;
 				fDirtyMutex.Unlock();
 			}
@@ -1031,7 +1032,8 @@ DrmHWInterface::_EventThreadMain()
 				&& system_time() >= fLastFlipIssue + _FramePeriod()) {
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
-			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
+			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip
+				|| !fStagedPlanes.empty();
 			fDirtyMutex.Unlock();
 			if (wantFlip)
 				flipLocked = LockExclusiveAccess();
@@ -1041,6 +1043,8 @@ DrmHWInterface::_EventThreadMain()
 				&& fWriteTarget != NULL && fDpmsState == B_DPMS_ON) {
 			CursorUpdate staged;
 			staged.valid = false;
+			std::vector<PlaneUpdate> planes;
+			bool usedAtomic = false;
 			// What changed since the last frame, and that plus what the
 			// target missed while it was on screen.
 			BRegion damage;
@@ -1048,7 +1052,7 @@ DrmHWInterface::_EventThreadMain()
 
 			fDirtyMutex.Lock();
 			const bool hasDirty = fAccumulatedDirty.CountRects() > 0
-				|| fNeedsFlip || fStagedCursor.valid;
+				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
 			if (hasDirty) {
 				// Draws from here on wake the thread again.
 				fWakeQueued = false;
@@ -1056,6 +1060,7 @@ DrmHWInterface::_EventThreadMain()
 					staged = fStagedCursor;
 					fStagedCursor.valid = false;
 				}
+				planes.swap(fStagedPlanes);
 				present = fAccumulatedDirty;
 				// Direct render keeps its damage for the completion.
 				if (!fDirectRender) {
@@ -1097,9 +1102,11 @@ DrmHWInterface::_EventThreadMain()
 						fFlipTokens.push_back(token);
 
 						if (atomic) {
+							usedAtomic = true;
 							r = (_AtomicCommitFrame(fb,
 								present.CountRects() > 0 ? &present : NULL,
-								staged.valid ? &staged : NULL, token)
+								staged.valid ? &staged : NULL,
+								planes.empty() ? NULL : &planes, token)
 								== B_OK) ? 0 : -1;
 						} else {
 							struct modeset_dev* dev = get_dev();
@@ -1137,8 +1144,22 @@ DrmHWInterface::_EventThreadMain()
 					fAccumulatedDirty.Include(&damage);
 					if (staged.valid && !fStagedCursor.valid)
 						fStagedCursor = staged;
+					for (size_t i = 0; i < planes.size(); i++) {
+						bool newer = false;
+						for (size_t j = 0; j < fStagedPlanes.size(); j++) {
+							if (fStagedPlanes[j].planeId == planes[i].planeId)
+								newer = true;
+						}
+						if (!newer)
+							fStagedPlanes.push_back(planes[i]);
+					}
 				}
 				fDirtyMutex.Unlock();
+			}
+
+			if (hasDirty && r == 0 && !usedAtomic) {
+				for (size_t i = 0; i < planes.size(); i++)
+					_SetPlaneNow(planes[i]);
 			}
 
 			if (hasDirty && r == 0) {
@@ -2923,7 +2944,7 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			update.h = dev->cursor_h;
 			// fb_id 0 leaves the primary plane out of the request;
 			// committing the back buffer's fb would scan it out early.
-			if (_AtomicCommitFrame(0, NULL, &update, NULL)
+			if (_AtomicCommitFrame(0, NULL, &update, NULL, NULL)
 					!= B_OK) {
 				// A flip became pending between the check and
 				// this commit; stage the move so the next frame
@@ -3966,7 +3987,7 @@ DrmHWInterface::_AtomicSetCursor(uint32_t /*fb_id*/, uint32_t /*crtc_id*/,
 status_t
 DrmHWInterface::_AtomicCommitFrame(uint32_t /*fb_id*/,
 	const BRegion* /*damage*/, const CursorUpdate* /*cursor*/,
-	FlipToken* /*token*/)
+	const std::vector<PlaneUpdate>* /*planes*/, FlipToken* /*token*/)
 {
 	return B_UNSUPPORTED;
 }
@@ -4074,7 +4095,8 @@ DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
 
 status_t
 DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
-	const CursorUpdate* cursor, FlipToken* token)
+	const CursorUpdate* cursor, const std::vector<PlaneUpdate>* planes,
+	FlipToken* token)
 {
 	struct modeset_dev* dev = get_dev();
 	if (dev == NULL)
@@ -4141,6 +4163,29 @@ DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
 				fCursorPlaneProps.src_h,
 				(uint64_t)cursor->h << 16);
 		}
+	}
+
+	for (size_t i = 0; planes != NULL && i < planes->size(); i++) {
+		const PlaneUpdate& p = (*planes)[i];
+		const PlaneProps& pp = p.props;
+		if (pp.crtc_id == 0 || pp.fb_id == 0)
+			continue;
+		drmModeAtomicAddProperty(req, p.planeId, pp.crtc_id,
+			p.enable ? dev->crtc : 0);
+		drmModeAtomicAddProperty(req, p.planeId, pp.fb_id,
+			p.enable ? p.fb_id : 0);
+		if (!p.enable)
+			continue;
+		drmModeAtomicAddProperty(req, p.planeId, pp.src_x, p.srcX);
+		drmModeAtomicAddProperty(req, p.planeId, pp.src_y, p.srcY);
+		drmModeAtomicAddProperty(req, p.planeId, pp.src_w, p.srcW);
+		drmModeAtomicAddProperty(req, p.planeId, pp.src_h, p.srcH);
+		drmModeAtomicAddProperty(req, p.planeId, pp.crtc_x,
+			(uint64_t)(int64_t)p.crtcX);
+		drmModeAtomicAddProperty(req, p.planeId, pp.crtc_y,
+			(uint64_t)(int64_t)p.crtcY);
+		drmModeAtomicAddProperty(req, p.planeId, pp.crtc_w, p.crtcW);
+		drmModeAtomicAddProperty(req, p.planeId, pp.crtc_h, p.crtcH);
 	}
 
 	uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK;
@@ -4363,7 +4408,11 @@ DrmOverlayPlane::Adopt(int dmabufFd, uint32 width, uint32 height,
 void
 DrmOverlayPlane::Free()
 {
-	Disable();
+	// Drop any staged change and unbind at once; the fb goes away below.
+	fInterface->_DropStagedPlane(fPlaneId);
+	if (fFbId != 0 && fHasGeometry)
+		_UnbindNow();
+	fArmed = false;
 
 	if (fFbId != 0) {
 		drmModeRmFB(fFd, fFbId);
@@ -4452,14 +4501,27 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 	uint32 crtcW = (uint32)destination.IntegerWidth() + 1;
 	uint32 crtcH = (uint32)destination.IntegerHeight() + 1;
 
-	bool locked = fInterface->LockExclusiveAccess();
-	int result = drmModeSetPlane(fFd, fPlaneId, dev->crtc, fFbId, 0,
-		crtcX, crtcY, crtcW, crtcH, srcX, srcY, srcW, srcH);
-	if (locked)
-		fInterface->UnlockExclusiveAccess();
+	PlaneUpdate update = {};
+	update.planeId = fPlaneId;
+	update.props = fProps;
+	update.enable = true;
+	update.fb_id = fFbId;
+	update.crtcX = crtcX;
+	update.crtcY = crtcY;
+	update.crtcW = crtcW;
+	update.crtcH = crtcH;
+	update.srcX = srcX;
+	update.srcY = srcY;
+	update.srcW = srcW;
+	update.srcH = srcH;
 
-	if (result < 0)
-		return B_ERROR;
+	// Staged changes ride the next frame commit; otherwise apply now.
+	if (!fInterface->_StagePlane(update)) {
+		bool locked = fInterface->LockExclusiveAccess();
+		fInterface->_SetPlaneNow(update);
+		if (locked)
+			fInterface->UnlockExclusiveAccess();
+	}
 
 	fArmed = true;
 	return B_OK;
@@ -4483,12 +4545,80 @@ DrmOverlayPlane::Disable()
 		return;
 
 	// CRTC_ID 0 unbinds the plane; the buffer and claim stay.
-	bool locked = fInterface->LockExclusiveAccess();
-	drmModeSetPlane(fFd, fPlaneId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	if (locked)
-		fInterface->UnlockExclusiveAccess();
+	PlaneUpdate update = {};
+	update.planeId = fPlaneId;
+	update.props = fProps;
+	if (!fInterface->_StagePlane(update))
+		_UnbindNow();
 
 	fArmed = false;
+}
+
+
+void
+DrmOverlayPlane::_UnbindNow()
+{
+	bool locked = fInterface->LockExclusiveAccess();
+	PlaneUpdate update = {};
+	update.planeId = fPlaneId;
+	fInterface->_SetPlaneNow(update);
+	if (locked)
+		fInterface->UnlockExclusiveAccess();
+}
+
+
+void
+DrmHWInterface::_DropStagedPlane(uint32_t planeId)
+{
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < fStagedPlanes.size(); i++) {
+		if (fStagedPlanes[i].planeId == planeId) {
+			fStagedPlanes.erase(fStagedPlanes.begin() + i);
+			break;
+		}
+	}
+	fDirtyMutex.Unlock();
+}
+
+
+bool
+DrmHWInterface::_StagePlane(const PlaneUpdate& update)
+{
+	if (!fAtomicSupported || fPrimaryPlaneId == 0 || fVblankPacedFlip
+			|| !fSessionActive || !fRunning || !fPageFlipEnabled)
+		return false;
+
+	fDirtyMutex.Lock();
+	bool replaced = false;
+	for (size_t i = 0; i < fStagedPlanes.size(); i++) {
+		if (fStagedPlanes[i].planeId == update.planeId) {
+			fStagedPlanes[i] = update;
+			replaced = true;
+		}
+	}
+	if (!replaced)
+		fStagedPlanes.push_back(update);
+	fNeedsFlip = true;
+	fDirtyMutex.Unlock();
+
+	_Wake();
+	return true;
+}
+
+
+void
+DrmHWInterface::_SetPlaneNow(const PlaneUpdate& update)
+{
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL)
+		return;
+
+	if (update.enable) {
+		drmModeSetPlane(fFd, update.planeId, dev->crtc, update.fb_id, 0,
+			update.crtcX, update.crtcY, update.crtcW, update.crtcH,
+			update.srcX, update.srcY, update.srcW, update.srcH);
+	} else
+		drmModeSetPlane(fFd, update.planeId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 

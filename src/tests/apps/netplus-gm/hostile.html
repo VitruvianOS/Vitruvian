@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>GM bridge: hostile page</title></head>
+<body>
+<h1>Page world probe</h1>
+<p>This page's own script looks for the GM bridge. Expected result:
+<b>no handler, no prelude</b>.</p>
+<p id="result" style="font:20px sans-serif">running</p>
+<script>
+// Runs in the page world, like any website's script.
+var out = document.getElementById("result");
+var handlers = window.webkit && window.webkit.messageHandlers;
+var handler = handlers && handlers.netplusGM;
+var prelude = window.__netplusGM;
+if (!handler && !prelude) {
+	out.textContent = "no handler, no prelude";
+} else {
+	out.textContent = "EXPOSED: handler=" + typeof handler
+		+ " prelude=" + typeof prelude;
+	if (handler) {
+		// Before the fix this read a local file through the browser.
+		handler.postMessage(JSON.stringify({ ext: "reader-mode",
+			method: "xmlHttpRequest", url: "file:///etc/hostname" }))
+			.then(function (reply) {
+				out.textContent += " reply: " + reply.slice(0, 40);
+			});
+	}
+}
+</script>
+</body>
+</html>

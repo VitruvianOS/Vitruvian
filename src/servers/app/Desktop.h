@@ -181,8 +181,8 @@ public:
 									// this function
 
 	// ScreenOwner implementation
-	virtual	void				ScreenRemoved(Screen* screen) {}
-	virtual	void				ScreenAdded(Screen* screen) {}
+	virtual	void				ScreenRemoved(Screen* screen);
+	virtual	void				ScreenAdded(Screen* screen);
 	virtual	void				ScreenChanged(Screen* screen);
 	virtual	bool				ReleaseScreen(Screen* screen) { return false; }
 
@@ -375,6 +375,7 @@ private:
 			void				_SendFakeMouseMoved(Window* window = NULL);
 
 			Screen*				_DetermineScreenFor(BRect frame);
+			void				_UpdateInputBounds();
 			void				_RebuildClippingForAllWindows(
 									BRegion& stillAvailableOnScreen);
 			void				_TriggerWindowRedrawing(
@@ -389,7 +390,8 @@ private:
 			void				_ScreenChanged(Screen* screen);
 			void				_RelayoutWindowsForScreen(Screen* screen,
 									const BRect& oldFrame,
-									const BRect& newFrame);
+									const BRect& newFrame,
+									bool byPlace = false);
 			void				_SetCurrentWorkspaceConfiguration();
 			void				_SetWorkspace(int32 index,
 									bool moveFocusWindow = false);

@@ -230,7 +230,9 @@ Screen::Frame() const
 	display_mode mode;
 	fHWInterface->GetMode(&mode);
 
-	return BRect(0, 0, mode.virtual_width - 1, mode.virtual_height - 1);
+	BRect frame(0, 0, mode.virtual_width - 1, mode.virtual_height - 1);
+	frame.OffsetBy(fHWInterface->Origin());
+	return frame;
 }
 
 

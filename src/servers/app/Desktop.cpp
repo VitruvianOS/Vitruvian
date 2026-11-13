@@ -712,9 +712,10 @@ Desktop::Init()
 
 	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
 
+	const BRect mainFrame = fVirtualScreen.ScreenFrameAt(0);
 	fVirtualScreen.HWInterface()->MoveCursorTo(
-		fVirtualScreen.Frame().Width() / 2,
-		fVirtualScreen.Frame().Height() / 2);
+		mainFrame.left + mainFrame.Width() / 2,
+		mainFrame.top + mainFrame.Height() / 2);
 
 #if TEST_MODE
 	gInputManager->AddStream(new InputServerStream);
@@ -740,13 +741,12 @@ Desktop::Init()
 
 	// draw the background
 
-	fScreenRegion = fVirtualScreen.Frame();
+	fVirtualScreen.Normalize();
+	fScreenRegion = fVirtualScreen.Region();
 
 	// _ScreenChanged() normally does this, but nothing calls it at cold
 	// boot, only on later mode changes.
-	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
-		HWInterface()->PanelScanoutOrientation(),
-		HWInterface()->PanelReflection());
+	_UpdateInputBounds();
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -4283,8 +4283,40 @@ Desktop::_DetermineScreenFor(BRect frame)
 {
 	AutoReadLocker _(fScreenLock);
 
-	// TODO: choose the screen depending on where most of the area is
-	return fVirtualScreen.ScreenAt(0);
+	// The screen most of the frame is on.
+	Screen* best = fVirtualScreen.ScreenAt(0);
+	float bestArea = 0;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		const BRect part = frame & fVirtualScreen.ScreenFrameAt(i);
+		if (!part.IsValid())
+			continue;
+
+		const float area = (part.Width() + 1) * (part.Height() + 1);
+		if (area > bestArea) {
+			bestArea = area;
+			best = fVirtualScreen.ScreenAt(i);
+		}
+	}
+
+	return best;
+}
+
+
+/*!	Absolute devices span the whole desktop. A panel's rotation only maps
+	a device glued to it when that panel is the only screen.
+*/
+void
+Desktop::_UpdateInputBounds()
+{
+	if (fVirtualScreen.CountScreens() > 1) {
+		gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
+			B_PANEL_ORIENTATION_NORMAL, B_PANEL_REFLECTION_NONE);
+		return;
+	}
+
+	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
+		HWInterface()->PanelScanoutOrientation(),
+		HWInterface()->PanelReflection());
 }
 
 
@@ -4444,8 +4476,57 @@ Desktop::ScreenChanged(Screen* screen)
 
 
 void
+Desktop::ScreenAdded(Screen* screen)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+
+	AutoWriteLocker screenLocker(fScreenLock);
+	if (fVirtualScreen.ScreenIndex(screen) >= 0
+		|| fVirtualScreen.AddScreen(screen,
+			fWorkspaces[fCurrentWorkspace].StoredScreenConfiguration(),
+			fWorkspaces[fCurrentWorkspace].CurrentScreenConfiguration())
+				!= B_OK)
+		return;
+	screenLocker.Unlock();
+
+	_ScreenChanged(screen);
+}
+
+
+void
+Desktop::ScreenRemoved(Screen* screen)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+
+	// The first screen is the one everything is drawn through; it stays.
+	const int32 index = fVirtualScreen.ScreenIndex(screen);
+	Screen* main = fVirtualScreen.ScreenAt(0);
+	if (index <= 0 || main == NULL)
+		return;
+
+	// Its windows go to the main screen, placed as they were.
+	_RelayoutWindowsForScreen(screen, fVirtualScreen.ScreenFrameAt(index),
+		fVirtualScreen.ScreenFrameAt(0), true);
+
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() == screen) {
+			window->ReleaseOverlay(true);
+			window->SetScreen(main);
+		}
+	}
+
+	AutoWriteLocker screenLocker(fScreenLock);
+	fVirtualScreen.RemoveScreen(screen);
+	screenLocker.Unlock();
+
+	_ScreenChanged(main);
+}
+
+
+void
 Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
-	const BRect& newFrame)
+	const BRect& newFrame, bool byPlace)
 {
 	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
@@ -4454,7 +4535,9 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
-		if (window->Screen() != screen)
+		// byPlace takes the windows that sit in the old frame, in any
+		// workspace, whatever screen they were last clipped to.
+		if (!byPlace && window->Screen() != screen)
 			continue;
 
 		const char* signature = NULL;
@@ -4471,7 +4554,7 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 			continue;
 
 		const BRect frame = window->Frame();
-		if (RelayoutFillsScreen(frame, oldFrame))
+		if (!byPlace && RelayoutFillsScreen(frame, oldFrame))
 			continue;
 
 		BRect footprint = frame;
@@ -4492,6 +4575,11 @@ Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
 					continue;
 				placed.OffsetTo(anchor.position - inset);
 			}
+
+			if (byPlace && !oldFrame.Contains(BPoint(
+					(placed.left + placed.right) / 2,
+					(placed.top + placed.bottom) / 2)))
+				continue;
 
 			relayout_placement& placement = anchor.placement;
 			if (!placement.valid || placement.placedAt != placed.LeftTop())
@@ -4515,30 +4603,42 @@ Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
 
-	// item->frame is still the old size; Screen::Frame() is already the new.
-	const int32 screenIndex = fVirtualScreen.ScreenIndex(screen);
+	// A screen that left or shrank may leave nothing at the top left.
+	fVirtualScreen.Normalize();
+
+	// item->frame is still the old one; Screen::Frame() is already the new.
+	// The other screens may have moved with this one.
+	ScreenList moved;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* each = fVirtualScreen.ScreenAt(i);
+		const BRect oldFrame = fVirtualScreen.ScreenFrameAt(i);
+		const BRect eachFrame = each->Frame();
+		if (each != screen && oldFrame == eachFrame)
+			continue;
+
+		_RelayoutWindowsForScreen(each, oldFrame, eachFrame);
+		fVirtualScreen.SetScreenFrame(i, eachFrame);
+		moved.AddItem(each);
+	}
+	fVirtualScreen.UpdateFrame();
+
 	const BRect newFrame = screen->Frame();
 
-	if (screenIndex >= 0) {
-		const BRect oldFrame = fVirtualScreen.ScreenFrameAt(screenIndex);
-		_RelayoutWindowsForScreen(screen, oldFrame, newFrame);
-		fVirtualScreen.SetScreenFrame(screenIndex, newFrame);
-	}
+	// update our cached screen region
+	fScreenRegion = fVirtualScreen.Region();
+	_UpdateInputBounds();
 
 	// the entire screen is dirty, because we're actually
-	// operating on an all new buffer in memory
+	// operating on an all new buffer in memory; with several screens
+	// that buffer is the one they share
 	BRegion dirty(newFrame);
-
-	// update our cached screen region
-	fScreenRegion.Set(newFrame);
-	gInputManager->UpdateScreenBounds(newFrame,
-		screen->HWInterface()->PanelScanoutOrientation(),
-		screen->HWInterface()->PanelReflection());
+	if (fVirtualScreen.CountScreens() > 1)
+		dirty = fScreenRegion;
 
 	// planes are bound to the old mode
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
-		if (window->Screen() == screen)
+		if (moved.HasItem(const_cast<Screen*>(window->Screen())))
 			window->ReleaseOverlay(true);
 	}
 
@@ -4553,18 +4653,20 @@ Desktop::_ScreenChanged(Screen* screen)
 	dirty.Exclude(&background);
 	_TriggerWindowRedrawing(dirty, dirty);
 
-	// send B_SCREEN_CHANGED to windows on that screen
-	BMessage update(B_SCREEN_CHANGED);
-	update.AddInt64("when", real_time_clock_usecs());
-	update.AddRect("frame", newFrame);
-	update.AddInt32("mode", screen->ColorSpace());
+	// send B_SCREEN_CHANGED to windows on the screens that changed
+	for (int32 i = 0; i < moved.CountItems(); i++) {
+		Screen* each = moved.ItemAt(i);
 
-	fVirtualScreen.UpdateFrame();
+		BMessage update(B_SCREEN_CHANGED);
+		update.AddInt64("when", real_time_clock_usecs());
+		update.AddRect("frame", each->Frame());
+		update.AddInt32("mode", each->ColorSpace());
 
-	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
-			window = window->NextWindow(kAllWindowList)) {
-		if (window->Screen() == screen)
-			window->ServerWindow()->ScreenChanged(&update);
+		for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+				window = window->NextWindow(kAllWindowList)) {
+			if (window->Screen() == each)
+				window->ServerWindow()->ScreenChanged(&update);
+		}
 	}
 }
 

@@ -148,15 +148,30 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 
 	monitor_info info;
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+
+	// Another screen goes back where it was, or right of the others.
+	if (fScreenList.CountItems() > 0) {
+		screen_configuration* stored = configurations.BestFit(screen->ID(),
+			hasInfo ? &info : NULL);
+		if (stored != NULL && stored->id == screen->ID()
+			&& stored->frame.left >= 0 && stored->frame.top >= 0)
+			screen->HWInterface()->SetOrigin(stored->frame.LeftTop());
+		else
+			screen->HWInterface()->SetOrigin(BPoint(fFrame.right + 1, 0));
+	}
+
 	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
 
-	// TODO: this works only for single screen configurations
-	fDrawingEngine = screen->GetDrawingEngine();
-	fHWInterface = screen->HWInterface();
-	fFrame = screen->Frame();
-	item->frame = fFrame;
+	// All drawing goes through the first screen's interface, which
+	// presents every screen's part.
+	if (fScreenList.CountItems() == 0) {
+		fDrawingEngine = screen->GetDrawingEngine();
+		fHWInterface = screen->HWInterface();
+	}
+	item->frame = screen->Frame();
 
 	fScreenList.AddItem(item);
+	UpdateFrame();
 
 	return B_OK;
 }
@@ -165,30 +180,104 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 status_t
 VirtualScreen::RemoveScreen(Screen* screen)
 {
-	// not implemented yet (config changes when running)
-	return B_ERROR;
+	// The first screen is the one everything is drawn through.
+	const int32 index = ScreenIndex(screen);
+	if (index <= 0)
+		return B_BAD_VALUE;
+
+	delete fScreenList.RemoveItemAt(index);
+		// the item, not the screen
+	UpdateFrame();
+	return B_OK;
 }
 
 
 void
 VirtualScreen::UpdateFrame()
 {
-	int32 virtualWidth = 0, virtualHeight = 0;
+	fFrame.Set(0, 0, 0, 0);
 
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		const BRect frame = fScreenList.ItemAt(i)->screen->Frame();
+		fFrame = i == 0 ? frame : fFrame | frame;
+	}
+}
+
+
+BRegion
+VirtualScreen::Region() const
+{
+	BRegion region;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++)
+		region.Include(fScreenList.ItemAt(i)->screen->Frame());
+	return region;
+}
+
+
+void
+VirtualScreen::Normalize()
+{
+	if (fScreenList.CountItems() == 0)
+		return;
+
+	// A screen that grew into a later one pushes it to the right. Two
+	// screens at the same place mirror each other and stay.
+	for (int32 i = 1; i < fScreenList.CountItems(); i++) {
 		Screen* screen = fScreenList.ItemAt(i)->screen;
-
-		uint16 width, height;
-		uint32 colorSpace;
-		float frequency;
-		screen->GetMode(width, height, colorSpace, frequency);
-
-		// TODO: compute virtual size depending on the actual screen position!
-		virtualWidth += width;
-		virtualHeight = max_c(virtualHeight, height);
+		for (int32 j = 0; j < i; j++) {
+			const BRect frame = screen->Frame();
+			const BRect other = fScreenList.ItemAt(j)->screen->Frame();
+			if (frame.LeftTop() != other.LeftTop()
+				&& frame.Intersects(other)) {
+				screen->HWInterface()->SetOrigin(
+					BPoint(other.right + 1, frame.top));
+			}
+		}
 	}
 
-	fFrame.Set(0, 0, virtualWidth - 1, virtualHeight - 1);
+	// A screen that shrank leaves a gap to the one on its right, which
+	// then moves up to it.
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		Screen* screen = fScreenList.ItemAt(i)->screen;
+		const BRect frame = screen->Frame();
+
+		float edge = -1;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			const BRect other = fScreenList.ItemAt(j)->screen->Frame();
+			if (j == i || other.bottom < frame.top
+				|| other.top > frame.bottom)
+				continue;
+			if (other.right >= frame.left) {
+				// touching or overlapping: nothing to close
+				if (other.left < frame.left) {
+					edge = -1;
+					break;
+				}
+				continue;
+			}
+			edge = max_c(edge, other.right);
+		}
+
+		if (edge >= 0 && frame.left > edge + 1)
+			screen->HWInterface()->SetOrigin(BPoint(edge + 1, frame.top));
+	}
+
+	BPoint offset = fScreenList.ItemAt(0)->screen->Frame().LeftTop();
+	for (int32 i = 1; i < fScreenList.CountItems(); i++) {
+		const BRect frame = fScreenList.ItemAt(i)->screen->Frame();
+		offset.x = min_c(offset.x, frame.left);
+		offset.y = min_c(offset.y, frame.top);
+	}
+
+	if (offset != B_ORIGIN) {
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			Screen* screen = fScreenList.ItemAt(i)->screen;
+			screen->HWInterface()->SetOrigin(
+				screen->Frame().LeftTop() - offset);
+		}
+	}
+
+	UpdateFrame();
 }
 
 
@@ -215,12 +304,16 @@ VirtualScreen::ScreenAt(int32 index) const
 Screen*
 VirtualScreen::ScreenByID(int32 id) const
 {
-	for (int32 i = fScreenList.CountItems(); i-- > 0;) {
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
 
-		if (item->screen->ID() == id || id == B_MAIN_SCREEN_ID.id)
+		if (item->screen->ID() == id)
 			return item->screen;
 	}
+
+	// The main screen is the first one.
+	if (id == B_MAIN_SCREEN_ID.id)
+		return ScreenAt(0);
 
 	return NULL;
 }

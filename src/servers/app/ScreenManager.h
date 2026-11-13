@@ -17,12 +17,16 @@
 class BMessage;
 
 class DrawingEngine;
+class DrmHWInterface;
 class HWInterface;
 class HWInterfaceListener;
 class Screen;
 
 
 typedef BObjectList<Screen> ScreenList;
+
+// The set of connected outputs, or the mode one prefers, has changed.
+static const uint32 kMsgOutputsChanged = 'outc';
 
 
 class ScreenOwner {
@@ -65,6 +69,8 @@ class ScreenManager : public BLooper {
 			ObjectDeleter<Screen>	screen;
 			ScreenOwner*			owner;
 			bool					isVirtual;
+			// Of an output beside the first one, else 0.
+			uint32					connector;
 			ObjectDeleter<HWInterfaceListener>
 									listener;
 		};
@@ -72,8 +78,11 @@ class ScreenManager : public BLooper {
 		void			_ScanDrivers();
 		screen_item*	_AddHWInterface(HWInterface* interface,
 							int32 id = -1);
+		int32			_NextID() const;
+		void			_SyncOutputs();
 
 		BObjectList<screen_item, true>	fScreenList;
+		DrmHWInterface*	fDrmInterface;
 };
 
 extern ScreenManager *gScreenManager;

@@ -21,8 +21,10 @@
 #include <Entry.h>
 #include <NodeMonitor.h>
 
+#include <algorithm>
 #include <new>
 #include <string.h>
+#include <vector>
 
 using std::nothrow;
 
@@ -76,7 +78,8 @@ ScreenChangeListener::ScreenChanged(HWInterface* interface)
 ScreenManager::ScreenManager()
 	:
 	BLooper("screen manager"),
-	fScreenList(4)
+	fScreenList(4),
+	fDrmInterface(NULL)
 {
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if defined(USE_DIRECT_WINDOW_TEST_MODE)
@@ -148,14 +151,7 @@ ScreenManager::AddVirtualOutput(uint16 width, uint16 height, const char* name,
 {
 	BAutolock locker(this);
 
-	// Ids must stay unique for the life of the server: removals shrink
-	// the list, so counting items would eventually collide.
-	int32 nextID = 0;
-	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
-		int32 screenID = fScreenList.ItemAt(i)->screen->ID();
-		if (screenID >= nextID)
-			nextID = screenID + 1;
-	}
+	int32 nextID = _NextID();
 
 	VirtualOutput* interface = new(nothrow) VirtualOutput(width, height, name);
 	if (interface == NULL)
@@ -222,6 +218,10 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
 
+		// A headless output is not part of the desktop.
+		if (item->isVirtual)
+			continue;
+
 		if (item->owner == NULL && list.AddItem(item->screen.Get())) {
 			item->owner = owner;
 			added++;
@@ -286,6 +286,7 @@ ScreenManager::_ScanDrivers()
 		DrmHWInterface* drm = new(nothrow) DrmHWInterface();
 		if (drm != NULL && drm->InitCheck() == B_OK) {
 			interface = drm;
+			fDrmInterface = drm;
 		} else {
 			fprintf(stderr, "DRM backend failed, falling back to FBDev\n");
 			delete drm;
@@ -293,8 +294,137 @@ ScreenManager::_ScanDrivers()
 		}
 #endif
 
-		_AddHWInterface(interface);
+		if (_AddHWInterface(interface) == NULL)
+			fDrmInterface = NULL;
 		initDrivers = false;
+	}
+#ifdef __VOS__
+	_SyncOutputs();
+#endif
+#endif
+}
+
+
+// Ids must stay unique for the life of the server: removals shrink the
+// list, so counting items would eventually collide.
+int32
+ScreenManager::_NextID() const
+{
+	int32 nextID = 0;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		int32 screenID = fScreenList.ItemAt(i)->screen->ID();
+		if (screenID >= nextID)
+			nextID = screenID + 1;
+	}
+	return nextID;
+}
+
+
+/*!	Gives every connected output beside the first one a screen and takes
+	the screen of an unplugged one away. The owner is called without our
+	lock: it takes the window lock, and holds that when it calls us.
+*/
+void
+ScreenManager::_SyncOutputs()
+{
+#if !defined(HAIKU_TARGET_PLATFORM_LIBBE_TEST) && defined(__VOS__)
+	if (fDrmInterface == NULL)
+		return;
+
+	std::vector<uint32> connected;
+	fDrmInterface->GetConnectedOutputs(connected);
+
+	// gone
+	while (true) {
+		BAutolock locker(this);
+
+		screen_item* gone = NULL;
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* item = fScreenList.ItemAt(i);
+			if (item->connector != 0
+				&& std::find(connected.begin(), connected.end(),
+					item->connector) == connected.end()) {
+				gone = item;
+				break;
+			}
+		}
+		if (gone == NULL)
+			break;
+
+		Screen* screen = gone->screen.Get();
+		ScreenOwner* owner = gone->owner;
+		const uint32 connector = gone->connector;
+
+		// Still listed and owned, so nobody else acquires it meanwhile.
+		locker.Unlock();
+		if (owner != NULL)
+			owner->ScreenRemoved(screen);
+		locker.Lock();
+
+		fScreenList.RemoveItem(gone, false);
+		screen->HWInterface()->RemoveListener(gone->listener.Get());
+		screen->Shutdown();
+		locker.Unlock();
+
+		fDrmInterface->RemoveOutput(connector);
+		delete gone;
+	}
+
+	// new
+	for (size_t i = 0; i < connected.size(); i++) {
+		BAutolock locker(this);
+
+		bool known = false;
+		ScreenOwner* owner = NULL;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* item = fScreenList.ItemAt(j);
+			if (item->connector == connected[i])
+				known = true;
+			if (item->screen->HWInterface() == fDrmInterface)
+				owner = item->owner;
+		}
+		if (known)
+			continue;
+
+		HWInterface* interface = fDrmInterface->AddOutput(connected[i]);
+		if (interface == NULL)
+			continue;
+
+		screen_item* item = _AddHWInterface(interface, _NextID());
+		if (item == NULL) {
+			fDrmInterface->RemoveOutput(connected[i]);
+			continue;
+		}
+
+		item->connector = connected[i];
+		item->owner = owner;
+		Screen* screen = item->screen.Get();
+
+		locker.Unlock();
+		if (owner != NULL)
+			owner->ScreenAdded(screen);
+	}
+
+	// resized
+	for (size_t i = 0; i < connected.size(); i++) {
+		if (!fDrmInterface->TakeOutputModeChange(connected[i]))
+			continue;
+
+		BAutolock locker(this);
+
+		Screen* screen = NULL;
+		ScreenOwner* owner = NULL;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* item = fScreenList.ItemAt(j);
+			if (item->connector == connected[i]) {
+				screen = item->screen.Get();
+				owner = item->owner;
+			}
+		}
+
+		locker.Unlock();
+		if (screen != NULL && owner != NULL)
+			owner->ScreenChanged(screen);
 	}
 #endif
 }
@@ -321,6 +451,7 @@ ScreenManager::_AddHWInterface(HWInterface* interface, int32 id)
 			item->screen.SetTo(screen.Detach());
 			item->owner = NULL;
 			item->isVirtual = false;
+			item->connector = 0;
 			item->listener.SetTo(
 				new(nothrow) ScreenChangeListener(*this, item->screen.Get()));
 			if (item->listener.IsSet()
@@ -345,6 +476,10 @@ ScreenManager::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_NODE_MONITOR:
 			// TODO: handle notification
+			break;
+
+		case kMsgOutputsChanged:
+			_SyncOutputs();
 			break;
 
 		default:

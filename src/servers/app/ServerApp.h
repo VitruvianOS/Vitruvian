@@ -30,6 +30,7 @@ class BMessage;
 class BList;
 class Desktop;
 class DrawingEngine;
+class HWInterface;
 class ServerPicture;
 class ServerCursor;
 class ServerBitmap;
@@ -103,6 +104,8 @@ private:
 	virtual	void				_DispatchMessage(int32 code,
 									BPrivate::LinkReceiver& link);
 	virtual	void				_MessageLooper();
+			// Screen lock held.
+			HWInterface*		_ScreenInterface(int32 id) const;
 			status_t			_CreateWindow(int32 code,
 									BPrivate::LinkReceiver& link,
 									port_id& clientReplyPort);

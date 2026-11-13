@@ -13,6 +13,7 @@
 #include "ScreenManager.h"
 
 #include <Message.h>
+#include <Region.h>
 
 
 class Desktop;
@@ -46,6 +47,11 @@ public:
 
 			void				UpdateFrame();
 			BRect				Frame() const;
+			// What the screens cover; Frame() is its bounding box.
+			BRegion				Region() const;
+			// Moves the screens apart where they overlap, and so that the
+			// top left one is at the origin.
+			void				Normalize();
 
 			// TODO: we need to play with a real multi-screen configuration to
 			//	figure out the specifics here

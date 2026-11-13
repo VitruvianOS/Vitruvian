@@ -141,6 +141,11 @@ public:
 	virtual status_t			GetConnectorName(BString& name)
 									{ return B_NOT_SUPPORTED; }
 
+	// Where this output sits on the desktop all outputs share.
+	virtual	BPoint				Origin() const { return B_ORIGIN; }
+	virtual	status_t			SetOrigin(BPoint origin)
+									{ return B_NOT_SUPPORTED; }
+
 	virtual status_t			GetAccelerantPath(BString& path);
 	virtual status_t			GetDriverPath(BString& path);
 

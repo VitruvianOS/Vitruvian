@@ -165,6 +165,31 @@ enum PanelOrientation {
 
 class DrmBuffer;
 
+
+// A rectangle of another buffer: the part of the desktop one output shows.
+class DrmBufferView : public RenderingBuffer {
+public:
+								DrmBufferView();
+
+			void				SetTo(RenderingBuffer* buffer, int32 x,
+									int32 y, uint32 width, uint32 height);
+
+	virtual	status_t			InitCheck() const;
+	virtual	color_space			ColorSpace() const;
+	virtual	void*				Bits() const;
+	virtual	uint32				BytesPerRow() const;
+	virtual	uint32				Width() const;
+	virtual	uint32				Height() const;
+
+private:
+			uint8*				fBits;
+			uint32				fBytesPerRow;
+			uint32				fWidth;
+			uint32				fHeight;
+			color_space			fColorSpace;
+};
+
+
 class DrmHWInterface : public HWInterface {
 public:
 								DrmHWInterface();
@@ -220,6 +245,9 @@ public:
 	virtual status_t			GetTemperature(float* kelvin);
 	virtual status_t			GetConnectorName(BString& name);
 
+	virtual	BPoint				Origin() const;
+	virtual	status_t			SetOrigin(BPoint origin);
+
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
@@ -267,8 +295,48 @@ public:
 
 			status_t			InitCheck() const;
 
+			// Outputs beside the first one. They show their part of the
+			// same render buffer; ScreenManager owns a screen for each.
+			void				GetConnectedOutputs(
+									std::vector<uint32>& connectors);
+			HWInterface*		AddOutput(uint32 connector);
+			void				RemoveOutput(uint32 connector);
+			// True once after the connector's preferred mode changed.
+			bool				TakeOutputModeChange(uint32 connector);
+
+			status_t			SetOutputMode(uint32 connector,
+									const display_mode& mode);
+			status_t			GetOutputMode(uint32 connector,
+									display_mode* mode);
+			status_t			GetOutputPreferredMode(uint32 connector,
+									display_mode* mode);
+			status_t			GetOutputModeList(uint32 connector,
+									display_mode** _modeList, uint32* _count);
+			status_t			GetOutputMonitorInfo(uint32 connector,
+									monitor_info* info);
+			status_t			GetOutputConnectorName(uint32 connector,
+									BString& name);
+			BPoint				OutputOrigin(uint32 connector);
+			status_t			SetOutputOrigin(uint32 connector,
+									BPoint origin);
+			int32				OutputOrientation(uint32 connector);
+			status_t			SetOutputOrientation(uint32 connector,
+									int32 orientation);
+			int32				OutputReflection(uint32 connector);
+			status_t			SetOutputReflection(uint32 connector,
+									int32 reflection);
+			uint32				OutputDPMSMode(uint32 connector);
+			status_t			SetOutputDPMSMode(uint32 connector,
+									uint32 state);
+
+	static	status_t			ProposeModeFromList(display_mode* modeList,
+									uint32 count, display_mode* candidate,
+									const display_mode* low,
+									const display_mode* high);
+
 private:
 	struct FlipToken;
+	struct Output;
 	friend class				DrmOverlayPlane;
 
 	static	int32				_EventThreadEntry(void* data);
@@ -309,7 +377,11 @@ private:
 									const BRegion& damage);
 			// Logical damage as physical clips inside the framebuffer.
 			uint32				_DamageClips(const BRegion& damage,
-									drm_mode_rect* clips, uint32 max) const;
+										drm_mode_rect* clips, uint32 max) const;
+	static	uint32				_DamageClips(const BRegion& damage,
+										drm_mode_rect* clips, uint32 max,
+										int32 logicalW, int32 logicalH,
+										int32 orientation, int32 reflection);
 
 			// Direct render: the painter draws into the scanout buffers
 			// and the flip completion copies only the region the recycled
@@ -319,14 +391,59 @@ private:
 			int32				_AgeSlotForFb(uint32_t fbId) const;
 			void				_DirectFlipComplete();
 			bigtime_t			_FramePeriod() const;
+	static	bigtime_t			_FramePeriodFor(const display_mode& mode);
 
 			void				_BlitRect(RenderingBuffer* src,
 									RenderingBuffer* dst,
 									const BRect& frame);
+			void				_BlitRect(RenderingBuffer* src,
+									RenderingBuffer* dst,
+									const BRect& frame, int32 orientation,
+									int32 reflection);
 
-		void				_BlendCursor(RenderingBuffer* srcBg,
-								RenderingBuffer* dst,
-								IntRect area) const;
+			// srcBg and area are the output's own; origin is where the
+			// output sits on the desktop.
+			void				_BlendCursor(RenderingBuffer* srcBg,
+									RenderingBuffer* dst, IntRect area,
+									const BPoint& origin, int32 orientation,
+									int32 reflection) const;
+			// The cursor's desktop frame even when a sprite shows it.
+			IntRect				_SoftCursorFrame() const;
+
+			// The first output and the others.
+			struct modeset_dev*	_PickDev() const;
+			BRect				_Frame() const;
+			BRect				_DesktopBounds() const;
+			bool				_SingleOutput() const;
+			void				_RebuildRenderBuffer(uint32 width,
+									uint32 height);
+			void				_AddDamage(const BRect& frame);
+			void				_AddDamage(const BRegion& region);
+			void				_AddOutputDamage(const BRect& frame);
+			// fDirtyMutex held.
+			void				_SplitDamage(const BRect& frame,
+									bool outputsOnly);
+			void				_DamageOutputs();
+			Output*				_FindOutput(uint32 connector) const;
+			status_t			_SetupOutput(Output* output);
+			void				_TeardownOutput(Output* output);
+			bool				_OutputsWaiting();
+			void				_PresentOutputs();
+			void				_OutputFlipComplete(uint32 connector,
+									uint64_t generation);
+			void				_RestoreOutputs(bool onlyLost = false);
+			void				_SetOutputDPMS(Output* output, uint32 state);
+
+			status_t			_ModeListFor(uint32 connector,
+									int32 orientation,
+									display_mode** _modeList, uint32* _count);
+			status_t			_PreferredModeFor(uint32 connector,
+									int32 orientation, bool probe,
+									display_mode* mode);
+			status_t			_MonitorInfoFor(uint32 connector,
+									monitor_info* info);
+			status_t			_ConnectorNameFor(uint32 connector,
+									BString& name);
 
 		virtual	void				_CopyToFront(uint8* src, uint32 srcBPR,
 									int32 x, int32 y,
@@ -410,7 +527,15 @@ private:
 			struct gbm_device*	fGbmDevice;
 #endif
 
+			// Spans every output; each one presents its own rectangle.
 			MallocBuffer*		fRenderBuffer;
+			// The first output: connector, place, part of the buffer.
+			struct modeset_dev*	fDev;
+			BPoint				fOrigin;
+			DrmBufferView		fSource;
+			// Changed under the exclusive lock and fDirtyMutex; read
+			// under either.
+			std::vector<Output*>	fOutputs;
 
 			// Written only under fFlipMutex (SetMode, _OnSessionEnable),
 			// read lock-free by the event thread's flip gate; atomic so
@@ -437,6 +562,8 @@ private:
 			struct FlipToken {
 				DrmHWInterface*	hw;
 				uint64_t		generation;
+				// Connector of the output flipped; 0 is the first one.
+				uint32_t		output;
 			};
 			std::vector<FlipToken*> fFlipTokens;
 			pthread_cond_t		fFlipCond;

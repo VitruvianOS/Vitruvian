@@ -158,6 +158,7 @@ Server(
 
 		drawing/interface/linux/drm/DrmHWInterface.cpp
 		drawing/interface/linux/drm/DrmBuffer.cpp
+		drawing/interface/linux/drm/DrmOutput.cpp
 		drawing/interface/linux/drm/BufferAgeTracker.cpp
 		drawing/interface/linux/drm/modeset.c
 

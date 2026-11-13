@@ -2957,12 +2957,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 1) int32 screen
 
 			int32 id;
-			if (link.Read<int32>(&id) == B_OK
-				&& id == B_MAIN_SCREEN_ID.id)
-				fLink.StartMessage(B_OK);
-			else
-				fLink.StartMessage(B_ERROR);
+			bool valid = false;
+			if (link.Read<int32>(&id) == B_OK) {
+				AutoReadLocker _(fDesktop->ScreenLocker());
+				valid = fDesktop->VirtualScreen().ScreenByID(id) != NULL;
+			}
 
+			fLink.StartMessage(valid ? B_OK : B_ERROR);
 			fLink.Flush();
 			break;
 		}
@@ -2975,8 +2976,23 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 id;
 			link.Read<int32>(&id);
 
-			// TODO: for now, just say we're the last one
-			fLink.StartMessage(B_ENTRY_NOT_FOUND);
+			int32 next = -1;
+			{
+				AutoReadLocker _(fDesktop->ScreenLocker());
+				const ::VirtualScreen& screens = fDesktop->VirtualScreen();
+				const int32 index
+					= screens.ScreenIndex(screens.ScreenByID(id));
+				Screen* screen = index >= 0
+					? screens.ScreenAt(index + 1) : NULL;
+				if (screen != NULL)
+					next = screen->ID();
+			}
+
+			if (next >= 0) {
+				fLink.StartMessage(B_OK);
+				fLink.Attach<int32>(next);
+			} else
+				fLink.StartMessage(B_ENTRY_NOT_FOUND);
 			fLink.Flush();
 			break;
 		}
@@ -3104,8 +3120,11 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<display_mode>(&target);
 			link.Read<display_mode>(&low);
 			link.Read<display_mode>(&high);
-			status_t status = fDesktop->HWInterface()->ProposeMode(&target,
+
+			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
+			status_t status = _ScreenInterface(id)->ProposeMode(&target,
 				&low, &high);
+			screenLocker.Unlock();
 
 			// ProposeMode() returns B_BAD_VALUE to hint that the candidate is
 			// not within the given limits (but is supported)
@@ -3124,12 +3143,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			int32 id;
 			link.Read<int32>(&id);
-			// TODO: use this screen id
 
 			display_mode* modeList;
 			uint32 count;
-			status_t status = fDesktop->HWInterface()->GetModeList(&modeList,
+			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
+			status_t status = _ScreenInterface(id)->GetModeList(&modeList,
 				&count);
+			screenLocker.Unlock();
 			if (status == B_OK) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<uint32>(count);
@@ -3243,13 +3263,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			STRACE(("ServerApp %s: get monitor info\n", Signature()));
 
-			// We aren't using the screen_id for now...
 			int32 id;
 			link.Read<int32>(&id);
 
 			monitor_info info;
-			// TODO: I wonder if there should be a "desktop" lock...
-			status_t status = fDesktop->HWInterface()->GetMonitorInfo(&info);
+			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
+			status_t status = _ScreenInterface(id)->GetMonitorInfo(&info);
+			screenLocker.Unlock();
 			if (status == B_OK) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<monitor_info>(info);
@@ -3298,15 +3318,16 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_GET_PIXEL_CLOCK_LIMITS:
 		{
 			STRACE(("ServerApp %s: get pixel clock limits\n", Signature()));
-			// We aren't using the screen_id for now...
 			int32 id;
 			link.Read<int32>(&id);
 			display_mode mode;
 			link.Read<display_mode>(&mode);
 
 			uint32 low, high;
-			status_t status = fDesktop->HWInterface()->GetPixelClockLimits(&mode,
+			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
+			status_t status = _ScreenInterface(id)->GetPixelClockLimits(&mode,
 				&low, &high);
+			screenLocker.Unlock();
 			if (status == B_OK) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<uint32>(low);
@@ -3519,7 +3540,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<int32>(&id);
 
 			BString name;
-			status_t result = fDesktop->HWInterface()->GetConnectorName(name);
+			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
+			status_t result = _ScreenInterface(id)->GetConnectorName(name);
+			screenLocker.Unlock();
 			fLink.StartMessage(result);
 			if (result == B_OK)
 				fLink.AttachString(name.String());
@@ -3710,6 +3733,16 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 /*!	\brief The thread function ServerApps use to monitor messages
 */
+HWInterface*
+ServerApp::_ScreenInterface(int32 id) const
+{
+	Screen* screen = fDesktop->VirtualScreen().ScreenByID(id);
+	if (screen != NULL)
+		return screen->HWInterface();
+	return fDesktop->HWInterface();
+}
+
+
 void
 ServerApp::_MessageLooper()
 {

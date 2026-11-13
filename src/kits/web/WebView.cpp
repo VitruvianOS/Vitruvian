@@ -103,7 +103,8 @@ static const char* kGMPreludeSource =
 	"window.__netplusGM = (function () {\n"
 	"	function post(ext, method, args) {\n"
 	"		var payload = { ext: ext, method: method };\n"
-	"		for (var k in (args || {})) payload[k] = args[k];\n"
+	"		for (var k in (args || {}))\n"
+	"			if (k !== 'ext' && k !== 'method') payload[k] = args[k];\n"
 	"		return window.webkit.messageHandlers.netplusGM\n"
 	"			.postMessage(JSON.stringify(payload))\n"
 	"			.then(function (text) {\n"
@@ -131,7 +132,9 @@ static const char* kGMPreludeSource =
 	"					{ key: String(key), value: String(value) });\n"
 	"			},\n"
 	"			xmlHttpRequest: function (params) {\n"
-	"				return post(ext, 'xmlHttpRequest', params || {});\n"
+	"				params = params || {};\n"
+	"				return post(ext, 'xmlHttpRequest', { url: params.url,\n"
+	"					httpMethod: params.method, data: params.data });\n"
 	"			},\n"
 	"			addStyle: addStyle\n"
 	"		};\n"
@@ -450,6 +453,7 @@ struct BWebView::WebViewImpl {
 			prelude.id = "__gm";
 			prelude.source = kGMPreludeSource;
 			prelude.atDocumentStart = true;
+			prelude.isolated = true;
 			scripts.insert(scripts.begin(), prelude);
 		}
 		std::vector<WebExtensionStyle> styles

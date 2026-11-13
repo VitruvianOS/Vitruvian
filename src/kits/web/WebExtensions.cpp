@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -383,7 +384,8 @@ _ReadFile(const fs::path& path)
 }
 
 
-// Userscript metadata header: // ==UserScript== ... // ==End==.
+// Userscript metadata header: // ==UserScript== ... // ==/UserScript==
+// (// ==End== also closes it).
 static void
 _ParseUserScriptHeader(const std::string& source,
 	WebExtensionRecord* extension)
@@ -397,11 +399,12 @@ _ParseUserScriptHeader(const std::string& source,
 				inHeader = true;
 			continue;
 		}
-		if (line.find("// ==End==") == 0)
+		if (line.find("// ==/UserScript==") == 0
+			|| line.find("// ==End==") == 0)
 			break;
 		if (line.find("// @") != 0)
 			continue;
-		std::string rest = line.substr(3);
+		std::string rest = line.substr(4);
 		size_t space = rest.find_first_of(" \t");
 		if (space == std::string::npos)
 			continue;
@@ -909,11 +912,45 @@ _GMValuesPath(const std::string& userRoot, const std::string& id)
 }
 
 
+/*!	An extension id is used as a directory name under the user root: only
+	letters, digits, '.', '_' and '-', and not "." or "..", so that no id
+	reaches outside it.
+*/
+static bool
+_IsSafeExtensionID(const char* id)
+{
+	if (id == NULL || id[0] == '\0' || strcmp(id, ".") == 0
+		|| strcmp(id, "..") == 0)
+		return false;
+	for (const char* c = id; *c != '\0'; c++) {
+		if (!isalnum((unsigned char)*c) && *c != '.' && *c != '_'
+			&& *c != '-')
+			return false;
+	}
+	return true;
+}
+
+
+bool
+BWebExtensions::AllowsGM(const char* id) const
+{
+	if (!_IsSafeExtensionID(id))
+		return false;
+	std::lock_guard<std::mutex> lock(fMutex);
+	for (const auto& extension : fExtensions) {
+		if (extension.info.id == id)
+			return extension.info.kind == "userscript"
+				&& extension.usesGM && extension.info.enabled;
+	}
+	return false;
+}
+
+
 bool
 BWebExtensions::GetValue(const char* id, const char* key,
 	std::string* into) const
 {
-	if (id == NULL || key == NULL || into == NULL)
+	if (!_IsSafeExtensionID(id) || key == NULL || into == NULL)
 		return false;
 	std::string userRoot;
 	{
@@ -943,7 +980,7 @@ status_t
 BWebExtensions::SetValue(const char* id, const char* key,
 	const char* value)
 {
-	if (id == NULL || key == NULL || value == NULL)
+	if (!_IsSafeExtensionID(id) || key == NULL || value == NULL)
 		return B_BAD_VALUE;
 	std::string userRoot;
 	{
@@ -997,9 +1034,11 @@ BWebExtensions::ScriptsForURL(const char* url) const
 		script.id = extension.info.id;
 		script.source = extension.source;
 		script.atDocumentStart = extension.atDocumentStart;
+		script.isolated = extension.usesGM;
 		if (extension.usesGM) {
-			// Scripts share the page world; the wrapper binds the
-			// GM object to this extension's id.
+			// GM scripts run in the userscript world with the GM
+			// prelude; the wrapper binds the GM object to this
+			// extension's id.
 			script.source = "if (window.__netplusGM) (function (GM) {"
 				+ extension.source
 				+ "\n})(window.__netplusGM.wrap(\""

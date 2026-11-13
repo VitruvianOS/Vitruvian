@@ -23,10 +23,16 @@
 #include <Url.h>
 #include <UrlProtocolRoster.h>
 #include <UrlRequest.h>
+#include <HttpRequest.h>
 #include <HttpResult.h>
 #include <wpe/webkit.h>
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
+
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -34,6 +40,12 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+
+// The script world GM userscripts and their prelude run in. It shares the
+// page's DOM but not its JavaScript globals, so pages cannot reach what is
+// registered for it (the netplusGM message handler).
+static const char* const kUserscriptWorld = "netplus-userscripts";
 
 
 // Completes the binding type before the destructor tears the
@@ -199,10 +211,13 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	{
 		WebKitUserContentManager* ucm
 			= webkit_web_view_get_user_content_manager(webView);
-		// GM.* calls answer synchronously through the reply API.
+		// GM.* calls answer synchronously through the reply API. The
+		// handler belongs to the userscript world only: registered for
+		// the page world (nullptr), any site's own scripts could call it
+		// and read local files and intranet pages through it.
 		webkit_user_content_manager_register_script_message_handler_with_reply(
-			ucm, "netplusGM", nullptr);
-		g_signal_connect(ucm, "script-message-received-with-reply::netplusGM",
+			ucm, "netplusGM", kUserscriptWorld);
+		g_signal_connect(ucm, "script-message-with-reply-received::netplusGM",
 			G_CALLBACK(_OnGMMessage), this);
 	}
 
@@ -1087,13 +1102,17 @@ WebKitBridge::_ApplyPageExtensions(
 			fPageScripts.erase(it);
 			continue;
 		}
-		WebKitUserScript* userScript = webkit_user_script_new(
-			script.source.c_str(),
-			WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-			script.atDocumentStart
-				? WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START
-				: WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
-			nullptr, nullptr);
+		WebKitUserScriptInjectionTime when = script.atDocumentStart
+			? WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START
+			: WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END;
+		// GM scripts run in their own world, the only one that can reach
+		// netplusGM; the rest share the page world as before.
+		WebKitUserScript* userScript = script.isolated
+			? webkit_user_script_new_for_world(script.source.c_str(),
+				WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, when, kUserscriptWorld,
+				nullptr, nullptr)
+			: webkit_user_script_new(script.source.c_str(),
+				WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, when, nullptr, nullptr);
 		webkit_user_content_manager_add_script(ucm, userScript);
 		newScripts[key] = userScript;
 	}
@@ -1295,11 +1314,84 @@ _GMJsonString(const std::string& body, const char* key, size_t from = 0)
 }
 
 
+/*!	Whether an address is one a page must not reach through the GM bridge:
+	loopback, unspecified, private, carrier-grade NAT, link-local, unique
+	local or multicast. These are the user's own machine and network.
+*/
+static bool
+_GMIsLocalAddress(const struct sockaddr* address)
+{
+	if (address->sa_family == AF_INET) {
+		uint32_t a = ntohl(((const struct sockaddr_in*)address)
+			->sin_addr.s_addr);
+		return (a >> 24) == 0 || (a >> 24) == 10 || (a >> 24) == 127
+			|| (a >> 20) == (172 << 4 | 1) /* 172.16.0.0/12 */
+			|| (a >> 16) == (192 << 8 | 168)
+			|| (a >> 16) == (169 << 8 | 254)
+			|| (a >> 22) == (100 << 2 | 1) /* 100.64.0.0/10 */
+			|| (a >> 28) >= 0xe; /* multicast, reserved */
+	}
+	if (address->sa_family == AF_INET6) {
+		const struct in6_addr& a
+			= ((const struct sockaddr_in6*)address)->sin6_addr;
+		if (IN6_IS_ADDR_V4MAPPED(&a)) {
+			struct sockaddr_in v4 = {};
+			v4.sin_family = AF_INET;
+			memcpy(&v4.sin_addr, &a.s6_addr[12], 4);
+			return _GMIsLocalAddress((const struct sockaddr*)&v4);
+		}
+		return IN6_IS_ADDR_LOOPBACK(&a) || IN6_IS_ADDR_UNSPECIFIED(&a)
+			|| IN6_IS_ADDR_LINKLOCAL(&a) || IN6_IS_ADDR_SITELOCAL(&a)
+			|| IN6_IS_ADDR_MULTICAST(&a)
+			|| (a.s6_addr[0] & 0xfe) == 0xfc; /* fc00::/7 */
+	}
+	return true;
+}
+
+
+/*!	The GM fetch only goes to the public web: http and https, to a host
+	that resolves to no local address. Returns an error for the reply, or
+	an empty string when the URL may be fetched. A name that resolves to a
+	public address now and a local one later (DNS rebinding) is not
+	covered; redirects are not followed for the same reason.
+*/
+static std::string
+_GMCheckFetchTarget(const BUrl& url)
+{
+	BString scheme = url.Protocol();
+	scheme.ToLower();
+	if (scheme != "http" && scheme != "https")
+		return "scheme not allowed";
+	BString host = url.Host();
+	if (host.IsEmpty())
+		return "no host";
+
+	struct addrinfo hints = {};
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	struct addrinfo* addresses = NULL;
+	if (getaddrinfo(host.String(), NULL, &hints, &addresses) != 0
+		|| addresses == NULL)
+		return "host not found";
+	bool local = false;
+	for (struct addrinfo* entry = addresses; entry != NULL;
+			entry = entry->ai_next) {
+		if (_GMIsLocalAddress(entry->ai_addr)) {
+			local = true;
+			break;
+		}
+	}
+	freeaddrinfo(addresses);
+	return local ? "local address not allowed" : "";
+}
+
+
 static std::string
 _GMPerformFetch(const std::string& body)
 {
 	std::string url = _GMJsonString(body, "url");
-	std::string method = _GMJsonString(body, "method");
+	// "method" names the GM call itself; the HTTP verb has its own key.
+	std::string method = _GMJsonString(body, "httpMethod");
 	std::string data = _GMJsonString(body, "data");
 	if (url.empty())
 		return "{\"ok\":false,\"error\":\"no url\"}";
@@ -1311,11 +1403,17 @@ _GMPerformFetch(const std::string& body)
 	BMallocIO output;
 	BUrl requestUrl;
 	requestUrl.SetUrlString(BString(url.c_str()), true);
+	std::string refused = _GMCheckFetchTarget(requestUrl);
+	if (!refused.empty())
+		return "{\"ok\":false,\"error\":\"" + refused + "\"}";
 	_GMFetchListener listener;
 	BUrlRequest* request = BUrlProtocolRoster::MakeRequest(requestUrl,
 		&output, &listener);
 	if (request == NULL)
 		return "{\"ok\":false,\"error\":\"unsupported url\"}";
+	// A redirect could lead to a local address the check above refused.
+	if (BHttpRequest* http = dynamic_cast<BHttpRequest*>(request))
+		http->SetFollowLocation(false);
 
 	if (request->Run() < B_OK) {
 		delete request;
@@ -1351,11 +1449,13 @@ WebKitBridge::_HandleGMCall(const std::string& body)
 	if (method.empty())
 		return "{\"ok\":false,\"error\":\"no method\"}";
 
+	// Only an installed, enabled GM userscript may use the bridge, and
+	// only under its own id (which also names its storage directory).
+	if (fGMExtensions == NULL || !fGMExtensions->AllowsGM(ext.c_str()))
+		return "{\"ok\":false,\"error\":\"not allowed\"}";
+
 	if (method == "xmlHttpRequest")
 		return _GMPerformFetch(body);
-
-	if (fGMExtensions == NULL)
-		return "{\"ok\":false,\"error\":\"no storage\"}";
 	if (method == "getValue") {
 		std::string key = _GMJsonString(body, "key");
 		std::string value;
@@ -1373,9 +1473,9 @@ WebKitBridge::_HandleGMCall(const std::string& body)
 }
 
 
-void
-WebKitBridge::_OnGMMessage(WebKitUserContentManager*,
-	WebKitScriptMessageReply* reply, JSCValue* value, gpointer data)
+gboolean
+WebKitBridge::_OnGMMessage(WebKitUserContentManager*, JSCValue* value,
+	WebKitScriptMessageReply* reply, gpointer data)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
 	gchar* text = jsc_value_to_string(value);
@@ -1387,6 +1487,7 @@ WebKitBridge::_OnGMMessage(WebKitUserContentManager*,
 	JSCValue* result = jsc_value_new_string(context, response.c_str());
 	webkit_script_message_reply_return_value(reply, result);
 	g_object_unref(result);
+	return TRUE;
 }
 
 

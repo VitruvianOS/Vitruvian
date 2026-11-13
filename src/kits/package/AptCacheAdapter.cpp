@@ -17,6 +17,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <vector>
+
 #include <apt-pkg/cachefile.h>
 #include <apt-pkg/debversion.h>
 #include <apt-pkg/depcache.h>
@@ -258,29 +261,25 @@ format_provides(pkgCache::VerIterator ver, BString* provides)
 }
 
 
-// Must mirror AptBackend::_ResolveChannel()'s substring rules exactly.
+// Our repo is recognised by its Release Origin; the suite then names
+// the channel: <base>-nightly, or the bare base for a release.
 static v_package_channel
 resolve_channel(pkgCache::VerIterator ver)
 {
 	if (ver.end())
 		return V_CHANNEL_UNKNOWN;
 
-	bool sawTrixie = false;
+	v_package_channel channel = V_CHANNEL_DEBIAN;
 	for (pkgCache::VerFileIterator vf = ver.FileList(); !vf.end(); ++vf) {
-		const char* codename = vf.File().Codename();
-		if (codename == NULL)
+		pkgCache::PkgFileIterator file = vf.File();
+		if (file.Origin() == NULL || strcmp(file.Origin(), "Vitruvian OS") != 0)
 			continue;
-		BString name(codename);
-		if (name.FindFirst("trixie-nightly") >= 0)
+		BString suite(file.Archive() != NULL ? file.Archive() : "");
+		if (suite.EndsWith("-nightly"))
 			return V_CHANNEL_NIGHTLY;
-		if (name.FindFirst("trixie-testing") >= 0)
-			return V_CHANNEL_TESTING;
-		if (name.FindFirst("trixie") >= 0)
-			sawTrixie = true;
+		channel = V_CHANNEL_STABLE;
 	}
-	if (sawTrixie)
-		return V_CHANNEL_STABLE;
-	return V_CHANNEL_DEBIAN;
+	return channel;
 }
 
 
@@ -298,9 +297,11 @@ AptCacheAdapter::GetPackageList(BObjectList<apt_raw_package, true>* packages)
 	pkgDepCache* depCache = fCache->DepCache();
 	pkgRecords* records = fCache->Records();
 
+	typedef std::pair<pkgCache::VerFileIterator, apt_raw_package*>
+		summary_lookup;
+	std::vector<summary_lookup> pending;
+
 	for (pkgCache::PkgIterator pkg = cache->PkgBegin(); !pkg.end(); ++pkg) {
-		// Checked per row: the record lookup below is what drags on
-		// large lists, and nothing else inside it can be interrupted.
 		if (fCancelFlag != NULL && *fCancelFlag)
 			return B_INTERRUPTED;
 
@@ -333,13 +334,26 @@ AptCacheAdapter::GetPackageList(BObjectList<apt_raw_package, true>* packages)
 			raw->channel = resolve_channel(best);
 
 			pkgCache::VerFileIterator vf = best.FileList();
-			if (!vf.end()) {
-				pkgRecords::Parser& parser = records->Lookup(vf);
-				raw->summary = parser.ShortDesc("").c_str();
-			}
+			if (!vf.end())
+				pending.push_back(summary_lookup(vf, raw));
 		}
 
 		packages->AddItem(raw);
+	}
+
+	// Lists may be kept compressed, where every backward jump restarts
+	// decompression: look summaries up in file order, not package order.
+	std::sort(pending.begin(), pending.end(),
+		[](const summary_lookup& a, const summary_lookup& b) {
+			if (a.first->File != b.first->File)
+				return a.first->File < b.first->File;
+			return a.first->Offset < b.first->Offset;
+		});
+	for (size_t i = 0; i < pending.size(); i++) {
+		if (fCancelFlag != NULL && *fCancelFlag)
+			return B_INTERRUPTED;
+		pkgRecords::Parser& parser = records->Lookup(pending[i].first);
+		pending[i].second->summary = parser.ShortDesc("").c_str();
 	}
 
 	return B_OK;

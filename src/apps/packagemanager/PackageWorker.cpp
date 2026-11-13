@@ -29,7 +29,9 @@ static void
 assign_category(PackageInfo* info)
 {
 	const BString& name = info->Name();
-	if (name == "vos" || name == "nexus-dkms" || name.StartsWith("vos-")) {
+	if (name == "vos" || name == "nexus-dkms" || name.StartsWith("vos-")
+		|| info->Channel() == kChannelStable
+		|| info->Channel() == kChannelNightly) {
 		info->SetCategory("Vitruvian");
 		return;
 	}

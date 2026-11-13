@@ -262,8 +262,8 @@ private:
 						WebKitPolicyDecisionType, gpointer);
 	static void		_OnResourceLoadFailed(WebKitWebView*, WebKitWebResource*,
 						GError*, gpointer);
-	static void		_OnGMMessage(WebKitUserContentManager*,
-						WebKitScriptMessageReply*, JSCValue*, gpointer);
+	static gboolean	_OnGMMessage(WebKitUserContentManager*, JSCValue*,
+						WebKitScriptMessageReply*, gpointer);
 	static gboolean	_OnScriptDialog(WebKitWebView*, WebKitScriptDialog*,
 						gpointer);
 	static gboolean	_OnPermissionRequest(WebKitWebView*,

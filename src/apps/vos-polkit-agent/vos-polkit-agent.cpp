@@ -10,7 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <syslog.h>
 #include <time.h>
@@ -65,6 +67,7 @@ static const char* kAuthorityPath   = "/org/freedesktop/PolicyKit1/Authority";
 static const char* kAuthorityIface  = "org.freedesktop.PolicyKit1.Authority";
 
 static const char* kHelperPath = "/usr/lib/polkit-1/polkit-agent-helper-1";
+static const char* kHelperSocket = "/run/polkit/agent-helper.socket";
 static const char* kGrantHelperPath = "/usr/libexec/vos-polkit-grant-helper";
 static const char* kGrantStateDir = "/run/vos/polkit-grant";
 static const char* kLockWatchPortName = "vos-polkit-agent:session-lock";
@@ -518,34 +521,74 @@ AuthDialog::_Send(bool ok)
 
 // ---- polkit-agent-helper-1 driver -----------------------------------------
 
+// Newer polkit drops the helper's setuid bit and runs it per connection
+// on this socket instead; the line protocol is the same once the user
+// and cookie have been sent.
+static int
+connect_helper_socket(const char* user, const char* cookie)
+{
+	int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (fd < 0)
+		return -1;
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strlcpy(addr.sun_path, kHelperSocket, sizeof(addr.sun_path));
+	if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+		close(fd);
+		return -1;
+	}
+	BString hello;
+	hello << user << "\n" << cookie << "\n";
+	if (write(fd, hello.String(), hello.Length()) != (ssize_t)hello.Length()) {
+		close(fd);
+		return -1;
+	}
+	return fd;
+}
+
+
 static bool
 run_helper(const char* user, const char* cookie, const char* password)
 {
-	int inp[2], outp[2];
-	if (pipe(inp) != 0 || pipe(outp) != 0)
-		return false;
+	pid_t pid = -1;
+	FILE* rd;
+	FILE* wr;
 
-	pid_t pid = fork();
-	if (pid < 0)
-		return false;
+	int sock = connect_helper_socket(user, cookie);
+	if (sock >= 0) {
+		rd = fdopen(sock, "r");
+		wr = fdopen(dup(sock), "w");
+	} else {
+		int inp[2], outp[2];
+		if (pipe(inp) != 0 || pipe(outp) != 0)
+			return false;
 
-	if (pid == 0) {
-		dup2(inp[0],  STDIN_FILENO);
-		dup2(outp[1], STDOUT_FILENO);
-		close(inp[0]);  close(inp[1]);
-		close(outp[0]); close(outp[1]);
-		execl(kHelperPath, "polkit-agent-helper-1", user, cookie, NULL);
-		_exit(127);
+		pid = fork();
+		if (pid < 0)
+			return false;
+
+		if (pid == 0) {
+			dup2(inp[0],  STDIN_FILENO);
+			dup2(outp[1], STDOUT_FILENO);
+			close(inp[0]);  close(inp[1]);
+			close(outp[0]); close(outp[1]);
+			execl(kHelperPath, "polkit-agent-helper-1", user, cookie, NULL);
+			_exit(127);
+		}
+
+		close(inp[0]);
+		close(outp[1]);
+		rd = fdopen(outp[0], "r");
+		wr = fdopen(inp[1],  "w");
 	}
-
-	close(inp[0]);
-	close(outp[1]);
-
-	FILE* rd = fdopen(outp[0], "r");
-	FILE* wr = fdopen(inp[1],  "w");
 	if (rd == NULL || wr == NULL) {
-		close(outp[0]); close(inp[1]);
-		waitpid(pid, NULL, 0);
+		if (rd != NULL)
+			fclose(rd);
+		if (wr != NULL)
+			fclose(wr);
+		if (pid > 0)
+			waitpid(pid, NULL, 0);
 		return false;
 	}
 
@@ -586,6 +629,8 @@ run_helper(const char* user, const char* cookie, const char* password)
 	fclose(rd);
 	fclose(wr);
 
+	if (pid < 0)
+		return success;
 	int status;
 	waitpid(pid, &status, 0);
 	return success && WIFEXITED(status) && WEXITSTATUS(status) == 0;

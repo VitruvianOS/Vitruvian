@@ -22,6 +22,8 @@
 #include <TextView.h>
 #include <Window.h>
 
+#include <sys/stat.h>
+
 #include "PackageInfo.h"
 
 
@@ -377,8 +379,8 @@ PackageInfoView::_BuildContentsTree(const BMessage* details)
 		ContentsItem::kRoot, this);
 	ContentsItem* metaRoot = new ContentsItem(B_TRANSLATE("metadata"),
 		ContentsItem::kRoot, this);
-	fContentsView->AddItem(dataRoot);
 	fContentsView->AddItem(metaRoot);
+	fContentsView->AddItem(dataRoot);
 
 	_AddMetaRow(metaRoot, B_TRANSLATE("Name"), fPackage->Name());
 	_AddMetaRow(metaRoot, B_TRANSLATE("Installed version"),
@@ -415,7 +417,8 @@ PackageInfoView::_BuildContentsTree(const BMessage* details)
 		for (int32 i = 0; i < count; i++) {
 			const char* path = NULL;
 			if (details->FindString("path", i, &path) == B_OK
-					&& path[0] == '/' && path[1] != '\0')
+					&& path[0] == '/' && path[1] != '\0'
+					&& strcmp(path, "/.") != 0)
 				paths.AddItem(new BString(path));
 		}
 	}
@@ -433,9 +436,12 @@ PackageInfoView::_BuildContentsTree(const BMessage* details)
 			parent = _EnsureDir(dirs, BString(path.String(), lastSlash),
 				dataRoot);
 
-		// The path itself may already exist as a directory entry.
-		if (dirs.ContainsKey(HashString(path.String())))
+		// dpkg -L lists directories too, ahead of their entries.
+		struct stat st;
+		if (lstat(path.String(), &st) == 0 && S_ISDIR(st.st_mode)) {
+			_EnsureDir(dirs, path, dataRoot);
 			continue;
+		}
 
 		fContentsView->AddUnder(new ContentsItem(
 			path.String() + lastSlash + 1, ContentsItem::kFile, this, path),

@@ -1278,10 +1278,13 @@ _partlib_resize() {
             ;;
         ext4:1)
             _partlib_table_resize "$_disk" "$_partno" "$_new_size_mib" || return 1
-            _err="$(_partlib_e2fsck_check "$_target")"
-            if [ $? -ge 4 ]; then
-                log "resize: e2fsck pre-grow failed on $_target: $_err"
-                return 1
+            # e2fsck refuses a mounted filesystem; the online grow needs none.
+            if [ -z "$_mnt" ]; then
+                _err="$(_partlib_e2fsck_check "$_target")"
+                if [ $? -ge 4 ]; then
+                    log "resize: e2fsck pre-grow failed on $_target: $_err"
+                    return 1
+                fi
             fi
             _err="$(resize2fs "$_target" 2>&1 >/dev/null)"
             if [ $? -ne 0 ]; then

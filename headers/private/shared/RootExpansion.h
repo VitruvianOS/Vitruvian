@@ -37,6 +37,10 @@ root_expansion_bytes(BString* reason = NULL)
 		return 0;
 	}
 
+	// Free space comes from the delegates.
+	if (device.PrepareModifications() != B_OK)
+		return 0;
+
 	BDiskSystem diskSystem;
 	bool whileMounted = false;
 	if (partition->GetDiskSystem(&diskSystem) != B_OK

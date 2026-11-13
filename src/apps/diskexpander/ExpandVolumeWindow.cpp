@@ -177,6 +177,14 @@ _ProbeRootPartition(ProbeResult& result)
 
 	result.currentSize = partition->Size();
 
+	// Capabilities and free space come from the delegates.
+	if (device->PrepareModifications() != B_OK) {
+		result.error = B_TRANSLATE("The disk did not report its free "
+			"space layout.");
+		delete device;
+		return;
+	}
+
 	bool canResizeContents = false;
 	if (!partition->CanResize(&canResizeContents,
 			&result.canResizeWhileMounted)

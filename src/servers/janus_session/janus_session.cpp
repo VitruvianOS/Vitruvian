@@ -669,7 +669,7 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 				setenv("JANUS_DRM_FD", buf, 1);
 			}
 
-			// The other cards with a monitor, as "fd:card,fd:card".
+			// The other cards with connectors, as "fd:card,fd:card".
 			char extras[128];
 			extras[0] = '\0';
 			for (int i = 0; i < sDrmExtraCount; i++) {

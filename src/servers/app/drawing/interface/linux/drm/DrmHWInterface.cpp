@@ -467,7 +467,7 @@ DrmHWInterface::_OnSessionEnable()
 		fFd = atoi(janusDrmFdStr);
 		fDeviceId = 0;
 
-		// "fd:card,fd:card": the other cards with a monitor.
+		// "fd:card,fd:card": the other cards with connectors.
 		const char* list = getenv("JANUS_DRM_FDS");
 		while (list != NULL && list[0] != '\0'
 				&& extraCount < DRM_MAX_EXTRA_CARDS) {
@@ -950,7 +950,7 @@ DrmHWInterface::_CardIndexForSlot(int slot) const
 }
 
 
-/*!	Takes over the cards beside the first one that have a monitor: their fds
+/*!	Takes over the cards beside the first one that have connectors: their fds
 	come with the session, from janus or from libseat. Each gets its own
 	list of connectors.
 */

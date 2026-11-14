@@ -172,8 +172,8 @@ drm_card_display_rank(bool connected, bool hasConnectors, bool hasInternal,
 }
 
 
-// A card beside the chosen one that has a monitor connected; its outputs
-// join the desktop.
+// A card beside the chosen one with connectors, monitor or not; its outputs
+// join the desktop, now or when one is plugged in.
 struct drm_extra_card {
 	int deviceId;
 	int fd;
@@ -184,7 +184,7 @@ struct drm_extra_card {
 
 
 // Open every /dev/dri/cardN on seat, keep the one that drives a display and close the rest.
-// With extras, the other cards that have a connected monitor stay open too.
+// With extras, the other cards that have connectors stay open too.
 // Returns false if nothing opened, leaving the out-params as -1/NULL.
 static inline bool
 drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
@@ -261,7 +261,7 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 		if (j == pick)
 			continue;
 
-		if (extras != NULL && extraCount != NULL && connected[j]
+		if (extras != NULL && extraCount != NULL && hasConnectors[j]
 				&& *extraCount < DRM_MAX_EXTRA_CARDS) {
 			fprintf(stderr, "drm: outputs on card%d join those of card%d\n",
 				indexes[j], indexes[pick]);

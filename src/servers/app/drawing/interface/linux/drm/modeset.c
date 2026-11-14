@@ -234,6 +234,9 @@ int modeset_prepare(int fd)
 	struct modeset_dev *dev;
 	int ret;
 
+	/* a card without a monitor still gets its list */
+	list_for(fd);
+
 	/* retrieve resources */
 	res = drmModeGetResources(fd);
 	if (!res) {

@@ -338,7 +338,7 @@ BootPromptWindow::BootPromptWindow()
 	ResizeToPreferred();
 
 	_UpdateStrings();
-	CenterOnScreen();
+	CenterOnScreen(B_MAIN_SCREEN_ID);
 	Show();
 }
 

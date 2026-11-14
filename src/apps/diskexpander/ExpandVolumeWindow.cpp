@@ -430,7 +430,7 @@ ExpandVolumeWindow::ExpandVolumeWindow(bool onlyIfExpandable)
 	fApplyStartedAt(0)
 {
 	_BuildControls();
-	CenterOnScreen();
+	CenterOnScreen(B_MAIN_SCREEN_ID);
 	// Stays hidden until the probe finds something to claim.
 	if (fOnlyIfExpandable)
 		Run();

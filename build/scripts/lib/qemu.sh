@@ -74,7 +74,7 @@ run_qemu() {
     if [ "${VOS_QEMU_VGA:-virtio}" = "std" ]; then
         _vga_args="-vga std"
     else
-        _vga_args="-vga none -device virtio-vga,xres=1280,yres=800,edid=on"
+        _vga_args="-vga none -device virtio-vga,xres=1280,yres=800,edid=on,max_outputs=3"
     fi
 
     _logfile="$_basedir/vitruvian-console.log"

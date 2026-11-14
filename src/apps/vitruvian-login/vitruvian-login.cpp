@@ -130,7 +130,7 @@ LoginWindow::LoginWindow(bool unlockMode)
 	else if (fUser != NULL)
 		fUser->MakeFocus(true);
 
-	BScreen screen(this);
+	BScreen screen(B_MAIN_SCREEN_ID);
 	BRect scr = screen.Frame();
 	MoveTo(scr.left + (scr.Width()  - Bounds().Width())  / 2,
 	       scr.top  + (scr.Height() - Bounds().Height()) / 2);

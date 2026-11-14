@@ -2201,8 +2201,8 @@ mode_refresh(const display_mode& mode)
 }
 
 
-/*!	Mirroring puts every screen at the origin, at the largest resolution all
-	of them have; switching it off puts them next to each other again.
+/*!	Mirroring puts every screen at the origin, at a resolution all of them
+	have; switching it off puts them next to each other again.
 */
 status_t
 ScreenWindow::_SetMirrored(bool mirrored)
@@ -2237,14 +2237,29 @@ ScreenWindow::_SetMirrored(bool mirrored)
 				break;
 		}
 
-		// The biggest resolution of the first screen the others have too.
+		// The biggest resolution of the first screen the others have too,
+		// no bigger than the smallest screen is now.
+		float limit = 0;
+		for (int32 i = 0; i < count; i++) {
+			const float area = (frames[i].Width() + 1)
+				* (frames[i].Height() + 1);
+			if (limit == 0 || area < limit)
+				limit = area;
+		}
+
 		int32 bestWidth = 0;
 		int32 bestHeight = 0;
 		if (status == B_OK) {
 			for (uint32 i = 0; i < counts[0]; i++) {
 				const int32 width = lists[0][i].virtual_width;
 				const int32 height = lists[0][i].virtual_height;
-				if (width * height <= bestWidth * bestHeight)
+				const bool fits = (float)width * height <= limit;
+				const bool bestFits
+					= (float)bestWidth * bestHeight <= limit;
+				// One that fits beats one that doesn't; else the bigger.
+				if (bestWidth != 0 && (fits != bestFits ? !fits
+						: (fits ? width * height <= bestWidth * bestHeight
+							: width * height >= bestWidth * bestHeight)))
 					continue;
 
 				bool common = true;

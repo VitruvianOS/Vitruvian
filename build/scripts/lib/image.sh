@@ -226,6 +226,8 @@ cp /usr/share/vos/grub/grub /etc/default/grub
 
 mkdir -p /boot/grub
 update-grub
+# Probed from the build host's root; unused at boot.
+rm -f /boot/grub/grub.cfg
 
 cat > /etc/fstab <<FSTABEOF
 UUID=$_root_uuid /            ext4   defaults,relatime,errors=remount-ro  0 1

@@ -1460,6 +1460,8 @@ DrmHWInterface::ListOutputs(std::vector<OutputInfo>& outputs)
 				// Distinct across the cards: ids follow it.
 				info.index = slot * 32 + i;
 				info.first = first;
+				info.connected = conn->connection == DRM_MODE_CONNECTED
+					&& conn->count_modes > 0;
 				_ConnectorNameFor(info.connector, info.name);
 
 				fDirtyMutex.Lock();

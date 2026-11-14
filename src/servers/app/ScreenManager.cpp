@@ -357,7 +357,7 @@ ScreenManager::SetOutputEnabled(const char* name, bool enabled)
 		for (size_t i = 0; i < list.size(); i++) {
 			if (list[i].name == name)
 				known = !list[i].disabled;
-			else if (!list[i].disabled)
+			else if (!list[i].disabled && list[i].connected)
 				others++;
 		}
 		if (known && others == 0)
@@ -413,9 +413,22 @@ ScreenManager::_SyncOutputs()
 
 	std::vector<DrmHWInterface::OutputInfo> outputs;
 	fDrmInterface->ListOutputs(outputs);
+
+	// Switched off outputs come back while no other monitor is there.
+	bool anyOn = false;
 	for (size_t i = 0; i < outputs.size(); i++) {
 		bool disabled = false;
 		for (int32 j = 0; j < fDisabledOutputs.CountItems(); j++) {
+			if (*fDisabledOutputs.ItemAt(j) == outputs[i].name)
+				disabled = true;
+		}
+		if (outputs[i].connected && !disabled)
+			anyOn = true;
+	}
+
+	for (size_t i = 0; i < outputs.size(); i++) {
+		bool disabled = false;
+		for (int32 j = 0; anyOn && j < fDisabledOutputs.CountItems(); j++) {
 			if (*fDisabledOutputs.ItemAt(j) == outputs[i].name)
 				disabled = true;
 		}

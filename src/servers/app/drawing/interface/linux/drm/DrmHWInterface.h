@@ -316,6 +316,7 @@ public:
 				BString	name;
 				bool	disabled;
 				bool	first;
+				bool	connected;
 			};
 			void				ListOutputs(std::vector<OutputInfo>& outputs);
 			// A disabled output gets no screen and its CRTC is off. The

@@ -374,6 +374,10 @@ private:
 			bool				_HandleUnmappedKeyDown(BMessage* event);
 			void				_KeyboardNavigation();
 
+			void				_CenterIn(const BRect& rect,
+									const BRect& screenFrame);
+			void				_MoveOnScreen(uint32 flags,
+									const BRect& screenFrame);
 			void				_GetDecoratorSize(float* _borderWidth,
 									float* _tabHeight) const;
 			void				_SendShowOrHideMessage();

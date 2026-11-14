@@ -2607,6 +2607,13 @@ BWindow::ResizeToPreferred()
 void
 BWindow::CenterIn(const BRect& rect)
 {
+	_CenterIn(rect, BScreen(this).Frame());
+}
+
+
+void
+BWindow::_CenterIn(const BRect& rect, const BRect& screenFrame)
+{
 	BAutolock locker(this);
 
 	// Set size limits now if needed
@@ -2615,7 +2622,8 @@ BWindow::CenterIn(const BRect& rect)
 	MoveTo(BLayoutUtils::AlignInFrame(rect, Size(),
 		BAlignment(B_ALIGN_HORIZONTAL_CENTER,
 			B_ALIGN_VERTICAL_CENTER)).LeftTop());
-	MoveOnScreen(B_DO_NOT_RESIZE_TO_FIT | B_MOVE_IF_PARTIALLY_OFFSCREEN);
+	_MoveOnScreen(B_DO_NOT_RESIZE_TO_FIT | B_MOVE_IF_PARTIALLY_OFFSCREEN,
+		screenFrame);
 }
 
 
@@ -2630,17 +2638,34 @@ BWindow::CenterOnScreen()
 void
 BWindow::CenterOnScreen(screen_id id)
 {
-	CenterIn(BScreen(id).Frame());
+	const BRect frame = BScreen(id).Frame();
+	_CenterIn(frame, frame);
 }
 
 
 void
 BWindow::MoveOnScreen(uint32 flags)
 {
+	// A window not shown yet is on no screen: use the one it lies on.
+	BRect screenFrame = BScreen(this).Frame();
+	const BRect frame = Frame();
+	const int32 screenAt = BPrivate::BPrivateScreen::ScreenAt(
+		BPoint((frame.left + frame.right) / 2, (frame.top + frame.bottom) / 2));
+	if (screenAt >= 0) {
+		screen_id id;
+		id.id = screenAt;
+		screenFrame = BScreen(id).Frame();
+	}
+	_MoveOnScreen(flags, screenFrame);
+}
+
+
+void
+BWindow::_MoveOnScreen(uint32 flags, const BRect& screenFrame)
+{
 	// Set size limits now if needed
 	UpdateSizeLimits();
 
-	BRect screenFrame = BScreen(this).Frame();
 	BRect frame = Frame();
 
 	float borderWidth;
@@ -2667,7 +2692,7 @@ BWindow::MoveOnScreen(uint32 flags)
 			&& !screenFrame.Contains(frame))
 		|| !frame.Intersects(screenFrame)) {
 		// Off and away
-		CenterOnScreen();
+		_CenterIn(screenFrame, screenFrame);
 		return;
 	}
 

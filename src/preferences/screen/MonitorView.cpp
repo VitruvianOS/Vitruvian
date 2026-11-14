@@ -31,7 +31,8 @@ MonitorView::MonitorView(BRect rect, const char *name, int32 width, int32 height
 	fMaxHeight(1200),
 	fWidth(width),
 	fHeight(height),
-	fDPI(0)
+	fDPI(0),
+	fScreenID(B_MAIN_SCREEN_ID.id)
 {
 	BScreen screen(B_MAIN_SCREEN_ID);
 	fDesktopColor = screen.DesktopColor(current_workspace());
@@ -150,6 +151,18 @@ MonitorView::SetMaxResolution(int32 width, int32 height)
 
 
 void
+MonitorView::SetScreen(int32 id)
+{
+	if (fScreenID == id)
+		return;
+
+	fScreenID = id;
+	_UpdateDPI();
+	Invalidate();
+}
+
+
+void
 MonitorView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
@@ -170,7 +183,9 @@ MonitorView::MessageReceived(BMessage* message)
 
 		case UPDATE_DESKTOP_COLOR_MSG:
 		{
-			BScreen screen(Window());
+			screen_id id;
+			id.id = fScreenID;
+			BScreen screen(id);
 			rgb_color color = screen.DesktopColor(current_workspace());
 			if (color != fDesktopColor) {
 				fDesktopColor = color;
@@ -221,7 +236,9 @@ MonitorView::_UpdateDPI()
 {
 	fDPI = 0;
 
-	BScreen screen(Window());
+	screen_id id;
+	id.id = fScreenID;
+	BScreen screen(id);
 	monitor_info info;
 	if (screen.GetMonitorInfo(&info) != B_OK)
 		return;

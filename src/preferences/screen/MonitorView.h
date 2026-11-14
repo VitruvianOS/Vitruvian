@@ -28,6 +28,7 @@ public:
 
 			void			SetResolution(int32 width, int32 height);
 			void			SetMaxResolution(int32 width, int32 height);
+			void			SetScreen(int32 id);
 
 private:
 			BRect			_MonitorBounds();
@@ -40,6 +41,7 @@ private:
 			int32			fWidth;
 			int32			fHeight;
 			int32			fDPI;
+			int32			fScreenID;
 };
 
 #endif	/* MONITOR_VIEW_H */

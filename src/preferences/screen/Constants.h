@@ -28,10 +28,6 @@ static const uint32 POP_RESOLUTION_MSG = 'pres';
 static const uint32 POP_COLORS_MSG = 'pclr';
 static const uint32 POP_REFRESH_MSG = 'prfr';
 static const uint32 POP_OTHER_REFRESH_MSG = 'porf';
-static const uint32 POP_COMBINE_DISPLAYS_MSG = 'pcdi';
-static const uint32 POP_SWAP_DISPLAYS_MSG = 'psdi';
-static const uint32 POP_USE_LAPTOP_PANEL_MSG = 'pulp';
-static const uint32 POP_TV_STANDARD_MSG = 'ptvs';
 static const uint32 POP_ROTATION_MSG = 'prot';
 static const uint32 POP_REFLECTION_MSG = 'prfl';
 //static const uint32 UPDATE_DESKTOP_COLOR_MSG = 'udsc';
@@ -47,8 +43,12 @@ static const uint32 kMsgWorkspaceLayoutChanged = 'wslc';
 static const uint32 kMsgWorkspaceColumnsChanged = 'wscc';
 static const uint32 kMsgWorkspaceRowsChanged = 'wsrc';
 
-// Output enable/disable per monitor
-static const uint32 POP_OUTPUT_TOGGLE_MSG = 'potg';
+// The monitors
+static const uint32 kMsgUseOutput = 'uout';
+static const uint32 kMsgPrimary = 'prim';
+static const uint32 kMsgMirror = 'mirr';
+static const uint32 kMsgIdentify = 'idnt';
+static const uint32 kMsgPollOutputs = 'poll';
 
 // Color temperature presets
 static const uint32 POP_TEMPERATURE_MSG = 'ptmp';

@@ -14,21 +14,11 @@
 #include <String.h>
 
 
-typedef enum {
-	kCombineDisable,
-	kCombineHorizontally,
-	kCombineVertically
-} combine_mode;
-
 struct screen_mode {
 	int32			width;		// these reflect the corrected width/height,
 	int32			height;		// taking the combine mode into account
 	color_space		space;
 	float			refresh;
-	combine_mode	combine;
-	bool			swap_displays;
-	bool			use_laptop_panel;
-	uint32			tv_standard;
 
 	void SetTo(const display_mode& mode);
 	int32 BitsPerPixel() const;
@@ -42,6 +32,10 @@ class ScreenMode {
 public:
 								ScreenMode(BWindow* window);
 								~ScreenMode();
+
+			// The screen the modes are of; the window's own at first.
+			void				SetScreen(int32 id);
+			int32				ScreenID() const { return fScreenID; }
 
 			status_t			Set(const screen_mode& mode,
 									int32 workspace = ~0);
@@ -85,9 +79,11 @@ public:
 private:
 			bool				_GetDisplayMode(const screen_mode& mode,
 									display_mode& displayMode);
+			void				_LoadModes();
 
 private:
 			BWindow*			fWindow;
+			int32				fScreenID;
 			display_mode*		fModeList;
 			uint32				fModeCount;
 

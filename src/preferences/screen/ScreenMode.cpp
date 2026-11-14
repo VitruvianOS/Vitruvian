@@ -23,21 +23,6 @@
 #include <compute_display_timing.h>
 
 
-/* Note, this headers defines a *private* interface to the Radeon accelerant.
- * It's a solution that works with the current BeOS interface that Haiku
- * adopted.
- * However, it's not a nice and clean solution. Don't use this header in any
- * application if you can avoid it. No other driver is using this, or should
- * be using this.
- * It will be replaced as soon as we introduce an updated accelerant interface
- * which may even happen before R1 hits the streets.
- */
-
-// Radeon multi-monitor tunnel not available; all multimon UI is hidden at runtime.
-#include "multimon.h"
-
-
-
 // Vendors.h is generated using these commands (plus a bit of manual editing):
 /*
  * wget https://uefi.org/uefi-pnp-export -O Vendors.h.tmp
@@ -46,6 +31,15 @@
  * fi
  * rm Vendors.h.tmp
  */
+
+static screen_id
+_screen_id(int32 id)
+{
+	screen_id screen;
+	screen.id = id;
+	return screen;
+}
+
 
 struct pnp_id {
 	const char* id;
@@ -61,22 +55,6 @@ struct pnp_id {
 static const struct pnp_id kPNPIDs[] = {
 #include "Vendors.h"
 };
-
-
-static combine_mode
-get_combine_mode(const display_mode& mode)
-{
-	if ((mode.flags & B_SCROLL) == 0)
-		return kCombineDisable;
-
-	if (mode.virtual_width == mode.timing.h_display * 2)
-		return kCombineHorizontally;
-
-	if (mode.virtual_height == mode.timing.v_display * 2)
-		return kCombineVertically;
-
-	return kCombineDisable;
-}
 
 
 static float
@@ -95,31 +73,12 @@ compare_mode(const void* _mode1, const void* _mode2)
 {
 	display_mode *mode1 = (display_mode *)_mode1;
 	display_mode *mode2 = (display_mode *)_mode2;
-	combine_mode combine1, combine2;
-	uint16 width1, width2, height1, height2;
 
-	combine1 = get_combine_mode(*mode1);
-	combine2 = get_combine_mode(*mode2);
+	if (mode1->virtual_width != mode2->virtual_width)
+		return mode1->virtual_width - mode2->virtual_width;
 
-	width1 = mode1->virtual_width;
-	height1 = mode1->virtual_height;
-	width2 = mode2->virtual_width;
-	height2 = mode2->virtual_height;
-
-	if (combine1 == kCombineHorizontally)
-		width1 /= 2;
-	if (combine1 == kCombineVertically)
-		height1 /= 2;
-	if (combine2 == kCombineHorizontally)
-		width2 /= 2;
-	if (combine2 == kCombineVertically)
-		height2 /= 2;
-
-	if (width1 != width2)
-		return width1 - width2;
-
-	if (height1 != height2)
-		return height1 - height2;
+	if (mode1->virtual_height != mode2->virtual_height)
+		return mode1->virtual_height - mode2->virtual_height;
 
 	return (int)(10 * get_refresh_rate(*mode1)
 		-  10 * get_refresh_rate(*mode2));
@@ -155,11 +114,7 @@ bool
 screen_mode::operator!=(const screen_mode &other) const
 {
 	return width != other.width || height != other.height
-		|| space != other.space || refresh != other.refresh
-		|| combine != other.combine
-		|| swap_displays != other.swap_displays
-		|| use_laptop_panel != other.use_laptop_panel
-		|| tv_standard != other.tv_standard;
+		|| space != other.space || refresh != other.refresh;
 }
 
 
@@ -169,17 +124,7 @@ screen_mode::SetTo(const display_mode& mode)
 	width = mode.virtual_width;
 	height = mode.virtual_height;
 	space = (color_space)mode.space;
-	combine = get_combine_mode(mode);
 	refresh = get_refresh_rate(mode);
-
-	if (combine == kCombineHorizontally)
-		width /= 2;
-	else if (combine == kCombineVertically)
-		height /= 2;
-
-	swap_displays = false;
-	use_laptop_panel = false;
-	tv_standard = 0;
 }
 
 
@@ -189,9 +134,44 @@ screen_mode::SetTo(const display_mode& mode)
 ScreenMode::ScreenMode(BWindow* window)
 	:
 	fWindow(window),
+	fScreenID(B_MAIN_SCREEN_ID.id),
+	fModeList(NULL),
+	fModeCount(0),
 	fUpdatedModes(false)
 {
-	BScreen screen(window);
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(window);
+	if (screen != NULL) {
+		fScreenID = screen->ID();
+		BPrivate::BPrivateScreen::Put(screen);
+	}
+
+	_LoadModes();
+}
+
+
+ScreenMode::~ScreenMode()
+{
+	free(fModeList);
+}
+
+
+void
+ScreenMode::SetScreen(int32 id)
+{
+	fScreenID = id;
+	fUpdatedModes = false;
+	_LoadModes();
+}
+
+
+void
+ScreenMode::_LoadModes()
+{
+	free(fModeList);
+	fModeList = NULL;
+	fModeCount = 0;
+
+	BScreen screen(_screen_id(fScreenID));
 	if (screen.GetModeList(&fModeList, &fModeCount) == B_OK) {
 		// sort modes by resolution and refresh to make
 		// the resolution and refresh menu look nicer
@@ -203,27 +183,16 @@ ScreenMode::ScreenMode(BWindow* window)
 }
 
 
-ScreenMode::~ScreenMode()
-{
-	free(fModeList);
-}
-
-
 status_t
 ScreenMode::Set(const screen_mode& mode, int32 workspace)
 {
 	if (!fUpdatedModes)
 		UpdateOriginalModes();
 
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 
 	if (workspace == ~0)
 		workspace = current_workspace();
-
-	// TODO: our app_server doesn't fully support workspaces, yet
-	SetSwapDisplays(&screen, mode.swap_displays);
-	SetUseLaptopPanel(&screen, mode.use_laptop_panel);
-	SetTVStandard(&screen, mode.tv_standard);
 
 	display_mode displayMode;
 	if (!_GetDisplayMode(mode, displayMode))
@@ -237,7 +206,7 @@ status_t
 ScreenMode::Get(screen_mode& mode, int32 workspace) const
 {
 	display_mode displayMode;
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 
 	if (workspace == ~0)
 		workspace = current_workspace();
@@ -246,14 +215,6 @@ ScreenMode::Get(screen_mode& mode, int32 workspace) const
 		return B_ERROR;
 
 	mode.SetTo(displayMode);
-
-	// TODO: our app_server doesn't fully support workspaces, yet
-	if (GetSwapDisplays(&screen, &mode.swap_displays) != B_OK)
-		mode.swap_displays = false;
-	if (GetUseLaptopPanel(&screen, &mode.use_laptop_panel) != B_OK)
-		mode.use_laptop_panel = false;
-	if (GetTVStandard(&screen, &mode.tv_standard) != B_OK)
-		mode.tv_standard = 0;
 
 	return B_OK;
 }
@@ -280,7 +241,7 @@ ScreenMode::Set(const display_mode& mode, int32 workspace)
 	if (!fUpdatedModes)
 		UpdateOriginalModes();
 
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 
 	if (workspace == ~0)
 		workspace = current_workspace();
@@ -295,7 +256,7 @@ ScreenMode::Set(const display_mode& mode, int32 workspace)
 status_t
 ScreenMode::Get(display_mode& mode, int32 workspace) const
 {
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 
 	if (workspace == ~0)
 		workspace = current_workspace();
@@ -319,14 +280,7 @@ ScreenMode::Revert()
 		if (Get(current, workspace) == B_OK && fOriginal[workspace] == current)
 			continue;
 
-		BScreen screen(fWindow);
-
-		// TODO: our app_server doesn't fully support workspaces, yet
-		if (workspace == current_workspace()) {
-			SetSwapDisplays(&screen, fOriginal[workspace].swap_displays);
-			SetUseLaptopPanel(&screen, fOriginal[workspace].use_laptop_panel);
-			SetTVStandard(&screen, fOriginal[workspace].tv_standard);
-		}
+		BScreen screen(_screen_id(fScreenID));
 
 		result = screen.SetMode(workspace, &fOriginalDisplayMode[workspace],
 			true);
@@ -341,7 +295,7 @@ ScreenMode::Revert()
 void
 ScreenMode::UpdateOriginalModes()
 {
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 	for (int32 workspace = 0; workspace < count_workspaces(); workspace++) {
 		if (screen.GetMode(workspace, &fOriginalDisplayMode[workspace])
 				== B_OK) {
@@ -367,7 +321,7 @@ ScreenMode::GetRefreshLimits(const screen_mode& mode, float& min, float& max)
 	if (!_GetDisplayMode(mode, displayMode))
 		return B_ERROR;
 
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 	if (screen.GetPixelClockLimits(&displayMode, &minClock, &maxClock) < B_OK)
 		return B_ERROR;
 
@@ -399,7 +353,7 @@ ScreenMode::GetManufacturerFromID(const char* id) const
 status_t
 ScreenMode::GetMonitorInfo(monitor_info& info, float* _diagonalInches)
 {
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 	status_t status = screen.GetMonitorInfo(&info);
 	if (status != B_OK)
 		return status;
@@ -439,7 +393,7 @@ ScreenMode::GetMonitorInfo(monitor_info& info, float* _diagonalInches)
 status_t
 ScreenMode::GetDeviceInfo(accelerant_device_info& info)
 {
-	BScreen screen(fWindow);
+	BScreen screen(_screen_id(fScreenID));
 	return screen.GetDeviceInfo(&info);
 }
 
@@ -447,7 +401,7 @@ ScreenMode::GetDeviceInfo(accelerant_device_info& info)
 status_t
 ScreenMode::GetConnectorName(BString& name)
 {
-	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(fWindow);
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(fScreenID);
 	if (screen == NULL)
 		return B_ERROR;
 
@@ -461,7 +415,7 @@ status_t
 ScreenMode::SetRotation(int32 rotation)
 {
 	BPrivate::BPrivateScreen* screen
-		= BPrivate::BPrivateScreen::Get(fWindow);
+		= BPrivate::BPrivateScreen::Get(fScreenID);
 	if (screen == NULL)
 		return B_ERROR;
 
@@ -476,7 +430,7 @@ int32
 ScreenMode::Rotation() const
 {
 	BPrivate::BPrivateScreen* screen
-		= BPrivate::BPrivateScreen::Get(fWindow);
+		= BPrivate::BPrivateScreen::Get(fScreenID);
 	if (screen == NULL)
 		return 0;
 
@@ -493,7 +447,7 @@ status_t
 ScreenMode::SetReflection(int32 reflection)
 {
 	BPrivate::BPrivateScreen* screen
-		= BPrivate::BPrivateScreen::Get(fWindow);
+		= BPrivate::BPrivateScreen::Get(fScreenID);
 	if (screen == NULL)
 		return B_ERROR;
 
@@ -508,7 +462,7 @@ int32
 ScreenMode::Reflection() const
 {
 	BPrivate::BPrivateScreen* screen
-		= BPrivate::BPrivateScreen::Get(fWindow);
+		= BPrivate::BPrivateScreen::Get(fScreenID);
 	if (screen == NULL)
 		return 0;
 
@@ -560,10 +514,8 @@ ScreenMode::_GetDisplayMode(const screen_mode& mode, display_mode& displayMode)
 	int32 bestIndex = -1;
 	float bestDiff = 999;
 
-	virtualWidth = mode.combine == kCombineHorizontally
-		? mode.width * 2 : mode.width;
-	virtualHeight = mode.combine == kCombineVertically
-		? mode.height * 2 : mode.height;
+	virtualWidth = mode.width;
+	virtualHeight = mode.height;
 
 	// try to find mode in list provided by driver
 	for (uint32 i = 0; i < fModeCount; i++) {

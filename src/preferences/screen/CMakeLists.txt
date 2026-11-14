@@ -1,7 +1,9 @@
 Application(Screen
 	SOURCES
 	AlertWindow.cpp
+	ArrangementView.cpp
 	compute_display_timing.cpp
+	IdentifyWindow.cpp
 	MonitorView.cpp
 	RefreshSlider.cpp
 	RefreshWindow.cpp

@@ -16,11 +16,14 @@
 
 #include <Window.h>
 #include <CheckBox.h>
+#include <String.h>
 
 #include "ScreenMode.h"
 
 
 class BBox;
+class BButton;
+class BMessageRunner;
 class BPopUpMenu;
 class BMenuField;
 class BSlider;
@@ -28,6 +31,7 @@ class BSpinner;
 class BStringView;
 
 class AlertWindow;
+class ArrangementView;
 class RefreshWindow;
 class MonitorView;
 class ScreenSettings;
@@ -63,7 +67,21 @@ private:
 			void			_UpdateOriginal();
 			void			_UpdateMonitor();
 			void			_UpdateColorLabel();
-			void			_UpdateOutputMenu();
+			screen_id		_ScreenID() const;
+			int32			_CountResolutions(uint16& maxWidth,
+								uint16& maxHeight);
+			void			_FillModeMenus();
+			void			_UpdateBrightnessControl();
+			void			_ReloadScreen(int32 id);
+			void			_RefreshOutputs(bool force);
+			void			_SelectOutput(const char* name);
+			void			_SetModeControlsEnabled(bool enabled);
+			void			_UpdateOutputControls();
+			bool			_BeginDisplayChange();
+			void			_EndDisplayChange(bool wasPending,
+								status_t status);
+			status_t		_SetMirrored(bool mirrored);
+			void			_Identify();
 			void			_UpdateProfileMenu();
 
 			void			_Apply();
@@ -97,6 +115,7 @@ private:
 			uint32			fSupportedColorSpaces;
 			BMenuItem*		fUserSelectedColorSpace;
 
+			bool			fResolutionMatrix;
 			BPopUpMenu*		fResolutionMenu;
 			BMenuField*		fResolutionField;
 			BPopUpMenu*		fColorsMenu;
@@ -105,18 +124,10 @@ private:
 			BMenuField*		fRefreshField;
 			BMenuItem*		fOtherRefresh;
 
-			BPopUpMenu*		fCombineMenu;
-			BMenuField*		fCombineField;
 			BPopUpMenu*		fRotationMenu;
 			BMenuField*		fRotationField;
 			BPopUpMenu*		fReflectionMenu;
 			BMenuField*		fReflectionField;
-			BPopUpMenu*		fSwapDisplaysMenu;
-			BMenuField*		fSwapDisplaysField;
-			BPopUpMenu*		fUseLaptopPanelMenu;
-			BMenuField*		fUseLaptopPanelField;
-			BPopUpMenu*		fTVStandardMenu;
-			BMenuField*		fTVStandardField;
 
 			BSlider*		fBrightnessSlider;
 
@@ -126,8 +137,12 @@ private:
 			bool			fTemperatureSupported;
 			float			fOriginalTemperature;
 
-			BPopUpMenu*		fOutputMenu;
-			BMenuField*		fOutputField;
+			BBox*			fDisplaysBox;
+			ArrangementView*	fArrangement;
+			BCheckBox*		fUseOutputBox;
+			BCheckBox*		fPrimaryBox;
+			BCheckBox*		fMirrorBox;
+			BButton*		fIdentifyButton;
 
 			BPopUpMenu*		fProfileMenu;
 			BMenuField*		fProfileField;
@@ -154,6 +169,17 @@ private:
 
 			AlertWindow*	fAlertWindow;
 				// countdown for the pending change; NULL when none
+
+			// The output the controls act on, by connector name, and the
+			// screen it is on (a client screen id).
+			BString			fSelectedOutput;
+			int32			fScreenID;
+			BString			fOutputsSignature;
+			bool			fBrightnessShown;
+			bool			fDisplaysShown;
+			BMessageRunner*	fPollRunner;
+
+	static	const int32		kMaxOutputs = 8;
 };
 
 #endif	/* SCREEN_WINDOW_H */

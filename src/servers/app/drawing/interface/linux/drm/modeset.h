@@ -70,6 +70,7 @@ extern "C"
 #endif
 
 struct modeset_dev* get_dev();
+struct modeset_dev* get_dev_for(int fd);
 const drmModeModeInfo* modeset_pick_mode(int fd, drmModeConnector *conn);
 int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			     struct modeset_dev *dev);

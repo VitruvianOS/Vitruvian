@@ -20,6 +20,8 @@ extern "C" {
 #include <atomic>
 #include <vector>
 
+struct drm_extra_card;
+
 #include "BufferAgeTracker.h"
 #include "DrmBuffer.h"
 #include "HWInterface.h"
@@ -361,7 +363,20 @@ public:
 private:
 	struct FlipToken;
 	struct Output;
+	// A card beside the first one, its outputs in the same desktop.
+	struct Card {
+		int		slot;
+		int		fd;
+		int		index;
+		int		deviceId;
+	};
 			void				_BindBacklight();
+			int					_FdForKey(uint32 key) const;
+			int					_CardIndexForSlot(int slot) const;
+			void				_OpenCards(
+									const struct drm_extra_card* extras,
+									int count);
+			std::vector<Card>	fCards;
 	friend class				DrmOverlayPlane;
 
 	static	int32				_EventThreadEntry(void* data);

@@ -172,12 +172,27 @@ drm_card_display_rank(bool connected, bool hasConnectors, bool hasInternal,
 }
 
 
+// A card beside the chosen one that has a monitor connected; its outputs
+// join the desktop.
+struct drm_extra_card {
+	int deviceId;
+	int fd;
+	int cardIndex;
+};
+
+#define DRM_MAX_EXTRA_CARDS 3
+
+
 // Open every /dev/dri/cardN on seat, keep the one that drives a display and close the rest.
+// With extras, the other cards that have a connected monitor stay open too.
 // Returns false if nothing opened, leaving the out-params as -1/NULL.
 static inline bool
 drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
-	int& cardIndex, const char*& why)
+	int& cardIndex, const char*& why, struct drm_extra_card* extras = NULL,
+	int* extraCount = NULL)
 {
+	if (extraCount != NULL)
+		*extraCount = 0;
 	// Optimus laptops expose the NVIDIA card first with no panel, and a Raspberry Pi exposes render-only v3d
 	// next to vc4. Prefer a card that owns an internal panel, then one with a
 	// connected display, then boot_vga, then the first.
@@ -242,17 +257,26 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 				: " [skipped, no outputs]"));
 	}
 
-	// Outputs are driven through one card only.
 	for (int j = 0; j < n; j++) {
-		if (j != pick && connected[j]) {
-			fprintf(stderr, "drm: outputs on card%d ignored, the session "
-				"uses card%d\n", indexes[j], indexes[pick]);
-		}
-	}
+		if (j == pick)
+			continue;
 
-	for (int j = 0; j < n; j++) {
-		if (j != pick)
-			libseat_close_device(seat, ids[j]);
+		if (extras != NULL && extraCount != NULL && connected[j]
+				&& *extraCount < DRM_MAX_EXTRA_CARDS) {
+			fprintf(stderr, "drm: outputs on card%d join those of card%d\n",
+				indexes[j], indexes[pick]);
+			extras[*extraCount].deviceId = ids[j];
+			extras[*extraCount].fd = fds[j];
+			extras[*extraCount].cardIndex = indexes[j];
+			(*extraCount)++;
+			continue;
+		}
+
+		if (connected[j]) {
+			fprintf(stderr, "drm: outputs on card%d are not used, the "
+				"session uses card%d\n", indexes[j], indexes[pick]);
+		}
+		libseat_close_device(seat, ids[j]);
 	}
 
 	deviceId = ids[pick];

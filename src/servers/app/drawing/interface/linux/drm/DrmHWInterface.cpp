@@ -50,6 +50,25 @@ int DrmHWInterface::fFd = -1;
 
 static const uint32 kMaxDamageClips = 16;
 
+// Connector ids repeat from card to card: the top byte holds the card's slot.
+static inline uint32
+output_key(int slot, uint32 connector)
+{
+	return slot == 0 ? connector : ((uint32)slot << 24) | connector;
+}
+
+static inline int
+key_slot(uint32 key)
+{
+	return (int)(key >> 24);
+}
+
+static inline uint32
+key_connector(uint32 key)
+{
+	return key & 0xffffff;
+}
+
 static drmModeModeInfo* find_connector_mode(drmModeConnector* conn,
 	uint32_t width, uint32_t height, const display_mode& mode);
 
@@ -57,7 +76,12 @@ static drmModeModeInfo* find_connector_mode(drmModeConnector* conn,
 // An output beside the first one. It presents its rectangle of the render
 // buffer through its own scanout buffers.
 struct DrmHWInterface::Output {
+	// The key; see output_key().
 	uint32_t			connector;
+	// The connector on its card, and the card's fd.
+	uint32_t			rawConnector;
+	int					fd;
+	int					slot;
 	struct modeset_dev*	dev;
 	DrmBuffer*			front;
 	DrmBuffer*			back;
@@ -412,16 +436,38 @@ DrmHWInterface::_OnSessionEnable()
 		return;
 	}
 
+	struct drm_extra_card extras[DRM_MAX_EXTRA_CARDS];
+	int extraCount = 0;
+
 	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
 	if (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0') {
 		fFd = atoi(janusDrmFdStr);
 		fDeviceId = 0;
+
+		// "fd:card,fd:card": the other cards with a monitor.
+		const char* list = getenv("JANUS_DRM_FDS");
+		while (list != NULL && list[0] != '\0'
+				&& extraCount < DRM_MAX_EXTRA_CARDS) {
+			char* end;
+			const int extraFd = (int)strtol(list, &end, 10);
+			if (*end != ':')
+				break;
+			const int extraCard = (int)strtol(end + 1, &end, 10);
+			extras[extraCount].deviceId = 0;
+			extras[extraCount].fd = extraFd;
+			extras[extraCount].cardIndex = extraCard;
+			extraCount++;
+			if (*end != ',')
+				break;
+			list = end + 1;
+		}
 	} else {
 		int deviceId = -1;
 		int fd = -1;
 		int cardIndex = -1;
 		const char* why = NULL;
-		if (!drm_select_seat_device(fSeat, deviceId, fd, cardIndex, why)) {
+		if (!drm_select_seat_device(fSeat, deviceId, fd, cardIndex, why,
+				extras, &extraCount)) {
 			fDeviceId = -1;
 			fFd = -1;
 		} else {
@@ -452,6 +498,8 @@ DrmHWInterface::_OnSessionEnable()
 		fprintf(stderr, "DrmHWInterface: no connected output\n");
 		return;
 	}
+
+	_OpenCards(extras, extraCount);
 
 	// Needed before any buffer is sized below, since fRenderBuffer must be
 	// allocated at logical (post-swap) dimensions, not the panel's physical
@@ -852,6 +900,58 @@ DrmHWInterface::_DamageOutputs()
 }
 
 
+// The fd of the card the key belongs to, or -1.
+int
+DrmHWInterface::_FdForKey(uint32 key) const
+{
+	const int slot = key_slot(key);
+	if (slot == 0)
+		return fFd;
+
+	for (size_t i = 0; i < fCards.size(); i++) {
+		if (fCards[i].slot == slot)
+			return fCards[i].fd;
+	}
+	return -1;
+}
+
+
+int
+DrmHWInterface::_CardIndexForSlot(int slot) const
+{
+	for (size_t i = 0; i < fCards.size(); i++) {
+		if (fCards[i].slot == slot)
+			return fCards[i].index;
+	}
+	return slot;
+}
+
+
+/*!	Takes over the cards beside the first one that have a monitor: their fds
+	come with the session, from janus or from libseat. Each gets its own
+	list of connectors.
+*/
+void
+DrmHWInterface::_OpenCards(const struct drm_extra_card* extras, int count)
+{
+	for (int i = 0; i < count && (int)fCards.size() < 3; i++) {
+		if (modeset_prepare(extras[i].fd) != 0) {
+			if (fSeat != NULL)
+				libseat_close_device(fSeat, extras[i].deviceId);
+			continue;
+		}
+
+		Card card;
+		card.slot = (int)fCards.size() + 1;
+		card.fd = extras[i].fd;
+		card.index = extras[i].cardIndex;
+		card.deviceId = extras[i].deviceId;
+		fCards.push_back(card);
+		fprintf(stderr, "DRM: card%d drives outputs too\n", card.index);
+	}
+}
+
+
 DrmHWInterface::Output*
 DrmHWInterface::_FindOutput(uint32 connector) const
 {
@@ -870,20 +970,20 @@ DrmHWInterface::_SetupOutput(Output* output)
 	struct modeset_dev* dev = output->dev;
 
 	if (dev->saved_crtc == NULL)
-		dev->saved_crtc = drmModeGetCrtc(fFd, dev->crtc);
+		dev->saved_crtc = drmModeGetCrtc(output->fd, dev->crtc);
 
-	output->front = new DrmBuffer(fFd, dev, false);
+	output->front = new DrmBuffer(output->fd, dev, false);
 	output->back = NULL;
 	output->target = output->front;
-	if (!fDamageFlush && modeset_create_back_fb(fFd, dev) == 0) {
-		output->back = new DrmBuffer(fFd, dev, true);
+	if (!fDamageFlush && modeset_create_back_fb(output->fd, dev) == 0) {
+		output->back = new DrmBuffer(output->fd, dev, true);
 		output->target = output->back;
 	}
 
 	_ClearBufferToBlack(output->front);
 	_ClearBufferToBlack(output->back);
 
-	if (drmModeSetCrtc(fFd, dev->crtc, dev->fb, 0, 0, &dev->conn, 1,
+	if (drmModeSetCrtc(output->fd, dev->crtc, dev->fb, 0, 0, &dev->conn, 1,
 			&dev->mode) != 0) {
 		fprintf(stderr, "[drm] cannot set CRTC for connector %u: %s\n",
 			dev->conn, strerror(errno));
@@ -1011,7 +1111,7 @@ DrmHWInterface::_PresentOutputs()
 				clips[j].x2 = rects[j].x2;
 				clips[j].y2 = rects[j].y2;
 			}
-			r = drmModeDirtyFB(fFd, output->target->GetFbId(),
+			r = drmModeDirtyFB(output->fd, output->target->GetFbId(),
 				clipCount > 0 ? clips : NULL, clipCount);
 			// ENOSYS: the scanout needs no flush.
 			if (r == -ENOSYS)
@@ -1024,7 +1124,7 @@ DrmHWInterface::_PresentOutputs()
 			token->output = output->connector;
 			fFlipTokens.push_back(token);
 
-			r = drmModePageFlip(fFd, output->dev->crtc,
+			r = drmModePageFlip(output->fd, output->dev->crtc,
 				output->target->GetFbId(), DRM_MODE_PAGE_FLIP_EVENT, token);
 			if (r != 0) {
 				fFlipTokens.pop_back();
@@ -1077,7 +1177,7 @@ DrmHWInterface::_RestoreOutputs(bool onlyLost)
 			continue;
 
 		if (onlyLost) {
-			drmModeCrtc* crtc = drmModeGetCrtc(fFd, dev->crtc);
+			drmModeCrtc* crtc = drmModeGetCrtc(output->fd, dev->crtc);
 			const bool active = crtc != NULL && crtc->mode_valid
 				&& crtc->buffer_id != 0;
 			if (crtc != NULL)
@@ -1086,8 +1186,8 @@ DrmHWInterface::_RestoreOutputs(bool onlyLost)
 				continue;
 		}
 
-		if (drmModeSetCrtc(fFd, dev->crtc, output->front->GetFbId(), 0, 0,
-				&dev->conn, 1, &dev->mode) != 0) {
+		if (drmModeSetCrtc(output->fd, dev->crtc, output->front->GetFbId(),
+				0, 0, &dev->conn, 1, &dev->mode) != 0) {
 			fprintf(stderr, "[drm] cannot restore connector %u: %s\n",
 				dev->conn, strerror(errno));
 		}
@@ -1110,17 +1210,19 @@ DrmHWInterface::_SetOutputDPMS(Output* output, uint32 state)
 			return;
 	}
 
-	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd,
-		output->connector);
+	drmModeConnector* conn = drmModeGetConnectorCurrent(output->fd,
+		output->rawConnector);
 	if (conn == NULL)
 		return;
 
 	for (int i = 0; i < conn->count_props; i++) {
-		drmModePropertyPtr prop = drmModeGetProperty(fFd, conn->props[i]);
+		drmModePropertyPtr prop = drmModeGetProperty(output->fd,
+			conn->props[i]);
 		if (prop == NULL)
 			continue;
 		if (strcmp(prop->name, "DPMS") == 0) {
-			if (drmModeConnectorSetProperty(fFd, output->connector,
+			if (drmModeConnectorSetProperty(output->fd,
+					output->rawConnector,
 					prop->prop_id, dpms) == 0)
 				output->dpms = state;
 		}
@@ -1149,28 +1251,34 @@ DrmHWInterface::GetConnectedOutputs(std::vector<uint32>& connectors)
 	if (fFd < 0 || fDev == NULL || (sSingle != NULL && sSingle[0] != '\0'))
 		return;
 
-	drmModeRes* res = drmModeGetResources(fFd);
-	if (res == NULL)
-		return;
+	for (size_t card = 0; card <= fCards.size(); card++) {
+		const int slot = card == 0 ? 0 : fCards[card - 1].slot;
+		const int fd = card == 0 ? fFd : fCards[card - 1].fd;
 
-	for (int i = 0; i < res->count_connectors; i++) {
-		drmModeConnector* conn = drmModeGetConnectorCurrent(fFd,
-			res->connectors[i]);
-		if (conn == NULL)
+		drmModeRes* res = drmModeGetResources(fd);
+		if (res == NULL)
 			continue;
-		if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0
-				&& conn->connector_id != fDev->conn) {
-			fDirtyMutex.Lock();
-			const bool disabled = std::find(fDisabledOutputs.begin(),
-				fDisabledOutputs.end(), conn->connector_id)
-					!= fDisabledOutputs.end();
-			fDirtyMutex.Unlock();
-			if (!disabled)
-				connectors.push_back(conn->connector_id);
+
+		for (int i = 0; i < res->count_connectors; i++) {
+			drmModeConnector* conn = drmModeGetConnectorCurrent(fd,
+				res->connectors[i]);
+			if (conn == NULL)
+				continue;
+			if (conn->connection == DRM_MODE_CONNECTED
+					&& conn->count_modes > 0
+					&& (slot != 0 || conn->connector_id != fDev->conn)) {
+				const uint32 key = output_key(slot, conn->connector_id);
+				fDirtyMutex.Lock();
+				const bool disabled = std::find(fDisabledOutputs.begin(),
+					fDisabledOutputs.end(), key) != fDisabledOutputs.end();
+				fDirtyMutex.Unlock();
+				if (!disabled)
+					connectors.push_back(key);
+			}
+			drmModeFreeConnector(conn);
 		}
-		drmModeFreeConnector(conn);
+		drmModeFreeResources(res);
 	}
-	drmModeFreeResources(res);
 }
 
 
@@ -1181,40 +1289,46 @@ DrmHWInterface::ListOutputs(std::vector<OutputInfo>& outputs)
 	if (fFd < 0 || fDev == NULL)
 		return;
 
-	drmModeRes* res = drmModeGetResources(fFd);
-	if (res == NULL)
-		return;
+	for (size_t card = 0; card <= fCards.size(); card++) {
+		const int slot = card == 0 ? 0 : fCards[card - 1].slot;
+		const int fd = card == 0 ? fFd : fCards[card - 1].fd;
 
-	for (int i = 0; i < res->count_connectors; i++) {
-		drmModeConnector* conn = drmModeGetConnectorCurrent(fFd,
-			res->connectors[i]);
-		if (conn == NULL)
+		drmModeRes* res = drmModeGetResources(fd);
+		if (res == NULL)
 			continue;
 
-		const bool first = conn->connector_id == fDev->conn;
-		if (first || (conn->connection == DRM_MODE_CONNECTED
-				&& conn->count_modes > 0)) {
-			OutputInfo info;
-			info.connector = conn->connector_id;
-			info.index = i;
-			info.first = first;
-			_ConnectorNameFor(conn->connector_id, info.name);
+		for (int i = 0; i < res->count_connectors; i++) {
+			drmModeConnector* conn = drmModeGetConnectorCurrent(fd,
+				res->connectors[i]);
+			if (conn == NULL)
+				continue;
 
-			fDirtyMutex.Lock();
-			info.disabled = std::find(fDisabledOutputs.begin(),
-				fDisabledOutputs.end(), conn->connector_id)
-					!= fDisabledOutputs.end();
-			fDirtyMutex.Unlock();
+			const bool first = slot == 0 && conn->connector_id == fDev->conn;
+			if (first || (conn->connection == DRM_MODE_CONNECTED
+					&& conn->count_modes > 0)) {
+				OutputInfo info;
+				info.connector = output_key(slot, conn->connector_id);
+				// Distinct across the cards: ids follow it.
+				info.index = slot * 32 + i;
+				info.first = first;
+				_ConnectorNameFor(info.connector, info.name);
 
-			// The first one leads the list.
-			if (first)
-				outputs.insert(outputs.begin(), info);
-			else
-				outputs.push_back(info);
+				fDirtyMutex.Lock();
+				info.disabled = std::find(fDisabledOutputs.begin(),
+					fDisabledOutputs.end(), info.connector)
+						!= fDisabledOutputs.end();
+				fDirtyMutex.Unlock();
+
+				// The first one leads the list.
+				if (first)
+					outputs.insert(outputs.begin(), info);
+				else
+					outputs.push_back(info);
+			}
+			drmModeFreeConnector(conn);
 		}
-		drmModeFreeConnector(conn);
+		drmModeFreeResources(res);
 	}
-	drmModeFreeResources(res);
 }
 
 
@@ -1228,6 +1342,7 @@ DrmHWInterface::SetOutputDisabled(uint32 connector, bool disabled)
 	// The first one is only noted: PromoteOutput() hands the screen to
 	// another output and switches this one off then.
 	const bool first = connector == fDev->conn;
+	const int fd = _FdForKey(connector);
 
 	fDirtyMutex.Lock();
 	std::vector<uint32>::iterator found = std::find(fDisabledOutputs.begin(),
@@ -1242,9 +1357,10 @@ DrmHWInterface::SetOutputDisabled(uint32 connector, bool disabled)
 	// Not ours yet: whatever lit it before us is still on it.
 	if (disabled && !shown && !first) {
 		ModesetGuard modesetGuard(&fModesetMutex);
-		for (struct modeset_dev* iter = get_dev(); iter; iter = iter->next) {
-			if (iter->conn == connector)
-				drmModeSetCrtc(fFd, iter->crtc, 0, 0, 0, NULL, 0, NULL);
+		for (struct modeset_dev* iter = get_dev_for(fd); iter;
+				iter = iter->next) {
+			if (iter->conn == key_connector(connector))
+				drmModeSetCrtc(fd, iter->crtc, 0, 0, 0, NULL, 0, NULL);
 		}
 	}
 }
@@ -1256,6 +1372,11 @@ HWInterface*
 DrmHWInterface::AddOutput(uint32 connector)
 {
 	if (fFd < 0 || !fInitialized || fDev == NULL || connector == fDev->conn)
+		return NULL;
+
+	const int fd = _FdForKey(connector);
+	const uint32 raw = key_connector(connector);
+	if (fd < 0)
 		return NULL;
 
 	if (!LockExclusiveAccess())
@@ -1270,12 +1391,13 @@ DrmHWInterface::AddOutput(uint32 connector)
 
 	struct modeset_dev* dev = NULL;
 	for (int pass = 0; pass < 2 && dev == NULL; pass++) {
-		for (struct modeset_dev* iter = get_dev(); iter; iter = iter->next) {
-			if (iter->conn == connector)
+		for (struct modeset_dev* iter = get_dev_for(fd); iter;
+				iter = iter->next) {
+			if (iter->conn == raw)
 				dev = iter;
 		}
 		if (dev == NULL && pass == 0)
-			modeset_add_connector(fFd, connector);
+			modeset_add_connector(fd, raw);
 	}
 
 	if (dev == NULL) {
@@ -1300,6 +1422,9 @@ DrmHWInterface::AddOutput(uint32 connector)
 		fSkippedOutputs.end(), connector), fSkippedOutputs.end());
 
 	output->connector = connector;
+	output->rawConnector = raw;
+	output->fd = fd;
+	output->slot = key_slot(connector);
 	output->dev = dev;
 	output->front = NULL;
 	output->back = NULL;
@@ -1378,10 +1503,12 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 	// Its node restores the CRTC it found; a monitor that is still there
 	// would light up with that.
 	const uint32_t crtc = output->dev->crtc;
+	const int fd = output->fd;
+	const uint32_t raw = output->rawConnector;
 	_TeardownOutput(output);
 	delete output;
-	modeset_remove_connector(fFd, connector);
-	drmModeSetCrtc(fFd, crtc, 0, 0, 0, NULL, 0, NULL);
+	modeset_remove_connector(fd, raw);
+	drmModeSetCrtc(fd, crtc, 0, 0, 0, NULL, 0, NULL);
 
 	_RebuildRenderBuffer(fDisplayMode.virtual_width,
 		fDisplayMode.virtual_height);
@@ -1396,8 +1523,10 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 bool
 DrmHWInterface::IsInternalConnector(uint32 connector)
 {
+	const int fd = _FdForKey(connector);
+	connector = key_connector(connector);
 	bool internal = false;
-	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, connector);
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fd, connector);
 	if (conn != NULL) {
 		internal = conn->connector_type == DRM_MODE_CONNECTOR_eDP
 			|| conn->connector_type == DRM_MODE_CONNECTOR_LVDS
@@ -1442,7 +1571,8 @@ DrmHWInterface::OutputToPromote()
 
 	std::vector<uint32> candidates;
 	for (size_t i = 0; usable == false && i < fOutputs.size(); i++) {
-		if (std::find(fDisabledOutputs.begin(), fDisabledOutputs.end(),
+		// The first output stays on its card.
+		if (fOutputs[i]->slot == 0 && std::find(fDisabledOutputs.begin(), fDisabledOutputs.end(),
 				fOutputs[i]->connector) == fDisabledOutputs.end())
 			candidates.push_back(fOutputs[i]->connector);
 	}
@@ -1450,6 +1580,20 @@ DrmHWInterface::OutputToPromote()
 
 	if (usable)
 		return 0;
+
+	if (candidates.empty()) {
+		static bool sSaid = false;
+		bool other = false;
+		fDirtyMutex.Lock();
+		for (size_t i = 0; i < fOutputs.size(); i++)
+			other = other || fOutputs[i]->slot != 0;
+		fDirtyMutex.Unlock();
+		if (other && !sSaid) {
+			sSaid = true;
+			fprintf(stderr, "DRM: the first card has no output left; "
+				"outputs of the other cards stay as they are\n");
+		}
+	}
 
 	uint32 best = 0;
 	bool bestInternal = false;
@@ -1503,7 +1647,8 @@ DrmHWInterface::_BindBacklight()
 bool
 DrmHWInterface::PromoteOutput(uint32 connector)
 {
-	if (fFd < 0 || !fInitialized || fDev == NULL || connector == fDev->conn)
+	if (fFd < 0 || !fInitialized || fDev == NULL || connector == fDev->conn
+			|| key_slot(connector) != 0)
 		return false;
 
 	if (!LockExclusiveAccess())
@@ -1628,7 +1773,7 @@ DrmHWInterface::SetOutputMode(uint32 connector, const display_mode& mode)
 	}
 
 	struct modeset_dev* dev = output->dev;
-	drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
+	drmModeConnector* conn = drmModeGetConnector(output->fd, dev->conn);
 	if (conn == NULL) {
 		UnlockExclusiveAccess();
 		return B_ERROR;
@@ -1650,11 +1795,11 @@ DrmHWInterface::SetOutputMode(uint32 connector, const display_mode& mode)
 	_TeardownOutput(output);
 
 	if (dev->fb) {
-		drmModeRmFB(fFd, dev->fb);
+		drmModeRmFB(output->fd, dev->fb);
 		dev->fb = 0;
 	}
 	if (dev->back_fb) {
-		drmModeRmFB(fFd, dev->back_fb);
+		drmModeRmFB(output->fd, dev->back_fb);
 		dev->back_fb = 0;
 	}
 
@@ -1663,7 +1808,7 @@ DrmHWInterface::SetOutputMode(uint32 connector, const display_mode& mode)
 	memcpy(&dev->mode, found, sizeof(*found));
 	drmModeFreeConnector(conn);
 
-	status_t status = modeset_create_fb(fFd, dev) == 0 ? B_OK : B_ERROR;
+	status_t status = modeset_create_fb(output->fd, dev) == 0 ? B_OK : B_ERROR;
 	if (status == B_OK)
 		status = _SetupOutput(output);
 
@@ -1986,6 +2131,9 @@ DrmHWInterface::_OnSessionDisable()
 		}
 	}
 
+	for (size_t i = 0; i < fCards.size(); i++)
+		drmDropMaster(fCards[i].fd);
+
 	if (fSeat != NULL)
 		libseat_disable_seat(fSeat);
 }
@@ -2306,7 +2454,8 @@ DrmHWInterface::_EventThreadMain()
 
 		bool active = fSessionActive.load();
 
-		struct pollfd pfds[4];
+		struct pollfd pfds[8];
+		int cardIdx[4];
 		int nfds = 0;
 		int seat_idx = -1;
 		int drm_idx  = -1;
@@ -2325,6 +2474,16 @@ DrmHWInterface::_EventThreadMain()
 			pfds[nfds].events  = POLLIN;
 			pfds[nfds].revents = 0;
 			drm_idx = nfds++;
+		}
+
+		for (size_t card = 0; card < fCards.size() && card < 4; card++) {
+			cardIdx[card] = -1;
+			if (active) {
+				pfds[nfds].fd      = fCards[card].fd;
+				pfds[nfds].events  = POLLIN;
+				pfds[nfds].revents = 0;
+				cardIdx[card] = nfds++;
+			}
 		}
 
 		if (fUdevFd >= 0) {
@@ -2395,6 +2554,21 @@ DrmHWInterface::_EventThreadMain()
 				// them under the same lock. A damage flush swaps nothing.
 				bool locked = !fDamageFlush && LockExclusiveAccess();
 				drmHandleEvent(fFd, &evctx);
+				if (locked)
+					UnlockExclusiveAccess();
+			}
+			for (size_t card = 0; card < fCards.size() && card < 4; card++) {
+				if (cardIdx[card] < 0
+						|| (pfds[cardIdx[card]].revents & POLLIN) == 0)
+					continue;
+
+				static drmEventContext cardContext = {
+					.version           = DRM_EVENT_CONTEXT_VERSION,
+					.page_flip_handler = DrmHWInterface::_PageFlipHandler,
+				};
+				// Its flips swap the buffers of an output.
+				bool locked = LockExclusiveAccess();
+				drmHandleEvent(fCards[card].fd, &cardContext);
 				if (locked)
 					UnlockExclusiveAccess();
 			}
@@ -2736,6 +2910,15 @@ DrmHWInterface::~DrmHWInterface()
 		drmModeDestroyPropertyBlob(fFd, fModeBlobId);
 		fModeBlobId = 0;
 	}
+
+	for (size_t i = 0; i < fCards.size(); i++) {
+		modeset_cleanup(fCards[i].fd);
+		if (fSeat != NULL)
+			libseat_close_device(fSeat, fCards[i].deviceId);
+		else
+			close(fCards[i].fd);
+	}
+	fCards.clear();
 
 	if (fSeat && fDeviceId > 0)
 		libseat_close_device(fSeat, fDeviceId);
@@ -3123,16 +3306,18 @@ status_t
 DrmHWInterface::_PreferredModeFor(uint32 connector, int32 orientation,
 	bool probe, display_mode* mode)
 {
-	if (fFd < 0)
+	const int fd = _FdForKey(connector);
+	connector = key_connector(connector);
+	if (fd < 0)
 		return B_NO_INIT;
 
 	// drmModeGetConnector() forces a reprobe (DDC/EDID, load
 	// detection). The poll must not do that every two seconds.
 	drmModeConnector* conn = probe
-		? drmModeGetConnector(fFd, connector)
-		: drmModeGetConnectorCurrent(fFd, connector);
+		? drmModeGetConnector(fd, connector)
+		: drmModeGetConnectorCurrent(fd, connector);
 	const drmModeModeInfo* picked
-		= conn != NULL ? modeset_pick_mode(fFd, conn) : NULL;
+		= conn != NULL ? modeset_pick_mode(fd, conn) : NULL;
 
 	if (picked == NULL) {
 		if (conn != NULL)
@@ -3228,10 +3413,12 @@ status_t
 DrmHWInterface::_ModeListFor(uint32 connector, int32 orientation,
 	display_mode** _modeList, uint32* _count)
 {
-	if (fFd < 0)
+	const int fd = _FdForKey(connector);
+	connector = key_connector(connector);
+	if (fd < 0)
 		return B_ERROR;
 
-	drmModeConnector* conn = drmModeGetConnector(fFd, connector);
+	drmModeConnector* conn = drmModeGetConnector(fd, connector);
 	if (conn == NULL)
 		return B_ERROR;
 
@@ -3771,11 +3958,14 @@ DrmHWInterface::GetConnectorName(BString& name)
 status_t
 DrmHWInterface::_ConnectorNameFor(uint32 connector, BString& name)
 {
-	if (fFd < 0)
+	const int slot = key_slot(connector);
+	const int fd = _FdForKey(connector);
+	connector = key_connector(connector);
+	if (fd < 0)
 		return B_NO_INIT;
 
 	// Current: kernel already holds EDID/type; GetConnector would reprobe.
-	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, connector);
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fd, connector);
 	if (conn == NULL)
 		return B_ERROR;
 
@@ -3785,7 +3975,13 @@ DrmHWInterface::_ConnectorNameFor(uint32 connector, BString& name)
 		return B_UNSUPPORTED;
 	}
 
-	name.SetToFormat("%s-%u", typeName, conn->connector_type_id);
+	// The cards beside the first one say which they are, so that names stay
+	// unique.
+	if (slot != 0) {
+		name.SetToFormat("card%d-%s-%u", _CardIndexForSlot(slot), typeName,
+			conn->connector_type_id);
+	} else
+		name.SetToFormat("%s-%u", typeName, conn->connector_type_id);
 	drmModeFreeConnector(conn);
 	return B_OK;
 }
@@ -3845,15 +4041,17 @@ DrmHWInterface::GetMonitorInfo(monitor_info* info)
 status_t
 DrmHWInterface::_MonitorInfoFor(uint32 connector, monitor_info* info)
 {
-	if (fFd < 0)
+	const int fd = _FdForKey(connector);
+	connector = key_connector(connector);
+	if (fd < 0)
 		return B_NO_INIT;
 
 	// Current: kernel already holds EDID/type; GetConnector would reprobe.
-	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, connector);
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fd, connector);
 	if (conn == NULL)
 		return B_ERROR;
 
-	drmModeObjectProperties* props = drmModeObjectGetProperties(fFd,
+	drmModeObjectProperties* props = drmModeObjectGetProperties(fd,
 		connector, DRM_MODE_OBJECT_CONNECTOR);
 	if (props == NULL) {
 		drmModeFreeConnector(conn);
@@ -3865,14 +4063,14 @@ DrmHWInterface::_MonitorInfoFor(uint32 connector, monitor_info* info)
 	info->version = B_ACCELERANT_VERSION;
 
 	for (uint32_t i = 0; i < props->count_props; i++) {
-		drmModePropertyRes* prop = drmModeGetProperty(fFd, props->props[i]);
+		drmModePropertyRes* prop = drmModeGetProperty(fd, props->props[i]);
 		if (prop == NULL)
 			continue;
 
 		if (strcmp(prop->name, "EDID") == 0
 				&& (prop->flags & DRM_MODE_PROP_BLOB)) {
 			drmModePropertyBlobRes* blob
-				= drmModeGetPropertyBlob(fFd, props->prop_values[i]);
+				= drmModeGetPropertyBlob(fd, props->prop_values[i]);
 			if (blob != NULL) {
 				if (_drm_edid_identity((const uint8_t*)blob->data,
 						blob->length, *info))
@@ -4632,6 +4830,42 @@ DrmHWInterface::_RescanConnectors()
 			}
 		}
 		drmModeFreeResources(res);
+	}
+
+	// The other cards only have outputs beside the first one.
+	for (size_t card = 0; card < fCards.size(); card++) {
+		drmModeRes* cardRes = drmModeGetResources(fCards[card].fd);
+		if (cardRes == NULL)
+			continue;
+
+		for (int i = 0; i < cardRes->count_connectors; i++) {
+			drmModeConnector* conn = drmModeGetConnector(fCards[card].fd,
+				cardRes->connectors[i]);
+			if (conn == NULL)
+				continue;
+
+			const uint32 key = output_key(fCards[card].slot,
+				conn->connector_id);
+			const bool connected = conn->connection == DRM_MODE_CONNECTED
+				&& conn->count_modes > 0;
+			drmModeFreeConnector(conn);
+
+			fDirtyMutex.Lock();
+			Output* output = _FindOutput(key);
+			fDirtyMutex.Unlock();
+
+			if (connected != (output != NULL))
+				outputsChanged = true;
+			else if (output != NULL
+					&& modeset_add_connector(fCards[card].fd,
+						key_connector(key)) == 1) {
+				fDirtyMutex.Lock();
+				output->modeChanged = true;
+				fDirtyMutex.Unlock();
+				outputsChanged = true;
+			}
+		}
+		drmModeFreeResources(cardRes);
 	}
 
 	if (outputsChanged && gScreenManager != NULL)

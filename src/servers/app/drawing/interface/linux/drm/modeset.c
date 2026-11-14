@@ -67,6 +67,46 @@ static void modeset_cleanup(int fd);
 
 struct modeset_dev *modeset_list = NULL;
 
+/* The first fd given owns modeset_list; the cards beside it keep a list
+ * each, as connector and CRTC ids repeat from card to card. */
+static int sPrimaryFd = -1;
+static struct { int used; int fd; struct modeset_dev* head; } sCards[4];
+
+static struct modeset_dev**
+list_for(int fd)
+{
+	int i;
+	if (sPrimaryFd < 0 || fd == sPrimaryFd) {
+		sPrimaryFd = fd;
+		return &modeset_list;
+	}
+	for (i = 0; i < 4; i++) {
+		if (sCards[i].used && sCards[i].fd == fd)
+			return &sCards[i].head;
+	}
+	for (i = 0; i < 4; i++) {
+		if (!sCards[i].used) {
+			sCards[i].used = 1;
+			sCards[i].fd = fd;
+			sCards[i].head = NULL;
+			return &sCards[i].head;
+		}
+	}
+	return &modeset_list;
+}
+
+struct modeset_dev* get_dev_for(int fd)
+{
+	int i;
+	if (fd == sPrimaryFd)
+		return modeset_list;
+	for (i = 0; i < 4; i++) {
+		if (sCards[i].used && sCards[i].fd == fd)
+			return sCards[i].head;
+	}
+	return NULL;
+}
+
 struct modeset_dev* get_dev() {
 	return modeset_list;
 }
@@ -232,8 +272,8 @@ int modeset_prepare(int fd)
 
 		/* free connector data and link device into global list */
 		drmModeFreeConnector(conn);
-		dev->next = modeset_list;
-		modeset_list = dev;
+		dev->next = *list_for(fd);
+		*list_for(fd) = dev;
 	}
 
 	/* free resources again */
@@ -497,7 +537,7 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 	if (enc) {
 		if (enc->crtc_id) {
 			crtc = enc->crtc_id;
-			for (iter = modeset_list; iter; iter = iter->next) {
+			for (iter = *list_for(fd); iter; iter = iter->next) {
 				if (iter->crtc == crtc) {
 					crtc = 0;
 					break;
@@ -534,7 +574,7 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 
 			/* check that no other device already uses this CRTC */
 			crtc = res->crtcs[j];
-			for (iter = modeset_list; iter; iter = iter->next) {
+			for (iter = *list_for(fd); iter; iter = iter->next) {
 				if (iter->crtc == crtc) {
 					crtc = 0;
 					break;
@@ -1026,7 +1066,7 @@ modeset_add_connector(int fd, uint32_t connector_id)
 	/* Already tracked: diff the reprobed mode instead of assuming
 	 * nothing changed. Does not mutate dev->* here, see header comment. */
 	struct modeset_dev* iter;
-	for (iter = modeset_list; iter; iter = iter->next) {
+	for (iter = *list_for(fd); iter; iter = iter->next) {
 		if (iter->conn != connector_id)
 			continue;
 
@@ -1058,8 +1098,8 @@ modeset_add_connector(int fd, uint32_t connector_id)
 	dev->saved_crtc = drmModeGetCrtc(fd, dev->crtc);
 	drmModeSetCrtc(fd, dev->crtc, dev->fb, 0, 0, &dev->conn, 1, &dev->mode);
 
-	dev->next = modeset_list;
-	modeset_list = dev;
+	dev->next = *list_for(fd);
+	*list_for(fd) = dev;
 
 	fprintf(stderr, "hotplug: added connector %u (%ux%u)\n",
 		connector_id, dev->width, dev->height);
@@ -1070,7 +1110,7 @@ modeset_add_connector(int fd, uint32_t connector_id)
 void
 modeset_remove_connector(int fd, uint32_t connector_id)
 {
-	struct modeset_dev** pp = &modeset_list;
+	struct modeset_dev** pp = list_for(fd);
 	while (*pp) {
 		if ((*pp)->conn == connector_id) {
 			struct modeset_dev* dev = *pp;
@@ -1093,10 +1133,11 @@ void modeset_cleanup(int fd)
 	struct modeset_dev *iter;
 	struct drm_mode_destroy_dumb dreq;
 
-	while (modeset_list) {
+	struct modeset_dev** head = list_for(fd);
+	while (*head) {
 		/* remove from global list */
-		iter = modeset_list;
-		modeset_list = iter->next;
+		iter = *head;
+		*head = iter->next;
 
 		/* restore saved CRTC configuration (only if we ever saved it
 		 * — early-init failures can leave saved_crtc NULL) */

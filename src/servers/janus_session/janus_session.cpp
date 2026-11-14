@@ -315,6 +315,8 @@ static char    sLaunchPortName[64] = "";
 static struct libseat* sSeat        = NULL;
 static int              sDrmFd       = -1;
 static int              sDrmDeviceId = -1;
+static struct drm_extra_card sDrmExtras[DRM_MAX_EXTRA_CARDS];
+static int              sDrmExtraCount = 0;
 static volatile bool    sSessionActive = false;
 static volatile bool    sRunning       = true;
 static volatile bool    sShuttingDown  = false;
@@ -666,6 +668,20 @@ launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
 				snprintf(buf, sizeof(buf), "%d", ifd);
 				setenv("JANUS_DRM_FD", buf, 1);
 			}
+
+			// The other cards with a monitor, as "fd:card,fd:card".
+			char extras[128];
+			extras[0] = '\0';
+			for (int i = 0; i < sDrmExtraCount; i++) {
+				int efd = dup(sDrmExtras[i].fd);
+				if (efd < 0)
+					continue;
+				size_t used = strlen(extras);
+				snprintf(extras + used, sizeof(extras) - used, "%s%d:%d",
+					used > 0 ? "," : "", efd, sDrmExtras[i].cardIndex);
+			}
+			if (extras[0] != '\0')
+				setenv("JANUS_DRM_FDS", extras, 1);
 		} else if (ks->needs_drm) {
 			// Safe Mode / nomodeset: no DRM device. Tell app_server to skip
 			// DRM entirely and fall back to fbdev instead of hanging in
@@ -1351,7 +1367,8 @@ open_drm_device()
 	int fd = -1;
 	int cardIndex = -1;
 	const char* why = NULL;
-	if (!drm_select_seat_device(sSeat, deviceId, fd, cardIndex, why)) {
+	if (!drm_select_seat_device(sSeat, deviceId, fd, cardIndex, why,
+			sDrmExtras, &sDrmExtraCount)) {
 		fprintf(stderr, "janus_session: could not open any KMS DRM device\n");
 		return false;
 	}
@@ -2034,6 +2051,8 @@ teardown_and_exit()
 	kill_fanout();
 	kill_session_cgroup();
 
+	for (int i = 0; i < sDrmExtraCount && sSeat; i++)
+		libseat_close_device(sSeat, sDrmExtras[i].deviceId);
 	if (sDrmDeviceId >= 0 && sSeat)
 		libseat_close_device(sSeat, sDrmDeviceId);
 	if (sSeat) {

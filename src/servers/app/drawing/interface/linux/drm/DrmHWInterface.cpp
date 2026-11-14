@@ -1291,6 +1291,9 @@ DrmHWInterface::_SyncOutputSprites()
 		if (want && output->spriteCursor != (const void*)fCursor.Get()) {
 			output->spriteFailed = !_LoadOutputSprite(output);
 			output->spriteCursor = (const void*)fCursor.Get();
+			// Set again: some drivers keep the old image otherwise.
+			if (!output->spriteFailed)
+				output->spriteShown = false;
 		}
 		if (want && output->spriteFailed)
 			want = false;

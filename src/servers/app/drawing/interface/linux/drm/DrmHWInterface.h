@@ -14,6 +14,7 @@ extern "C" {
 
 #include <OS.h>
 #include <Region.h>
+#include <String.h>
 #include <BFutexLocker.h>
 #include <pthread.h>
 #include <atomic>
@@ -304,6 +305,21 @@ public:
 			// True once after the connector's preferred mode changed.
 			bool				TakeOutputModeChange(uint32 connector);
 
+			// Every connected connector, the first one and the
+			// disabled ones included.
+			struct OutputInfo {
+				uint32	connector;
+				// Its place among the device's connectors.
+				int32	index;
+				BString	name;
+				bool	disabled;
+				bool	first;
+			};
+			void				ListOutputs(std::vector<OutputInfo>& outputs);
+			// A disabled output gets no screen and its CRTC is off.
+			void				SetOutputDisabled(uint32 connector,
+									bool disabled);
+
 			status_t			SetOutputMode(uint32 connector,
 									const display_mode& mode);
 			status_t			GetOutputMode(uint32 connector,
@@ -536,6 +552,8 @@ private:
 			// Changed under the exclusive lock and fDirtyMutex; read
 			// under either.
 			std::vector<Output*>	fOutputs;
+			// fDirtyMutex.
+			std::vector<uint32>	fDisabledOutputs;
 
 			// Written only under fFlipMutex (SetMode, _OnSessionEnable),
 			// read lock-free by the event thread's flip gate; atomic so

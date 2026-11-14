@@ -62,6 +62,7 @@
 #include "Screen.h"
 #include "ScreenManager.h"
 #include "ScreenRelayout.h"
+#include <DeskbarPrivate.h>
 #include "ServerApp.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -486,6 +487,8 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 	fDirectScreenTeam(-1),
 	fCurrentWorkspace(0),
 	fPreviousWorkspace(0),
+	fMainScreenID(0),
+	fStoredMainScreenID(0),
 	fAllWindows(kAllWindowList),
 	fSubsetWindows(kSubsetList),
 	fFocusList(kFocusList),
@@ -605,6 +608,18 @@ Desktop::Init()
 	// geometry. The stored rotation is relative to the panel mounting; an
 	// absolute one from an older version is converted once here, while the
 	// scanout still shows the bare mounting.
+	{
+		const BMessage& outputs = *fSettings->WorkspacesMessage(0);
+		if (outputs.FindInt32("main screen", &fStoredMainScreenID) != B_OK)
+			fStoredMainScreenID = 0;
+		BString name;
+		for (int32 i = 0; outputs.FindString("disabled output", i, &name)
+				== B_OK; i++) {
+			fDisabledOutputs.AddItem(new(std::nothrow) BString(name));
+			gScreenManager->SetOutputEnabled(name.String(), false);
+		}
+	}
+
 	ScreenConfigurations& storedScreens
 		= fWorkspaces[0].StoredScreenConfiguration();
 	gScreenManager->Lock();
@@ -647,6 +662,9 @@ Desktop::Init()
 	}
 
 	HWInterface()->SetDPMSMode(B_DPMS_ON);
+
+	if (fVirtualScreen.ScreenByID(fStoredMainScreenID) != NULL)
+		fMainScreenID = fVirtualScreen.ScreenByID(fStoredMainScreenID)->ID();
 
 	// Restore brightness
 	{
@@ -1097,13 +1115,13 @@ Desktop::RevertScreenModes(uint32 workspaces)
 status_t
 Desktop::SetBrightness(int32 id, float brightness)
 {
-	status_t result = HWInterface()->SetBrightness(brightness);
+	status_t result = _InterfaceFor(id)->SetBrightness(brightness);
 
 	if (result == B_OK) {
 		screen_configuration* current
 			= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
 		if (current != NULL) {
-			HWInterface()->GetBrightness(&brightness);
+			_InterfaceFor(id)->GetBrightness(&brightness);
 			current->brightness = brightness;
 
 			// Save brightness for next boot
@@ -1127,7 +1145,7 @@ Desktop::SetRotation(int32 id, int32 rotation)
 	// lock so nothing draws with the old clipping in between. The
 	// synchronous ScreenChanged() nests it.
 	AutoWriteLocker windowLocker(fWindowLock);
-	status_t result = HWInterface()->SetPanelOrientation(rotation);
+	status_t result = _InterfaceFor(id)->SetPanelOrientation(rotation);
 	windowLocker.Unlock();
 
 	// While an unconfirmed change is pending, only the live state moves;
@@ -1139,6 +1157,8 @@ Desktop::SetRotation(int32 id, int32 rotation)
 		if (stored.CurrentByID(id) == NULL) {
 			screen_configuration* current
 				= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
+			if (current == NULL)
+				return result;
 			stored.Set(id, current->has_info ? &current->info : NULL,
 				current->frame, current->mode);
 		}
@@ -1154,7 +1174,7 @@ Desktop::SetRotation(int32 id, int32 rotation)
 int32
 Desktop::Rotation(int32 id) const
 {
-	return HWInterface()->PanelOrientation();
+	return _InterfaceFor(id)->PanelOrientation();
 }
 
 
@@ -1163,7 +1183,7 @@ Desktop::SetReflection(int32 id, int32 reflection)
 {
 	// Not locked: HWInterface notifies listeners synchronously and
 	// Desktop::ScreenChanged() takes the window lock for writing.
-	status_t result = HWInterface()->SetPanelReflection(reflection);
+	status_t result = _InterfaceFor(id)->SetPanelReflection(reflection);
 
 	// Same rule as SetRotation: pending changes touch live state only.
 	if (result == B_OK && !_ScreenChangeStoreDeferred()) {
@@ -1172,6 +1192,8 @@ Desktop::SetReflection(int32 id, int32 reflection)
 		if (stored.CurrentByID(id) == NULL) {
 			screen_configuration* current
 				= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
+			if (current == NULL)
+				return result;
 			stored.Set(id, current->has_info ? &current->info : NULL,
 				current->frame, current->mode);
 		}
@@ -1186,7 +1208,7 @@ Desktop::SetReflection(int32 id, int32 reflection)
 int32
 Desktop::Reflection(int32 id) const
 {
-	return HWInterface()->PanelReflection();
+	return _InterfaceFor(id)->PanelReflection();
 }
 
 
@@ -1321,6 +1343,30 @@ Desktop::_TakeScreenChangeSnapshot(screen_change_snapshot& snapshot)
 		}
 		snapshot.modeCount = workspace + 1;
 	}
+
+	AutoReadLocker locker(fScreenLock);
+
+	snapshot.mainScreen = fMainScreenID;
+	snapshot.screenCount = 0;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens()
+			&& i < screen_change_snapshot::kMaxScreens; i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		const int32 n = snapshot.screenCount++;
+		snapshot.screenIDs[n] = screen->ID();
+		snapshot.originX[n] = screen->Frame().left;
+		snapshot.originY[n] = screen->Frame().top;
+		snapshot.rotations[n] = screen->HWInterface()->PanelOrientation();
+		snapshot.reflections[n] = screen->HWInterface()->PanelReflection();
+		screen->GetMode(snapshot.screenModes[n]);
+	}
+
+	snapshot.disabledCount = 0;
+	for (int32 i = 0; i < fDisabledOutputs.CountItems()
+			&& i < screen_change_snapshot::kMaxScreens; i++) {
+		strlcpy(snapshot.disabled[snapshot.disabledCount++],
+			fDisabledOutputs.ItemAt(i)->String(),
+			sizeof(snapshot.disabled[0]));
+	}
 }
 
 
@@ -1333,6 +1379,25 @@ Desktop::_RestoreScreenChange()
 		snapshot = fScreenChangeSnapshot;
 	}
 
+	// Outputs first: they add and remove the screens the rest is about.
+	{
+		BObjectList<ScreenManager::output_info, true> outputs;
+		gScreenManager->GetOutputs(outputs);
+		for (int32 i = 0; i < outputs.CountItems(); i++) {
+			ScreenManager::output_info* output = outputs.ItemAt(i);
+			if (output->first)
+				continue;
+
+			bool wasDisabled = false;
+			for (int32 j = 0; j < snapshot.disabledCount; j++) {
+				if (output->name == snapshot.disabled[j])
+					wasDisabled = true;
+			}
+			if (wasDisabled == output->enabled)
+				SetOutputEnabled(output->name.String(), !wasDisabled);
+		}
+	}
+
 	for (int32 workspace = 0; workspace < snapshot.modeCount; workspace++) {
 		if (snapshot.hasModes[workspace])
 			SetScreenMode(workspace, 0, snapshot.modes[workspace], true);
@@ -1342,6 +1407,31 @@ Desktop::_RestoreScreenChange()
 		SetRotation(0, snapshot.rotation);
 		SetReflection(0, snapshot.reflection);
 	}
+
+	int32 ids[screen_change_snapshot::kMaxScreens];
+	BPoint origins[screen_change_snapshot::kMaxScreens];
+	int32 placed = 0;
+	for (int32 i = 0; i < snapshot.screenCount; i++) {
+		const int32 id = snapshot.screenIDs[i];
+		if (id != 0 && fVirtualScreen.ScreenByID(id) != NULL) {
+			SetScreenMode(fCurrentWorkspace, id, snapshot.screenModes[i],
+				true);
+			SetRotation(id, snapshot.rotations[i]);
+			SetReflection(id, snapshot.reflections[i]);
+		}
+
+		if (fVirtualScreen.ScreenByID(id) != NULL) {
+			ids[placed] = id;
+			origins[placed++]
+				= BPoint(snapshot.originX[i], snapshot.originY[i]);
+		}
+	}
+	if (placed > 0)
+		SetScreenLayout(ids, origins, placed);
+
+	if (snapshot.screenCount > 0
+			&& snapshot.mainScreen != fMainScreenID)
+		SetMainScreen(snapshot.mainScreen);
 
 	if (snapshot.columns != fSettings->WorkspacesColumns()
 		|| snapshot.rows != fSettings->WorkspacesRows()) {
@@ -1381,6 +1471,29 @@ Desktop::_StoreScreenChange()
 
 		StoreWorkspaceConfiguration(workspace);
 	}
+
+	// The other screens, their places, the main one and the disabled outputs.
+	for (int32 i = 1; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* other = fVirtualScreen.ScreenAt(i);
+		for (int32 workspace = 0; workspace < workspaces; workspace++) {
+			display_mode mode;
+			if (GetScreenMode(workspace, other->ID(), mode) != B_OK)
+				continue;
+
+			ScreenConfigurations& stored
+				= fWorkspaces[workspace].StoredScreenConfiguration();
+			monitor_info otherInfo;
+			bool hasOtherInfo = other->GetMonitorInfo(otherInfo) == B_OK;
+			stored.Set(other->ID(), hasOtherInfo ? &otherInfo : NULL,
+				other->Frame(), mode);
+			stored.SetRotation(other->ID(),
+				other->HWInterface()->PanelOrientation());
+			stored.SetReflection(other->ID(),
+				other->HWInterface()->PanelReflection());
+		}
+	}
+
+	_StoreScreenLayout();
 }
 
 
@@ -1458,7 +1571,7 @@ Desktop::_ScreenChangeTimer(uint32 generation)
 status_t
 Desktop::SetTemperature(int32 id, float kelvin)
 {
-	status_t result = HWInterface()->SetTemperature(kelvin);
+	status_t result = _InterfaceFor(id)->SetTemperature(kelvin);
 
 	if (result == B_OK) {
 		ScreenConfigurations& stored
@@ -1466,6 +1579,8 @@ Desktop::SetTemperature(int32 id, float kelvin)
 		if (stored.CurrentByID(id) == NULL) {
 			screen_configuration* current
 				= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
+			if (current == NULL)
+				return result;
 			stored.Set(id, current->has_info ? &current->info : NULL,
 				current->frame, current->mode);
 		}
@@ -1481,8 +1596,240 @@ float
 Desktop::Temperature(int32 id) const
 {
 	float temp = 6500.0f;
-	HWInterface()->GetTemperature(&temp);
+	_InterfaceFor(id)->GetTemperature(&temp);
 	return temp;
+}
+
+
+::HWInterface*
+Desktop::_InterfaceFor(int32 id) const
+{
+	Screen* screen = fVirtualScreen.ScreenByID(id);
+	if (screen != NULL)
+		return screen->HWInterface();
+
+	return HWInterface();
+}
+
+
+int32
+Desktop::MapScreenID(int32 id) const
+{
+	const int32 main = fMainScreenID;
+	if (id == 0)
+		return main;
+	if (id == main)
+		return 0;
+
+	return id;
+}
+
+
+/*!	The Deskbar follows the main screen, keeping its place on it. The
+	desktop windows span every screen and stay where they are; they are told.
+*/
+void
+Desktop::_MoveDesktopWindows(const BRect& from, const BRect& to)
+{
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
+
+	if (from == to)
+		return;
+
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		const char* signature = NULL;
+		if (window->ServerWindow() != NULL
+				&& window->ServerWindow()->App() != NULL)
+			signature = window->ServerWindow()->App()->Signature();
+		if (signature == NULL
+				|| strcasecmp(signature, kDeskbarSignature) != 0)
+			continue;
+
+		Window* topWindow = window->TopLayerStackWindow();
+		if (topWindow != NULL && topWindow != window)
+			continue;
+
+		BRect footprint = window->Frame();
+		if (::Decorator* decorator = window->Decorator())
+			footprint = decorator->GetFootprint().Frame();
+		const BPoint inset = window->Frame().LeftTop() - footprint.LeftTop();
+
+		for (int32 i = 0; i < kMaxWorkspaces; i++) {
+			if (!window->InWorkspace(i))
+				continue;
+
+			window_anchor& anchor = window->Anchor(i);
+			BRect placed = footprint;
+			if (i != fCurrentWorkspace) {
+				if (anchor.position == kInvalidWindowPosition)
+					continue;
+				placed.OffsetTo(anchor.position - inset);
+			}
+
+			const relayout_placement placement = RelayoutCapture(placed, from);
+			const BPoint origin = RelayoutOrigin(placement, placed, to);
+			if (i == fCurrentWorkspace) {
+				window->MoveBy((int32)(origin.x - placed.left),
+					(int32)(origin.y - placed.top));
+			} else
+				anchor.position = origin + inset;
+		}
+	}
+}
+
+
+status_t
+Desktop::SetMainScreen(int32 id)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+
+	Screen* screen = fVirtualScreen.ScreenByID(id);
+	if (screen == NULL)
+		return B_NAME_NOT_FOUND;
+
+	id = screen->ID();
+	fStoredMainScreenID = id;
+	if (id != fMainScreenID) {
+		Screen* old = fVirtualScreen.ScreenByID(fMainScreenID);
+		const BRect from = old != NULL ? old->Frame() : screen->Frame();
+		fMainScreenID = id;
+		_MoveDesktopWindows(from, screen->Frame());
+		_ScreenChanged(screen);
+		_NotifyAllWindows();
+	}
+
+	_StoreScreenLayout();
+	return B_OK;
+}
+
+
+/*!	Tells every window to look at its screen again, e.g. after the main one
+	changed.
+*/
+void
+Desktop::_NotifyAllWindows()
+{
+	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
+
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		const Screen* screen = window->Screen();
+		if (screen == NULL || window->ServerWindow() == NULL)
+			continue;
+
+		BMessage update(B_SCREEN_CHANGED);
+		update.AddInt64("when", real_time_clock_usecs());
+		update.AddRect("frame", screen->Frame());
+		update.AddInt32("mode", screen->ColorSpace());
+		window->ServerWindow()->ScreenChanged(&update);
+	}
+}
+
+
+status_t
+Desktop::SetScreenLayout(const int32* ids, const BPoint* origins, int32 count)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+
+	if (count < 1 || count > kMaxLayoutScreens)
+		return B_BAD_VALUE;
+
+	BPoint minimum(origins[0]);
+	for (int32 i = 0; i < count; i++) {
+		if (fVirtualScreen.ScreenByID(ids[i]) == NULL)
+			return B_NAME_NOT_FOUND;
+
+		minimum.x = min_c(minimum.x, origins[i].x);
+		minimum.y = min_c(minimum.y, origins[i].y);
+	}
+
+	{
+		AutoWriteLocker screenLocker(fScreenLock);
+		for (int32 i = 0; i < count; i++) {
+			fVirtualScreen.ScreenByID(ids[i])->HWInterface()->SetOrigin(
+				BPoint(floorf(origins[i].x - minimum.x),
+					floorf(origins[i].y - minimum.y)));
+		}
+	}
+
+	_ScreenChanged(fVirtualScreen.ScreenAt(0));
+	_StoreScreenLayout();
+	return B_OK;
+}
+
+
+status_t
+Desktop::SetOutputEnabled(const char* name, bool enabled)
+{
+	// Not under the window lock: the screen manager takes it back when it
+	// adds or removes the screen.
+	status_t status = gScreenManager->SetOutputEnabled(name, enabled);
+	if (status != B_OK)
+		return status;
+
+	AutoWriteLocker windowLocker(fWindowLock);
+	{
+		AutoWriteLocker screenLocker(fScreenLock);
+		for (int32 i = fDisabledOutputs.CountItems(); i-- > 0;) {
+			if (*fDisabledOutputs.ItemAt(i) == name)
+				delete fDisabledOutputs.RemoveItemAt(i);
+		}
+		if (!enabled)
+			fDisabledOutputs.AddItem(new(std::nothrow) BString(name));
+	}
+
+	_StoreScreenLayout();
+	return B_OK;
+}
+
+
+void
+Desktop::_AddOutputSettings(BMessage& settings)
+{
+	settings.RemoveName("main screen");
+	settings.RemoveName("disabled output");
+
+	settings.AddInt32("main screen", fStoredMainScreenID);
+
+	AutoReadLocker _(fScreenLock);
+	for (int32 i = 0; i < fDisabledOutputs.CountItems(); i++)
+		settings.AddString("disabled output", *fDisabledOutputs.ItemAt(i));
+}
+
+
+/*!	Writes where the screens are, and the output settings, to every
+	workspace. Pending unconfirmed changes are stored when they are
+	confirmed.
+*/
+void
+Desktop::_StoreScreenLayout()
+{
+	if (_ScreenChangeStoreDeferred())
+		return;
+
+	int32 workspaces = fSettings->WorkspacesCount();
+	if (workspaces > kMaxWorkspaces)
+		workspaces = kMaxWorkspaces;
+
+	for (int32 workspace = 0; workspace < workspaces; workspace++) {
+		ScreenConfigurations& stored
+			= fWorkspaces[workspace].StoredScreenConfiguration();
+
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			Screen* screen = fVirtualScreen.ScreenAt(i);
+			display_mode mode;
+			if (GetScreenMode(workspace, screen->ID(), mode) != B_OK)
+				continue;
+
+			monitor_info info;
+			bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+			stored.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(),
+				mode);
+		}
+
+		StoreWorkspaceConfiguration(workspace);
+	}
 }
 
 
@@ -1614,6 +1961,8 @@ Desktop::StoreWorkspaceConfiguration(int32 index)
 
 	BMessage settings;
 	fWorkspaces[index].StoreConfiguration(settings);
+	if (index == 0)
+		_AddOutputSettings(settings);
 
 	// and store them
 
@@ -4489,6 +4838,37 @@ Desktop::ScreenAdded(Screen* screen)
 		return;
 	screenLocker.Unlock();
 
+	// What the user set for this monitor the last time.
+	{
+		monitor_info info;
+		bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+		screen_configuration* config = fWorkspaces[0]
+			.StoredScreenConfiguration().BestFit(screen->ID(),
+				hasInfo ? &info : NULL);
+		::HWInterface* interface = screen->HWInterface();
+		if (config != NULL && config->id == screen->ID()) {
+			if (config->brightness > 0)
+				interface->SetBrightness(config->brightness);
+			if (config->temperature > 0 && config->temperature != 6500.0f)
+				interface->SetTemperature(config->temperature);
+			if (config->reflection != interface->PanelReflection())
+				interface->SetPanelReflection(config->reflection);
+			if (config->rotation != interface->PanelOrientation()) {
+				// Changing it resets the mode to the preferred one.
+				const display_mode mode = config->mode;
+				if (interface->SetPanelOrientation(config->rotation) == B_OK)
+					screen->SetMode(mode);
+			}
+		}
+	}
+
+	if (screen->ID() == fStoredMainScreenID && screen->ID() != fMainScreenID) {
+		Screen* old = fVirtualScreen.ScreenByID(fMainScreenID);
+		const BRect from = old != NULL ? old->Frame() : screen->Frame();
+		fMainScreenID = screen->ID();
+		_MoveDesktopWindows(from, screen->Frame());
+	}
+
 	_ScreenChanged(screen);
 }
 
@@ -4507,6 +4887,11 @@ Desktop::ScreenRemoved(Screen* screen)
 	// Its windows go to the main screen, placed as they were.
 	_RelayoutWindowsForScreen(screen, fVirtualScreen.ScreenFrameAt(index),
 		fVirtualScreen.ScreenFrameAt(0), true);
+
+	if (screen->ID() == fMainScreenID) {
+		fMainScreenID = 0;
+		_MoveDesktopWindows(screen->Frame(), main->Frame());
+	}
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {

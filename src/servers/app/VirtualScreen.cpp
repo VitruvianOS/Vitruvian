@@ -154,9 +154,24 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		screen_configuration* stored = configurations.BestFit(screen->ID(),
 			hasInfo ? &info : NULL);
 		if (stored != NULL && stored->id == screen->ID()
-			&& stored->frame.left >= 0 && stored->frame.top >= 0)
+			&& stored->frame.left >= 0 && stored->frame.top >= 0) {
 			screen->HWInterface()->SetOrigin(stored->frame.LeftTop());
-		else
+
+			// The first one may not have been at the origin either.
+			if (fScreenList.CountItems() == 1) {
+				Screen* first = fScreenList.ItemAt(0)->screen;
+				monitor_info firstInfo;
+				bool hasFirstInfo = first->GetMonitorInfo(firstInfo) == B_OK;
+				screen_configuration* firstStored = configurations.BestFit(
+					first->ID(), hasFirstInfo ? &firstInfo : NULL);
+				if (firstStored != NULL && firstStored->id == first->ID()
+					&& firstStored->frame.left >= 0
+					&& firstStored->frame.top >= 0) {
+					first->HWInterface()->SetOrigin(
+						firstStored->frame.LeftTop());
+				}
+			}
+		} else
 			screen->HWInterface()->SetOrigin(BPoint(fFrame.right + 1, 0));
 	}
 

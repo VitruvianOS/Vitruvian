@@ -79,7 +79,8 @@ ScreenManager::ScreenManager()
 	:
 	BLooper("screen manager"),
 	fScreenList(4),
-	fDrmInterface(NULL)
+	fDrmInterface(NULL),
+	fSyncLock("output sync")
 {
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if defined(USE_DIRECT_WINDOW_TEST_MODE)
@@ -305,6 +306,71 @@ ScreenManager::_ScanDrivers()
 }
 
 
+void
+ScreenManager::GetOutputs(BObjectList<output_info, true>& outputs)
+{
+#if !defined(HAIKU_TARGET_PLATFORM_LIBBE_TEST) && defined(__VOS__)
+	if (fDrmInterface == NULL)
+		return;
+
+	std::vector<DrmHWInterface::OutputInfo> list;
+	fDrmInterface->ListOutputs(list);
+
+	BAutolock locker(this);
+
+	for (size_t i = 0; i < list.size(); i++) {
+		output_info* info = new(nothrow) output_info;
+		if (info == NULL)
+			return;
+
+		info->name = list[i].name;
+		info->enabled = !list[i].disabled;
+		info->first = list[i].first;
+		info->screen = -1;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* item = fScreenList.ItemAt(j);
+			if (list[i].first
+					? item->screen->HWInterface() == fDrmInterface
+					: item->connector == list[i].connector)
+				info->screen = item->screen->ID();
+		}
+		outputs.AddItem(info);
+	}
+#endif
+}
+
+
+status_t
+ScreenManager::SetOutputEnabled(const char* name, bool enabled)
+{
+#if !defined(HAIKU_TARGET_PLATFORM_LIBBE_TEST) && defined(__VOS__)
+	if (fDrmInterface == NULL)
+		return B_NOT_SUPPORTED;
+
+	std::vector<DrmHWInterface::OutputInfo> list;
+	fDrmInterface->ListOutputs(list);
+	if (!list.empty() && list[0].first && list[0].name == name)
+		return B_NOT_ALLOWED;
+
+	{
+		BAutolock syncLocker(fSyncLock);
+
+		for (int32 i = fDisabledOutputs.CountItems(); i-- > 0;) {
+			if (*fDisabledOutputs.ItemAt(i) == name)
+				delete fDisabledOutputs.RemoveItemAt(i);
+		}
+		if (!enabled)
+			fDisabledOutputs.AddItem(new BString(name));
+	}
+
+	_SyncOutputs();
+	return B_OK;
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+
 // Ids must stay unique for the life of the server: removals shrink the
 // list, so counting items would eventually collide.
 int32
@@ -330,6 +396,22 @@ ScreenManager::_SyncOutputs()
 #if !defined(HAIKU_TARGET_PLATFORM_LIBBE_TEST) && defined(__VOS__)
 	if (fDrmInterface == NULL)
 		return;
+
+	BAutolock syncLocker(fSyncLock);
+
+	std::vector<DrmHWInterface::OutputInfo> outputs;
+	fDrmInterface->ListOutputs(outputs);
+	for (size_t i = 0; i < outputs.size(); i++) {
+		bool disabled = false;
+		for (int32 j = 0; j < fDisabledOutputs.CountItems(); j++) {
+			if (*fDisabledOutputs.ItemAt(j) == outputs[i].name)
+				disabled = true;
+		}
+		if (disabled != outputs[i].disabled) {
+			fDrmInterface->SetOutputDisabled(outputs[i].connector,
+				disabled);
+		}
+	}
 
 	std::vector<uint32> connected;
 	fDrmInterface->GetConnectedOutputs(connected);
@@ -390,7 +472,17 @@ ScreenManager::_SyncOutputs()
 		if (interface == NULL)
 			continue;
 
-		screen_item* item = _AddHWInterface(interface, _NextID());
+		// The same connector gets the same id every time: the stored
+		// place of a screen is found by it.
+		int32 id = -1;
+		for (size_t j = 0; j < outputs.size(); j++) {
+			if (outputs[j].connector == connected[i])
+				id = outputs[j].index + 1;
+		}
+		if (id < 0 || ScreenByID(id) != NULL)
+			id = _NextID();
+
+		screen_item* item = _AddHWInterface(interface, id);
 		if (item == NULL) {
 			fDrmInterface->RemoveOutput(connected[i]);
 			continue;

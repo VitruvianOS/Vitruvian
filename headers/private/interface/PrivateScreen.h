@@ -14,6 +14,7 @@
 #include <Accelerant.h>
 #include <GraphicsDefs.h>
 #include <ObjectList.h>
+#include <Point.h>
 #include <Rect.h>
 
 
@@ -25,6 +26,9 @@ class BWindow;
 
 
 #define B_CURRENT_WORKSPACE_INDEX	(~0L)
+
+
+class BMessage;
 
 
 namespace BPrivate {
@@ -39,6 +43,16 @@ public:
 	static	void				Put(BPrivateScreen* screen);
 
 	static	BPrivateScreen*		GetNext(BPrivateScreen* screen);
+
+	// The connected outputs: "name", "enabled", "first", "screen" (-1
+	// when there is none), "frame" and "main" for each.
+	static	status_t			GetOutputs(BMessage* outputs);
+	static	status_t			SetOutputEnabled(const char* name,
+									bool enabled);
+	// Where each screen's top left sits on the desktop.
+	static	status_t			SetLayout(const int32* ids,
+									const BPoint* origins, int32 count);
+	static	status_t			SetMainScreen(int32 id);
 
 			bool				IsValid() const;
 			color_space			ColorSpace();

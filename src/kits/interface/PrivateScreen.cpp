@@ -192,6 +192,107 @@ BPrivateScreen::GetNext(BPrivateScreen* screen)
 }
 
 
+status_t
+BPrivateScreen::GetOutputs(BMessage* outputs)
+{
+	if (outputs == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_OUTPUTS);
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK)
+		return B_ERROR;
+	if (status != B_OK)
+		return status;
+
+	int32 count = 0;
+	link.Read<int32>(&count);
+	for (int32 i = 0; i < count; i++) {
+		BString name;
+		bool enabled = false;
+		bool first = false;
+		bool main = false;
+		int32 screen = -1;
+		BRect frame;
+		if (link.ReadString(name) != B_OK
+			|| link.Read<bool>(&enabled) != B_OK
+			|| link.Read<bool>(&first) != B_OK
+			|| link.Read<int32>(&screen) != B_OK
+			|| link.Read<BRect>(&frame) != B_OK
+			|| link.Read<bool>(&main) != B_OK)
+			return B_ERROR;
+
+		outputs->AddString("name", name);
+		outputs->AddBool("enabled", enabled);
+		outputs->AddBool("first", first);
+		outputs->AddInt32("screen", screen);
+		outputs->AddRect("frame", frame);
+		outputs->AddBool("main", main);
+	}
+
+	return B_OK;
+}
+
+
+status_t
+BPrivateScreen::SetOutputEnabled(const char* name, bool enabled)
+{
+	if (name == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_OUTPUT_ENABLED);
+	link.AttachString(name);
+	link.Attach<bool>(enabled);
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK)
+		return B_ERROR;
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::SetLayout(const int32* ids, const BPoint* origins,
+	int32 count)
+{
+	if (ids == NULL || origins == NULL || count < 1)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_SCREEN_LAYOUT);
+	link.Attach<int32>(count);
+	for (int32 i = 0; i < count; i++) {
+		link.Attach<int32>(ids[i]);
+		link.Attach<BPoint>(origins[i]);
+	}
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK)
+		return B_ERROR;
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::SetMainScreen(int32 id)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_MAIN_SCREEN);
+	link.Attach<int32>(id);
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK)
+		return B_ERROR;
+
+	return status;
+}
+
+
 bool
 BPrivateScreen::_IsValid(int32 id)
 {

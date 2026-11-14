@@ -401,6 +401,12 @@ enum {
 	// team_id (BSurface: team the window is listed under)
 	AS_SET_WINDOW_TEAM,
 
+	// Outputs and where their screens sit on the desktop.
+	AS_GET_OUTPUTS,
+	AS_SET_OUTPUT_ENABLED,
+	AS_SET_SCREEN_LAYOUT,
+	AS_SET_MAIN_SCREEN,
+
 	AS_LAST_CODE
 };
 

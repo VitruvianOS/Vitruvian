@@ -60,6 +60,7 @@
 #include "InputManager.h"
 #include "OffscreenServerWindow.h"
 #include "Screen.h"
+#include "ScreenManager.h"
 #include "ServerBitmap.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -2960,7 +2961,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			bool valid = false;
 			if (link.Read<int32>(&id) == B_OK) {
 				AutoReadLocker _(fDesktop->ScreenLocker());
-				valid = fDesktop->VirtualScreen().ScreenByID(id) != NULL;
+				valid = fDesktop->VirtualScreen().ScreenByID(
+					fDesktop->MapScreenID(id)) != NULL;
 			}
 
 			fLink.StartMessage(valid ? B_OK : B_ERROR);
@@ -2976,16 +2978,17 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 id;
 			link.Read<int32>(&id);
 
+			// In client id order, the main screen being 0.
 			int32 next = -1;
 			{
 				AutoReadLocker _(fDesktop->ScreenLocker());
 				const ::VirtualScreen& screens = fDesktop->VirtualScreen();
-				const int32 index
-					= screens.ScreenIndex(screens.ScreenByID(id));
-				Screen* screen = index >= 0
-					? screens.ScreenAt(index + 1) : NULL;
-				if (screen != NULL)
-					next = screen->ID();
+				for (int32 i = 0; i < screens.CountScreens(); i++) {
+					const int32 client
+						= fDesktop->MapScreenID(screens.ScreenAt(i)->ID());
+					if (client > id && (next < 0 || client < next))
+						next = client;
+				}
 			}
 
 			if (next >= 0) {
@@ -3029,7 +3032,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 						}
 
 						fLink.StartMessage(B_OK);
-						fLink.Attach<int32>(screen->ID());
+						fLink.Attach<int32>(fDesktop->MapScreenID(screen->ID()));
 						status = B_OK;
 						break;
 					}
@@ -3052,6 +3055,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 			uint32 workspace;
 			link.Read<uint32>(&workspace);
 
@@ -3077,6 +3081,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 			uint32 workspace;
 			link.Read<uint32>(&workspace);
 
@@ -3115,6 +3120,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_PROPOSE_MODE\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			display_mode target, low, high;
 			link.Read<display_mode>(&target);
@@ -3143,6 +3149,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			display_mode* modeList;
 			uint32 count;
@@ -3173,6 +3180,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 			uint32 workspace;
 			link.Read<uint32>(&workspace);
 
@@ -3244,11 +3252,12 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// We aren't using the screen_id for now...
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			accelerant_device_info accelerantInfo;
 			// TODO: I wonder if there should be a "desktop" lock...
 			status_t status
-				= fDesktop->HWInterface()->GetDeviceInfo(&accelerantInfo);
+				= _ScreenInterface(id)->GetDeviceInfo(&accelerantInfo);
 			if (status == B_OK) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<accelerant_device_info>(accelerantInfo);
@@ -3265,6 +3274,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			monitor_info info;
 			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
@@ -3287,9 +3297,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// We aren't using the screen_id for now...
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			fLink.StartMessage(B_OK);
-			fLink.Attach<sem_id>(fDesktop->HWInterface()->RetraceSemaphore());
+			fLink.Attach<sem_id>(_ScreenInterface(id)->RetraceSemaphore());
 			fLink.Flush();
 			break;
 		}
@@ -3301,9 +3312,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// We aren't using the screen_id for now...
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			display_timing_constraints constraints;
-			status_t status = fDesktop->HWInterface()->GetTimingConstraints(
+			status_t status = _ScreenInterface(id)->GetTimingConstraints(
 				&constraints);
 			if (status == B_OK) {
 				fLink.StartMessage(B_OK);
@@ -3320,6 +3332,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: get pixel clock limits\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 			display_mode mode;
 			link.Read<display_mode>(&mode);
 
@@ -3344,6 +3357,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SET_DPMS\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			uint32 mode;
 			link.Read<uint32>(&mode);
@@ -3361,6 +3375,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			uint32 state = fDesktop->HWInterface()->DPMSMode();
 			fLink.StartMessage(B_OK);
@@ -3374,6 +3389,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_GET_DPMS_CAPABILITIES\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			uint32 capabilities = fDesktop->HWInterface()->DPMSCapabilities();
 			fLink.StartMessage(B_OK);
@@ -3387,6 +3403,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_SET_ROTATION\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			int32 rotation;
 			link.Read<int32>(&rotation);
@@ -3403,6 +3420,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_GET_ROTATION\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<int32>(fDesktop->Rotation(id));
@@ -3416,6 +3434,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_SET_REFLECTION\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			int32 reflection;
 			link.Read<int32>(&reflection);
@@ -3432,6 +3451,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_GET_REFLECTION\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<int32>(fDesktop->Reflection(id));
@@ -3475,6 +3495,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_SET_BRIGHTNESS\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			float brightness;
 			link.Read<float>(&brightness);
@@ -3491,9 +3512,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_GET_BRIGHTNESS\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			float brightness;
-			status_t result = fDesktop->HWInterface()->GetBrightness(&brightness);
+			status_t result = _ScreenInterface(id)->GetBrightness(&brightness);
 			fLink.StartMessage(result);
 			if (result == B_OK)
 				fLink.Attach<float>(brightness);
@@ -3506,11 +3528,12 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_SET_TEMPERATURE\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			float kelvin;
 			link.Read<float>(&kelvin);
 
-			status_t status = fDesktop->HWInterface()->SetTemperature(kelvin);
+			status_t status = _ScreenInterface(id)->SetTemperature(kelvin);
 			fLink.StartMessage(status);
 
 			fLink.Flush();
@@ -3522,9 +3545,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: AS_SCREEN_GET_TEMPERATURE\n", Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			float kelvin;
-			status_t result = fDesktop->HWInterface()->GetTemperature(&kelvin);
+			status_t result = _ScreenInterface(id)->GetTemperature(&kelvin);
 			fLink.StartMessage(result);
 			if (result == B_OK)
 				fLink.Attach<float>(kelvin);
@@ -3538,6 +3562,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				Signature()));
 			int32 id;
 			link.Read<int32>(&id);
+			id = fDesktop->MapScreenID(id);
 
 			BString name;
 			AutoReadLocker screenLocker(fDesktop->ScreenLocker());
@@ -3546,6 +3571,97 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			fLink.StartMessage(result);
 			if (result == B_OK)
 				fLink.AttachString(name.String());
+			fLink.Flush();
+			break;
+		}
+
+		case AS_GET_OUTPUTS:
+		{
+			BObjectList<ScreenManager::output_info, true> outputs;
+			if (gScreenManager != NULL)
+				gScreenManager->GetOutputs(outputs);
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<int32>(outputs.CountItems());
+			for (int32 i = 0; i < outputs.CountItems(); i++) {
+				ScreenManager::output_info* output = outputs.ItemAt(i);
+
+				BRect frame(0, 0, -1, -1);
+				int32 screen = -1;
+				bool main = false;
+				if (output->screen >= 0
+					&& fDesktop->GetScreenFrame(B_CURRENT_WORKSPACE_INDEX,
+						output->screen, frame) == B_OK) {
+					main = output->screen == fDesktop->MainScreen();
+					screen = fDesktop->MapScreenID(output->screen);
+				}
+
+				fLink.AttachString(output->name.String());
+				fLink.Attach<bool>(output->enabled);
+				fLink.Attach<bool>(output->first);
+				fLink.Attach<int32>(screen);
+				fLink.Attach<BRect>(frame);
+				fLink.Attach<bool>(main);
+			}
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SET_OUTPUT_ENABLED:
+		{
+			// Attached data
+			// 1) string connector name
+			// 2) bool enabled
+
+			char name[128];
+			bool enabled = true;
+			status_t status = link.ReadString(name, sizeof(name));
+			if (status == B_OK)
+				status = link.Read<bool>(&enabled);
+			if (status == B_OK)
+				status = fDesktop->SetOutputEnabled(name, enabled);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SET_SCREEN_LAYOUT:
+		{
+			// Attached data
+			// 1) int32 count
+			// 2) count times: int32 screen, BPoint origin
+
+			int32 count = 0;
+			status_t status = link.Read<int32>(&count);
+			int32 ids[Desktop::kMaxLayoutScreens];
+			BPoint origins[Desktop::kMaxLayoutScreens];
+			if (status == B_OK
+				&& (count < 1 || count > Desktop::kMaxLayoutScreens))
+				status = B_BAD_VALUE;
+			for (int32 i = 0; status == B_OK && i < count; i++) {
+				status = link.Read<int32>(&ids[i]);
+				if (status == B_OK)
+					status = link.Read<BPoint>(&origins[i]);
+				if (status == B_OK)
+					ids[i] = fDesktop->MapScreenID(ids[i]);
+			}
+			if (status == B_OK)
+				status = fDesktop->SetScreenLayout(ids, origins, count);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SET_MAIN_SCREEN:
+		{
+			int32 id;
+			status_t status = link.Read<int32>(&id);
+			if (status == B_OK)
+				status = fDesktop->SetMainScreen(fDesktop->MapScreenID(id));
+
+			fLink.StartMessage(status);
 			fLink.Flush();
 			break;
 		}

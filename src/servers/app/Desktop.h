@@ -76,6 +76,19 @@ struct screen_change_snapshot {
 			int32				modeCount;
 			display_mode		modes[kMaxWorkspaces];
 			bool				hasModes[kMaxWorkspaces];
+
+			// Every screen: place, transform and current mode.
+			enum { kMaxScreens = 8 };
+			int32				screenCount;
+			int32				screenIDs[kMaxScreens];
+			float				originX[kMaxScreens];
+			float				originY[kMaxScreens];
+			int32				rotations[kMaxScreens];
+			int32				reflections[kMaxScreens];
+			display_mode		screenModes[kMaxScreens];
+			int32				mainScreen;
+			int32				disabledCount;
+			char				disabled[kMaxScreens][32];
 };
 
 
@@ -154,6 +167,18 @@ public:
 			status_t			SetReflection(int32 id, int32 reflection);
 			int32				Reflection(int32 id) const;
 			status_t			SetTemperature(int32 id, float kelvin);
+
+			// Clients know the main screen as B_MAIN_SCREEN_ID; this
+			// swaps that id with the real one, both ways.
+			enum { kMaxLayoutScreens = 8 };
+			int32				MapScreenID(int32 id) const;
+			status_t			SetMainScreen(int32 id);
+			int32				MainScreen() const
+									{ return fMainScreenID; }
+			status_t			SetScreenLayout(const int32* ids,
+									const BPoint* origins, int32 count);
+			status_t			SetOutputEnabled(const char* name,
+									bool enabled);
 			float				Temperature(int32 id) const;
 
 	// Unconfirmed display change: the deadline lives here so that the
@@ -376,6 +401,12 @@ private:
 
 			Screen*				_DetermineScreenFor(BRect frame);
 			void				_UpdateInputBounds();
+			::HWInterface*		_InterfaceFor(int32 id) const;
+			void				_MoveDesktopWindows(const BRect& from,
+									const BRect& to);
+			void				_AddOutputSettings(BMessage& settings);
+			void				_StoreScreenLayout();
+			void				_NotifyAllWindows();
 			void				_RebuildClippingForAllWindows(
 									BRegion& stillAvailableOnScreen);
 			void				_TriggerWindowRedrawing(
@@ -434,6 +465,12 @@ private:
 			team_id				fDirectScreenTeam;
 			int32				fCurrentWorkspace;
 			int32				fPreviousWorkspace;
+
+			// The real id of the screen clients know as the main one, and
+			// the one the user chose, which may be unplugged right now.
+			int32				fMainScreenID;
+			int32				fStoredMainScreenID;
+			BObjectList<BString, true>	fDisabledOutputs;
 
 			WindowList			fAllWindows;
 			WindowList			fSubsetWindows;

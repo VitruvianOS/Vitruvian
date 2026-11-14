@@ -10,8 +10,10 @@
 
 
 #include <AutoDeleter.h>
+#include <Locker.h>
 #include <Looper.h>
 #include <ObjectList.h>
+#include <String.h>
 
 
 class BMessage;
@@ -62,6 +64,17 @@ class ScreenManager : public BLooper {
 
 		void			ScreenChanged(Screen* screen);
 
+		// The connected outputs, the first one leading; screen is -1
+		// for a disabled one.
+		struct output_info {
+			BString		name;
+			bool		enabled;
+			bool		first;
+			int32		screen;
+		};
+		void			GetOutputs(BObjectList<output_info, true>& outputs);
+		status_t		SetOutputEnabled(const char* name, bool enabled);
+
 		virtual void	MessageReceived(BMessage* message);
 
 	private:
@@ -83,6 +96,11 @@ class ScreenManager : public BLooper {
 
 		BObjectList<screen_item, true>	fScreenList;
 		DrmHWInterface*	fDrmInterface;
+		// One pass at a time: a hotplug and a client can both ask.
+		BLocker			fSyncLock;
+		// By connector name, so that it holds for a monitor that is
+		// plugged in later; fSyncLock.
+		BObjectList<BString, true>	fDisabledOutputs;
 };
 
 extern ScreenManager *gScreenManager;

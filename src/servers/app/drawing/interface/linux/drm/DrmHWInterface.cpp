@@ -1159,11 +1159,90 @@ DrmHWInterface::GetConnectedOutputs(std::vector<uint32>& connectors)
 		if (conn == NULL)
 			continue;
 		if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0
-				&& conn->connector_id != fDev->conn)
-			connectors.push_back(conn->connector_id);
+				&& conn->connector_id != fDev->conn) {
+			fDirtyMutex.Lock();
+			const bool disabled = std::find(fDisabledOutputs.begin(),
+				fDisabledOutputs.end(), conn->connector_id)
+					!= fDisabledOutputs.end();
+			fDirtyMutex.Unlock();
+			if (!disabled)
+				connectors.push_back(conn->connector_id);
+		}
 		drmModeFreeConnector(conn);
 	}
 	drmModeFreeResources(res);
+}
+
+
+void
+DrmHWInterface::ListOutputs(std::vector<OutputInfo>& outputs)
+{
+	outputs.clear();
+	if (fFd < 0 || fDev == NULL)
+		return;
+
+	drmModeRes* res = drmModeGetResources(fFd);
+	if (res == NULL)
+		return;
+
+	for (int i = 0; i < res->count_connectors; i++) {
+		drmModeConnector* conn = drmModeGetConnectorCurrent(fFd,
+			res->connectors[i]);
+		if (conn == NULL)
+			continue;
+
+		const bool first = conn->connector_id == fDev->conn;
+		if (first || (conn->connection == DRM_MODE_CONNECTED
+				&& conn->count_modes > 0)) {
+			OutputInfo info;
+			info.connector = conn->connector_id;
+			info.index = i;
+			info.first = first;
+			_ConnectorNameFor(conn->connector_id, info.name);
+
+			fDirtyMutex.Lock();
+			info.disabled = std::find(fDisabledOutputs.begin(),
+				fDisabledOutputs.end(), conn->connector_id)
+					!= fDisabledOutputs.end();
+			fDirtyMutex.Unlock();
+
+			// The first one leads the list.
+			if (first)
+				outputs.insert(outputs.begin(), info);
+			else
+				outputs.push_back(info);
+		}
+		drmModeFreeConnector(conn);
+	}
+	drmModeFreeResources(res);
+}
+
+
+// The caller has ScreenManager take the output's screen away.
+void
+DrmHWInterface::SetOutputDisabled(uint32 connector, bool disabled)
+{
+	if (fDev == NULL || connector == fDev->conn)
+		return;
+
+	fDirtyMutex.Lock();
+	std::vector<uint32>::iterator found = std::find(fDisabledOutputs.begin(),
+		fDisabledOutputs.end(), connector);
+	if (disabled && found == fDisabledOutputs.end())
+		fDisabledOutputs.push_back(connector);
+	else if (!disabled && found != fDisabledOutputs.end())
+		fDisabledOutputs.erase(found);
+	const bool shown = _FindOutput(connector) != NULL;
+	fDirtyMutex.Unlock();
+
+	// Not ours yet: whatever lit it before us is still on it.
+	if (disabled && !shown) {
+		ModesetGuard modesetGuard(&fModesetMutex);
+		for (struct modeset_dev* iter = get_dev(); iter; iter = iter->next) {
+			if (iter->conn == connector)
+				drmModeSetCrtc(fFd, iter->crtc, 0, 0, 0, NULL, 0, NULL);
+		}
+	}
 }
 
 
@@ -1277,9 +1356,13 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 	}
 	fDirtyMutex.Unlock();
 
+	// Its node restores the CRTC it found; a monitor that is still there
+	// would light up with that.
+	const uint32_t crtc = output->dev->crtc;
 	_TeardownOutput(output);
 	delete output;
 	modeset_remove_connector(fFd, connector);
+	drmModeSetCrtc(fFd, crtc, 0, 0, 0, NULL, 0, NULL);
 
 	_RebuildRenderBuffer(fDisplayMode.virtual_width,
 		fDisplayMode.virtual_height);

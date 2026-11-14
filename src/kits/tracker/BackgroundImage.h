@@ -108,6 +108,10 @@ public:
 private:
 	BackgroundImageInfo* ImageInfoForWorkspace(int32) const;
 	void Show(BackgroundImageInfo*, BView* view);
+	bool ShowOnEveryScreen(BackgroundImageInfo*, BView* view);
+		// the desktop spanning several screens: each gets the image the
+		// way it would on its own
+	void ClearComposite();
 
 	BackgroundImage(const BNode*, bool);
 		// no public constructor, GetBackgroundImage factory function is
@@ -123,6 +127,7 @@ private:
 	BNode fDefinedByNode;
 	BView* fView;
 	BackgroundImageInfo* fShowingBitmap;
+	BBitmap* fComposite;
 
 	BObjectList<BackgroundImageInfo, true> fBitmapForWorkspaceList;
 };

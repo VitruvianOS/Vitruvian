@@ -76,6 +76,7 @@ protected:
 	virtual void MessageReceived(BMessage*);
 
 private:
+	static BRect _DesktopFrame();
 	void InitAddOnsList(bool);
 	void ApplyShortcutPreferences(bool);
 

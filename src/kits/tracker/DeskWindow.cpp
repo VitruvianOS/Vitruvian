@@ -251,13 +251,13 @@ BDeskWindow::~BDeskWindow()
 void
 BDeskWindow::Init(const BMessage*)
 {
-	// Set the size of the screen before calling the container window's
+	// Set the size of the desktop before calling the container window's
 	// Init() because it will add volume poses to this window and
 	// they will be clipped otherwise
 
-	BScreen screen(this);
-	fOldFrame = screen.Frame();
+	fOldFrame = _DesktopFrame();
 
+	MoveTo(fOldFrame.LeftTop());
 	ResizeTo(fOldFrame.Width(), fOldFrame.Height());
 
 	InitKeyIndices();
@@ -504,13 +504,29 @@ BDeskWindow::SaveDesktopPoseLocations()
 }
 
 
-void
-BDeskWindow::ScreenChanged(BRect frame, color_space space)
+/*!	The window spans every screen; the icons stay on the main one. */
+BRect
+BDeskWindow::_DesktopFrame()
 {
+	BScreen screen(B_MAIN_SCREEN_ID);
+	BRect frame = screen.Frame();
+	for (int32 i = 0; i < 16 && screen.SetToNext() == B_OK; i++)
+		frame = frame | screen.Frame();
+
+	return frame;
+}
+
+
+void
+BDeskWindow::ScreenChanged(BRect, color_space space)
+{
+	// Any screen may have changed, not only the one this window is on.
+	const BRect frame = _DesktopFrame();
 	bool frameChanged = (frame != fOldFrame);
 
 	SaveDesktopPoseLocations();
 	fOldFrame = frame;
+	MoveTo(frame.LeftTop());
 	ResizeTo(frame.Width(), frame.Height());
 
 	if (fBackgroundImage != NULL)

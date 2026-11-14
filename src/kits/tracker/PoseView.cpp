@@ -1127,7 +1127,7 @@ BPoseView::GetLayoutInfo(uint32 mode, BPoint* grid, BPoint* offset) const
 
 	// keep the first desktop row below a Deskbar spanning the screen top
 	if (IsDesktopView() && fDeskbarFrame.IsValid() && fDeskbarFrame.top <= 0
-		&& fDeskbarFrame.Width() >= BScreen(Window()).Frame().Width()) {
+		&& fDeskbarFrame.Width() >= BScreen(B_MAIN_SCREEN_ID).Frame().Width()) {
 		offset->y += fDeskbarFrame.bottom + 1;
 	}
 }
@@ -2107,7 +2107,7 @@ BPoseView::CreatePoses(Model** models, PoseInfo* poseInfoArray, int32 count,
 	if (boundsPointer != NULL)
 		viewBounds = *boundsPointer;
 	else
-		viewBounds = Bounds();
+		viewBounds = LayoutBounds();
 
 	bool clipboardLocked = be_clipboard->Lock();
 
@@ -3348,7 +3348,7 @@ BPoseView::SetViewMode(uint32 newMode)
 	if (mapIcons)
 		GetLayoutInfo(lastIconMode, &oldGrid, &oldOffset);
 
-	BRect bounds(Bounds());
+	BRect bounds(LayoutBounds());
 	PoseList newPoseList(30);
 
 	if (newMode != kListMode) {
@@ -3754,7 +3754,7 @@ BPoseView::Cleanup(bool doAll)
 		SetScrollBarsTo(B_ORIGIN);
 		ResetPosePlacementHint();
 
-		BRect viewBounds(Bounds());
+		BRect viewBounds(LayoutBounds());
 
 		// relocate all poses in list (reset vs list)
 		fVSPoseList->MakeEmpty();
@@ -3782,7 +3782,7 @@ BPoseView::Cleanup(bool doAll)
 		Invalidate(viewBounds);
 	} else {
 		// clean up items to nearest locations
-		BRect viewBounds(Bounds());
+		BRect viewBounds(LayoutBounds());
 		int32 poseCount = fPoseList->CountItems();
 		for (int32 index = 0; index < poseCount; index++) {
 			BPose* pose = fPoseList->ItemAt(index);
@@ -3885,7 +3885,8 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 		// we've scanned the entire desktop without finding an available
 		// position, give up and simply place it towards the top left.
 		if (checkValidLocation && !rect.Intersects(viewBounds)) {
-			fHintLocation = PinToGrid(BPoint(0.0, 0.0), fGrid, fOffset);
+			fHintLocation = PinToGrid(LayoutBounds().LeftTop(), fGrid,
+				fOffset);
 			pose->SetLocation(fHintLocation, this);
 			rect = pose->CalcRect(this);
 			break;
@@ -3920,7 +3921,7 @@ BPoseView::IsValidLocation(const BRect& rect)
 		return true;
 
 	// on the desktop, don't allow icons outside of the view bounds
-	if (!Bounds().Contains(rect))
+	if (!LayoutBounds().Contains(rect))
 		return false;
 
 	// also check the deskbar frame
@@ -3971,7 +3972,7 @@ BPoseView::CheckAutoPlacedPoses()
 	if (ViewMode() == kListMode)
 		return;
 
-	BRect viewBounds(Bounds());
+	BRect viewBounds(LayoutBounds());
 
 	int32 poseCount = fPoseList->CountItems();
 	for (int32 index = 0; index < poseCount; index++) {
@@ -4007,7 +4008,7 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 
 	ASSERT(ViewMode() != kListMode);
 
-	BRect bounds(Bounds());
+	BRect bounds(LayoutBounds());
 	bounds.InsetBy(20, 20);
 
 	int32 poseCount = fPoseList->CountItems();
@@ -4063,7 +4064,7 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 			Invalidate(pose->CalcRect(this));
 				// make sure the new pose location updates properly
 
-			BRect viewBounds(Bounds());
+			BRect viewBounds(LayoutBounds());
 			SnapPoseToGrid(pose, viewBounds);
 				// the new location has to end up on a free grid slot
 		}
@@ -4227,11 +4228,19 @@ BPoseView::PinToGrid(BPoint point, BPoint grid, BPoint offset) const
 }
 
 
+BRect
+BPoseView::LayoutBounds() const
+{
+	return Bounds();
+}
+
+
 void
 BPoseView::ResetPosePlacementHint()
 {
-	fHintLocation = PinToGrid(BPoint(LeftTop().x + fOffset.x,
-		LeftTop().y + fOffset.y), fGrid, fOffset);
+	const BPoint origin = LayoutBounds().LeftTop();
+	fHintLocation = PinToGrid(BPoint(origin.x + fOffset.x,
+		origin.y + fOffset.y), fGrid, fOffset);
 }
 
 

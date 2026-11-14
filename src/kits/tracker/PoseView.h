@@ -120,6 +120,9 @@ public:
 
 	virtual bool IsFilePanel() const;
 	virtual bool IsDesktopView() const;
+	virtual BRect LayoutBounds() const;
+		// where icons are laid out; the view, but on the desktop only the
+		// main screen
 	virtual bool IsOpenWithView() const;
 	virtual bool IsQueryView() const;
 

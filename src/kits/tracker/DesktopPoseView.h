@@ -67,6 +67,7 @@ protected:
 	virtual void AddPosesCompleted();
 
 	virtual bool IsDesktopView() const;
+	virtual BRect LayoutBounds() const;
 
 	virtual bool Represents(const node_ref*) const;
 	virtual bool Represents(const entry_ref*) const;

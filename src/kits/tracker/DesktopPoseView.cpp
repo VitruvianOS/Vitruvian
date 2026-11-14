@@ -160,6 +160,19 @@ DesktopPoseView::InitDesktopDirentIterator(BPoseView* nodeMonitoringTarget,
 }
 
 
+/*!	The window spans every screen; the icons stay on the main one. */
+BRect
+DesktopPoseView::LayoutBounds() const
+{
+	BRect bounds = Bounds();
+	if (Window() == NULL)
+		return bounds;
+
+	BRect main = ConvertFromScreen(BScreen(B_MAIN_SCREEN_ID).Frame());
+	return main.IsValid() && main.Intersects(bounds) ? main & bounds : bounds;
+}
+
+
 void
 DesktopPoseView::AdoptSystemColors()
 {

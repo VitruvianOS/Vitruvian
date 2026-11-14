@@ -36,6 +36,8 @@ All rights reserved.
 
 
 #include <Bitmap.h>
+#include <Region.h>
+#include <Screen.h>
 #include <ControlLook.h>
 #include <Node.h>
 #include <TranslationKit.h>
@@ -61,6 +63,27 @@ const char* kBackgroundImageInfoWorkspaces 	= B_BACKGROUND_WORKSPACES;
 const char* kBackgroundImageInfoPath 		= B_BACKGROUND_IMAGE;
 
 }	// namespace BPrivate
+
+
+static const int32 kMaxScreens = 16;
+
+
+// The frames of the screens, and the rectangle that spans them.
+static int32
+screen_frames(BRect* frames, BRect* _desktop)
+{
+	BScreen screen(B_MAIN_SCREEN_ID);
+	int32 count = 0;
+	BRect desktop;
+	do {
+		frames[count] = screen.Frame();
+		desktop = count == 0 ? frames[count] : desktop | frames[count];
+		count++;
+	} while (count < kMaxScreens && screen.SetToNext() == B_OK);
+
+	*_desktop = desktop;
+	return count;
+}
 
 
 //	#pragma mark - BackgroundImage
@@ -151,6 +174,7 @@ BackgroundImage::BackgroundImage(const BNode* node, bool desktop)
 	fDefinedByNode(*node),
 	fView(NULL),
 	fShowingBitmap(NULL),
+	fComposite(NULL),
 	fBitmapForWorkspaceList(1)
 {
 }
@@ -158,6 +182,130 @@ BackgroundImage::BackgroundImage(const BNode* node, bool desktop)
 
 BackgroundImage::~BackgroundImage()
 {
+	delete fComposite;
+}
+
+
+void
+BackgroundImage::ClearComposite()
+{
+	delete fComposite;
+	fComposite = NULL;
+}
+
+
+bool
+BackgroundImage::ShowOnEveryScreen(BackgroundImageInfo* info, BView* view)
+{
+	BRect frames[kMaxScreens];
+	BRect desktop;
+	const int32 count = screen_frames(frames, &desktop);
+	if (count < 2)
+		return false;
+
+	BRect bounds(0, 0, desktop.Width(), desktop.Height());
+	BBitmap* composite = new(std::nothrow) BBitmap(bounds,
+		B_BITMAP_ACCEPTS_VIEWS, B_RGB32);
+	if (composite == NULL || composite->InitCheck() != B_OK) {
+		delete composite;
+		return false;
+	}
+
+	BView* canvas = new BView(bounds, "canvas", B_FOLLOW_NONE, 0);
+	composite->AddChild(canvas);
+	composite->Lock();
+
+	canvas->SetHighColor(view->ViewColor());
+	canvas->FillRect(bounds);
+
+	const BRect bitmapBounds(info->fBitmap->Bounds());
+	const float bitmapWidth = bitmapBounds.Width() + 1;
+	const float bitmapHeight = bitmapBounds.Height() + 1;
+
+	for (int32 i = 0; i < count; i++) {
+		const BRect screen = frames[i].OffsetByCopy(-desktop.left,
+			-desktop.top);
+		BRegion clip(screen);
+		canvas->ConstrainClippingRegion(&clip);
+
+		switch (info->fMode) {
+			case kCentered:
+			{
+				BRect destination(bitmapBounds);
+				destination.OffsetTo(screen.left
+					+ (screen.Width() + 1 - bitmapWidth) / 2,
+					screen.top + (screen.Height() + 1 - bitmapHeight) / 2);
+				canvas->DrawBitmap(info->fBitmap, bitmapBounds, destination);
+				break;
+			}
+
+			case kScaledToFit:
+			{
+				BRect area(0, 0, screen.Width(), screen.Height());
+				BRect destination(bitmapBounds);
+				if (BRectRatio(destination) >= BRectRatio(area)) {
+					float overlap = BRectHorizontalOverlap(area, destination);
+					destination.Set(-overlap, 0, area.Width() + overlap,
+						area.Height());
+				} else {
+					float overlap = BRectVerticalOverlap(area, destination);
+					destination.Set(0, -overlap, area.Width(),
+						area.Height() + overlap);
+				}
+				destination.OffsetBy(screen.LeftTop());
+				canvas->DrawBitmap(info->fBitmap, bitmapBounds, destination,
+					B_FILTER_BITMAP_BILINEAR);
+				break;
+			}
+
+			case kAtOffset:
+			{
+				BRect destination(bitmapBounds);
+				destination.OffsetTo(screen.LeftTop() + info->fOffset);
+				canvas->DrawBitmap(info->fBitmap, bitmapBounds, destination);
+				break;
+			}
+
+			case kTiled:
+			{
+				// the grid is laid out from the centre, as on one screen
+				float left = screen.left
+					+ (screen.Width() + 1 - bitmapWidth) / 2;
+				float top = screen.top
+					+ (screen.Height() + 1 - bitmapHeight) / 2;
+				while (left > screen.left)
+					left -= bitmapWidth;
+				while (top > screen.top)
+					top -= bitmapHeight;
+
+				for (float y = top; y <= screen.bottom; y += bitmapHeight) {
+					for (float x = left; x <= screen.right;
+							x += bitmapWidth) {
+						BRect destination(bitmapBounds);
+						destination.OffsetTo(x, y);
+						canvas->DrawBitmap(info->fBitmap, bitmapBounds,
+							destination);
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	canvas->ConstrainClippingRegion(NULL);
+	canvas->Sync();
+	composite->Unlock();
+	composite->RemoveChild(canvas);
+	delete canvas;
+
+	view->SetViewBitmap(composite, bounds, bounds,
+		B_FOLLOW_TOP | B_FOLLOW_LEFT, 0);
+	view->Invalidate();
+
+	ClearComposite();
+	fComposite = composite;
+	fShowingBitmap = info;
+	return true;
 }
 
 
@@ -194,9 +342,16 @@ BackgroundImage::Show(BackgroundImageInfo* info, BView* view)
 	if (info->fBitmap == NULL) {
 		view->ClearViewBitmap();
 		view->Invalidate();
+		ClearComposite();
 		fShowingBitmap = info;
 		return;
 	}
+
+	if (fIsDesktop && ShowOnEveryScreen(info, view))
+		return;
+
+	ClearComposite();
+
 	BRect viewBounds(view->Bounds());
 	BRect bitmapBounds(info->fBitmap->Bounds());
 	BRect destinationBitmapBounds(bitmapBounds);
@@ -290,6 +445,7 @@ BackgroundImage::Remove()
 	if (fShowingBitmap != NULL) {
 		fView->ClearViewBitmap();
 		fView->Invalidate();
+		ClearComposite();
 		BPoseView* poseView = dynamic_cast<BPoseView*>(fView);
 		// make sure text widgets draw the default way, erasing
 		// their background
@@ -352,6 +508,7 @@ BackgroundImage::WorkspaceActivated(BView* view, int32 workspace, bool state)
 
 			view->ClearViewBitmap();
 			view->Invalidate();
+			ClearComposite();
 		}
 
 		fShowingBitmap = info;
@@ -364,6 +521,14 @@ BackgroundImage::ScreenChanged(BRect, color_space)
 {
 	if (!fIsDesktop || fShowingBitmap == NULL || fShowingBitmap->fBitmap == NULL)
 		return;
+
+	// Drawn per screen, so it follows any change of the screens.
+	BRect frames[kMaxScreens];
+	BRect desktop;
+	if (fComposite != NULL || screen_frames(frames, &desktop) > 1) {
+		Show(fShowingBitmap, fView);
+		return;
+	}
 
 	if (fShowingBitmap->fMode == kCentered) {
 		BRect viewBounds(fView->Bounds());

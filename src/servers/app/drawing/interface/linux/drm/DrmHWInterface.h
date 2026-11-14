@@ -499,6 +499,8 @@ private:
 									display_mode* mode);
 			status_t			_MonitorInfoFor(uint32 connector,
 									monitor_info* info);
+			status_t			_EdidInfoFor(uint32 connector,
+									monitor_info* info);
 			status_t			_ConnectorNameFor(uint32 connector,
 									BString& name);
 

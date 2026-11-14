@@ -4428,8 +4428,61 @@ DrmHWInterface::GetMonitorInfo(monitor_info* info)
 }
 
 
+/*!	What the monitor on \a connector says about itself. Two monitors that say
+	the same get the connector name appended to the serial number, so their
+	stored settings do not run into each other.
+*/
 status_t
 DrmHWInterface::_MonitorInfoFor(uint32 connector, monitor_info* info)
+{
+	status_t status = _EdidInfoFor(connector, info);
+	if (status != B_OK)
+		return status;
+
+	bool shared = false;
+	for (size_t card = 0; !shared && card <= fCards.size(); card++) {
+		const int slot = card == 0 ? 0 : fCards[card - 1].slot;
+		const int fd = card == 0 ? fFd : fCards[card - 1].fd;
+
+		drmModeRes* res = drmModeGetResources(fd);
+		if (res == NULL)
+			continue;
+
+		for (int i = 0; !shared && i < res->count_connectors; i++) {
+			const uint32 other = output_key(slot, res->connectors[i]);
+			if (other == connector)
+				continue;
+
+			drmModeConnector* conn = drmModeGetConnectorCurrent(fd,
+				res->connectors[i]);
+			if (conn == NULL)
+				continue;
+			const bool connected = conn->connection == DRM_MODE_CONNECTED;
+			drmModeFreeConnector(conn);
+
+			monitor_info otherInfo;
+			shared = connected && _EdidInfoFor(other, &otherInfo) == B_OK
+				&& strcasecmp(otherInfo.vendor, info->vendor) == 0
+				&& strcasecmp(otherInfo.name, info->name) == 0
+				&& otherInfo.product_id == info->product_id
+				&& strcmp(otherInfo.serial_number, info->serial_number) == 0;
+		}
+		drmModeFreeResources(res);
+	}
+
+	if (shared) {
+		BString name;
+		_ConnectorNameFor(connector, name);
+		const size_t used = strlen(info->serial_number);
+		snprintf(info->serial_number + used,
+			sizeof(info->serial_number) - used, "@%s", name.String());
+	}
+	return B_OK;
+}
+
+
+status_t
+DrmHWInterface::_EdidInfoFor(uint32 connector, monitor_info* info)
 {
 	const int fd = _FdForKey(connector);
 	connector = key_connector(connector);

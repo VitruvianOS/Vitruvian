@@ -4723,6 +4723,14 @@ Desktop::_UpdateInputBounds()
 
 
 void
+Desktop::UpdateInputBounds()
+{
+	AutoReadLocker _(fScreenLock);
+	_UpdateInputBounds();
+}
+
+
+void
 Desktop::_RebuildClippingForAllWindows(BRegion& stillAvailableOnScreen)
 {
 	// the available region on screen starts with the entire screen area

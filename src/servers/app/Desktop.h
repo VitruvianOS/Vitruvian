@@ -172,6 +172,7 @@ public:
 			// swaps that id with the real one, both ways.
 			enum { kMaxLayoutScreens = 8 };
 			int32				MapScreenID(int32 id) const;
+			void				UpdateInputBounds();
 			status_t			SetMainScreen(int32 id);
 			int32				MainScreen() const
 									{ return fMainScreenID; }

@@ -525,11 +525,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			// A fresh input_server otherwise only learns the screen
 			// bounds and panel orientation on the next mode change.
-			if (stream != NULL) {
-				stream->UpdateScreenBounds(fDesktop->VirtualScreen().Frame(),
-					fDesktop->HWInterface()->PanelScanoutOrientation(),
-					fDesktop->HWInterface()->PanelReflection());
-			}
+			if (stream != NULL)
+				fDesktop->UpdateInputBounds();
 
 			// TODO: this should be done using notifications (so that an
 			// abandoned stream will get noticed directly)

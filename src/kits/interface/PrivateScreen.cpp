@@ -160,6 +160,7 @@ BPrivateScreen::_Get(int32 id, bool check)
 		return NULL;
 
 	screens->list.AddItem(screen);
+	screen->_Acquire();
 	return screen;
 }
 

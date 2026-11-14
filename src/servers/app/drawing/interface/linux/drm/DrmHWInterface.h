@@ -316,9 +316,17 @@ public:
 				bool	first;
 			};
 			void				ListOutputs(std::vector<OutputInfo>& outputs);
-			// A disabled output gets no screen and its CRTC is off.
+			// A disabled output gets no screen and its CRTC is off. The
+			// first one only when another output can take its place.
 			void				SetOutputDisabled(uint32 connector,
 									bool disabled);
+
+			// The output to take over from a gone or disabled first one, or 0.
+			uint32				OutputToPromote();
+			// The caller removes the output's own screen.
+			bool				PromoteOutput(uint32 connector);
+			bool				IsInternalConnector(uint32 connector);
+			virtual	bool		IsInternalPanel() const;
 
 			status_t			SetOutputMode(uint32 connector,
 									const display_mode& mode);
@@ -353,6 +361,7 @@ public:
 private:
 	struct FlipToken;
 	struct Output;
+			void				_BindBacklight();
 	friend class				DrmOverlayPlane;
 
 	static	int32				_EventThreadEntry(void* data);
@@ -554,6 +563,8 @@ private:
 			std::vector<Output*>	fOutputs;
 			// fDirtyMutex.
 			std::vector<uint32>	fDisabledOutputs;
+			// Connectors that found no CRTC, for the one log line.
+			std::vector<uint32>	fSkippedOutputs;
 
 			// Written only under fFlipMutex (SetMode, _OnSessionEnable),
 			// read lock-free by the event thread's flip gate; atomic so

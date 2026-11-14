@@ -347,10 +347,22 @@ ScreenManager::SetOutputEnabled(const char* name, bool enabled)
 	if (fDrmInterface == NULL)
 		return B_NOT_SUPPORTED;
 
+	// Something must stay on: the first output can go only when another
+	// output takes its place, and the last one cannot go at all.
 	std::vector<DrmHWInterface::OutputInfo> list;
 	fDrmInterface->ListOutputs(list);
-	if (!list.empty() && list[0].first && list[0].name == name)
-		return B_NOT_ALLOWED;
+	if (!enabled) {
+		bool known = false;
+		int32 others = 0;
+		for (size_t i = 0; i < list.size(); i++) {
+			if (list[i].name == name)
+				known = !list[i].disabled;
+			else if (!list[i].disabled)
+				others++;
+		}
+		if (known && others == 0)
+			return B_NOT_ALLOWED;
+	}
 
 	{
 		BAutolock syncLocker(fSyncLock);
@@ -495,6 +507,57 @@ ScreenManager::_SyncOutputs()
 		locker.Unlock();
 		if (owner != NULL)
 			owner->ScreenAdded(screen);
+	}
+
+	// The first output is gone or switched off: another one takes over.
+	while (true) {
+		const uint32 promote = fDrmInterface->OutputToPromote();
+		if (promote == 0)
+			break;
+
+		BAutolock locker(this);
+
+		screen_item* item = NULL;
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			if (fScreenList.ItemAt(i)->connector == promote)
+				item = fScreenList.ItemAt(i);
+		}
+		if (item == NULL)
+			break;
+
+		// Its own screen goes; the first screen shows it from now on.
+		Screen* screen = item->screen.Get();
+		ScreenOwner* owner = item->owner;
+
+		locker.Unlock();
+		if (owner != NULL)
+			owner->ScreenRemoved(screen);
+		locker.Lock();
+
+		fScreenList.RemoveItem(item, false);
+		screen->HWInterface()->RemoveListener(item->listener.Get());
+		screen->Shutdown();
+		locker.Unlock();
+
+		const bool promoted = fDrmInterface->PromoteOutput(promote);
+		delete item;
+		if (!promoted)
+			break;
+
+		Screen* first = NULL;
+		ScreenOwner* firstOwner = NULL;
+		locker.Lock();
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* each = fScreenList.ItemAt(i);
+			if (each->screen->HWInterface() == fDrmInterface) {
+				first = each->screen.Get();
+				firstOwner = each->owner;
+			}
+		}
+		locker.Unlock();
+
+		if (first != NULL && firstOwner != NULL)
+			firstOwner->ScreenChanged(first);
 	}
 
 	// resized

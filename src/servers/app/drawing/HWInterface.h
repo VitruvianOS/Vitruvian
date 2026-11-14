@@ -141,6 +141,10 @@ public:
 	virtual status_t			GetConnectorName(BString& name)
 									{ return B_NOT_SUPPORTED; }
 
+	// True for the screen of a laptop's own display; touch devices glued to
+	// it are mapped to it alone.
+	virtual	bool				IsInternalPanel() const { return false; }
+
 	// Where this output sits on the desktop all outputs share.
 	virtual	BPoint				Origin() const { return B_ORIGIN; }
 	virtual	status_t			SetOrigin(BPoint origin)

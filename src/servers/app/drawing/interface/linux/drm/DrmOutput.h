@@ -58,6 +58,7 @@ public:
 
 	virtual status_t			GetConnectorName(BString& name);
 
+	virtual	bool				IsInternalPanel() const;
 	virtual	BPoint				Origin() const;
 	virtual	status_t			SetOrigin(BPoint origin);
 

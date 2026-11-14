@@ -2143,9 +2143,8 @@ ScreenWindow::_UpdateOutputControls()
 	}
 
 	fUseOutputBox->SetValue(output->enabled ? B_CONTROL_ON : B_CONTROL_OFF);
-	// The first output cannot be switched off, nor the last one left.
-	fUseOutputBox->SetEnabled(!output->enabled
-		|| (!output->first && enabledCount > 1));
+	// The last one cannot be switched off.
+	fUseOutputBox->SetEnabled(!output->enabled || enabledCount > 1);
 
 	fPrimaryBox->SetValue(output->main ? B_CONTROL_ON : B_CONTROL_OFF);
 	fPrimaryBox->SetEnabled(output->enabled && output->screen >= 0

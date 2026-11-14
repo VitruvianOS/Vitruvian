@@ -208,6 +208,13 @@ DrmOutput::GetBrightness(float* brightness)
 }
 
 
+bool
+DrmOutput::IsInternalPanel() const
+{
+	return fOwner->IsInternalConnector(fConnector);
+}
+
+
 status_t
 DrmOutput::GetConnectorName(BString& name)
 {

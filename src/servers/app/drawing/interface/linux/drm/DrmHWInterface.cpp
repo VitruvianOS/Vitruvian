@@ -1222,8 +1222,12 @@ DrmHWInterface::ListOutputs(std::vector<OutputInfo>& outputs)
 void
 DrmHWInterface::SetOutputDisabled(uint32 connector, bool disabled)
 {
-	if (fDev == NULL || connector == fDev->conn)
+	if (fDev == NULL)
 		return;
+
+	// The first one is only noted: PromoteOutput() hands the screen to
+	// another output and switches this one off then.
+	const bool first = connector == fDev->conn;
 
 	fDirtyMutex.Lock();
 	std::vector<uint32>::iterator found = std::find(fDisabledOutputs.begin(),
@@ -1236,7 +1240,7 @@ DrmHWInterface::SetOutputDisabled(uint32 connector, bool disabled)
 	fDirtyMutex.Unlock();
 
 	// Not ours yet: whatever lit it before us is still on it.
-	if (disabled && !shown) {
+	if (disabled && !shown && !first) {
 		ModesetGuard modesetGuard(&fModesetMutex);
 		for (struct modeset_dev* iter = get_dev(); iter; iter = iter->next) {
 			if (iter->conn == connector)
@@ -1274,11 +1278,26 @@ DrmHWInterface::AddOutput(uint32 connector)
 			modeset_add_connector(fFd, connector);
 	}
 
-	Output* output = dev != NULL ? new(std::nothrow) Output() : NULL;
+	if (dev == NULL) {
+		// Every output needs a CRTC of its own; say so once.
+		if (std::find(fSkippedOutputs.begin(), fSkippedOutputs.end(),
+				connector) == fSkippedOutputs.end()) {
+			fSkippedOutputs.push_back(connector);
+			fprintf(stderr, "DRM: no free CRTC for connector %u, output "
+				"skipped\n", connector);
+		}
+		UnlockExclusiveAccess();
+		return NULL;
+	}
+
+	Output* output = new(std::nothrow) Output();
 	if (output == NULL) {
 		UnlockExclusiveAccess();
 		return NULL;
 	}
+
+	fSkippedOutputs.erase(std::remove(fSkippedOutputs.begin(),
+		fSkippedOutputs.end(), connector), fSkippedOutputs.end());
 
 	output->connector = connector;
 	output->dev = dev;
@@ -1371,6 +1390,208 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 	fprintf(stderr, "DRM: output on connector %u removed\n", connector);
 
 	UnlockExclusiveAccess();
+}
+
+
+bool
+DrmHWInterface::IsInternalConnector(uint32 connector)
+{
+	bool internal = false;
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, connector);
+	if (conn != NULL) {
+		internal = conn->connector_type == DRM_MODE_CONNECTOR_eDP
+			|| conn->connector_type == DRM_MODE_CONNECTOR_LVDS
+			|| conn->connector_type == DRM_MODE_CONNECTOR_DSI;
+		drmModeFreeConnector(conn);
+	}
+	return internal;
+}
+
+
+bool
+DrmHWInterface::IsInternalPanel() const
+{
+	return fFd >= 0 && fDev != NULL
+		&& const_cast<DrmHWInterface*>(this)->IsInternalConnector(fDev->conn);
+}
+
+
+/*!	The first output stays while it is usable. When its monitor is gone, or
+	the user switched it off, an output that is still there takes over: the
+	internal panel if it is one, else the lowest connector.
+*/
+uint32
+DrmHWInterface::OutputToPromote()
+{
+	if (fFd < 0 || !fInitialized || fDev == NULL)
+		return 0;
+
+	bool usable = false;
+	const uint32 firstConnector = fDev->conn;
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, firstConnector);
+	if (conn != NULL) {
+		usable = conn->connection == DRM_MODE_CONNECTED
+			&& conn->count_modes > 0;
+		drmModeFreeConnector(conn);
+	}
+
+	fDirtyMutex.Lock();
+	if (std::find(fDisabledOutputs.begin(), fDisabledOutputs.end(),
+			firstConnector) != fDisabledOutputs.end())
+		usable = false;
+
+	std::vector<uint32> candidates;
+	for (size_t i = 0; usable == false && i < fOutputs.size(); i++) {
+		if (std::find(fDisabledOutputs.begin(), fDisabledOutputs.end(),
+				fOutputs[i]->connector) == fDisabledOutputs.end())
+			candidates.push_back(fOutputs[i]->connector);
+	}
+	fDirtyMutex.Unlock();
+
+	if (usable)
+		return 0;
+
+	uint32 best = 0;
+	bool bestInternal = false;
+	for (size_t i = 0; i < candidates.size(); i++) {
+		const bool internal = IsInternalConnector(candidates[i]);
+		if (best == 0 || (internal && !bestInternal)
+				|| (internal == bestInternal && candidates[i] < best)) {
+			best = candidates[i];
+			bestInternal = internal;
+		}
+	}
+
+	return best;
+}
+
+
+void
+DrmHWInterface::_BindBacklight()
+{
+	if (fBacklight != NULL) {
+		backlight_destroy(fBacklight);
+		fBacklight = NULL;
+	}
+
+	if (fUdev == NULL || fDev == NULL)
+		return;
+
+	struct stat st;
+	if (fstat(fFd, &st) != 0)
+		return;
+
+	struct udev_device* udevDev = udev_device_new_from_devnum(fUdev, 'c',
+		st.st_rdev);
+	if (udevDev == NULL)
+		return;
+
+	drmModeConnector* conn = drmModeGetConnector(fFd, fDev->conn);
+	if (conn != NULL) {
+		fBacklight = backlight_init(udevDev, conn->connector_type);
+		drmModeFreeConnector(conn);
+	}
+	udev_device_unref(udevDev);
+}
+
+
+/*!	The output on \a connector takes over as the first one, when that went
+	away or was switched off. The scanout of the first one is rebuilt on its
+	node, the old node and its screen are dropped; the output keeps its
+	place on the desktop and its rotation.
+*/
+bool
+DrmHWInterface::PromoteOutput(uint32 connector)
+{
+	if (fFd < 0 || !fInitialized || fDev == NULL || connector == fDev->conn)
+		return false;
+
+	if (!LockExclusiveAccess())
+		return false;
+
+	ModesetGuard modesetGuard(&fModesetMutex);
+
+	Output* output = _FindOutput(connector);
+	if (output == NULL) {
+		UnlockExclusiveAccess();
+		return false;
+	}
+
+	_DrainPendingFlip();
+	if (fDirectRender)
+		_LeaveDirectRender();
+	_DisableHardwareCursor();
+
+	struct modeset_dev* old = fDev;
+	struct modeset_dev* dev = output->dev;
+	const uint32 oldConnector = old->conn;
+	const uint32_t oldCrtc = old->crtc;
+	const BPoint origin = output->origin;
+	display_mode mode = output->mode;
+
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		if (fOutputs[i] == output) {
+			fOutputs.erase(fOutputs.begin() + i);
+			break;
+		}
+	}
+	fDirtyMutex.Unlock();
+
+	fUserOrientation = output->orientation;
+	fPanelReflection = output->reflection;
+	_TeardownOutput(output);
+	delete output;
+
+	// The buffers of the old first one wrap its node, which goes now; a
+	// flip still in flight completes against the bumped generation.
+	pthread_mutex_lock(&fFlipMutex);
+	fFlipGeneration++;
+	delete fFrontBuffer;
+	fFrontBuffer = NULL;
+	delete fBackBuffer;
+	fBackBuffer = NULL;
+	fWriteTarget = NULL;
+	fPageFlipPending = false;
+	pthread_mutex_unlock(&fFlipMutex);
+
+	fDev = dev;
+	fOrigin = origin;
+
+	drmModeSetCrtc(fFd, oldCrtc, 0, 0, 0, NULL, 0, NULL);
+	modeset_remove_connector(fFd, oldConnector);
+
+	// Everything the first output derived from its node.
+	_DiscoverPanelOrientation();
+	fPrimaryPlaneId = 0;
+	fCursorPlaneId = 0;
+	_ReleaseOverlayPlanes();
+	if (fAtomicSupported)
+		_DiscoverProperties();
+
+	modeset_create_cursor_fb(fFd, dev);
+	fCursorUsesAtomic = false;
+	_ProbeCursor();
+	_BindBacklight();
+
+	uint32_t logW, logH;
+	_ApplyOrientationSwap(dev->width, dev->height, logW, logH);
+	mode.virtual_width = logW;
+	mode.virtual_height = logH;
+
+	// Builds the scanout buffers and programs the CRTC, as for a mode change.
+	status_t status = SetMode(mode);
+	if (status != B_OK) {
+		fprintf(stderr, "DRM: cannot scan out connector %u as the first "
+			"output (%s)\n", connector, strerror(status));
+	} else {
+		fprintf(stderr, "DRM: connector %u is the first output now\n",
+			connector);
+	}
+
+	UnlockExclusiveAccess();
+	_Wake();
+	return status == B_OK;
 }
 
 
@@ -3269,10 +3490,12 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 	if (fConnProps.dpms) {
 		int ret = drmModeConnectorSetProperty(fFd, dev->conn,
 			fConnProps.dpms, dpms);
-		if (ret == 0) {
+		// The other outputs follow, whatever the first one does: it may be
+		// unplugged.
+		for (size_t i = 0; i < fOutputs.size(); i++)
+			_SetOutputDPMS(fOutputs[i], state);
+		if (ret == 0 || !fOutputs.empty()) {
 			fDpmsState = state;
-			for (size_t i = 0; i < fOutputs.size(); i++)
-				_SetOutputDPMS(fOutputs[i], state);
 			_RepaintAfterDPMS();
 			return B_OK;
 		}
@@ -4390,6 +4613,8 @@ DrmHWInterface::_RescanConnectors()
 			if (id == primaryConn) {
 				if (connected && modeset_add_connector(fFd, id) == 1)
 					resizePrimary = true;
+				else if (!connected)
+					outputsChanged = true;
 				continue;
 			}
 

@@ -41,7 +41,8 @@ class EventStream {
 		// the built-in panel's (invalid when there is none).
 		virtual void UpdateScreenLayout(const BRect* /*frames*/,
 				int32 /*count*/, const BRect& /*panel*/,
-				int32 /*panelOrientation*/, int32 /*panelReflection*/)
+				int32 /*panelOrientation*/, int32 /*panelReflection*/,
+				const BRect& /*main*/)
 				{}
 
 		// Relays the seat pointer constraint (flags: 1 = confined to
@@ -84,7 +85,7 @@ class InputServerStream : public EventStream {
 
 		virtual void UpdateScreenLayout(const BRect* frames, int32 count,
 				const BRect& panel, int32 panelOrientation,
-				int32 panelReflection);
+				int32 panelReflection, const BRect& main);
 
 		virtual void SetPointerConstraint(uint32 flags,
 				const BRect& rect);

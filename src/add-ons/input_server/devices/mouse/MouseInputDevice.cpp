@@ -243,7 +243,8 @@ public:
 									int32 panelOrientation
 										= B_PANEL_ORIENTATION_NORMAL,
 									int32 panelReflection
-										= B_PANEL_REFLECTION_NONE);
+										= B_PANEL_REFLECTION_NONE,
+									BRect main = BRect());
 
 			// Hardware name, distinct from fDeviceRef.name (the
 			// identity/settings key).
@@ -402,6 +403,10 @@ private:
 			int32				fLastAbsX, fLastAbsY;
 			BPoint				fCursorPosition;
 			int32				fScreenW, fScreenH;
+			// Main screen width: pad scaling ignores the rest of the desktop.
+			int32				fMainScreenW;
+			BRect				fMainRect;
+			bool				fScreenBoundsKnown;
 			// DRM_MODE_PANEL_ORIENTATION_*, see PanelOrientationTransform.h
 			int32				fOrientation;
 			// B_PANEL_REFLECTION_*, see PanelOrientationTransform.h
@@ -507,6 +512,8 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fCursorPosition(0, 0),
 	fScreenW(1280),
 	fScreenH(800),
+	fMainScreenW(0),
+	fScreenBoundsKnown(false),
 	fOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fReflection(B_PANEL_REFLECTION_NONE),
 	fFollowsPanel(false),
@@ -855,10 +862,17 @@ MouseDevice::UpdateTouchpadSettings(const BMessage* message)
 void
 MouseDevice::UpdateScreenBounds(BRect frame, int32 orientation,
 	int32 reflection, BRect panel, int32 panelOrientation,
-	int32 panelReflection)
+	int32 panelReflection, BRect main)
 {
+	const BPoint oldCentre(fScreenW / 2.0f, fScreenH / 2.0f);
+	const bool mainFirst = main.IsValid() && !fMainRect.IsValid();
+	fMainRect = main;
+	if (main.IsValid())
+		fMainScreenW = (int32)(main.Width() + 1);
+
 	fScreenW = (int32)(frame.Width() + 1);
 	fScreenH = (int32)(frame.Height() + 1);
+	fScreenBoundsKnown = true;
 	fOrientation = orientation;
 	fReflection = reflection;
 	fPanelRect = panel;
@@ -871,6 +885,16 @@ MouseDevice::UpdateScreenBounds(BRect frame, int32 orientation,
 	fCursorPosition.y = std::min(fCursorPosition.y, (float)(fScreenH - 1));
 	fLibinputLastPos.x = std::min(fLibinputLastPos.x, (float)(fScreenW - 1));
 	fLibinputLastPos.y = std::min(fLibinputLastPos.y, (float)(fScreenH - 1));
+
+	// Still at the default start: begin on the main screen.
+	if (mainFirst && fTarget.fCursorLock.Lock()) {
+		if (fTarget.fCursorPosition == oldCentre) {
+			fTarget.fCursorPosition.Set(main.left + main.Width() / 2,
+				main.top + main.Height() / 2);
+			fCursorPosition = fLibinputLastPos = fTarget.fCursorPosition;
+		}
+		fTarget.fCursorLock.Unlock();
+	}
 }
 
 
@@ -970,16 +994,28 @@ MouseDevice::_ControlThread()
 	CALLED();
 
 	// Initialize screen size and sync cursor position
-	{
+	// The desktop bounds from app_server may have come in already.
+	if (!fScreenBoundsKnown) {
 		BScreen screen;
 		BRect frame = screen.Frame();
 		fScreenW = (int32)(frame.Width() + 1);
 		fScreenH = (int32)(frame.Height() + 1);
 	}
+	{
+		BScreen main(B_MAIN_SCREEN_ID);
+		if (!fMainRect.IsValid() && main.IsValid())
+			fMainScreenW = (int32)(main.Frame().Width() + 1);
+	}
 	_UpdateTouchpadScale();
 	if (fTarget.fCursorLock.Lock()) {
-		if (fTarget.fCursorPosition.x < 0)
-			fTarget.fCursorPosition.Set(fScreenW / 2.0f, fScreenH / 2.0f);
+		if (fTarget.fCursorPosition.x < 0) {
+			if (fMainRect.IsValid()) {
+				fTarget.fCursorPosition.Set(
+					fMainRect.left + fMainRect.Width() / 2,
+					fMainRect.top + fMainRect.Height() / 2);
+			} else
+				fTarget.fCursorPosition.Set(fScreenW / 2.0f, fScreenH / 2.0f);
+		}
 		if (!fTarget.fScreenFrame.IsValid())
 			fTarget.fScreenFrame.Set(0, 0, fScreenW - 1, fScreenH - 1);
 		fCursorPosition = fTarget.fCursorPosition;
@@ -1724,12 +1760,13 @@ MouseDevice::_UpdateTouchpadScale()
 
 	int32 spanX = fAbsMaxX - fAbsMinX;
 	int32 spanY = fAbsMaxY - fAbsMinY;
-	if (spanX <= 0 || spanY <= 0 || fScreenW <= 1 || fScreenH <= 1)
+	int32 scaleW = fMainScreenW > 1 ? fMainScreenW : fScreenW;
+	if (spanX <= 0 || spanY <= 0 || scaleW <= 1 || fScreenH <= 1)
 		return;
 
 	// One scale for both axes, so a diagonal stroke stays diagonal; Y
 	// follows X through the pad's own units per mm when it reports them.
-	fTouchpadScaleX = (float)(fScreenW - 1) / (float)spanX;
+	fTouchpadScaleX = (float)(scaleW - 1) / (float)spanX;
 	fTouchpadScaleY = fTouchpadScaleX;
 	if (fAbsResX > 0 && fAbsResY > 0)
 		fTouchpadScaleY = fTouchpadScaleX * fAbsResX / fAbsResY;
@@ -2560,8 +2597,12 @@ MouseInputDevice::_UpdateScreenBounds(MouseDevice* device, BMessage* message)
 	int32 panelReflection = B_PANEL_REFLECTION_NONE;
 	message->FindInt32("panel_reflection", &panelReflection);
 
+	BRect main;
+	if (message->FindRect("main_rect", &main) != B_OK)
+		main = BRect();
+
 	device->UpdateScreenBounds(frame, orientation, reflection, panel,
-		panelOrientation, panelReflection);
+		panelOrientation, panelReflection, main);
 	return B_OK;
 }
 

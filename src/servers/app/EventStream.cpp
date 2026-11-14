@@ -157,7 +157,8 @@ InputServerStream::UpdateScreenBounds(BRect bounds, int32 orientation,
 
 void
 InputServerStream::UpdateScreenLayout(const BRect* frames, int32 count,
-	const BRect& panel, int32 panelOrientation, int32 panelReflection)
+	const BRect& panel, int32 panelOrientation, int32 panelReflection,
+	const BRect& main)
 {
 	BMessage update(IS_SCREEN_LAYOUT_UPDATED);
 	for (int32 i = 0; i < count; i++)
@@ -165,6 +166,7 @@ InputServerStream::UpdateScreenLayout(const BRect* frames, int32 count,
 	update.AddRect("panel_rect", panel);
 	update.AddInt32("panel_orientation", panelOrientation);
 	update.AddInt32("panel_reflection", panelReflection);
+	update.AddRect("main_rect", main);
 
 	fInputServer.SendMessage(&update);
 }

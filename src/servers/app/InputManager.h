@@ -26,7 +26,7 @@ class InputManager : public BLocker {
 
 		void UpdateScreenLayout(const BRect* frames, int32 count,
 				const BRect& panel, int32 panelOrientation,
-				int32 panelReflection);
+				int32 panelReflection, const BRect& main);
 
 		// Relays the seat pointer constraint (confinement rect and
 		// relative mode) that a grab established.

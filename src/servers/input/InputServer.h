@@ -245,6 +245,7 @@ class InputServer : public BApplication {
 		BRect			fScreenRects[kMaxScreenRects];
 		int32			fScreenRectCount;
 		BRect			fPanelRect;
+		BRect			fMainRect;
 		int32			fPanelOrientation;
 		int32			fPanelReflection;
 		int32			fScreenOrientation;

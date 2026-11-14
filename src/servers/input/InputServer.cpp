@@ -614,6 +614,8 @@ InputServer::MessageReceived(BMessage* message)
 				fScreenRects[fScreenRectCount++] = rect;
 			if (message->FindRect("panel_rect", &fPanelRect) != B_OK)
 				fPanelRect = BRect();
+			if (message->FindRect("main_rect", &fMainRect) != B_OK)
+				fMainRect = BRect();
 			if (message->FindInt32("panel_orientation", &fPanelOrientation)
 					!= B_OK)
 				fPanelOrientation = 0;
@@ -628,6 +630,7 @@ InputServer::MessageReceived(BMessage* message)
 				bounds.AddInt32("screen_orientation", fScreenOrientation);
 				bounds.AddInt32("screen_reflection", fScreenReflection);
 				bounds.AddRect("panel_rect", fPanelRect);
+				bounds.AddRect("main_rect", fMainRect);
 				bounds.AddInt32("panel_orientation", fPanelOrientation);
 				bounds.AddInt32("panel_reflection", fPanelReflection);
 				ControlDevices(NULL, B_POINTING_DEVICE,
@@ -1523,6 +1526,7 @@ debug_printf("InputServer::RegisterDevices() device_ref already exists: %s\n", d
 					bounds.AddInt32("screen_orientation", fScreenOrientation);
 					bounds.AddInt32("screen_reflection", fScreenReflection);
 					bounds.AddRect("panel_rect", fPanelRect);
+					bounds.AddRect("main_rect", fMainRect);
 					bounds.AddInt32("panel_orientation", fPanelOrientation);
 					bounds.AddInt32("panel_reflection", fPanelReflection);
 					item->Control(B_SCREEN_BOUNDS_CHANGED, &bounds);

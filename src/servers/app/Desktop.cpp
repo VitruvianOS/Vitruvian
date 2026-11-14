@@ -730,7 +730,9 @@ Desktop::Init()
 
 	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
 
-	const BRect mainFrame = fVirtualScreen.ScreenFrameAt(0);
+	Screen* mainScreen = fVirtualScreen.ScreenByID(fMainScreenID);
+	const BRect mainFrame = mainScreen != NULL
+		? mainScreen->Frame() : fVirtualScreen.ScreenFrameAt(0);
 	fVirtualScreen.HWInterface()->MoveCursorTo(
 		mainFrame.left + mainFrame.Width() / 2,
 		mainFrame.top + mainFrame.Height() / 2);
@@ -4717,8 +4719,9 @@ Desktop::_UpdateInputBounds()
 		}
 	}
 
+	Screen* main = fVirtualScreen.ScreenByID(fMainScreenID);
 	gInputManager->UpdateScreenLayout(frames, count, panel, panelOrientation,
-		panelReflection);
+		panelReflection, main != NULL ? main->Frame() : BRect());
 }
 
 

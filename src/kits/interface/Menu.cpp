@@ -34,6 +34,7 @@
 #include <Messenger.h>
 #include <Path.h>
 #include <PropertyInfo.h>
+#include <PrivateScreen.h>
 #include <Screen.h>
 #include <ScrollBar.h>
 #include <SystemCatalog.h>
@@ -2822,8 +2823,15 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 	BRect bounds = Bounds();
 	BRect frame = bounds.OffsetToCopy(where);
 
+	// The screen the menu is to appear on, which the window may not be on yet.
 	BScreen screen(Window());
 	BRect screenFrame = screen.Frame();
+	int32 screenAt = BPrivate::BPrivateScreen::ScreenAt(where);
+	if (screenAt >= 0 && !screenFrame.Contains(where)) {
+		screen_id id;
+		id.id = screenAt;
+		screenFrame = BScreen(id).Frame();
+	}
 
 	BMenu* superMenu = Supermenu();
 	BMenuItem* superItem = Superitem();

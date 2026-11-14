@@ -42,6 +42,7 @@
 #include <PropertyInfo.h>
 #include <Roster.h>
 #include <RosterPrivate.h>
+#include <PrivateScreen.h>
 #include <Screen.h>
 #include <ServerProtocol.h>
 #include <String.h>
@@ -1695,7 +1696,8 @@ BWindow::Zoom()
 	BDeskbar deskbar;
 	BRect deskbarFrame = deskbar.Frame();
 	bool isShiftDown = (modifiers() & B_SHIFT_KEY) != 0;
-	if (!isShiftDown && !deskbar.IsAutoHide()) {
+	if (!isShiftDown && !deskbar.IsAutoHide()
+		&& deskbarFrame.Intersects(screenFrame)) {
 		// remove area taken up by Deskbar unless hidden or shift is held down
 		switch (deskbar.Location()) {
 			case B_DESKBAR_TOP:
@@ -4055,7 +4057,15 @@ BWindow::AlertPosition(const BRect& frame)
 	BPoint point(frame.left + (frame.Width() / 2.0f) - (width / 2.0f),
 		frame.top + (frame.Height() / 4.0f) - ceil(height / 3.0f));
 
+	// The screen the reference frame is on, not the one the pointer is on.
 	BRect screenFrame = BScreen(this).Frame();
+	const int32 screenAt = BPrivate::BPrivateScreen::ScreenAt(
+		BPoint((frame.left + frame.right) / 2, (frame.top + frame.bottom) / 2));
+	if (screenAt >= 0) {
+		screen_id id;
+		id.id = screenAt;
+		screenFrame = BScreen(id).Frame();
+	}
 	if (frame == screenFrame) {
 		// reference frame is screen frame, skip the below adjustments
 		return point;

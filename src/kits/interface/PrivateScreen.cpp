@@ -23,6 +23,7 @@
 #include <Application.h>
 #include <Autolock.h>
 #include <Bitmap.h>
+#include <InterfaceDefs.h>
 #include <Locker.h>
 #include <ObjectList.h>
 #include <String.h>
@@ -102,6 +103,16 @@ BPrivateScreen::Get(BWindow* window)
 		status_t status;
 		if (link.FlushWithReply(status) == B_OK && status == B_OK)
 			link.Read<int32>(&id);
+		else {
+			// Not on the desktop yet: the screen the pointer is on.
+			BPoint where;
+			uint32 buttons;
+			if (get_mouse(&where, &buttons) == B_OK) {
+				const int32 found = ScreenAt(where);
+				if (found >= 0)
+					id = found;
+			}
+		}
 	}
 
 	return _Get(id, false);
@@ -189,6 +200,30 @@ BPrivateScreen::GetNext(BPrivateScreen* screen)
 
 	Put(screen);
 	return nextScreen;
+}
+
+
+int32
+BPrivateScreen::ScreenAt(BPoint where)
+{
+	int32 id = B_MAIN_SCREEN_ID.id;
+	while (true) {
+		BPrivateScreen* screen = _Get(id, true);
+		if (screen == NULL)
+			return -1;
+
+		const bool found = screen->Frame().Contains(where);
+		int32 next;
+		const bool more = !found && screen->GetNextID(next) == B_OK;
+		Put(screen);
+
+		if (found)
+			return id;
+		if (!more)
+			return -1;
+
+		id = next;
+	}
 }
 
 

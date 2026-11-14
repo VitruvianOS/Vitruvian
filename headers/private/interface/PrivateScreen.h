@@ -54,6 +54,9 @@ public:
 									const BPoint* origins, int32 count);
 	static	status_t			SetMainScreen(int32 id);
 
+	// The id of the screen containing \a where, or -1.
+	static	int32				ScreenAt(BPoint where);
+
 			bool				IsValid() const;
 			color_space			ColorSpace();
 			BRect				Frame();

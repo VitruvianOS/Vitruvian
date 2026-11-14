@@ -156,6 +156,19 @@ InputServerStream::UpdateScreenBounds(BRect bounds, int32 orientation,
 
 
 void
+InputServerStream::UpdateScreenLayout(const BRect* frames, int32 count,
+	const BRect& panel)
+{
+	BMessage update(IS_SCREEN_LAYOUT_UPDATED);
+	for (int32 i = 0; i < count; i++)
+		update.AddRect("screen_rect", frames[i]);
+	update.AddRect("panel_rect", panel);
+
+	fInputServer.SendMessage(&update);
+}
+
+
+void
 InputServerStream::SetPointerConstraint(uint32 flags, const BRect& rect)
 {
 	BMessage constraint(IS_SET_POINTER_CONSTRAINT);

@@ -152,6 +152,7 @@ InputServer::InputServer()
 	fMouseSettings(),
 	fChars(NULL),
 	fScreen(B_MAIN_SCREEN_ID),
+	fScreenRectCount(0),
 	fScreenOrientation(0),
 	fScreenReflection(0),
 	fScreenBoundsValid(false),
@@ -401,6 +402,39 @@ InputServer::ReadyToRun()
 }
 
 
+/*!	The nearest point on the screens: they can have different sizes, so the
+	desktop has corners the pointer cannot reach.
+*/
+BPoint
+InputServer::_ConstrainToScreens(BPoint where) const
+{
+	if (fScreenRectCount < 2) {
+		where.ConstrainTo(fFrame);
+		return where;
+	}
+
+	BPoint best = where;
+	float bestDistance = -1;
+	for (int32 i = 0; i < fScreenRectCount; i++) {
+		BPoint point = where;
+		point.ConstrainTo(fScreenRects[i]);
+
+		const float dx = point.x - where.x;
+		const float dy = point.y - where.y;
+		const float distance = dx * dx + dy * dy;
+		if (distance == 0)
+			return where;
+
+		if (bestDistance < 0 || distance < bestDistance) {
+			bestDistance = distance;
+			best = point;
+		}
+	}
+
+	return best;
+}
+
+
 status_t
 InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 {
@@ -568,6 +602,18 @@ InputServer::MessageReceived(BMessage* message)
 		case IS_RELEASE_INPUT:
 			_ReleaseInput(message);
 			return;
+		case IS_SCREEN_LAYOUT_UPDATED:
+		{
+			fScreenRectCount = 0;
+			BRect rect;
+			while (fScreenRectCount < kMaxScreenRects
+				&& message->FindRect("screen_rect", fScreenRectCount, &rect)
+					== B_OK)
+				fScreenRects[fScreenRectCount++] = rect;
+			if (message->FindRect("panel_rect", &fPanelRect) != B_OK)
+				fPanelRect = BRect();
+			return;
+		}
 		case IS_SCREEN_BOUNDS_UPDATED:
 		{
 			// This is what the R5 app_server sends us when the screen
@@ -1828,7 +1874,7 @@ InputServer::_SanitizeEvents(EventList& events)
 				// point to the message.
 				where.x = roundf(where.x);
 				where.y = roundf(where.y);
-				where.ConstrainTo(fFrame);
+				where = _ConstrainToScreens(where);
 				if (event->ReplacePoint("where", where) != B_OK)
 					event->AddPoint("where", where);
 

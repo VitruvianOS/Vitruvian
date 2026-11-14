@@ -185,6 +185,8 @@ class InputServer : public BApplication {
 	private:
 		typedef BApplication _inherited;
 
+		BPoint _ConstrainToScreens(BPoint where) const;
+
 		status_t _LoadKeymap();
 		status_t _LoadSystemKeymap();
 		status_t _SaveKeymap(bool isDefault = false);
@@ -238,6 +240,11 @@ class InputServer : public BApplication {
 
 		BScreen			fScreen;
 		BRect			fFrame;
+		// Where the screens are; the pointer cannot leave them.
+		enum { kMaxScreenRects = 16 };
+		BRect			fScreenRects[kMaxScreenRects];
+		int32			fScreenRectCount;
+		BRect			fPanelRect;
 		int32			fScreenOrientation;
 		int32			fScreenReflection;
 		// True once app_server has sent IS_SCREEN_BOUNDS_UPDATED;

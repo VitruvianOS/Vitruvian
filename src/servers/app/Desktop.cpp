@@ -4688,12 +4688,20 @@ Desktop::_UpdateInputBounds()
 	if (fVirtualScreen.CountScreens() > 1) {
 		gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
 			B_PANEL_ORIENTATION_NORMAL, B_PANEL_REFLECTION_NONE);
-		return;
+	} else {
+		gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
+			HWInterface()->PanelScanoutOrientation(),
+			HWInterface()->PanelReflection());
 	}
 
-	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
-		HWInterface()->PanelScanoutOrientation(),
-		HWInterface()->PanelReflection());
+	// The pointer stays on the screens, which need not fill their frame.
+	BRect frames[kMaxLayoutScreens];
+	int32 count = 0;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens()
+			&& count < kMaxLayoutScreens; i++)
+		frames[count++] = fVirtualScreen.ScreenAt(i)->Frame();
+
+	gInputManager->UpdateScreenLayout(frames, count, BRect());
 }
 
 

@@ -66,4 +66,8 @@
 #define IS_SCREEN_BOUNDS_UPDATED		'_FMM'
 	// R5 compatible definition
 
+// Where the screens are on the desktop: "screen_rect" for each one, and the
+// "panel_rect" of the built-in display, if any.
+#define IS_SCREEN_LAYOUT_UPDATED		'Islu'
+
 #endif	/* INPUT_SERVER_TYPES_H */

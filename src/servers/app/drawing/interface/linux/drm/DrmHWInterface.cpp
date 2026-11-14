@@ -1237,6 +1237,22 @@ DrmHWInterface::_LoadOutputSprite(Output* output)
 }
 
 
+// Where the pointer image lies on the desktop.
+BRect
+DrmHWInterface::_SpriteFrame(const BPoint& where) const
+{
+	if (!fCursor.IsSet())
+		return BRect(where, where);
+
+	const BPoint hot = fCursor->GetHotSpot();
+	const BRect bounds = fCursor->Bounds();
+	const float left = floorf(where.x - hot.x);
+	const float top = floorf(where.y - hot.y);
+	return BRect(left, top, left + bounds.IntegerWidth(),
+		top + bounds.IntegerHeight());
+}
+
+
 // A change of the pointer outside of a move: the sprites follow at once.
 void
 DrmHWInterface::_RefreshOutputSprites()
@@ -1266,10 +1282,11 @@ DrmHWInterface::_SyncOutputSprites()
 	for (size_t i = 0; i < fOutputs.size(); i++) {
 		Output* output = fOutputs[i];
 
+		// Every output the pointer reaches into shows its part of it.
 		bool want = show && output->target != NULL
 			&& output->orientation == PANEL_ORIENTATION_NORMAL
 			&& output->reflection == B_PANEL_REFLECTION_NONE
-			&& output->Frame().Contains(where);
+			&& output->Frame().Intersects(_SpriteFrame(where));
 
 		if (want && output->spriteCursor != (const void*)fCursor.Get()) {
 			output->spriteFailed = !_LoadOutputSprite(output);
@@ -4902,6 +4919,13 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	if (ret == 0) {
 		dev->cursor_ok = true;
 		fHardwareCursorEnabled = true;
+		// Another output has the pointer: this sprite stays hidden.
+		fFirstSpriteParked = false;
+		if (!fOutputs.empty()
+				&& !_Frame().Intersects(_SpriteFrame(fCursorLocation))) {
+			_DisableHardwareCursor();
+			fFirstSpriteParked = true;
+		}
 	} else {
 		dev->cursor_ok = false;
 		fHardwareCursorEnabled = false;
@@ -5052,7 +5076,7 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 
 	// With other outputs, the sprite of the first one hides while the
 	// pointer is on one of them.
-	if (!fOutputs.empty() && !_Frame().Contains(BPoint(x, y))) {
+	if (!fOutputs.empty() && !_Frame().Intersects(_SpriteFrame(BPoint(x, y)))) {
 		if (!fFirstSpriteParked) {
 			_DisableHardwareCursor();
 			fFirstSpriteParked = true;

@@ -383,6 +383,7 @@ private:
 			bool				_LoadOutputSprite(Output* output);
 			void				_SyncOutputSprites();
 			void				_RefreshOutputSprites();
+			BRect				_SpriteFrame(const BPoint& where) const;
 			bool				fFirstSpriteParked = false;
 			bool				_FirstUsable();
 			uint32				_FirstKey() const;

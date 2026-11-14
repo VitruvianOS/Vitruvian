@@ -438,6 +438,9 @@ ScreenManager::_SyncOutputs()
 		}
 	}
 
+	// The first output is back, or the output that stood in for it left.
+	bool firstChanged = fDrmInterface->ReleaseStandIn();
+
 	std::vector<uint32> connected;
 	fDrmInterface->GetConnectedOutputs(connected);
 
@@ -573,7 +576,60 @@ ScreenManager::_SyncOutputs()
 			firstOwner->ScreenChanged(first);
 	}
 
+	// Nothing is left on the first card: the desktop goes on at an output of
+	// another one, which the first screen shows from now on.
+	const uint32 adopt = fDrmInterface->OutputToAdopt();
+	if (adopt != 0) {
+		BAutolock locker(this);
+
+		screen_item* item = NULL;
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			if (fScreenList.ItemAt(i)->connector == adopt)
+				item = fScreenList.ItemAt(i);
+		}
+
+		if (item != NULL) {
+			Screen* screen = item->screen.Get();
+			ScreenOwner* owner = item->owner;
+
+			locker.Unlock();
+			if (owner != NULL)
+				owner->ScreenRemoved(screen);
+			locker.Lock();
+
+			fScreenList.RemoveItem(item, false);
+			screen->HWInterface()->RemoveListener(item->listener.Get());
+			screen->Shutdown();
+			locker.Unlock();
+
+			const bool adopted = fDrmInterface->AdoptOutput(adopt);
+			delete item;
+			firstChanged = firstChanged || adopted;
+		}
+	}
+
 	// resized
+	const uint32 standIn = fDrmInterface->StandIn();
+	if (standIn != 0 && fDrmInterface->TakeOutputModeChange(standIn))
+		firstChanged = true;
+
+	if (firstChanged) {
+		Screen* first = NULL;
+		ScreenOwner* firstOwner = NULL;
+		BAutolock locker(this);
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* each = fScreenList.ItemAt(i);
+			if (each->screen->HWInterface() == fDrmInterface) {
+				first = each->screen.Get();
+				firstOwner = each->owner;
+			}
+		}
+		locker.Unlock();
+
+		if (first != NULL && firstOwner != NULL)
+			firstOwner->ScreenChanged(first);
+	}
+
 	for (size_t i = 0; i < connected.size(); i++) {
 		if (!fDrmInterface->TakeOutputModeChange(connected[i]))
 			continue;

@@ -328,6 +328,14 @@ public:
 			uint32				OutputToPromote();
 			// The caller removes the output's own screen.
 			bool				PromoteOutput(uint32 connector);
+			// The other card's output to carry on at when the first card has
+			// none left, or 0.
+			uint32				OutputToAdopt();
+			bool				AdoptOutput(uint32 connector);
+			// The adopted output, or 0.
+			uint32				StandIn() const { return fStandIn; }
+			// The first output is usable again or the adopted one is gone.
+			bool				ReleaseStandIn();
 			bool				IsInternalConnector(uint32 connector);
 			virtual	bool		IsInternalPanel() const;
 
@@ -374,7 +382,11 @@ private:
 			void				_BindBacklight();
 			bool				_LoadOutputSprite(Output* output);
 			void				_SyncOutputSprites();
+			void				_RefreshOutputSprites();
 			bool				fFirstSpriteParked = false;
+			bool				_FirstUsable();
+			uint32				_FirstKey() const;
+			void				_SyncStandIn(Output* output);
 			int					_FdForKey(uint32 key) const;
 			int					_CardIndexForSlot(int slot) const;
 			void				_OpenCards(
@@ -584,6 +596,9 @@ private:
 			std::vector<uint32>	fDisabledOutputs;
 			// Connectors that found no CRTC, for the one log line.
 			std::vector<uint32>	fSkippedOutputs;
+			// The output standing in for the parked first one; the
+			// exclusive lock.
+			uint32				fStandIn = 0;
 
 			// Written only under fFlipMutex (SetMode, _OnSessionEnable),
 			// read lock-free by the event thread's flip gate; atomic so

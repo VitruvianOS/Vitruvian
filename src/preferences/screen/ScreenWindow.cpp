@@ -1750,7 +1750,7 @@ ScreenWindow::_RevertScreenChange()
 	// Re-sync the controls with the restored state.
 	fUndoScreenMode.Revert();
 
-	BMenuItem* rotationItem = fRotationMenu->ItemAt(fOriginalRotation + 1);
+	BMenuItem* rotationItem = fRotationMenu->ItemAt(fOriginalRotation);
 	if (rotationItem != NULL)
 		rotationItem->SetMarked(true);
 

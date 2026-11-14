@@ -88,6 +88,19 @@ OpenSettingsFile(BFile& file, int mode)
 }
 
 
+// The workspaces show the whole desktop, which spans every screen.
+static float
+desktop_aspect_ratio()
+{
+	BScreen screen(B_MAIN_SCREEN_ID);
+	BRect frame = screen.Frame();
+	for (int32 i = 0; i < 16 && screen.SetToNext() == B_OK; i++)
+		frame = frame | screen.Frame();
+
+	return frame.Width() / frame.Height();
+}
+
+
 class WorkspacesSettings {
 	public:
 		WorkspacesSettings();
@@ -741,7 +754,7 @@ WorkspacesWindow::WorkspacesWindow(WorkspacesSettings *settings)
 
 		float screenWidth = screen.Frame().Width();
 		float screenHeight = screen.Frame().Height();
-		float aspectRatio = screenWidth / screenHeight;
+		float aspectRatio = desktop_aspect_ratio();
 
 		uint32 columns, rows;
 		BPrivate::get_workspaces_layout(&columns, &rows);
@@ -821,12 +834,7 @@ WorkspacesWindow::FrameResized(float width, float height)
 	uint32 columns, rows;
 	BPrivate::get_workspaces_layout(&columns, &rows);
 
-	BScreen screen;
-	float screenWidth = screen.Frame().Width();
-	float screenHeight = screen.Frame().Height();
-
-	float windowAspectRatio
-		= (columns * screenWidth) / (rows * screenHeight);
+	float windowAspectRatio = (columns * desktop_aspect_ratio()) / rows;
 
 	float newHeight = width / windowAspectRatio;
 
@@ -843,7 +851,7 @@ WorkspacesWindow::Zoom(BPoint origin, float width, float height)
 	BScreen screen;
 	float screenWidth = screen.Frame().Width();
 	float screenHeight = screen.Frame().Height();
-	float aspectRatio = screenWidth / screenHeight;
+	float aspectRatio = desktop_aspect_ratio();
 
 	uint32 columns, rows;
 	BPrivate::get_workspaces_layout(&columns, &rows);
@@ -1115,10 +1123,7 @@ instantiate_deskbar_item(float maxWidth, float maxHeight)
 {
 	// Calculate the correct size of the Deskbar replicant first
 
-	BScreen screen;
-	float screenWidth = screen.Frame().Width();
-	float screenHeight = screen.Frame().Height();
-	float aspectRatio = screenWidth / screenHeight;
+	float aspectRatio = desktop_aspect_ratio();
 	uint32 columns, rows;
 	BPrivate::get_workspaces_layout(&columns, &rows);
 

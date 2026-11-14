@@ -223,6 +223,8 @@ public:
 									{ return fWorkspaces[index]; }
 			status_t			SetWorkspacesLayout(int32 columns, int32 rows);
 			BRect				WorkspaceFrame(int32 index) const;
+			int32				WorkspaceScreens(int32 index, BRect* frames,
+										int32 max) const;
 
 			void				StoreWorkspaceConfiguration(int32 index);
 

@@ -341,6 +341,20 @@ WorkspacesView::_DrawWorkspace(DrawingEngine* drawingEngine,
 	// draw background
 	drawingEngine->FillRect(rect, color);
 
+	// the screens, when there are several
+	BRect screens[Desktop::kMaxLayoutScreens];
+	const int32 count = Window()->Desktop()->WorkspaceScreens(index, screens,
+		Desktop::kMaxLayoutScreens);
+	if (count > 1) {
+		drawingEngine->ConstrainClippingRegion(&backgroundRegion);
+		rgb_color outline = tint_color(color, B_DARKEN_3_TINT);
+		for (int32 i = 0; i < count; i++) {
+			BRect frame = _WindowFrame(rect, screenFrame,
+				screens[i].OffsetToCopy(B_ORIGIN), screens[i].LeftTop());
+			drawingEngine->StrokeRect(frame, outline);
+		}
+	}
+
 	drawingEngine->ConstrainClippingRegion(&redraw);
 }
 

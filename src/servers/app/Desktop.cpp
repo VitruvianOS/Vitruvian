@@ -1930,22 +1930,50 @@ Desktop::SetWorkspacesLayout(int32 newColumns, int32 newRows)
 }
 
 
+/*!	Returns the frames of the screens of the workspace specified by \a index.
+*/
+int32
+Desktop::WorkspaceScreens(int32 index, BRect* frames, int32 max) const
+{
+	int32 count = 0;
+	if (index == fCurrentWorkspace) {
+		for (int32 i = 0; i < fVirtualScreen.CountScreens() && count < max;
+				i++)
+			frames[count++] = fVirtualScreen.ScreenAt(i)->Frame();
+	} else if (index >= 0 && index < fSettings->WorkspacesCount()) {
+		BMessage screenData;
+		for (int32 i = 0; count < max && fSettings->WorkspacesMessage(index)
+				->FindMessage("screen", i, &screenData) == B_OK; i++) {
+			// Settings of screens that are gone are kept for their return.
+			int32 id;
+			BRect frame;
+			if (screenData.FindInt32("id", &id) == B_OK
+				&& screenData.FindRect("frame", &frame) == B_OK
+				&& fVirtualScreen.ScreenByID(id) != NULL)
+				frames[count++] = frame;
+		}
+	}
+
+	return count;
+}
+
+
 /*!	Returns the virtual screen frame of the workspace specified by \a index.
 */
 BRect
 Desktop::WorkspaceFrame(int32 index) const
 {
-	BRect frame;
 	if (index == fCurrentWorkspace)
-		frame = fVirtualScreen.Frame();
-	else if (index >= 0 && index < fSettings->WorkspacesCount()) {
-		BMessage screenData;
-		if (fSettings->WorkspacesMessage(index)->FindMessage("screen",
-				&screenData) != B_OK
-			|| screenData.FindRect("frame", &frame) != B_OK) {
-			frame = fVirtualScreen.Frame();
-		}
-	}
+		return fVirtualScreen.Frame();
+
+	BRect frames[kMaxLayoutScreens];
+	const int32 count = WorkspaceScreens(index, frames, kMaxLayoutScreens);
+	if (count == 0)
+		return fVirtualScreen.Frame();
+
+	BRect frame = frames[0];
+	for (int32 i = 1; i < count; i++)
+		frame = frame | frames[i];
 
 	return frame;
 }

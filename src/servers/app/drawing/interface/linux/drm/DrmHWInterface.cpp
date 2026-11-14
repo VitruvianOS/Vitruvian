@@ -100,6 +100,29 @@ struct DrmHWInterface::Output {
 	bigtime_t			lastFlip;
 	bool				modeChanged;
 
+	// The pointer's own sprite on this output: a small dumb buffer on its
+	// fd, loaded for one cursor at a time.
+	uint32_t			spriteHandle;
+	uint8_t*			spriteMap;
+	uint32_t			spriteSize;
+	uint32_t			spriteW;
+	uint32_t			spriteH;
+	const void*			spriteCursor;
+	bool				spriteFailed;
+	bool				spriteShown;
+
+	~Output()
+	{
+		if (spriteMap != NULL)
+			munmap(spriteMap, spriteSize);
+		if (spriteHandle != 0) {
+			struct drm_mode_destroy_dumb dreq;
+			memset(&dreq, 0, sizeof(dreq));
+			dreq.handle = spriteHandle;
+			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		}
+	}
+
 	BRect Frame() const
 	{
 		return BRect(origin.x, origin.y, origin.x + mode.virtual_width - 1,
@@ -1057,6 +1080,8 @@ DrmHWInterface::_PresentOutputs()
 	if (!due || !LockExclusiveAccess())
 		return;
 
+	_SyncOutputSprites();
+
 	for (size_t i = 0; i < fOutputs.size(); i++) {
 		Output* output = fOutputs[i];
 		if (output->flipPending || output->dpms != B_DPMS_ON
@@ -1089,7 +1114,8 @@ DrmHWInterface::_PresentOutputs()
 		if (cursorFrame.IsValid()) {
 			cursorFrame.OffsetBy(-(int32)output->origin.x,
 				-(int32)output->origin.y);
-			if (present.Intersects((BRect)cursorFrame)) {
+			if (!output->spriteShown
+					&& present.Intersects((BRect)cursorFrame)) {
 				_BlendCursor(&output->source, output->target, cursorFrame,
 					output->origin, output->orientation, output->reflection);
 			}
@@ -1149,6 +1175,129 @@ DrmHWInterface::_PresentOutputs()
 	}
 
 	UnlockExclusiveAccess();
+}
+
+
+// The cursor image in the output's sprite; false when it cannot be had.
+bool
+DrmHWInterface::_LoadOutputSprite(Output* output)
+{
+	if (output->spriteHandle == 0) {
+		uint64_t width = 64;
+		uint64_t height = 64;
+		drmGetCap(output->fd, DRM_CAP_CURSOR_WIDTH, &width);
+		drmGetCap(output->fd, DRM_CAP_CURSOR_HEIGHT, &height);
+
+		struct drm_mode_create_dumb creq;
+		memset(&creq, 0, sizeof(creq));
+		creq.width = (uint32_t)width;
+		creq.height = (uint32_t)height;
+		creq.bpp = 32;
+		if (drmIoctl(output->fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq) < 0)
+			return false;
+
+		struct drm_mode_map_dumb mreq;
+		memset(&mreq, 0, sizeof(mreq));
+		mreq.handle = creq.handle;
+		void* map = MAP_FAILED;
+		if (drmIoctl(output->fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq) == 0) {
+			map = mmap(0, creq.size, PROT_READ | PROT_WRITE, MAP_SHARED,
+				output->fd, mreq.offset);
+		}
+		if (map == MAP_FAILED) {
+			struct drm_mode_destroy_dumb dreq;
+			memset(&dreq, 0, sizeof(dreq));
+			dreq.handle = creq.handle;
+			drmIoctl(output->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+			return false;
+		}
+
+		output->spriteHandle = creq.handle;
+		output->spriteMap = (uint8_t*)map;
+		output->spriteSize = creq.size;
+		output->spriteW = (uint32_t)width;
+		output->spriteH = (uint32_t)height;
+	}
+
+	const int32 cw = (int32)fCursor->Bounds().IntegerWidth() + 1;
+	const int32 ch = (int32)fCursor->Bounds().IntegerHeight() + 1;
+	if (cw <= 0 || ch <= 0 || cw > (int32)output->spriteW
+			|| ch > (int32)output->spriteH || fCursor->Bits() == NULL)
+		return false;
+
+	// Rows are as wide as the sprite.
+	memset(output->spriteMap, 0, output->spriteSize);
+	const uint32_t stride = output->spriteSize / output->spriteH;
+	for (int32 row = 0; row < ch; row++) {
+		memcpy(output->spriteMap + row * stride,
+			(const uint8*)fCursor->Bits() + row * fCursor->BytesPerRow(),
+			cw * 4);
+	}
+	return true;
+}
+
+
+/*!	The pointer is shown by a hardware sprite on the output it is on, when
+	that output is not rotated and the driver takes it; every other output
+	hides its sprite, and the ones without blend the cursor in software.
+	The hardware lock is held.
+*/
+void
+DrmHWInterface::_SyncOutputSprites()
+{
+	if (fOutputs.empty())
+		return;
+
+	const bool show = fCursor.IsSet() && fCursorVisible
+		&& !fDragBitmap.IsSet();
+	const BPoint where = fCursorLocation;
+
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		Output* output = fOutputs[i];
+
+		bool want = show && output->target != NULL
+			&& output->orientation == PANEL_ORIENTATION_NORMAL
+			&& output->reflection == B_PANEL_REFLECTION_NONE
+			&& output->Frame().Contains(where);
+
+		if (want && output->spriteCursor != (const void*)fCursor.Get()) {
+			output->spriteFailed = !_LoadOutputSprite(output);
+			output->spriteCursor = (const void*)fCursor.Get();
+		}
+		if (want && output->spriteFailed)
+			want = false;
+
+		bool failed = false;
+		if (want) {
+			const BPoint hot = fCursor->GetHotSpot();
+			const int32 x = (int32)floorf(where.x - hot.x - output->origin.x);
+			const int32 y = (int32)floorf(where.y - hot.y - output->origin.y);
+			if (!output->spriteShown) {
+				failed = drmModeSetCursor(output->fd, output->dev->crtc,
+					output->spriteHandle, output->spriteW, output->spriteH)
+						!= 0;
+			}
+			if (!failed)
+				failed = drmModeMoveCursor(output->fd, output->dev->crtc,
+					x, y) != 0;
+
+			if (failed) {
+				output->spriteFailed = true;
+				want = false;
+			} else if (!output->spriteShown) {
+				output->spriteShown = true;
+				// What was blended in goes.
+				_AddOutputDamage((BRect)_SoftCursorFrame());
+			}
+		}
+
+		if (!want && output->spriteShown) {
+			drmModeSetCursor(output->fd, output->dev->crtc, 0, 0, 0);
+			output->spriteShown = false;
+			if (failed)
+				_AddOutputDamage((BRect)_SoftCursorFrame());
+		}
+	}
 }
 
 
@@ -1437,6 +1586,14 @@ DrmHWInterface::AddOutput(uint32 connector)
 	output->generation = 0;
 	output->lastFlip = 0;
 	output->modeChanged = false;
+	output->spriteHandle = 0;
+	output->spriteMap = NULL;
+	output->spriteSize = 0;
+	output->spriteW = 0;
+	output->spriteH = 0;
+	output->spriteCursor = NULL;
+	output->spriteFailed = false;
+	output->spriteShown = false;
 
 	if (_SetupOutput(output) != B_OK) {
 		delete output;
@@ -4633,6 +4790,32 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	if (!LockParallelAccess())
 		return;
 	HWInterface::MoveCursorTo(x, y);
+	_SyncOutputSprites();
+
+	// Only an output blending the pointer needs it redrawn; one with a
+	// sprite shown just moves it.
+	if (fHardwareCursorEnabled && !fOutputs.empty()) {
+		const BRect frames[2] = { (BRect)oldFrame, (BRect)_SoftCursorFrame() };
+		fDirtyMutex.Lock();
+		bool damaged = false;
+		for (size_t i = 0; i < fOutputs.size(); i++) {
+			Output* output = fOutputs[i];
+			if (output->spriteShown)
+				continue;
+
+			for (int32 j = 0; j < 2; j++) {
+				BRect part = frames[j] & output->Frame();
+				if (part.IsValid()) {
+					part.OffsetBy(-output->origin.x, -output->origin.y);
+					output->dirty.Include(part);
+					damaged = true;
+				}
+			}
+		}
+		fDirtyMutex.Unlock();
+		if (damaged)
+			_Wake();
+	}
 	UnlockParallelAccess();
 
 	// When the HW sprite is off (software composite / drag), the base
@@ -4640,15 +4823,28 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	if (!fHardwareCursorEnabled)
 		return;
 
-	// The sprite shows on the first output only; the others blend.
-	_AddOutputDamage((BRect)oldFrame);
-	_AddOutputDamage((BRect)_SoftCursorFrame());
-
 	// The node can be freed by a concurrent udev rescan.
 	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = fDev;
 	if (!dev || !dev->cursor_ok)
 		return;
+
+	// With other outputs, the sprite of the first one hides while the
+	// pointer is on one of them.
+	if (!fOutputs.empty() && !_Frame().Contains(BPoint(x, y))) {
+		if (!fFirstSpriteParked) {
+			_DisableHardwareCursor();
+			fFirstSpriteParked = true;
+		}
+		return;
+	}
+	if (fFirstSpriteParked) {
+		fFirstSpriteParked = false;
+		if (!fCursorUsesAtomic) {
+			drmModeSetCursor(fFd, dev->crtc, dev->cursor_handle,
+				dev->cursor_w, dev->cursor_h);
+		}
+	}
 
 	const int32 px = (int32)floorf(x - hot.x) - (int32)fOrigin.x;
 	const int32 py = (int32)floorf(y - hot.y) - (int32)fOrigin.y;

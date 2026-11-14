@@ -371,6 +371,9 @@ private:
 		int		deviceId;
 	};
 			void				_BindBacklight();
+			bool				_LoadOutputSprite(Output* output);
+			void				_SyncOutputSprites();
+			bool				fFirstSpriteParked = false;
 			int					_FdForKey(uint32 key) const;
 			int					_CardIndexForSlot(int slot) const;
 			void				_OpenCards(

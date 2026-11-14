@@ -5053,6 +5053,21 @@ Desktop::_ScreenChanged(Screen* screen)
 				window->ServerWindow()->ScreenChanged(&update);
 		}
 	}
+
+	// The desktop windows span every screen, so any of them concerns them.
+	if (moved.CountItems() > 0) {
+		BMessage update(B_SCREEN_CHANGED);
+		update.AddInt64("when", real_time_clock_usecs());
+		update.AddRect("frame", fVirtualScreen.Frame());
+		update.AddInt32("mode", screen->ColorSpace());
+
+		for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+				window = window->NextWindow(kAllWindowList)) {
+			if (window->Feel() == kDesktopWindowFeel
+				&& !moved.HasItem(const_cast<Screen*>(window->Screen())))
+				window->ServerWindow()->ScreenChanged(&update);
+		}
+	}
 }
 
 

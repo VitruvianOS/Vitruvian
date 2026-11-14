@@ -234,6 +234,23 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	}
 
 	for (int j = 0; j < n; j++) {
+		fprintf(stderr, "drm: card%d: %s, %sconnector%s, boot_vga=%d%s\n",
+			indexes[j], connected[j] ? "connected" : "nothing connected",
+			hasInternal[j] ? "internal panel, " : "",
+			hasConnectors[j] ? "s" : " none", bootVga[j] ? 1 : 0,
+			j == pick ? " [chosen]" : (hasConnectors[j] ? " [skipped]"
+				: " [skipped, no outputs]"));
+	}
+
+	// Outputs are driven through one card only.
+	for (int j = 0; j < n; j++) {
+		if (j != pick && connected[j]) {
+			fprintf(stderr, "drm: outputs on card%d ignored, the session "
+				"uses card%d\n", indexes[j], indexes[pick]);
+		}
+	}
+
+	for (int j = 0; j < n; j++) {
 		if (j != pick)
 			libseat_close_device(seat, ids[j]);
 	}

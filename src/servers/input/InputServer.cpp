@@ -153,6 +153,8 @@ InputServer::InputServer()
 	fChars(NULL),
 	fScreen(B_MAIN_SCREEN_ID),
 	fScreenRectCount(0),
+	fPanelOrientation(0),
+	fPanelReflection(0),
 	fScreenOrientation(0),
 	fScreenReflection(0),
 	fScreenBoundsValid(false),
@@ -612,6 +614,25 @@ InputServer::MessageReceived(BMessage* message)
 				fScreenRects[fScreenRectCount++] = rect;
 			if (message->FindRect("panel_rect", &fPanelRect) != B_OK)
 				fPanelRect = BRect();
+			if (message->FindInt32("panel_orientation", &fPanelOrientation)
+					!= B_OK)
+				fPanelOrientation = 0;
+			if (message->FindInt32("panel_reflection", &fPanelReflection)
+					!= B_OK)
+				fPanelReflection = 0;
+
+			// Devices glued to the panel map onto it alone.
+			if (fScreenBoundsValid) {
+				BMessage bounds;
+				bounds.AddRect("screen_bounds", fFrame);
+				bounds.AddInt32("screen_orientation", fScreenOrientation);
+				bounds.AddInt32("screen_reflection", fScreenReflection);
+				bounds.AddRect("panel_rect", fPanelRect);
+				bounds.AddInt32("panel_orientation", fPanelOrientation);
+				bounds.AddInt32("panel_reflection", fPanelReflection);
+				ControlDevices(NULL, B_POINTING_DEVICE,
+					B_SCREEN_BOUNDS_CHANGED, &bounds);
+			}
 			return;
 		}
 		case IS_SCREEN_BOUNDS_UPDATED:
@@ -1501,6 +1522,9 @@ debug_printf("InputServer::RegisterDevices() device_ref already exists: %s\n", d
 					bounds.AddRect("screen_bounds", fFrame);
 					bounds.AddInt32("screen_orientation", fScreenOrientation);
 					bounds.AddInt32("screen_reflection", fScreenReflection);
+					bounds.AddRect("panel_rect", fPanelRect);
+					bounds.AddInt32("panel_orientation", fPanelOrientation);
+					bounds.AddInt32("panel_reflection", fPanelReflection);
 					item->Control(B_SCREEN_BOUNDS_CHANGED, &bounds);
 				}
 				BMessage message(IS_NOTIFY_DEVICE);

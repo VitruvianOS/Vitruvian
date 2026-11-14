@@ -106,15 +106,17 @@ InputManager::UpdateScreenBounds(BRect bounds, int32 orientation,
 
 void
 InputManager::UpdateScreenLayout(const BRect* frames, int32 count,
-	const BRect& panel)
+	const BRect& panel, int32 panelOrientation, int32 panelReflection)
 {
 	BAutolock _(this);
 
 	for (int32 i = fUsedStreams.CountItems(); i-- > 0;)
-		fUsedStreams.ItemAt(i)->UpdateScreenLayout(frames, count, panel);
+		fUsedStreams.ItemAt(i)->UpdateScreenLayout(frames, count, panel,
+			panelOrientation, panelReflection);
 
 	for (int32 i = fFreeStreams.CountItems(); i-- > 0;)
-		fFreeStreams.ItemAt(i)->UpdateScreenLayout(frames, count, panel);
+		fFreeStreams.ItemAt(i)->UpdateScreenLayout(frames, count, panel,
+			panelOrientation, panelReflection);
 }
 
 

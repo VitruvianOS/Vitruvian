@@ -238,7 +238,12 @@ public:
 			void				HandleSeatMessage(uint32 what);
 
 			void				UpdateScreenBounds(BRect frame,
-									int32 orientation, int32 reflection);
+									int32 orientation, int32 reflection,
+									BRect panel = BRect(),
+									int32 panelOrientation
+										= B_PANEL_ORIENTATION_NORMAL,
+									int32 panelReflection
+										= B_PANEL_REFLECTION_NONE);
 
 			// Hardware name, distinct from fDeviceRef.name (the
 			// identity/settings key).
@@ -303,6 +308,25 @@ private:
 										outU = u;
 										outV = v;
 									}
+								}
+
+			// A normalized point of the device as a point on the desktop.
+			BPoint				_AbsolutePoint(float u, float v) const
+								{
+									float outU, outV;
+									if (fFollowsPanel && fPanelRect.IsValid()) {
+										rotate_panel_point(fPanelOrientation,
+											u, v, outU, outV,
+											fPanelReflection);
+										return BPoint(fPanelRect.left
+												+ outU * fPanelRect.Width(),
+											fPanelRect.top
+												+ outV * fPanelRect.Height());
+									}
+
+									_RotatePoint(u, v, outU, outV);
+									return BPoint(outU * (fScreenW - 1),
+										outV * (fScreenH - 1));
 								}
 
 			BPoint				_TouchPoint(
@@ -386,6 +410,11 @@ private:
 			// panel (INPUT_PROP_DIRECT) or a VM absolute pointer. False for
 			// pen tablets, which keep their own orientation.
 			bool				fFollowsPanel;
+			// The laptop's own panel on a multi-screen desktop, which the
+			// devices that follow the panel map onto; invalid without one.
+			BRect				fPanelRect;
+			int32				fPanelOrientation;
+			int32				fPanelReflection;
 
 			input_device_ref	fDeviceRef;
 			mouse_settings		fSettings;
@@ -481,6 +510,9 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fReflection(B_PANEL_REFLECTION_NONE),
 	fFollowsPanel(false),
+	fPanelRect(),
+	fPanelOrientation(B_PANEL_ORIENTATION_NORMAL),
+	fPanelReflection(B_PANEL_REFLECTION_NONE),
 	fDeviceRemapsButtons(false),
 	fSerial(atomic_add(&sNextMouseDeviceSerial, 1)),
 	fDeviceInode(0),
@@ -822,12 +854,16 @@ MouseDevice::UpdateTouchpadSettings(const BMessage* message)
 
 void
 MouseDevice::UpdateScreenBounds(BRect frame, int32 orientation,
-	int32 reflection)
+	int32 reflection, BRect panel, int32 panelOrientation,
+	int32 panelReflection)
 {
 	fScreenW = (int32)(frame.Width() + 1);
 	fScreenH = (int32)(frame.Height() + 1);
 	fOrientation = orientation;
 	fReflection = reflection;
+	fPanelRect = panel;
+	fPanelOrientation = panelOrientation;
+	fPanelReflection = panelReflection;
 
 	_UpdateTouchpadScale();
 
@@ -1217,10 +1253,7 @@ MouseDevice::_ControlThread()
 					// logical (landscape) space, then scale.
 					float u = (float)(currentAbsX - fAbsMinX) / spanX;
 					float v = (float)(currentAbsY - fAbsMinY) / spanY;
-					float outU, outV;
-					_RotatePoint(u, v, outU, outV);
-					fCursorPosition.x = outU * (fScreenW - 1);
-					fCursorPosition.y = outV * (fScreenH - 1);
+					fCursorPosition = _AbsolutePoint(u, v);
 				}
 
 				fCursorPosition.x = std::max(0.0f,
@@ -1797,9 +1830,7 @@ MouseDevice::_TouchPoint(struct libinput_event_touch* tev) const
 {
 	float u = (float)libinput_event_touch_get_x_transformed(tev, 1);
 	float v = (float)libinput_event_touch_get_y_transformed(tev, 1);
-	float outU, outV;
-	_RotatePoint(u, v, outU, outV);
-	return BPoint(outU * (fScreenW - 1), outV * (fScreenH - 1));
+	return _AbsolutePoint(u, v);
 }
 
 
@@ -1958,11 +1989,7 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				pev, 1);
 			double v = libinput_event_pointer_get_absolute_y_transformed(
 				pev, 1);
-			float outU, outV;
-			_RotatePoint((float)u, (float)v, outU, outV);
-
-			fLibinputLastPos.x = outU * (fScreenW - 1);
-			fLibinputLastPos.y = outV * (fScreenH - 1);
+			fLibinputLastPos = _AbsolutePoint((float)u, (float)v);
 			_ConstrainMotion(fLibinputLastPos, 0.0f, 0.0f);
 
 			// Sync shared cursor position
@@ -2525,7 +2552,16 @@ MouseInputDevice::_UpdateScreenBounds(MouseDevice* device, BMessage* message)
 		fCursorLock.Unlock();
 	}
 
-	device->UpdateScreenBounds(frame, orientation, reflection);
+	BRect panel;
+	if (message->FindRect("panel_rect", &panel) != B_OK)
+		panel = BRect();
+	int32 panelOrientation = B_PANEL_ORIENTATION_NORMAL;
+	message->FindInt32("panel_orientation", &panelOrientation);
+	int32 panelReflection = B_PANEL_REFLECTION_NONE;
+	message->FindInt32("panel_reflection", &panelReflection);
+
+	device->UpdateScreenBounds(frame, orientation, reflection, panel,
+		panelOrientation, panelReflection);
 	return B_OK;
 }
 

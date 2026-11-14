@@ -245,6 +245,8 @@ class InputServer : public BApplication {
 		BRect			fScreenRects[kMaxScreenRects];
 		int32			fScreenRectCount;
 		BRect			fPanelRect;
+		int32			fPanelOrientation;
+		int32			fPanelReflection;
 		int32			fScreenOrientation;
 		int32			fScreenReflection;
 		// True once app_server has sent IS_SCREEN_BOUNDS_UPDATED;

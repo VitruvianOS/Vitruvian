@@ -4701,7 +4701,24 @@ Desktop::_UpdateInputBounds()
 			&& count < kMaxLayoutScreens; i++)
 		frames[count++] = fVirtualScreen.ScreenAt(i)->Frame();
 
-	gInputManager->UpdateScreenLayout(frames, count, BRect());
+	// A touch device glued to the laptop's own panel reaches that panel
+	// only, not the whole desktop.
+	BRect panel;
+	int32 panelOrientation = B_PANEL_ORIENTATION_NORMAL;
+	int32 panelReflection = B_PANEL_REFLECTION_NONE;
+	for (int32 i = 0; fVirtualScreen.CountScreens() > 1
+			&& i < fVirtualScreen.CountScreens(); i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		if (screen->HWInterface()->IsInternalPanel()) {
+			panel = screen->Frame();
+			panelOrientation = screen->HWInterface()->PanelScanoutOrientation();
+			panelReflection = screen->HWInterface()->PanelReflection();
+			break;
+		}
+	}
+
+	gInputManager->UpdateScreenLayout(frames, count, panel, panelOrientation,
+		panelReflection);
 }
 
 

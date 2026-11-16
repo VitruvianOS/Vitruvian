@@ -8,6 +8,7 @@
 
 #include <new>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <poll.h>
 #include <unistd.h>
@@ -409,8 +410,17 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fPlane(NULL),
 	fSerial(0),
 	fPeriod(0),
-	fCounted(false)
+	fCounted(false),
+	fStats(false),
+	fStatsStart(0),
+	fLastShown(0),
+	fWorstGap(0),
+	fPresented(0),
+	fShown(0),
+	fReplaced(0)
 {
+	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
+	fStats = stats != NULL && atoi(stats) != 0;
 }
 
 
@@ -612,6 +622,10 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 
 		generation->held[index] = true;
 		generation->presented = true;
+		if (fStats) {
+			fPresented++;
+			_Report(system_time());
+		}
 		frame.bitmap = generation->buffers[index].Get();
 		frame.token = token;
 		frame.index = index;
@@ -660,6 +674,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	}
 
 	if (shown) {
+		_CountShown(system_time());
 		Generation* previous = fShownGeneration;
 		const int32 previousIndex = fShownIndex;
 		fShownGeneration = generation;
@@ -787,6 +802,7 @@ ViewSwapChain::NotifyShown(uint64 serial, bigtime_t when)
 			if (fPending[i].serial != serial)
 				continue;
 
+			_CountShown(when);
 			Generation* previous = fShownGeneration;
 			const int32 previousIndex = fShownIndex;
 			fShownGeneration = fPending[i].generation;
@@ -810,6 +826,7 @@ ViewSwapChain::NotifyDropped(uint64 serial)
 			if (fPending[i].serial != serial)
 				continue;
 
+			_CountReplaced();
 			_Retire(fPending[i].generation, fPending[i].index, system_time());
 			fPending.erase(fPending.begin() + i);
 			break;
@@ -875,9 +892,59 @@ ViewSwapChain::_DropPending(uint64 below)
 		if (fPending[i].serial >= below)
 			continue;
 
+		_CountReplaced();
 		_Retire(fPending[i].generation, fPending[i].index, system_time());
 		fPending.erase(fPending.begin() + i);
 	}
+}
+
+
+// fLock held.
+void
+ViewSwapChain::_CountShown(bigtime_t when)
+{
+	if (!fStats)
+		return;
+
+	fShown++;
+	if (fLastShown != 0 && when - fLastShown > fWorstGap)
+		fWorstGap = when - fLastShown;
+	fLastShown = when;
+	_Report(system_time());
+}
+
+
+// fLock held.
+void
+ViewSwapChain::_CountReplaced()
+{
+	if (fStats)
+		fReplaced++;
+}
+
+
+// At most one line in two seconds. fLock held.
+void
+ViewSwapChain::_Report(bigtime_t now)
+{
+	if (fStatsStart == 0) {
+		fStatsStart = now;
+		return;
+	}
+
+	const bigtime_t span = now - fStatsStart;
+	if (span < 2000000)
+		return;
+
+	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
+		"replaced %u, worst gap %.1f ms\n",
+		fView != NULL ? fView->Name() : "?",
+		(unsigned long long)fShown * 1000000 / span,
+		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
+		fWorstGap / 1000.0);
+	fStatsStart = now;
+	fShown = fPresented = fReplaced = 0;
+	fWorstGap = 0;
 }
 
 

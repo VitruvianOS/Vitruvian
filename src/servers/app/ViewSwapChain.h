@@ -151,6 +151,9 @@ private:
 			BRect				_Destination(const Generation* generation)
 									const;
 			void				_UpdatePeriod(::HWInterface* hardware);
+			void				_CountShown(bigtime_t when);
+			void				_CountReplaced();
+			void				_Report(bigtime_t now);
 
 			ServerApp*			fApp;
 			ServerWindow*		fWindow;
@@ -168,6 +171,15 @@ private:
 			uint64				fSerial;
 			int32				fPeriod;
 			bool				fCounted;
+
+			// Frame timing, reported with VOS_SWAP_CHAIN_STATS=1.
+			bool				fStats;
+			bigtime_t			fStatsStart;
+			bigtime_t			fLastShown;
+			bigtime_t			fWorstGap;
+			uint32				fPresented;
+			uint32				fShown;
+			uint32				fReplaced;
 };
 
 

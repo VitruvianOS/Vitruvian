@@ -2752,9 +2752,13 @@ ServerWindow::_PresentSwapChain(BPrivate::LinkReceiver& link)
 		return;
 	}
 
+	// While nothing under the view changed the chain needs no region.
 	BRegion clipping;
-	fWindow->GetEffectiveDrawingRegion(view, clipping);
-	chain->Present(token, index, damage, flags, drawingEngine, &clipping);
+	const bool steady = !fWindow->DrawingRegionChanged(view);
+	if (!steady)
+		fWindow->GetEffectiveDrawingRegion(view, clipping);
+	chain->Present(token, index, damage, flags, drawingEngine,
+		steady ? NULL : &clipping);
 }
 
 

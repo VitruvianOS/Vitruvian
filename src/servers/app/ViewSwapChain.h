@@ -116,7 +116,9 @@ public:
 			bool				Accepts(int32 token) const;
 			uint32				Format() const;
 
-			// Window and drawing engine locked as for drawing.
+			// Window and drawing engine locked as for drawing. A NULL
+			// clipping says the view's clipping is unchanged since the
+			// last present.
 			void				Present(int32 token, int32 index,
 									const BRegion& damage, uint32 flags,
 									DrawingEngine* engine,
@@ -176,6 +178,7 @@ private:
 			std::vector<Pending> fPending;
 			uint64				fSerial;
 			int32				fPeriod;
+			bigtime_t			fPeriodAt;
 			bool				fCounted;
 
 			// Frame timing, reported with VOS_SWAP_CHAIN_STATS=1.

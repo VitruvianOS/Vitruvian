@@ -421,6 +421,7 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fPlane(NULL),
 	fSerial(0),
 	fPeriod(0),
+	fPeriodAt(0),
 	fCounted(false),
 	fStats(false),
 	fStatsStart(0),
@@ -647,7 +648,6 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 		frame.destination = _Destination(generation);
 		frame.damage = &damage;
 		frame.engine = engine;
-		frame.clipping = clipping;
 		frame.flags = flags;
 		frame.hardware = hardware;
 		frame.count = generation->count;
@@ -661,18 +661,37 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			fPlane = new(std::nothrow) PlaneConsumer(this);
 	}
 
-	if (hardware != NULL) {
-		frame.outputFrame = hardware->OverlayOutputFrame(frame.destination);
-		frame.fullyVisible = fOwnerWindow != NULL
-			&& fOwnerWindow->IsRectFullyVisible(fView, frame.destination);
+	// Same buffer geometry on the same plane and nothing changed under
+	// the view: what the plane was given still holds.
+	BRegion lazyClipping;
+	PlaneConsumer* plane = fPlane;
+	const bool steady = clipping == NULL && plane != NULL && plane->Active()
+		&& plane->Token() == token && plane->Destination() == frame.destination;
+	if (steady) {
+		frame.outputFrame = plane->OutputFrame();
+		frame.fullyVisible = true;
+	} else {
+		if (clipping == NULL && fOwnerWindow != NULL)
+			fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
+		if (hardware != NULL) {
+			frame.outputFrame
+				= hardware->OverlayOutputFrame(frame.destination);
+			frame.fullyVisible = fOwnerWindow != NULL
+				&& fOwnerWindow->IsRectFullyVisible(fView, frame.destination);
+		}
 	}
+	frame.clipping = clipping != NULL ? clipping : &lazyClipping;
 
 	// Neither consumer runs under our lock: both take others.
 	bool shown = false;
 	if (fPlane != NULL)
 		shown = fPlane->Show(frame);
-	if (!shown && fCpu != NULL)
+	if (!shown && fCpu != NULL) {
+		// The plane refused a steady present: the painter needs its region.
+		if (clipping == NULL && steady && fOwnerWindow != NULL)
+			fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
 		shown = fCpu->Show(frame);
+	}
 
 	BAutolock locker(fLock);
 	if (shown && frame.async) {
@@ -1011,6 +1030,12 @@ ViewSwapChain::_UpdatePeriod(::HWInterface* hardware)
 {
 	if (hardware == NULL)
 		return;
+
+	// The mode changes rarely.
+	const bigtime_t now = system_time();
+	if (fPeriod != 0 && now - fPeriodAt < 1000000)
+		return;
+	fPeriodAt = now;
 
 	display_mode mode;
 	hardware->GetMode(&mode);

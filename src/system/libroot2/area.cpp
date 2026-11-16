@@ -323,6 +323,17 @@ _kern_create_gbm_area(const char* name, void** startAddr, uint32 addrSpec,
 }
 
 
+int
+_kern_area_fd(area_id area)
+{
+	BKernelPrivate::LocalArea local;
+	if (!BKernelPrivate::AreaPool::Get().Get(area, local) || local.memfd < 0)
+		return -1;
+
+	return dup(local.memfd);
+}
+
+
 area_id
 clone_area(const char* name, void** destAddr, uint32 addrSpec,
 	uint32 protection, area_id source)

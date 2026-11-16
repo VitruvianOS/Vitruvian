@@ -19,6 +19,10 @@ extern area_id	_kern_create_gbm_area(const char* name, void** startAddress,
 					uint32 addressSpec, size_t size, uint32 lock,
 					uint32 protection, int fd);
 
+/* A duplicate of the descriptor behind a local area mapping, or -1. The
+   caller closes it. */
+extern int		_kern_area_fd(area_id area);
+
 #ifdef __cplusplus
 }
 #endif

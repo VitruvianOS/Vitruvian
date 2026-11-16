@@ -290,6 +290,7 @@ DrmHWInterface::DrmHWInterface()
 	fOrigin(B_ORIGIN),
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
+	fCursorInFlightAt(0),
 	fNeedsFlip(false),
 	fDamageFlush(false),
 	fWakeQueued(false),
@@ -313,6 +314,8 @@ DrmHWInterface::DrmHWInterface()
 	fStagedCursor{},
 	fVblankPacedFlip(false),
 	fFlipFailures(0),
+	fFlipRecovered(false),
+	fCursorRetryAt(0),
 	fModesetActive(false),
 	fModeBlobId(0),
 	fPlaneProps{},
@@ -429,6 +432,22 @@ DrmHWInterface::OnSeatDisabled()
 		_OnSessionDisable();
 		UnlockExclusiveAccess();
 	}
+}
+
+
+void
+DrmHWInterface::_ResetFlipState()
+{
+	// Probe flips again, and drop updates staged against the old state.
+	fVblankPacedFlip = false;
+	fFlipFailures = 0;
+	fFlipRecovered = false;
+	fCursorRetryAt = 0;
+	fDirtyMutex.Lock();
+	fStagedCursor.valid = false;
+	fStagedPlanes.clear();
+	fNeedsFlip = true;
+	fDirtyMutex.Unlock();
 }
 
 
@@ -575,14 +594,19 @@ DrmHWInterface::_OnSessionEnable()
 	if (fAtomicSupported)
 		_DiscoverProperties();
 
-	// Opt-in until soaked on real cards; off, the flip and cursor paths
-	// below stay byte-for-byte the legacy ioctls.
+	// Default when atomic and a cursor plane exist; VOS_ATOMIC_BATCH=0 or
+	// VOS_LEGACY_CURSOR=1 keep the legacy flip and cursor ioctls.
 	static const char* sAtomicBatch = getenv("VOS_ATOMIC_BATCH");
-	fAtomicBatch = sAtomicBatch != NULL && sAtomicBatch[0] != '\0'
-		&& fAtomicSupported && fPrimaryPlaneId != 0;
-	if (fAtomicBatch)
-		fprintf(stderr, "DRM: batched atomic commit "
-			"(flip+cursor+damage) enabled\n");
+	static const char* sLegacyCursor = getenv("VOS_LEGACY_CURSOR");
+	const bool batchOff = (sAtomicBatch != NULL && strcmp(sAtomicBatch, "0") == 0)
+		|| (sLegacyCursor != NULL && sLegacyCursor[0] != '\0'
+			&& strcmp(sLegacyCursor, "0") != 0);
+	fAtomicBatch = !batchOff && fAtomicSupported && fPrimaryPlaneId != 0
+		&& fCursorPlaneId != 0;
+	fprintf(stderr, "DRM: %s\n", fAtomicBatch
+		? "batched atomic commit (flip+cursor+planes)"
+		: batchOff ? "legacy flip and cursor (forced)"
+			: "legacy flip and cursor (no atomic cursor plane)");
 
 	// Configure the crtc; the other outputs are set up as they are added.
 	iter = fDev;
@@ -1149,6 +1173,7 @@ DrmHWInterface::_PresentOutputs()
 			token->hw = this;
 			token->generation = output->generation;
 			token->output = output->connector;
+			token->cursorOnly = false;
 			fFlipTokens.push_back(token);
 
 			r = drmModePageFlip(output->fd, output->dev->crtc,
@@ -2590,6 +2615,13 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 			break;
 		}
 	}
+	if (token->cursorOnly) {
+		delete token;
+		hw->fCursorInFlightAt = 0;
+		pthread_mutex_unlock(&hw->fFlipMutex);
+		hw->_Wake();
+		return;
+	}
 	std::vector<PlaneNote> planes;
 	planes.swap(token->planes);
 	delete token;
@@ -3027,7 +3059,28 @@ DrmHWInterface::_EventThreadMain()
 				flipLocked = LockExclusiveAccess();
 		}
 
-		if (flipLocked && fPageFlipEnabled && !fPageFlipPending
+		// Only the cursor moved: commit it alone, it need not wait for a
+		// frame. A refusal stays staged and is retried on the next pass.
+		if (active && !flipLocked && fAtomicBatch && !_CommitInFlight()
+				&& fDpmsState == B_DPMS_ON && fStandIn == 0
+				&& system_time() >= fCursorRetryAt) {
+			CursorUpdate only;
+			only.valid = false;
+			fDirtyMutex.Lock();
+			if (fStagedCursor.valid) {
+				only = fStagedCursor;
+				fStagedCursor.valid = false;
+			}
+			fDirtyMutex.Unlock();
+			if (only.valid && !_CommitCursorOnly(only)) {
+				fDirtyMutex.Lock();
+				if (!fStagedCursor.valid)
+					fStagedCursor = only;
+				fDirtyMutex.Unlock();
+			}
+		}
+
+		if (flipLocked && fPageFlipEnabled && !_CommitInFlight()
 				&& fWriteTarget != NULL && fDpmsState == B_DPMS_ON) {
 			CursorUpdate staged;
 			staged.valid = false;
@@ -3101,6 +3154,7 @@ DrmHWInterface::_EventThreadMain()
 						token->hw = this;
 						token->generation = fFlipGeneration;
 						token->output = 0;
+						token->cursorOnly = false;
 						fFlipTokens.push_back(token);
 
 						if (atomic) {
@@ -3189,6 +3243,7 @@ DrmHWInterface::_EventThreadMain()
 
 			if (hasDirty && r == 0) {
 				fFlipFailures = 0;
+				fFlipRecovered = false;
 				fLastFlipIssue = system_time();
 				if (fDirectRender && !paced && !fPacingLockHeld) {
 					// Keep the exclusive lock until the completion
@@ -3210,7 +3265,17 @@ DrmHWInterface::_EventThreadMain()
 				// count; EACCES and EPERM around a VT switch or
 				// an EINVAL under a modeset are transient, and
 				// eight of those must not tear the session down.
-				if (drm_flip_failure_counts(flipErr,
+				// EINVAL on an atomic frame: remodeset once and retry
+				// before it counts against the flip.
+				if (flipErr == EINVAL && usedAtomic && !fFlipRecovered) {
+					fFlipRecovered = true;
+					fprintf(stderr, "[drm] frame commit EINVAL, "
+						"remodeset and retry\n");
+					_RestoreDisplay();
+					fDirtyMutex.Lock();
+					fNeedsFlip = true;
+					fDirtyMutex.Unlock();
+				} else if (drm_flip_failure_counts(flipErr,
 						fModesetActive.load(),
 						&fFlipFailures)) {
 					fVblankPacedFlip = true;
@@ -4951,7 +5016,7 @@ DrmHWInterface::_DisableHardwareCursor()
 	// Legacy ioctl can return success without clearing the plane FB on
 	// atomic-capable drivers, so branch the same way the plane was armed.
 	if (fCursorUsesAtomic)
-		_AtomicSetCursor(0, 0, 0, 0, 0, 0);
+		_ApplyCursorPlane(0, 0, 0);
 	else
 		drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
 }
@@ -4963,6 +5028,11 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	if (fDragBitmap.IsSet())
 		return;
 
+	// A software/hardware switch repaints what the old pointer covered.
+	struct Switched {
+		DrmHWInterface* self; bool was;
+		~Switched() { if (self->fHardwareCursorEnabled != was) self->_Repaint(); }
+	} switched = { this, fHardwareCursorEnabled };
 	const IntRect oldFrame = _SoftCursorFrame();
 	HWInterface::SetCursor(cursor);
 	_AddOutputDamage((BRect)oldFrame);
@@ -5058,8 +5128,7 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 
 	int ret;
 	if (fCursorUsesAtomic) {
-		ret = (_AtomicSetCursor(dev->cursor_fb, dev->crtc,
-			px, py, dev->cursor_w, dev->cursor_h) == B_OK) ? 0 : -1;
+		ret = _ApplyCursorPlane(dev->cursor_fb, px, py);
 	} else {
 		ret = drmModeSetCursor2(fFd, dev->crtc,
 			dev->cursor_handle, dev->cursor_w, dev->cursor_h,
@@ -5120,8 +5189,7 @@ DrmHWInterface::SetCursorVisible(bool visible)
 		// _DrawCursor() and the hardware plane both draw at once.
 		int ret;
 		if (fCursorUsesAtomic) {
-			ret = (_AtomicSetCursor(dev->cursor_fb, dev->crtc,
-				px, py, dev->cursor_w, dev->cursor_h) == B_OK) ? 0 : -1;
+			ret = _ApplyCursorPlane(dev->cursor_fb, px, py);
 		} else {
 			ret = drmModeSetCursor(fFd, dev->crtc, dev->cursor_handle,
 				dev->cursor_w, dev->cursor_h);
@@ -5246,7 +5314,7 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	const int32 py = (int32)floorf(y - hot.y) - (int32)fOrigin.y;
 
 	if (fCursorUsesAtomic) {
-		if (fAtomicBatch && fPageFlipPending) {
+		if (fAtomicBatch && _CommitInFlight()) {
 			// A second non-blocking commit on a CRTC with a flip in
 			// flight is answered with EBUSY; stage the update so it
 			// rides the next frame commit instead.
@@ -5270,8 +5338,8 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			update.h = dev->cursor_h;
 			// fb_id 0 leaves the primary plane out of the request;
 			// committing the back buffer's fb would scan it out early.
-			if (_AtomicCommitFrame(0, NULL, &update, NULL, NULL)
-					!= B_OK) {
+			if (system_time() < fCursorRetryAt
+					|| !_CommitCursorOnly(update)) {
 				// A flip became pending between the check and
 				// this commit; stage the move so the next frame
 				// commit carries it instead of dropping it.
@@ -5485,6 +5553,7 @@ DrmHWInterface::_HandleHotplug()
 		|| (action != NULL && strcmp(action, "change") == 0);
 	if (isHotplug && fFd >= 0) {
 		fprintf(stderr, "DRM hotplug event\n");
+		_ResetFlipState();
 
 		// The uevent carries no CONNECTOR=, so every connector is
 		// rescanned; scope the resize reaction to the one we render to.
@@ -5538,6 +5607,7 @@ DrmHWInterface::_OnResume()
 		return;
 
 	fprintf(stderr, "[drm] resume detected, reconciling display state\n");
+	_ResetFlipState();
 
 	// The reconcile mutates the modeset list and re-commits buffers: it
 	// must not overlap a SetMode() on the resize or app thread. If a mode
@@ -5573,7 +5643,8 @@ DrmHWInterface::_OnResume()
 			&& crtc->buffer_id != 0;
 		if (crtc)
 			drmModeFreeCrtc(crtc);
-		if (!crtcActive)
+		// The commit state may differ from the hardware: remodeset.
+		if (!crtcActive || fAtomicBatch)
 			_RestoreDisplay();
 		else
 			_RestoreOutputs(true);
@@ -5798,6 +5869,126 @@ DrmHWInterface::_ProbeAtomic()
 }
 
 
+bool
+DrmHWInterface::_CommitInFlight()
+{
+	if (fPageFlipPending.load())
+		return true;
+	const bigtime_t at = fCursorInFlightAt.load();
+	return at != 0 && system_time() - at < 4 * _FramePeriod();
+}
+
+
+// False when the update must be staged. Only a frame commit may count
+// against the flip; a refused cursor stays on the hardware as it was.
+bool
+DrmHWInterface::_CommitCursorOnly(const CursorUpdate& update)
+{
+#ifdef HAVE_DRM_ATOMIC
+	FlipToken* token = new FlipToken;
+	token->hw = this;
+	token->generation = 0;
+	token->output = 0;
+	token->cursorOnly = true;
+	pthread_mutex_lock(&fFlipMutex);
+	fFlipTokens.push_back(token);
+	fCursorInFlightAt = system_time();
+	pthread_mutex_unlock(&fFlipMutex);
+
+	if (_AtomicCommitFrame(0, NULL, &update, NULL, token) == B_OK)
+		return true;
+
+	const int err = errno;
+	pthread_mutex_lock(&fFlipMutex);
+	for (size_t i = 0; i < fFlipTokens.size(); i++) {
+		if (fFlipTokens[i] == token) {
+			fFlipTokens.erase(fFlipTokens.begin() + i);
+			break;
+		}
+	}
+	fCursorInFlightAt = 0;
+	pthread_mutex_unlock(&fFlipMutex);
+	delete token;
+	if (err == EINVAL) {
+		static bool sLogged = false;
+		if (!sLogged) {
+			sLogged = true;
+			fprintf(stderr, "[drm] cursor commit EINVAL, staged\n");
+		}
+		fCursorRetryAt = system_time() + _FramePeriod();
+	} else
+		_NoteCursorBusy(err);
+#endif
+	return false;
+}
+
+
+void
+DrmHWInterface::_NoteCursorBusy(int err)
+{
+	fCursorRetryAt = system_time() + _FramePeriod();
+	static bigtime_t sLast = 0;
+	static uint32 sCount = 0;
+	sCount++;
+	const bigtime_t now = system_time();
+	if (now - sLast < 1000000)
+		return;
+	sLast = now;
+	fprintf(stderr, "[drm] cursor commit refused (%s), retrying; %u since "
+		"start\n", strerror(err), (unsigned)sCount);
+}
+
+
+// Batched mode never fails over to the software pointer on a busy CRTC:
+// the update is staged and rides the next commit. fb_id 0 hides the plane.
+int
+DrmHWInterface::_ApplyCursorPlane(uint32_t fb_id, int32 x, int32 y)
+{
+	struct modeset_dev* dev = fDev;
+	if (dev == NULL)
+		return -1;
+
+	if (!fCursorUsesAtomic) {
+		if (fb_id == 0)
+			drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
+		return 0;
+	}
+
+	if (!fAtomicBatch) {
+		return _AtomicSetCursor(fb_id, fb_id != 0 ? dev->crtc : 0, x, y,
+			dev->cursor_w, dev->cursor_h) == B_OK ? 0 : -1;
+	}
+
+	CursorUpdate update;
+	update.valid = true;
+	update.fb_id = fb_id;
+	update.x = x;
+	update.y = y;
+	update.w = dev->cursor_w;
+	update.h = dev->cursor_h;
+	if (!_CommitInFlight() && system_time() >= fCursorRetryAt
+			&& _CommitCursorOnly(update))
+		return 0;
+
+	fDirtyMutex.Lock();
+	fStagedCursor = update;
+	fDirtyMutex.Unlock();
+	_Wake();
+	return 0;
+}
+
+
+void
+DrmHWInterface::_Repaint()
+{
+	// Drops a software pointer blended into the scanout buffers.
+	fBackStale.MakeEmpty();
+	_AddOutputDamage((BRect)_DesktopBounds());
+	if (fOutputs.empty())
+		Invalidate(_DesktopBounds());
+}
+
+
 void
 DrmHWInterface::_ProbeCursor()
 {
@@ -5811,25 +6002,29 @@ DrmHWInterface::_ProbeCursor()
 	fprintf(stderr, "DRM: cursor buffer %ux%u pitch %u\n",
 		dev->cursor_w, dev->cursor_h, dev->cursor_pitch);
 
-	// Legacy by default. An atomic cursor commit is a second non-blocking
-	// commit on a CRTC that already has a page flip in flight, which the
-	// kernel answers with EBUSY; batching (VOS_ATOMIC_BATCH) removes that
-	// hazard by merging the cursor into the frame's commit. VOS_ATOMIC_CURSOR
-	// opts in to test the unbatched atomic cursor path.
+	// An atomic cursor commit during a flip is answered with EBUSY; batching
+	// merges the cursor into the frame's commit. VOS_ATOMIC_CURSOR tests the
+	// unbatched path; VOS_LEGACY_CURSOR forces the legacy ioctls.
 	static const char* sAtomicCursor = getenv("VOS_ATOMIC_CURSOR");
-	const bool canAtomic = ((sAtomicCursor != NULL && sAtomicCursor[0] != '\0')
+	static const char* sLegacyCursor = getenv("VOS_LEGACY_CURSOR");
+	const bool legacyForced = sLegacyCursor != NULL && sLegacyCursor[0] != '\0'
+		&& strcmp(sLegacyCursor, "0") != 0;
+	const bool canAtomic = !legacyForced
+		&& ((sAtomicCursor != NULL && sAtomicCursor[0] != '\0')
 			|| fAtomicBatch)
 		&& fAtomicSupported && fCursorPlaneId != 0 && dev->cursor_fb != 0;
 
 	int r = -1;
 	if (canAtomic) {
 		r = (_AtomicSetCursor(dev->cursor_fb, dev->crtc,
-			0, 0, dev->cursor_w, dev->cursor_h) == B_OK) ? 0 : -1;
+			0, 0, dev->cursor_w, dev->cursor_h, true) == B_OK) ? 0 : -1;
+		// Test only: a real commit would leave the plane showing at 0,0
+		// when the disabling one is refused as busy.
 		if (r == 0) {
 			fprintf(stderr, "DRM: hardware cursor via atomic plane\n");
 			fCursorUsesAtomic = true;
 			fHardwareCursorEnabled = true;
-			_DisableHardwareCursor();
+			_Repaint();
 			return;
 		}
 	}
@@ -5841,6 +6036,7 @@ DrmHWInterface::_ProbeCursor()
 		fprintf(stderr, "DRM: hardware cursor via legacy ioctl\n");
 		fHardwareCursorEnabled = true;
 		_DisableHardwareCursor();
+		_Repaint();
 		return;
 	}
 
@@ -6455,7 +6651,7 @@ DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 
 status_t
 DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
-	int32 x, int32 y, uint32_t w, uint32_t h)
+	int32 x, int32 y, uint32_t w, uint32_t h, bool testOnly)
 {
 	if (!fCursorPlaneId)
 		return B_UNSUPPORTED;
@@ -6488,7 +6684,8 @@ DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
 			fCursorPlaneProps.src_h, (uint64_t)h << 16);
 	}
 
-	int ret = drmModeAtomicCommit(fFd, req, DRM_MODE_ATOMIC_NONBLOCK, NULL);
+	int ret = drmModeAtomicCommit(fFd, req, testOnly
+		? DRM_MODE_ATOMIC_TEST_ONLY : DRM_MODE_ATOMIC_NONBLOCK, NULL);
 	drmModeAtomicFree(req);
 	return ret == 0 ? B_OK : B_ERROR;
 }
@@ -6506,7 +6703,7 @@ DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
 	// fb_id 0 means cursor-only: the primary plane keeps scanning out
 	// whatever it has. Committing the back buffer's fb here would show
 	// a half-drawn frame.
-	if (fb_id == 0 && (damage != NULL || token != NULL))
+	if (fb_id == 0 && damage != NULL)
 		return B_BAD_VALUE;
 
 	drmModeAtomicReq* req = drmModeAtomicAlloc();
@@ -6538,7 +6735,7 @@ DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
 	if (cursor != NULL && cursor->valid && fCursorPlaneId != 0
 			&& fCursorPlaneProps.fb_id != 0) {
 		drmModeAtomicAddProperty(req, fCursorPlaneId,
-			fCursorPlaneProps.crtc_id, dev->crtc);
+			fCursorPlaneProps.crtc_id, cursor->fb_id != 0 ? dev->crtc : 0);
 		drmModeAtomicAddProperty(req, fCursorPlaneId,
 			fCursorPlaneProps.fb_id, cursor->fb_id);
 
@@ -6596,6 +6793,15 @@ DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
 	int ret = drmModeAtomicCommit(fFd, req, flags, token);
 	// The caller classifies the failure by errno.
 	const int commitErrno = errno;
+	static bool sLoggedInvalid = false;
+	if (ret != 0 && commitErrno == EINVAL && !sLoggedInvalid) {
+		sLoggedInvalid = true;
+		fprintf(stderr, "[drm] atomic commit EINVAL: crtc %u fb %u "
+			"cursor %d (fb %u) planes %u damage %u\n", dev->crtc, fb_id,
+			cursor != NULL && cursor->valid,
+			cursor != NULL ? cursor->fb_id : 0,
+			(unsigned)(planes != NULL ? planes->size() : 0), blobId);
+	}
 	drmModeAtomicFree(req);
 	if (blobId != 0)
 		drmModeDestroyPropertyBlob(fFd, blobId);

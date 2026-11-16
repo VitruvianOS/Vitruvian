@@ -551,6 +551,9 @@ private:
 			int					_CrtcIndex(uint32_t crtc_id);
 			void				_ProbeAtomic();
 			void				_ProbeCursor();
+			void				_Repaint();
+			int					_ApplyCursorPlane(uint32_t fb_id, int32 x,
+									int32 y);
 			void				_DisableHardwareCursor();
 			void				_DiscoverProperties();
 			void				_DiscoverPlaneProps(uint32_t plane_id,
@@ -578,7 +581,8 @@ private:
 			status_t			_AtomicSetCursor(uint32_t fb_id,
 									uint32_t crtc_id,
 									int32 x, int32 y,
-									uint32_t w, uint32_t h);
+									uint32_t w, uint32_t h,
+									bool testOnly = false);
 
 			static int			fFd;
 
@@ -640,6 +644,9 @@ private:
 			// gates are validated under fFlipMutex before use.
 			std::atomic<bool>	fPageFlipEnabled;
 			std::atomic<bool>	fPageFlipPending;
+			// When the last cursor-only commit was issued; 0 once its
+			// event arrived. Stale after a few frames.
+			std::atomic<bigtime_t>	fCursorInFlightAt;
 
 			// Serializes buffer pointer swaps (page-flip completion) against
 			// the SetMode() teardown that deletes those same buffers, and
@@ -661,6 +668,8 @@ private:
 				uint64_t		generation;
 				// Connector of the output flipped; 0 is the first one.
 				uint32_t		output;
+				// A cursor-only commit: no frame to swap.
+				bool			cursorOnly;
 				// Plane updates riding this flip.
 				std::vector<PlaneNote> planes;
 			};
@@ -726,8 +735,8 @@ private:
 			uint32_t			fCursorPlaneId;
 			// Which API armed the cursor plane; set once by _ProbeCursor().
 			bool				fCursorUsesAtomic;
-			// VOS_ATOMIC_BATCH: flip, cursor and damage ride one atomic
-			// request. Off keeps the legacy page-flip and cursor ioctls.
+			// Flip, cursor, planes and damage ride one atomic
+			// request (VOS_ATOMIC_BATCH=0 keeps the legacy ioctls).
 			bool				fAtomicBatch;
 			CursorUpdate		fStagedCursor;
 			// Overlay plane changes for the next frame commit (fDirtyMutex).
@@ -745,6 +754,8 @@ private:
 		// on session enable; only flip-unsupported errnos count.
 		bool				fVblankPacedFlip;
 		uint32_t			fFlipFailures;
+		bool				fFlipRecovered;
+		bigtime_t			fCursorRetryAt;
 		// Set while a modeset is in flight; a flip EINVAL during a
 		// modeset is transient, not proof the flip is broken.
 		std::atomic<bool>	fModesetActive;
@@ -771,6 +782,10 @@ private:
 									color_space space, int dmabufFd,
 									uint32 stride, uint32 sharedHandle,
 									OverlayPlane** _plane);
+			void				_NoteCursorBusy(int err);
+			bool				_CommitInFlight();
+			bool				_CommitCursorOnly(const CursorUpdate& update);
+			void				_ResetFlipState();
 			void				_RearmOverlayPlanes();
 			void				_ReleaseOverlayPlanes();
 			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t planeId);

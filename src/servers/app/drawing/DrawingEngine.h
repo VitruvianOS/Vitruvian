@@ -34,6 +34,14 @@ class ServerCursor;
 class ServerFont;
 
 
+// Composes what the frame buffer does not hold into a screen read.
+class ReadOverlay {
+public:
+	virtual					~ReadOverlay() {}
+	virtual	void			Compose(ServerBitmap* bitmap, BRect bounds) = 0;
+};
+
+
 class DrawingEngine : public HWInterfaceListener {
 public:
 							DrawingEngine(HWInterface* interface = NULL);
@@ -198,6 +206,10 @@ public:
 	virtual	BRect			CopyRect(BRect rect, int32 xOffset,
 								int32 yOffset) const;
 
+			// Exclusive lock held while set.
+			void			SetReadOverlay(ReadOverlay* overlay)
+								{ fReadOverlay = overlay; }
+
 			void			SetRendererOffset(int32 offsetX, int32 offsetY);
 
 private:
@@ -211,6 +223,7 @@ private:
 							fPainter;
 			HWInterface*	fGraphicsCard;
 			bool			fCopyToFront;
+			ReadOverlay*	fReadOverlay;
 };
 
 #endif // DRAWING_ENGINE_H_

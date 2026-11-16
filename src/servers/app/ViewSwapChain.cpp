@@ -734,6 +734,41 @@ ViewSwapChain::Redraw(DrawingEngine* engine, const BRegion& region)
 
 
 void
+ViewSwapChain::Compose(ServerBitmap* target, const BRect& bounds)
+{
+	if (fPlane == NULL || !fPlane->Active() || fOwnerWindow == NULL
+			|| fView == NULL)
+		return;
+
+	BReference<ServerBitmap> bitmap;
+	BRect destination;
+	{
+		BAutolock locker(fLock);
+		if (fShownGeneration == NULL || fShownIndex < 0)
+			return;
+
+		bitmap = fShownGeneration->buffers[fShownIndex];
+		destination = _Destination(fShownGeneration);
+	}
+
+	BRegion visible;
+	fOwnerWindow->VisibleViewRegion(fView, visible);
+	BRegion area(destination & bounds);
+	visible.IntersectWith(&area);
+
+	SwapChainCpuRead reading(bitmap.Get());
+	for (int32 i = 0; i < visible.CountRects(); i++) {
+		const BRect rect = visible.RectAt(i);
+		target->ImportBits(bitmap->Bits(), bitmap->BitsLength(),
+			bitmap->BytesPerRow(), bitmap->ColorSpace(),
+			BPoint(rect.left - destination.left, rect.top - destination.top),
+			BPoint(rect.left - bounds.left, rect.top - bounds.top),
+			rect.IntegerWidth() + 1, rect.IntegerHeight() + 1);
+	}
+}
+
+
+void
 ViewSwapChain::Hide(bool redraw, const char* reason)
 {
 	PlaneConsumer* plane = fPlane;

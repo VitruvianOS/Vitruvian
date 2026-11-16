@@ -68,6 +68,7 @@
 #include "ServerPicture.h"
 #include "ServerTokenSpace.h"
 #include "ServerWindow.h"
+#include <SwapChain.h>
 #include "Window.h"
 
 
@@ -86,6 +87,28 @@
 #endif
 
 using std::nothrow;
+
+
+// Puts the buffers shown on planes into a screen read.
+class SwapChainRead : public ReadOverlay {
+public:
+	SwapChainRead(Desktop* desktop)
+		:
+		fDesktop(desktop)
+	{
+	}
+
+	virtual void Compose(ServerBitmap* bitmap, BRect bounds)
+	{
+		for (Window* window = fDesktop->AllWindows().FirstWindow();
+				window != NULL;
+				window = window->NextWindow(kAllWindowList))
+			window->ComposeSwapChains(bitmap, bounds);
+	}
+
+private:
+	Desktop*	fDesktop;
+};
 
 static const uint32 kMsgUpdateShowAllDraggers = '_adg';
 static const uint32 kMsgAppQuit = 'appQ';
@@ -3684,11 +3707,23 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			BReference<ServerBitmap> bitmap(GetBitmap(token), true);
 			if (bitmap != NULL) {
+				// Window lock first, as drawing takes them.
+				const bool planes = BPrivate::swap_chain_enabled();
+				SwapChainRead overlay(fDesktop);
+				if (planes)
+					fDesktop->LockSingleWindow();
 				if (fDesktop->GetDrawingEngine()->LockExclusiveAccess()) {
+					if (planes) {
+						fDesktop->GetDrawingEngine()->SetReadOverlay(
+							&overlay);
+					}
 					success = fDesktop->GetDrawingEngine()->ReadBitmap(bitmap,
 						drawCursor, bounds) == B_OK;
+					fDesktop->GetDrawingEngine()->SetReadOverlay(NULL);
 					fDesktop->GetDrawingEngine()->UnlockExclusiveAccess();
 				}
+				if (planes)
+					fDesktop->UnlockSingleWindow();
 			}
 
 			if (success)

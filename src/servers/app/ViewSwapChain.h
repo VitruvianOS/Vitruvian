@@ -128,6 +128,10 @@ public:
 									const BRegion& region);
 			// Takes the buffer off its plane; the painter shows it again.
 			void				Hide(bool redraw, const char* reason);
+			// Copies the buffer on a plane into a screen read. Desktop
+			// window lock held.
+			void				Compose(ServerBitmap* target,
+									const BRect& bounds);
 			// The window changed under a plane.
 			void				Revalidate();
 			void				Detach();

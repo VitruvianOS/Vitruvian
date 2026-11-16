@@ -256,6 +256,29 @@ Window::RemoveSwapChain(ViewSwapChain* chain)
 }
 
 
+void
+Window::VisibleViewRegion(View* view, BRegion& region)
+{
+	region.MakeEmpty();
+	if (!IsVisible())
+		return;
+
+	if (!fContentRegionValid)
+		_UpdateContentRegion();
+	region = VisibleContentRegion();
+	region.IntersectWith(&view->ScreenAndUserClipping(&fContentRegion));
+}
+
+
+void
+Window::ComposeSwapChains(ServerBitmap* target, const BRect& bounds)
+{
+	BAutolock locker(fSwapChainLock);
+	for (size_t i = 0; i < fSwapChains.size(); i++)
+		fSwapChains[i]->Compose(target, bounds);
+}
+
+
 bool
 Window::IsRectFullyVisible(View* view, const BRect& screenRect)
 {

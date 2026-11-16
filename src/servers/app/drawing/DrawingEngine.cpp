@@ -180,7 +180,8 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	:
 	fPainter(new Painter()),
 	fGraphicsCard(NULL),
-	fCopyToFront(true)
+	fCopyToFront(true),
+	fReadOverlay(NULL)
 {
 	SetHWInterface(interface);
 }
@@ -1388,6 +1389,9 @@ DrawingEngine::ReadBitmap(ServerBitmap* bitmap, bool drawCursor, BRect bounds)
 		buffer->BytesPerRow(), buffer->ColorSpace(),
 		bounds.LeftTop(), BPoint(0, 0),
 		bounds.IntegerWidth() + 1, bounds.IntegerHeight() + 1);
+
+	if (fReadOverlay != NULL)
+		fReadOverlay->Compose(bitmap, bounds);
 
 	if (drawCursor) {
 		ServerCursorReference cursorRef = fGraphicsCard->Cursor();

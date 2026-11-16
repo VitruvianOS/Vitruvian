@@ -78,6 +78,9 @@ private:
 	GLuint						fFbo;
 	GLuint						fColorRb;
 	GLuint						fDepthRb;
+	GLuint						fFlipFbo;
+	GLuint						fFlipRb;
+	bool						fReadBgra;
 
 	bool						fIsGles;
 	int32						fContextMajor;

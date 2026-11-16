@@ -45,6 +45,9 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fFbo(0),
 	fColorRb(0),
 	fDepthRb(0),
+	fFlipFbo(0),
+	fFlipRb(0),
+	fReadBgra(false),
 	fIsGles(false),
 	fContextMajor(0),
 	fContextMinor(0),
@@ -229,6 +232,8 @@ MesaSurfacelessRenderer::_LogGlStrings()
 	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
 	bool hasCompat = extensions != NULL
 		&& strstr(extensions, "GL_ARB_compatibility") != NULL;
+	fReadBgra = !fIsGles || (extensions != NULL
+		&& strstr(extensions, "GL_EXT_read_format_bgra") != NULL);
 
 	printf("MesaSurfacelessRenderer: EGL %s vendor=%s\n",
 		eglVersion != NULL ? eglVersion : "?",
@@ -517,6 +522,24 @@ MesaSurfacelessRenderer::_CreateFbo(int32 width, int32 height)
 		return;
 	}
 
+	// Second target for the GPU-side vertical flip; without it the readback
+	// falls back to the CPU flip.
+	glGenFramebuffers(1, &fFlipFbo);
+	glGenRenderbuffers(1, &fFlipRb);
+	glBindRenderbuffer(GL_RENDERBUFFER, fFlipRb);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+	glBindFramebuffer(GL_FRAMEBUFFER, fFlipFbo);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		GL_RENDERBUFFER, fFlipRb);
+	if (glGetError() != GL_NO_ERROR
+		|| glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		glDeleteFramebuffers(1, &fFlipFbo);
+		glDeleteRenderbuffers(1, &fFlipRb);
+		fFlipFbo = 0;
+		fFlipRb = 0;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, fFbo);
+
 	glViewport(0, 0, width, height);
 	fFboReady = true;
 }
@@ -528,6 +551,8 @@ MesaSurfacelessRenderer::_DestroyFbo()
 	if (fFbo)      { glDeleteFramebuffers(1, &fFbo);      fFbo = 0; }
 	if (fColorRb)  { glDeleteRenderbuffers(1, &fColorRb); fColorRb = 0; }
 	if (fDepthRb)  { glDeleteRenderbuffers(1, &fDepthRb); fDepthRb = 0; }
+	if (fFlipFbo)  { glDeleteFramebuffers(1, &fFlipFbo);  fFlipFbo = 0; }
+	if (fFlipRb)   { glDeleteRenderbuffers(1, &fFlipRb);  fFlipRb = 0; }
 	fFboReady = false;
 }
 
@@ -536,7 +561,7 @@ void
 MesaSurfacelessRenderer::_Cleanup()
 {
 	if (fDisplay != EGL_NO_DISPLAY) {
-		if (fContext != EGL_NO_CONTEXT && (fFbo || fColorRb || fDepthRb)) {
+		if (fContext != EGL_NO_CONTEXT && (fFbo || fColorRb || fDepthRb || fFlipFbo)) {
 			eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, fContext);
 			_DestroyFbo();
 			eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
@@ -613,24 +638,35 @@ MesaSurfacelessRenderer::SwapBuffers(bool vSync)
 	if (slot >= 0 && bitmap == NULL)
 		fRing->ReleaseSlot(slot);
 
-	if (bitmap != NULL && fReadBufferSize >= readSize) {
-		// glReadPixels waits for the frame and returns it bottom-up. A
-		// packed read and one copy per row into the flipped position.
-		// GLES has no GL_BGRA readback: read RGBA and swizzle.
+	const bool gpuFlip = fFlipFbo != 0;
+	if (bitmap != NULL && (gpuFlip || fReadBufferSize >= readSize)) {
 		uint8* bits = (uint8*)bitmap->Bits();
 		uint32 bpr  = (uint32)bitmap->BytesPerRow();
-		GLenum readFormat = fIsGles ? GL_RGBA : GL_BGRA;
+		GLenum readFormat = fReadBgra ? GL_BGRA : GL_RGBA;
 
 		glPixelStorei(GL_PACK_ALIGNMENT, 4);
-		glReadPixels(0, 0, fWidth, fHeight, readFormat, GL_UNSIGNED_BYTE,
-			fReadBuffer);
-
-		for (int32 y = 0; y < fHeight; y++) {
-			memcpy(bits + (fHeight - 1 - y) * bpr,
-				fReadBuffer + y * rowBytes, rowBytes);
+		if (gpuFlip) {
+			// Flip on the GPU so the readback lands in bitmap row order.
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, fFbo);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fFlipFbo);
+			glBlitFramebuffer(0, 0, fWidth, fHeight, 0, fHeight, fWidth, 0,
+				GL_COLOR_BUFFER_BIT, GL_NEAREST);
+			glBindFramebuffer(GL_FRAMEBUFFER, fFlipFbo);
+			glPixelStorei(GL_PACK_ROW_LENGTH, bpr / 4);
+			glReadPixels(0, 0, fWidth, fHeight, readFormat, GL_UNSIGNED_BYTE,
+				bits);
+			glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+			glBindFramebuffer(GL_FRAMEBUFFER, fFbo);
+		} else {
+			glReadPixels(0, 0, fWidth, fHeight, readFormat, GL_UNSIGNED_BYTE,
+				fReadBuffer);
+			for (int32 y = 0; y < fHeight; y++) {
+				memcpy(bits + (fHeight - 1 - y) * bpr,
+					fReadBuffer + y * rowBytes, rowBytes);
+			}
 		}
 
-		if (fIsGles) {
+		if (!fReadBgra) {
 			for (int32 y = 0; y < fHeight; y++) {
 				uint8* row = bits + y * bpr;
 				for (int32 x = 0; x < fWidth; x++) {

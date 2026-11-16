@@ -787,6 +787,9 @@ BRoster::GetRunningAppInfo(team_id team, app_info* info) const
 	status_t error = (info ? B_OK : B_BAD_VALUE);
 	if (error == B_OK && team < 0)
 		error = B_BAD_TEAM_ID;
+	// the registrar cannot ask itself; its looper would never answer
+	if (error == B_OK && fMessenger.Team() == BPrivate::current_team())
+		error = B_NOT_ALLOWED;
 	// compose the request message
 	BMessage request(B_REG_GET_APP_INFO);
 	if (error == B_OK)

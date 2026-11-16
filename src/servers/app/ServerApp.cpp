@@ -3708,7 +3708,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			BReference<ServerBitmap> bitmap(GetBitmap(token), true);
 			if (bitmap != NULL) {
 				// Window lock first, as drawing takes them.
-				const bool planes = BPrivate::swap_chain_enabled();
+				const bool planes = BPrivate::swap_chain_enabled()
+					|| Window::BitmapOverlayEnabled();
 				SwapChainRead overlay(fDesktop);
 				if (planes)
 					fDesktop->LockSingleWindow();

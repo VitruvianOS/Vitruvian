@@ -166,9 +166,11 @@ public:
 			bool				IsRectFullyVisible(View* view,
 									const BRect& screenRect);
 
-			// Draws the chains that sit on planes into a screen read.
+			// Draws the chains and the bitmap that sit on planes into a
+			// screen read.
 			void				ComposeSwapChains(ServerBitmap* target,
 									const BRect& bounds);
+	static	bool				BitmapOverlayEnabled();
 			// What of the view can be seen. Desktop window lock held.
 			void				VisibleViewRegion(View* view,
 									BRegion& region);

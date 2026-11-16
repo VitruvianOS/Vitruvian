@@ -276,6 +276,30 @@ Window::ComposeSwapChains(ServerBitmap* target, const BRect& bounds)
 	BAutolock locker(fSwapChainLock);
 	for (size_t i = 0; i < fSwapChains.size(); i++)
 		fSwapChains[i]->Compose(target, bounds);
+
+	if (fOverlayPlane == NULL || fOverlayBitmap.Get() == NULL)
+		return;
+
+	ServerBitmap* bitmap = fOverlayBitmap.Get();
+	const BRect area = fOverlayRect & bounds;
+	if (!area.IsValid())
+		return;
+
+	SwapChainCpuRead reading(bitmap);
+	target->ImportBits(bitmap->Bits(), bitmap->BitsLength(),
+		bitmap->BytesPerRow(), bitmap->ColorSpace(),
+		BPoint(area.left - fOverlayRect.left, area.top - fOverlayRect.top),
+		BPoint(area.left - bounds.left, area.top - bounds.top),
+		area.IntegerWidth() + 1, area.IntegerHeight() + 1);
+}
+
+
+/*static*/ bool
+Window::BitmapOverlayEnabled()
+{
+	static const bool enabled = getenv("VOS_OVERLAY_GL") != NULL
+		&& atoi(getenv("VOS_OVERLAY_GL")) == 1;
+	return enabled;
 }
 
 
@@ -299,10 +323,7 @@ bool
 Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
 	const BRect& source, const BRect& screenRect)
 {
-	static const bool enabled = getenv("VOS_OVERLAY_GL") != NULL
-		&& atoi(getenv("VOS_OVERLAY_GL")) == 1;
-
-	if (!enabled || bitmap == NULL || bitmap->GbmBuffer() == NULL
+	if (!BitmapOverlayEnabled() || bitmap == NULL || bitmap->GbmBuffer() == NULL
 			|| IsOffscreenWindow() || fScreen == NULL || !IsVisible())
 		return false;
 

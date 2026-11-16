@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -104,7 +105,21 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	setenv("ALSOFT_DRIVERS", "pipewire", 0);
 	// A paused off-screen video never resumed after a scroll or resize.
 	setenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1", 0);
-	context = webkit_web_context_new();
+	// The SHM path renders in software with a large footprint; the default
+	// thresholds released memory mid-video and deadlocked the compositor.
+	WebKitMemoryPressureSettings* pressure
+		= webkit_memory_pressure_settings_new();
+	long pages = sysconf(_SC_PHYS_PAGES);
+	long pageSize = sysconf(_SC_PAGESIZE);
+	if (pages > 0 && pageSize > 0) {
+		webkit_memory_pressure_settings_set_memory_limit(pressure,
+			(guint)((uint64_t)pages * pageSize / (1024 * 1024)));
+	}
+	webkit_memory_pressure_settings_set_conservative_threshold(pressure, 0.7);
+	webkit_memory_pressure_settings_set_strict_threshold(pressure, 0.85);
+	context = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
+		"memory-pressure-settings", pressure, NULL));
+	webkit_memory_pressure_settings_free(pressure);
 	if (const char* runtimeDir = g_getenv("XDG_RUNTIME_DIR")) {
 		std::string socket = std::string(runtimeDir) + "/pipewire-0";
 		webkit_web_context_add_path_to_sandbox(context, socket.c_str(),

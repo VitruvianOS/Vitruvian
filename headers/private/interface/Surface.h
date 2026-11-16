@@ -95,6 +95,8 @@ private:
 			// Swap chain of the root view, when VOS_SWAP_CHAIN allows.
 			SwapChain*			fChain;
 			BBitmap*			fChainBitmaps[4];
+			// Where each buffer differs from the one presented last.
+			BRegion				fChainStale[4];
 			int32				fChainIndex;
 			int32				fLastIndex;
 			bool				fChainFailed;

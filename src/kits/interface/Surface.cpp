@@ -472,6 +472,8 @@ BSurface::_ChainBuffer()
 		}
 		fChainIndex = -1;
 		fLastIndex = -1;
+		for (int32 i = 0; i < 4; i++)
+			fChainStale[i].MakeEmpty();
 		if (fChain->Resize(width, height) != B_OK)
 			_ChainDelete();
 	}
@@ -515,6 +517,8 @@ BSurface::_ChainBuffer()
 			delete fChainBitmaps[i];
 			fChainBitmaps[i] = NULL;
 		}
+		if (fChainBitmaps[i] != NULL)
+			fChainStale[i].Set(BRect(0, 0, width - 1, height - 1));
 	}
 
 	BBitmap* bitmap = fChainBitmaps[fChainIndex];
@@ -524,15 +528,32 @@ BSurface::_ChainBuffer()
 		return NULL;
 	}
 
-	// The contents persist: bring the new buffer up to date.
+	// The contents persist: bring the new buffer up to date, only where
+	// the presents since it was last shown changed something.
 	BBitmap* last = fLastIndex >= 0 ? fChainBitmaps[fLastIndex] : NULL;
 	if (acquired && last != NULL && fLastIndex != fChainIndex) {
-		const int32 rows = bitmap->Bounds().IntegerHeight() + 1;
-		const int32 bytes = min_c(bitmap->BytesPerRow(), last->BytesPerRow());
-		for (int32 y = 0; y < rows; y++) {
-			memcpy((uint8*)bitmap->Bits() + y * bitmap->BytesPerRow(),
-				(uint8*)last->Bits() + y * last->BytesPerRow(), bytes);
+		const int32 bytesPerRow = min_c(bitmap->BytesPerRow(),
+			last->BytesPerRow());
+		const BRegion& stale = fChainStale[fChainIndex];
+		for (int32 i = 0; i < stale.CountRects(); i++) {
+			const BRect rect = stale.RectAt(i) & bitmap->Bounds();
+			if (!rect.IsValid())
+				continue;
+
+			const int32 offset = (int32)rect.left * 4;
+			const int32 length = min_c(((int32)rect.IntegerWidth() + 1) * 4,
+				bytesPerRow - offset);
+			if (length <= 0)
+				continue;
+
+			for (int32 y = (int32)rect.top; y <= (int32)rect.bottom; y++) {
+				memcpy((uint8*)bitmap->Bits() + y * bitmap->BytesPerRow()
+						+ offset,
+					(uint8*)last->Bits() + y * last->BytesPerRow() + offset,
+					length);
+			}
 		}
+		fChainStale[fChainIndex].MakeEmpty();
 	}
 	return bitmap;
 }
@@ -573,6 +594,20 @@ BSurface::_ChainPresent(const BRegion& region)
 	if (fChain->Present(fChainIndex, rects, count) != B_OK)
 		return true;
 
+	// Every other buffer misses what this one changed.
+	for (int32 i = 0; i < 4; i++) {
+		if (i == fChainIndex)
+			continue;
+
+		if (count == 0)
+			fChainStale[i].Set(bounds);
+		else {
+			for (int32 j = 0; j < count; j++)
+				fChainStale[i].Include(rects[j]);
+		}
+	}
+	fChainStale[fChainIndex].MakeEmpty();
+
 	fLastIndex = fChainIndex;
 	fChainIndex = -1;
 	return true;
@@ -590,6 +625,8 @@ BSurface::_ChainDelete()
 	fChain = NULL;
 	fChainIndex = -1;
 	fLastIndex = -1;
+	for (int32 i = 0; i < 4; i++)
+		fChainStale[i].MakeEmpty();
 }
 
 

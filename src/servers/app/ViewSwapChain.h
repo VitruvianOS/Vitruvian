@@ -139,7 +139,7 @@ public:
 			// From the plane consumer.
 			void				NotifyShown(uint64 serial, bigtime_t when);
 			void				NotifyDropped(uint64 serial);
-			void				NotifyLost();
+			void				NotifyLost(const BRect& area);
 			// Staged updates older than serial will not be shown.
 			void				NotifyReleased(uint64 serial);
 
@@ -152,6 +152,8 @@ private:
 									bigtime_t when);
 			void				_DropPending(uint64 below);
 			void				_Prune();
+			BRect				_DestinationFor(int32 width,
+									int32 height) const;
 			BRect				_Destination(const Generation* generation)
 									const;
 			void				_UpdatePeriod(::HWInterface* hardware);

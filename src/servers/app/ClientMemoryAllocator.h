@@ -137,6 +137,8 @@ public:
 			uint32				Format() const;
 			// GEM handle of the buffer object on the gbm device fd.
 			uint32				Handle() const;
+			// The fd of the gbm device the buffer object lives on.
+			int					DeviceFd() const;
 
 private:
 			struct gbm_bo*		fBo;

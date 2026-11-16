@@ -526,4 +526,11 @@ GbmMemory::Handle() const
 	return fBo != NULL ? gbm_bo_get_handle(fBo).u32 : 0;
 }
 
+
+int
+GbmMemory::DeviceFd() const
+{
+	return fBo != NULL ? gbm_device_get_fd(gbm_bo_get_device(fBo)) : -1;
+}
+
 #endif	// HAVE_GBM

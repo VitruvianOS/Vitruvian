@@ -88,12 +88,17 @@ struct PlaneUpdate {
 	// Nonzero: the plane's listener hears when this update is on screen.
 	uint64_t	serial;
 	bigtime_t	staged;
+	// Where it goes: the output (0 is the first), its card and CRTC.
+	uint32_t	output;
+	int			fd;
+	uint32_t	crtc;
 };
 
 // A staged update waiting for its commit to complete.
 struct PlaneNote {
 	uint32_t	planeId;
 	uint64_t	serial;
+	uint32_t	output;
 };
 
 class DrmHWInterface;
@@ -103,7 +108,8 @@ class DrmHWInterface;
 class DrmOverlayPlane : public OverlayPlane {
 public:
 							DrmOverlayPlane(DrmHWInterface* interface,
-								uint32_t planeId, const PlaneProps& props);
+								uint32_t planeId, const PlaneProps& props,
+								uint32_t output, int fd, uint32_t crtc);
 	virtual					~DrmOverlayPlane();
 
 			status_t		Allocate(uint32 width, uint32 height,
@@ -139,6 +145,11 @@ public:
 	virtual	void			Disable();
 
 			uint32_t		PlaneId() const { return fPlaneId; }
+			uint32_t		Output() const { return fOutput; }
+			bool			SharedDevice() const { return fSharedDevice; }
+			// The buffers' device is this plane's card.
+			void			SetSharedDevice(bool shared)
+								{ fSharedDevice = shared; }
 
 private:
 			void			_UnbindNow();
@@ -147,6 +158,9 @@ private:
 			int				fFd;
 			uint32_t		fPlaneId;
 			PlaneProps		fProps;
+			uint32_t		fOutput;
+			uint32_t		fCrtc;
+			bool			fSharedDevice;
 			uint32_t		fHandle;
 			uint32_t		fFbId;
 			// Buffers added after the first, and the one on show.
@@ -184,6 +198,10 @@ struct OverlayPlaneInfo {
 	uint32					maxHeight;
 	std::vector<uint32_t>	formats;
 	DrmOverlayPlane*		claimed;
+	// The output it scans out on (0 is the first), its card and CRTC.
+	uint32_t				output;
+	int						fd;
+	uint32_t				crtcId;
 };
 
 // Values match the kernel's "panel orientation" connector property
@@ -246,6 +264,7 @@ public:
 
 #ifdef HAVE_GBM
 	virtual	struct gbm_device*	GbmDevice();
+	virtual	struct gbm_device*	GbmDeviceFor(const BRect& where);
 #endif
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);
@@ -315,8 +334,9 @@ public:
 	virtual	void				ReleaseOverlayPlane(OverlayPlane* plane);
 	virtual	status_t			AcquireOverlayPlaneForBitmap(
 									ServerBitmap* bitmap,
-									OverlayPlane** _plane);
-	virtual	BRect				OverlayOutputFrame();
+									OverlayPlane** _plane,
+									const BRect& destination);
+	virtual	BRect				OverlayOutputFrame(const BRect& where);
 	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
 	virtual	bool				CheckOverlayRestrictions(int32 width,
@@ -409,6 +429,9 @@ private:
 		int		fd;
 		int		index;
 		int		deviceId;
+#ifdef HAVE_GBM
+		struct gbm_device*	gbm;
+#endif
 	};
 			void				_BindBacklight();
 			bool				_LoadOutputSprite(Output* output);
@@ -556,8 +579,8 @@ private:
 									int32 y);
 			void				_DisableHardwareCursor();
 			void				_DiscoverProperties();
-			void				_DiscoverPlaneProps(uint32_t plane_id,
-									PlaneProps& props);
+			void				_DiscoverPlaneProps(int fd,
+									uint32_t plane_id, PlaneProps& props);
 			void				_DiscoverCrtcProps(uint32_t crtc_id);
 			void				_DiscoverConnProps(uint32_t conn_id);
 			void				_DiscoverPanelOrientation();
@@ -747,7 +770,8 @@ private:
 			void				_NotifyPlanes(
 									const std::vector<PlaneNote>& notes,
 									bool shown, bigtime_t when);
-			void				_DropStagedPlane(uint32_t planeId);
+			void				_DropStagedPlane(uint32_t output,
+									uint32_t planeId);
 			void				_SetPlaneNow(const PlaneUpdate& update);
 		// Armed once unsupported flip errors reach the limit: the
 		// driver has dumb buffers but no working page flip. Cleared
@@ -781,14 +805,27 @@ private:
 									uint32 fourcc, uint32 bpp,
 									color_space space, int dmabufFd,
 									uint32 stride, uint32 sharedHandle,
-									OverlayPlane** _plane);
+									OverlayPlane** _plane, uint32 output = 0,
+									int sharedFd = -1);
 			void				_NoteCursorBusy(int err);
 			bool				_CommitInFlight();
 			bool				_CommitCursorOnly(const CursorUpdate& update);
 			void				_ResetFlipState();
 			void				_RearmOverlayPlanes();
-			void				_ReleaseOverlayPlanes();
-			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t planeId);
+			// Claims go back; with dropInfo the planes are forgotten too.
+			// kAllOutputs is every output.
+			void				_ReleaseOverlayPlanes(
+									uint32 output = kAllOutputs,
+									bool dropInfo = true);
+			void				_DiscoverOutputPlanes(Output* output);
+			// The output wholly holding where; false when none does.
+			bool				_OutputFor(const BRect& where, uint32* output,
+									BRect* frame);
+			bool				_PlaneTarget(uint32 output, int* fd,
+									uint32_t* crtc, BPoint* origin);
+	static	const uint32		kAllOutputs = 0xffffffff;
+			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t output,
+									uint32_t planeId);
 			DrmOverlayBuffer*	_FindOverlayBuffer(const overlay_buffer* buffer);
 
 			bool				fVRRSupported;

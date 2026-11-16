@@ -181,11 +181,17 @@ public:
 									OverlayPlane** _plane);
 	virtual void				ReleaseOverlayPlane(OverlayPlane* plane);
 	// Scans a GBM-backed bitmap out on a plane without copying.
+	// The plane belongs to the output that wholly contains destination;
+	// an empty destination means the first output.
 	virtual status_t			AcquireOverlayPlaneForBitmap(
 									ServerBitmap* bitmap,
-									OverlayPlane** _plane);
-	// Desktop rect of the output the claimed planes scan out on.
-	virtual	BRect				OverlayOutputFrame() { return BRect(); }
+									OverlayPlane** _plane,
+									const BRect& destination = BRect());
+	// Desktop rect of the output that wholly contains where (the first
+	// output for an empty one); invalid when none does.
+	virtual	BRect				OverlayOutputFrame(
+									const BRect& where = BRect())
+									{ return BRect(); }
 
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
@@ -203,6 +209,10 @@ public:
 	// buffer objects; NULL means "no GBM", and allocation falls through
 	// to shared memory.
 	virtual	struct gbm_device*	GbmDevice() { return NULL; }
+	// The device of the card that scans out where; GbmDevice() when it is
+	// not wholly on one output.
+	virtual	struct gbm_device*	GbmDeviceFor(const BRect& /*where*/)
+									{ return GbmDevice(); }
 
 	// frame buffer access (you need to ReadLock!)
 			RenderingBuffer*	DrawingBuffer() const;

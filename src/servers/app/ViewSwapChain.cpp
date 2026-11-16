@@ -235,6 +235,11 @@ public:
 		return fDestination;
 	}
 
+	BRect OutputFrame() const
+	{
+		return fOutputFrame;
+	}
+
 	virtual bool Show(SwapChainFrame& frame)
 	{
 		_CheckLost();
@@ -247,6 +252,10 @@ public:
 				: "geometry");
 			return false;
 		}
+
+		// Another output needs a plane of its own.
+		if (fPlane != NULL && fOutputFrame != output)
+			Release(frame.serial, "moved to another output");
 
 		// A resized chain takes a second plane first, so the screen is
 		// never left without the picture between the two.
@@ -336,7 +345,7 @@ public:
 	virtual void PlaneLost()
 	{
 		fLost = true;
-		fChain->NotifyLost();
+		fChain->NotifyLost(fDestination);
 	}
 
 private:
@@ -357,7 +366,7 @@ private:
 #else
 		OverlayPlane* plane = NULL;
 		if (frame.hardware->AcquireOverlayPlaneForBitmap(frame.buffers[0],
-				&plane) != B_OK)
+				&plane, frame.destination) != B_OK)
 			return false;
 
 		for (int32 i = 1; i < frame.count; i++) {
@@ -381,6 +390,7 @@ private:
 		fPlane = plane;
 		fHardware = frame.hardware;
 		fToken = frame.token;
+		fOutputFrame = frame.outputFrame;
 		return true;
 #endif
 	}
@@ -392,6 +402,7 @@ private:
 	int32			fRefused;
 	BRect			fDestination;
 	BRect			fSource;
+	BRect			fOutputFrame;
 	volatile bool	fLost;
 };
 
@@ -482,6 +493,9 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	if (resize && fCurrent == NULL)
 		return B_BAD_VALUE;
 
+	// Where the view lies picks the card that allocates.
+	BRect where = _DestinationFor(width, height);
+
 	const size_t bytes = (size_t)((width * 4 + 255) & ~255) * height * count;
 	if (!fApp->ReserveSwapChain(bytes, !resize))
 		return B_NO_MEMORY;
@@ -500,7 +514,8 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	for (int32 i = 0; i < count && status == B_OK; i++) {
 		ServerBitmap* bitmap = gBitmapManager->CreateBitmap(NULL, *hardware,
 			BRect(0, 0, width - 1, height - 1), B_RGB32,
-			B_BITMAP_SUPPORTS_GBM);
+			B_BITMAP_SUPPORTS_GBM, -1, B_MAIN_SCREEN_ID.id, NULL,
+			where.IsValid() ? &where : NULL);
 		if (bitmap == NULL) {
 			status = B_NO_MEMORY;
 			break;
@@ -647,7 +662,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	}
 
 	if (hardware != NULL) {
-		frame.outputFrame = hardware->OverlayOutputFrame();
+		frame.outputFrame = hardware->OverlayOutputFrame(frame.destination);
 		frame.fullyVisible = fOwnerWindow != NULL
 			&& fOwnerWindow->IsRectFullyVisible(fView, frame.destination);
 	}
@@ -807,7 +822,8 @@ ViewSwapChain::Revalidate()
 	const char* reason = NULL;
 	if (hardware == NULL || !destination.IsValid())
 		reason = "no destination";
-	else if (!hardware->OverlayOutputFrame().Contains(destination))
+	else if (!hardware->OverlayOutputFrame(destination).Contains(destination)
+			|| hardware->OverlayOutputFrame(destination) != plane->OutputFrame())
 		reason = "off output";
 	else if (!fOwnerWindow->IsRectFullyVisible(fView, destination))
 		reason = "covered";
@@ -872,9 +888,16 @@ ViewSwapChain::NotifyDropped(uint64 serial)
 
 
 void
-ViewSwapChain::NotifyLost()
+ViewSwapChain::NotifyLost(const BRect& area)
 {
 	NotifyReleased(UINT64_MAX);
+
+	// Back to the painter: the area is drawn again.
+	::Window* owner = fOwnerWindow;
+	if (owner != NULL && area.IsValid()) {
+		BRegion dirty(area);
+		owner->MarkContentDirtyAsync(dirty);
+	}
 }
 
 
@@ -1030,12 +1053,19 @@ ViewSwapChain::_Prune()
 BRect
 ViewSwapChain::_Destination(const Generation* generation) const
 {
+	return _DestinationFor(generation->width, generation->height);
+}
+
+
+BRect
+ViewSwapChain::_DestinationFor(int32 width, int32 height) const
+{
 	if (fView == NULL)
 		return BRect();
 
 	const IntRect bounds = fView->Bounds();
-	BRect rect(bounds.left, bounds.top, bounds.left + generation->width - 1,
-		bounds.top + generation->height - 1);
+	BRect rect(bounds.left, bounds.top, bounds.left + width - 1,
+		bounds.top + height - 1);
 	fView->LocalToScreenTransform().Apply(&rect);
 	return rect;
 }

@@ -423,7 +423,7 @@ HWInterface::AcquireOverlayPlane(color_space /*space*/, uint32 /*width*/,
 
 status_t
 HWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* /*bitmap*/,
-	OverlayPlane** _plane)
+	OverlayPlane** _plane, const BRect& /*destination*/)
 {
 	if (_plane != NULL)
 		*_plane = NULL;

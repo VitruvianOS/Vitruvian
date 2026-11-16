@@ -31,7 +31,8 @@ public:
 									color_space space, uint32 flags,
 									int32 bytesPerRow = -1,
 									int32 screen = B_MAIN_SCREEN_ID.id,
-									uint8* _allocationFlags = NULL);
+									uint8* _allocationFlags = NULL,
+									const BRect* desktopFrame = NULL);
 
 			ServerBitmap*		CloneFromClient(area_id clientArea,
 									size_t areaOffset, BRect bounds,

@@ -61,10 +61,9 @@ BitmapManager *gBitmapManager = NULL;
 	through to the shared-memory path. The flag stays a hint.
 */
 static uint8*
-_AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
+_AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 	GbmMemory** _memory, uint32* _stride)
 {
-	struct gbm_device* device = hwInterface.GbmDevice();
 	if (device == NULL)
 		return NULL;
 
@@ -202,7 +201,8 @@ BitmapManager::~BitmapManager()
 ServerBitmap*
 BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 	HWInterface& hwInterface, BRect bounds, color_space space, uint32 flags,
-	int32 bytesPerRow, int32 screen, uint8* _allocationFlags)
+	int32 bytesPerRow, int32 screen, uint8* _allocationFlags,
+	const BRect* desktopFrame)
 {
 	BAutolock locker(fLock);
 	if (!locker.IsLocked())
@@ -242,8 +242,16 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 	if ((flags & B_BITMAP_SUPPORTS_GBM) != 0
 		&& (flags & B_BITMAP_WILL_OVERLAY) == 0) {
 		uint32 gbmStride = 0;
-		buffer = _AllocateGbmBuffer(hwInterface, bitmap, &gbmMemory,
-			&gbmStride);
+		// On the card that scans the frame out; any failure there falls
+		// back to the first card.
+		struct gbm_device* first = hwInterface.GbmDevice();
+		struct gbm_device* device = desktopFrame != NULL
+			? hwInterface.GbmDeviceFor(*desktopFrame) : first;
+		buffer = _AllocateGbmBuffer(device, bitmap, &gbmMemory, &gbmStride);
+		if (buffer == NULL && device != first) {
+			buffer = _AllocateGbmBuffer(first, bitmap, &gbmMemory,
+				&gbmStride);
+		}
 		if (buffer != NULL) {
 			bitmap->fMemory = gbmMemory;
 			bitmap->fBytesPerRow = (int32)gbmStride;

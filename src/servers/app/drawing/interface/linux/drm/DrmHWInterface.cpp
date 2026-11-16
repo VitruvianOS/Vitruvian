@@ -994,6 +994,9 @@ DrmHWInterface::_OpenCards(const struct drm_extra_card* extras, int count)
 		card.fd = extras[i].fd;
 		card.index = extras[i].cardIndex;
 		card.deviceId = extras[i].deviceId;
+#ifdef HAVE_GBM
+		card.gbm = NULL;
+#endif
 		fCards.push_back(card);
 		fprintf(stderr, "DRM: card%d drives outputs too\n", card.index);
 	}
@@ -1679,6 +1682,7 @@ DrmHWInterface::AddOutput(uint32 connector)
 	fDirtyMutex.Lock();
 	fOutputs.push_back(output);
 	fDirtyMutex.Unlock();
+	_DiscoverOutputPlanes(output);
 
 	_RebuildRenderBuffer(fDisplayMode.virtual_width,
 		fDisplayMode.virtual_height);
@@ -1708,6 +1712,9 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 		UnlockExclusiveAccess();
 		return;
 	}
+
+	// Its planes go dark before the monitor does.
+	_ReleaseOverlayPlanes(connector);
 
 	fDirtyMutex.Lock();
 	for (size_t i = 0; i < fOutputs.size(); i++) {
@@ -1967,7 +1974,8 @@ DrmHWInterface::PromoteOutput(uint32 connector)
 	_DiscoverPanelOrientation();
 	fPrimaryPlaneId = 0;
 	fCursorPlaneId = 0;
-	_ReleaseOverlayPlanes();
+	_ReleaseOverlayPlanes(0);
+	_ReleaseOverlayPlanes(connector);
 	if (fAtomicSupported)
 		_DiscoverProperties();
 
@@ -2042,7 +2050,7 @@ DrmHWInterface::AdoptOutput(uint32 connector)
 		_LeaveDirectRender();
 	_DisableHardwareCursor();
 	fHardwareCursorEnabled = false;
-	_ReleaseOverlayPlanes();
+	_ReleaseOverlayPlanes(0, false);
 
 	drmModeSetCrtc(fFd, fDev->crtc, 0, 0, 0, NULL, 0, NULL);
 
@@ -2186,6 +2194,7 @@ DrmHWInterface::SetOutputMode(uint32 connector, const display_mode& mode)
 		return B_BAD_VALUE;
 	}
 
+	_ReleaseOverlayPlanes(connector, false);
 	_TeardownOutput(output);
 
 	if (dev->fb) {
@@ -3163,7 +3172,7 @@ DrmHWInterface::_EventThreadMain()
 								if (planes[i].serial == 0)
 									continue;
 								PlaneNote note = { planes[i].planeId,
-									planes[i].serial };
+									planes[i].serial, 0 };
 								token->planes.push_back(note);
 							}
 							r = (_AtomicCommitFrame(fb,
@@ -3217,7 +3226,7 @@ DrmHWInterface::_EventThreadMain()
 							fStagedPlanes.push_back(planes[i]);
 						else if (planes[i].serial != 0) {
 							PlaneNote note = { planes[i].planeId,
-								planes[i].serial };
+								planes[i].serial, 0 };
 							lost.push_back(note);
 						}
 					}
@@ -3233,7 +3242,7 @@ DrmHWInterface::_EventThreadMain()
 					_SetPlaneNow(planes[i]);
 					if (planes[i].serial != 0) {
 						PlaneNote note = { planes[i].planeId,
-							planes[i].serial };
+							planes[i].serial, 0 };
 						shown.push_back(note);
 					}
 				}
@@ -3392,6 +3401,11 @@ DrmHWInterface::~DrmHWInterface()
 	fRenderBuffer = NULL;
 
 #ifdef HAVE_GBM
+	for (size_t i = 0; i < fCards.size(); i++) {
+		if (fCards[i].gbm != NULL)
+			gbm_device_destroy(fCards[i].gbm);
+		fCards[i].gbm = NULL;
+	}
 	if (fGbmDevice != NULL) {
 		gbm_device_destroy(fGbmDevice);
 		fGbmDevice = NULL;
@@ -3587,6 +3601,9 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	}
 
 	_DrainPendingFlip();
+
+	// The modeset reshapes the CRTC under the planes.
+	_ReleaseOverlayPlanes(0, false);
 
 	// Bump the generation before the pointers change: a completion event
 	// that lands after the drain (abandoned flip) must not swap these.
@@ -6065,6 +6082,32 @@ DrmHWInterface::_CrtcIndex(uint32_t crtc_id)
 }
 
 
+// The plane's type and size limits.
+static void
+_ReadPlaneLimits(int fd, uint32_t planeId, OverlayPlaneInfo* info,
+	uint64_t* _type)
+{
+	drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, planeId,
+		DRM_MODE_OBJECT_PLANE);
+	if (props == NULL)
+		return;
+
+	for (uint32_t j = 0; j < props->count_props; j++) {
+		drmModePropertyPtr prop = drmModeGetProperty(fd, props->props[j]);
+		if (prop == NULL)
+			continue;
+		if (strcmp(prop->name, "type") == 0)
+			*_type = props->prop_values[j];
+		else if (strcmp(prop->name, "min") == 0)
+			info->minWidth = info->minHeight = (uint32)props->prop_values[j];
+		else if (strcmp(prop->name, "max") == 0)
+			info->maxWidth = info->maxHeight = (uint32)props->prop_values[j];
+		drmModeFreeProperty(prop);
+	}
+	drmModeFreeObjectProperties(props);
+}
+
+
 void
 DrmHWInterface::_DiscoverProperties()
 {
@@ -6090,35 +6133,19 @@ DrmHWInterface::_DiscoverProperties()
 			OverlayPlaneInfo info = {};
 			info.planeId = planes->planes[i];
 			info.possibleCrtcs = plane->possible_crtcs;
-
-			drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(
-				fFd, planes->planes[i], DRM_MODE_OBJECT_PLANE);
-			if (props) {
-				for (uint32_t j = 0; j < props->count_props; j++) {
-					drmModePropertyPtr prop = drmModeGetProperty(fFd, props->props[j]);
-					if (!prop)
-						continue;
-					if (strcmp(prop->name, "type") == 0)
-						typeValue = props->prop_values[j];
-					else if (strcmp(prop->name, "min") == 0)
-						info.minWidth = info.minHeight
-							= (uint32)props->prop_values[j];
-					else if (strcmp(prop->name, "max") == 0)
-						info.maxWidth = info.maxHeight
-							= (uint32)props->prop_values[j];
-					drmModeFreeProperty(prop);
-				}
-				drmModeFreeObjectProperties(props);
-			}
+			info.output = 0;
+			info.fd = fFd;
+			info.crtcId = dev->crtc;
+			_ReadPlaneLimits(fFd, planes->planes[i], &info, &typeValue);
 
 			if (typeValue == DRM_PLANE_TYPE_PRIMARY && !fPrimaryPlaneId) {
 				fPrimaryPlaneId = planes->planes[i];
-				_DiscoverPlaneProps(planes->planes[i], fPlaneProps);
+				_DiscoverPlaneProps(fFd, planes->planes[i], fPlaneProps);
 			} else if (typeValue == DRM_PLANE_TYPE_CURSOR && !fCursorPlaneId) {
 				fCursorPlaneId = planes->planes[i];
-				_DiscoverPlaneProps(planes->planes[i], fCursorPlaneProps);
+				_DiscoverPlaneProps(fFd, planes->planes[i], fCursorPlaneProps);
 			} else if (typeValue == DRM_PLANE_TYPE_OVERLAY) {
-				_DiscoverPlaneProps(planes->planes[i], info.props);
+				_DiscoverPlaneProps(fFd, planes->planes[i], info.props);
 				info.formats.assign(plane->formats,
 					plane->formats + plane->count_formats);
 				overlayPlanes.push_back(info);
@@ -6131,10 +6158,16 @@ DrmHWInterface::_DiscoverProperties()
 	// Hotplug re-runs this; keep live claims, drop stale free entries.
 	pthread_mutex_lock(&fOverlayMutex);
 	std::vector<OverlayPlaneInfo> merged;
+	for (size_t j = 0; j < fOverlayPlanes.size(); j++) {
+		if (fOverlayPlanes[j].output != 0)
+			merged.push_back(fOverlayPlanes[j]);
+	}
+	const size_t others = merged.size();
 	for (size_t i = 0; i < overlayPlanes.size(); i++) {
 		OverlayPlaneInfo* existing = NULL;
 		for (size_t j = 0; j < fOverlayPlanes.size(); j++) {
-			if (fOverlayPlanes[j].planeId == overlayPlanes[i].planeId)
+			if (fOverlayPlanes[j].output == 0
+					&& fOverlayPlanes[j].planeId == overlayPlanes[i].planeId)
 				existing = &fOverlayPlanes[j];
 		}
 		if (existing != NULL && existing->claimed != NULL)
@@ -6143,10 +6176,10 @@ DrmHWInterface::_DiscoverProperties()
 			merged.push_back(overlayPlanes[i]);
 	}
 	for (size_t j = 0; j < fOverlayPlanes.size(); j++) {
-		if (fOverlayPlanes[j].claimed == NULL)
+		if (fOverlayPlanes[j].claimed == NULL || fOverlayPlanes[j].output != 0)
 			continue;
 		bool stillThere = false;
-		for (size_t i = 0; i < merged.size(); i++) {
+		for (size_t i = others; i < merged.size(); i++) {
 			if (merged[i].planeId == fOverlayPlanes[j].planeId)
 				stillThere = true;
 		}
@@ -6171,15 +6204,16 @@ DrmHWInterface::_DiscoverProperties()
 
 
 void
-DrmHWInterface::_DiscoverPlaneProps(uint32_t plane_id, PlaneProps& props)
+DrmHWInterface::_DiscoverPlaneProps(int fd, uint32_t plane_id,
+	PlaneProps& props)
 {
 	memset(&props, 0, sizeof(props));
 	drmModeObjectPropertiesPtr oprops = drmModeObjectGetProperties(
-		fFd, plane_id, DRM_MODE_OBJECT_PLANE);
+		fd, plane_id, DRM_MODE_OBJECT_PLANE);
 	if (!oprops)
 		return;
 	for (uint32_t i = 0; i < oprops->count_props; i++) {
-		drmModePropertyPtr prop = drmModeGetProperty(fFd, oprops->props[i]);
+		drmModePropertyPtr prop = drmModeGetProperty(fd, oprops->props[i]);
 		if (!prop)
 			continue;
 		if      (strcmp(prop->name, "FB_ID")           == 0)
@@ -6894,12 +6928,15 @@ _CloseGem(int fd, uint32 handle)
 
 
 DrmOverlayPlane::DrmOverlayPlane(DrmHWInterface* interface, uint32_t planeId,
-	const PlaneProps& props)
+	const PlaneProps& props, uint32_t output, int fd, uint32_t crtc)
 	:
 	fInterface(interface),
-	fFd(DrmHWInterface::fFd),
+	fFd(fd),
 	fPlaneId(planeId),
 	fProps(props),
+	fOutput(output),
+	fCrtc(crtc),
+	fSharedDevice(true),
 	fHandle(0),
 	fFbId(0),
 	fShowFb(0),
@@ -7020,7 +7057,7 @@ DrmOverlayPlane::Free()
 {
 	// Drop any staged change and unbind at once; the fb goes away below.
 	fListener = NULL;
-	fInterface->_DropStagedPlane(fPlaneId);
+	fInterface->_DropStagedPlane(fOutput, fPlaneId);
 	if (fFbId != 0 && fHasGeometry)
 		_UnbindNow();
 	fArmed = false;
@@ -7101,28 +7138,36 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 	fDestination = destination;
 	fHasGeometry = true;
 
-	struct modeset_dev* dev = fInterface->fDev;
-	if (dev == NULL || fProps.crtc_id == 0 || fProps.fb_id == 0)
+	if (fProps.crtc_id == 0 || fProps.fb_id == 0)
 		return B_NO_INIT;
 
 	// The compositor only rotates in software; a plane would scan out
 	// untransformed. Decline so the caller stays on the CPU path.
-	if (fInterface->fPanelOrientation != PANEL_ORIENTATION_NORMAL
-			|| fInterface->fPanelReflection != 0)
+	if (fOutput == 0 && (fInterface->fPanelOrientation
+			!= PANEL_ORIENTATION_NORMAL || fInterface->fPanelReflection != 0))
 		return B_UNSUPPORTED;
+
+	int fd;
+	uint32_t crtc;
+	BPoint origin;
+	if (!fInterface->_PlaneTarget(fOutput, &fd, &crtc, &origin))
+		return B_NO_INIT;
 
 	uint32 srcX = (uint32)source.left << 16;
 	uint32 srcY = (uint32)source.top << 16;
 	uint32 srcW = (uint32)(source.IntegerWidth() + 1) << 16;
 	uint32 srcH = (uint32)(source.IntegerHeight() + 1) << 16;
-	int32 crtcX = (int32)destination.left - (int32)fInterface->fOrigin.x;
-	int32 crtcY = (int32)destination.top - (int32)fInterface->fOrigin.y;
+	int32 crtcX = (int32)destination.left - (int32)origin.x;
+	int32 crtcY = (int32)destination.top - (int32)origin.y;
 	uint32 crtcW = (uint32)destination.IntegerWidth() + 1;
 	uint32 crtcH = (uint32)destination.IntegerHeight() + 1;
 
 	PlaneUpdate update = {};
 	update.planeId = fPlaneId;
 	update.props = fProps;
+	update.output = fOutput;
+	update.fd = fd;
+	update.crtc = crtc;
 	update.enable = true;
 	update.fb_id = fShowFb != 0 ? fShowFb : fFbId;
 	update.serial = fSerial;
@@ -7145,7 +7190,7 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 
 		if (update.serial != 0) {
 			std::vector<PlaneNote> notes;
-			PlaneNote note = { fPlaneId, update.serial };
+			PlaneNote note = { fPlaneId, update.serial, fOutput };
 			notes.push_back(note);
 			fInterface->_NotifyPlanes(notes, true, system_time());
 		}
@@ -7169,7 +7214,7 @@ DrmOverlayPlane::AddBuffer(int dmabufFd, uint32 width, uint32 height,
 	if (drmPrimeFDToHandle(fFd, dmabufFd, &handle) < 0)
 		return B_ERROR;
 
-	const bool closeHandle = handle != sharedHandle;
+	const bool closeHandle = !fSharedDevice || handle != sharedHandle;
 	uint32 handles[4] = { handle, 0, 0, 0 };
 	uint32 pitches[4] = { stride, 0, 0, 0 };
 	uint32 offsets[4] = { 0, 0, 0, 0 };
@@ -7249,6 +7294,9 @@ DrmOverlayPlane::Disable()
 	PlaneUpdate update = {};
 	update.planeId = fPlaneId;
 	update.props = fProps;
+	update.output = fOutput;
+	update.fd = fFd;
+	update.crtc = fCrtc;
 	if (!fInterface->_StagePlane(update))
 		_UnbindNow();
 
@@ -7262,6 +7310,9 @@ DrmOverlayPlane::_UnbindNow()
 	bool locked = fInterface->LockExclusiveAccess();
 	PlaneUpdate update = {};
 	update.planeId = fPlaneId;
+	update.output = fOutput;
+	update.fd = fFd;
+	update.crtc = fCrtc;
 	fInterface->_SetPlaneNow(update);
 	if (locked)
 		fInterface->UnlockExclusiveAccess();
@@ -7269,11 +7320,12 @@ DrmOverlayPlane::_UnbindNow()
 
 
 void
-DrmHWInterface::_DropStagedPlane(uint32_t planeId)
+DrmHWInterface::_DropStagedPlane(uint32_t output, uint32_t planeId)
 {
 	fDirtyMutex.Lock();
 	for (size_t i = 0; i < fStagedPlanes.size(); i++) {
-		if (fStagedPlanes[i].planeId == planeId) {
+		if (fStagedPlanes[i].planeId == planeId
+				&& fStagedPlanes[i].output == output) {
 			fStagedPlanes.erase(fStagedPlanes.begin() + i);
 			break;
 		}
@@ -7285,7 +7337,9 @@ DrmHWInterface::_DropStagedPlane(uint32_t planeId)
 bool
 DrmHWInterface::_StagePlane(const PlaneUpdate& update)
 {
-	if (!fAtomicSupported || fPrimaryPlaneId == 0 || fVblankPacedFlip
+	// The other outputs flip on their own; their planes are set at once.
+	if (update.output != 0 || !fAtomicSupported || fPrimaryPlaneId == 0
+			|| fVblankPacedFlip
 			|| !fSessionActive || !fRunning || !fPageFlipEnabled)
 		return false;
 
@@ -7305,7 +7359,7 @@ DrmHWInterface::_StagePlane(const PlaneUpdate& update)
 				} else {
 					// Never reached the screen.
 					PlaneNote note = { update.planeId,
-						fStagedPlanes[i].serial };
+						fStagedPlanes[i].serial, 0 };
 					dropped.push_back(note);
 				}
 			}
@@ -7331,7 +7385,8 @@ DrmHWInterface::_NotifyPlanes(const std::vector<PlaneNote>& notes, bool shown,
 {
 	pthread_mutex_lock(&fOverlayMutex);
 	for (size_t i = 0; i < notes.size(); i++) {
-		OverlayPlaneInfo* info = _FindOverlayPlaneInfo(notes[i].planeId);
+		OverlayPlaneInfo* info = _FindOverlayPlaneInfo(notes[i].output,
+			notes[i].planeId);
 		if (info == NULL || info->claimed == NULL
 				|| info->claimed->Listener() == NULL)
 			continue;
@@ -7346,25 +7401,189 @@ DrmHWInterface::_NotifyPlanes(const std::vector<PlaneNote>& notes, bool shown,
 
 
 BRect
-DrmHWInterface::OverlayOutputFrame()
+DrmHWInterface::OverlayOutputFrame(const BRect& where)
 {
-	return _Frame();
+	uint32 output;
+	BRect frame;
+	return _OutputFor(where, &output, &frame) ? frame : BRect();
+}
+
+
+// An empty rectangle is the first output. Outputs that rotate, sleep or
+// are not set up cannot take a plane.
+bool
+DrmHWInterface::_OutputFor(const BRect& where, uint32* _output, BRect* _frame)
+{
+	const bool any = !where.IsValid();
+
+	if (fStandIn == 0 && fDev != NULL && fPanelOrientation
+			== PANEL_ORIENTATION_NORMAL && fPanelReflection == 0
+			&& fDpmsState == B_DPMS_ON) {
+		const BRect frame = _Frame();
+		if (any || frame.Contains(where)) {
+			*_output = 0;
+			*_frame = frame;
+			return true;
+		}
+	}
+
+	bool found = false;
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < fOutputs.size() && !found; i++) {
+		Output* output = fOutputs[i];
+		if (output->target == NULL || output->dpms != B_DPMS_ON
+				|| output->orientation != PANEL_ORIENTATION_NORMAL
+				|| output->reflection != B_PANEL_REFLECTION_NONE)
+			continue;
+
+		const BRect frame = output->Frame();
+		if (any || frame.Contains(where)) {
+			*_output = output->connector;
+			*_frame = frame;
+			found = true;
+		}
+	}
+	fDirtyMutex.Unlock();
+	return found;
+}
+
+
+// Card, CRTC and place of an output the planes scan out on.
+bool
+DrmHWInterface::_PlaneTarget(uint32 output, int* _fd, uint32_t* _crtc,
+	BPoint* _origin)
+{
+	if (output == 0) {
+		struct modeset_dev* dev = fDev;
+		if (dev == NULL)
+			return false;
+
+		*_fd = fFd;
+		*_crtc = dev->crtc;
+		*_origin = fOrigin;
+		return true;
+	}
+
+	bool found = false;
+	fDirtyMutex.Lock();
+	Output* target = _FindOutput(output);
+	if (target != NULL && target->orientation == PANEL_ORIENTATION_NORMAL
+			&& target->reflection == B_PANEL_REFLECTION_NONE) {
+		*_fd = target->fd;
+		*_crtc = target->dev->crtc;
+		*_origin = target->origin;
+		found = true;
+	}
+	fDirtyMutex.Unlock();
+	return found;
+}
+
+
+#ifdef HAVE_GBM
+struct gbm_device*
+DrmHWInterface::GbmDeviceFor(const BRect& where)
+{
+	int slot = 0;
+	if (where.IsValid()) {
+		fDirtyMutex.Lock();
+		for (size_t i = 0; i < fOutputs.size(); i++) {
+			if (fOutputs[i]->Frame().Contains(where))
+				slot = fOutputs[i]->slot;
+		}
+		fDirtyMutex.Unlock();
+	}
+	if (slot == 0)
+		return GbmDevice();
+
+	struct gbm_device* device = NULL;
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < fCards.size(); i++) {
+		if (fCards[i].slot != slot)
+			continue;
+		if (fCards[i].gbm == NULL)
+			fCards[i].gbm = gbm_create_device(fCards[i].fd);
+		device = fCards[i].gbm;
+	}
+	fDirtyMutex.Unlock();
+	return device != NULL ? device : GbmDevice();
+}
+#endif
+
+
+// Exclusive lock held; the output has its buffers.
+void
+DrmHWInterface::_DiscoverOutputPlanes(Output* output)
+{
+	if (output->dev == NULL)
+		return;
+
+	drmSetClientCap(output->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+
+	int crtcIdx = -1;
+	drmModeRes* res = drmModeGetResources(output->fd);
+	if (res != NULL) {
+		for (int i = 0; i < res->count_crtcs; i++) {
+			if (res->crtcs[i] == output->dev->crtc)
+				crtcIdx = i;
+		}
+		drmModeFreeResources(res);
+	}
+	if (crtcIdx < 0)
+		return;
+
+	std::vector<OverlayPlaneInfo> found;
+	drmModePlaneResPtr planes = drmModeGetPlaneResources(output->fd);
+	for (uint32_t i = 0; planes != NULL && i < planes->count_planes; i++) {
+		drmModePlanePtr plane = drmModeGetPlane(output->fd, planes->planes[i]);
+		if (plane == NULL)
+			continue;
+
+		uint64_t type = 0;
+		OverlayPlaneInfo info = {};
+		info.planeId = planes->planes[i];
+		info.possibleCrtcs = plane->possible_crtcs;
+		info.output = output->connector;
+		info.fd = output->fd;
+		info.crtcId = output->dev->crtc;
+		if ((plane->possible_crtcs & (1u << crtcIdx)) != 0) {
+			_ReadPlaneLimits(output->fd, planes->planes[i], &info, &type);
+			if (type == DRM_PLANE_TYPE_OVERLAY) {
+				_DiscoverPlaneProps(output->fd, planes->planes[i],
+					info.props);
+				info.formats.assign(plane->formats,
+					plane->formats + plane->count_formats);
+				found.push_back(info);
+			}
+		}
+		drmModeFreePlane(plane);
+	}
+	if (planes != NULL)
+		drmModeFreePlaneResources(planes);
+
+	pthread_mutex_lock(&fOverlayMutex);
+	for (size_t i = 0; i < found.size(); i++)
+		fOverlayPlanes.push_back(found[i]);
+	pthread_mutex_unlock(&fOverlayMutex);
+
+	fprintf(stderr, "DRM: connector %u has %u overlay planes\n",
+		(unsigned)output->connector, (unsigned)found.size());
 }
 
 
 void
 DrmHWInterface::_SetPlaneNow(const PlaneUpdate& update)
 {
-	struct modeset_dev* dev = fDev;
-	if (dev == NULL)
+	if (update.fd < 0)
 		return;
 
 	if (update.enable) {
-		drmModeSetPlane(fFd, update.planeId, dev->crtc, update.fb_id, 0,
-			update.crtcX, update.crtcY, update.crtcW, update.crtcH,
+		drmModeSetPlane(update.fd, update.planeId, update.crtc, update.fb_id,
+			0, update.crtcX, update.crtcY, update.crtcW, update.crtcH,
 			update.srcX, update.srcY, update.srcW, update.srcH);
-	} else
-		drmModeSetPlane(fFd, update.planeId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	} else {
+		drmModeSetPlane(update.fd, update.planeId, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0);
+	}
 }
 
 
@@ -7420,7 +7639,7 @@ DrmHWInterface::AcquireOverlayPlane(color_space space, uint32 width,
 
 status_t
 DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
-	OverlayPlane** _plane)
+	OverlayPlane** _plane, const BRect& destination)
 {
 	if (_plane == NULL)
 		return B_BAD_VALUE;
@@ -7431,13 +7650,19 @@ DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
 	if (memory == NULL)
 		return B_UNSUPPORTED;
 
+	// A view on two outputs stays with the painter.
+	uint32 output;
+	BRect frame;
+	if (!_OutputFor(destination, &output, &frame))
+		return B_BUSY;
+
 	int fd = memory->ExportFd();
 	if (fd < 0)
 		return B_ERROR;
 
 	status_t status = _ClaimOverlayPlane(memory->Width(), memory->Height(),
 		memory->Format(), 0, bitmap->ColorSpace(), fd, memory->Stride(),
-		memory->Handle(), _plane);
+		memory->Handle(), _plane, output, memory->DeviceFd());
 	close(fd);
 	return status;
 #else
@@ -7449,20 +7674,21 @@ DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
 status_t
 DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 	uint32 bpp, color_space space, int dmabufFd, uint32 stride,
-	uint32 sharedHandle, OverlayPlane** _plane)
+	uint32 sharedHandle, OverlayPlane** _plane, uint32 output, int sharedFd)
 {
 	if (fFd < 0 || !fInitialized)
 		return B_NO_INIT;
 
 	// See DrmOverlayPlane::Configure(): a rotated or reflected output
 	// would scan the plane out untransformed.
-	if (fPanelOrientation != PANEL_ORIENTATION_NORMAL || fPanelReflection != 0)
+	if (output == 0 && (fPanelOrientation != PANEL_ORIENTATION_NORMAL
+			|| fPanelReflection != 0))
 		return B_UNSUPPORTED;
 
 	pthread_mutex_lock(&fOverlayMutex);
 	for (size_t i = 0; i < fOverlayPlanes.size(); i++) {
 		OverlayPlaneInfo& info = fOverlayPlanes[i];
-		if (info.claimed != NULL)
+		if (info.claimed != NULL || info.output != output)
 			continue;
 		if (std::find(info.formats.begin(), info.formats.end(), fourcc)
 				== info.formats.end())
@@ -7474,14 +7700,15 @@ DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 			continue;
 
 		DrmOverlayPlane* plane = new(std::nothrow) DrmOverlayPlane(this,
-			info.planeId, info.props);
+			info.planeId, info.props, info.output, info.fd, info.crtcId);
 		if (plane == NULL) {
 			pthread_mutex_unlock(&fOverlayMutex);
 			return B_NO_MEMORY;
 		}
+		plane->SetSharedDevice(sharedFd < 0 || sharedFd == info.fd);
 		status_t status = dmabufFd >= 0
 			? plane->Adopt(dmabufFd, width, height, fourcc, stride, space,
-				sharedHandle)
+				plane->SharedDevice() ? sharedHandle : 0)
 			: plane->Allocate(width, height, fourcc, bpp, space);
 		if (status != B_OK) {
 			delete plane;
@@ -7513,7 +7740,8 @@ DrmHWInterface::ReleaseOverlayPlane(OverlayPlane* plane)
 	uint32_t planeId = drmPlane->PlaneId();
 
 	pthread_mutex_lock(&fOverlayMutex);
-	OverlayPlaneInfo* info = _FindOverlayPlaneInfo(planeId);
+	OverlayPlaneInfo* info = _FindOverlayPlaneInfo(drmPlane->Output(),
+		planeId);
 	if (info != NULL && info->claimed == drmPlane)
 		info->claimed = NULL;
 	pthread_mutex_unlock(&fOverlayMutex);
@@ -7694,10 +7922,11 @@ DrmHWInterface::HideOverlay(Overlay* overlay)
 
 
 OverlayPlaneInfo*
-DrmHWInterface::_FindOverlayPlaneInfo(uint32_t planeId)
+DrmHWInterface::_FindOverlayPlaneInfo(uint32_t output, uint32_t planeId)
 {
 	for (size_t i = 0; i < fOverlayPlanes.size(); i++) {
-		if (fOverlayPlanes[i].planeId == planeId)
+		if (fOverlayPlanes[i].planeId == planeId
+				&& fOverlayPlanes[i].output == output)
 			return &fOverlayPlanes[i];
 	}
 	return NULL;
@@ -7732,25 +7961,42 @@ DrmHWInterface::_RearmOverlayPlanes()
 
 
 void
-DrmHWInterface::_ReleaseOverlayPlanes()
+DrmHWInterface::_ReleaseOverlayPlanes(uint32 output, bool dropInfo)
 {
 	pthread_mutex_lock(&fOverlayMutex);
 	std::vector<DrmOverlayPlane*> claimed;
+	std::vector<OverlayPlaneInfo> kept;
 	for (size_t i = 0; i < fOverlayPlanes.size(); i++) {
-		if (fOverlayPlanes[i].claimed != NULL) {
-			claimed.push_back(fOverlayPlanes[i].claimed);
-			fOverlayPlanes[i].claimed = NULL;
+		OverlayPlaneInfo& info = fOverlayPlanes[i];
+		const bool mine = output == kAllOutputs || info.output == output;
+		if (mine && info.claimed != NULL) {
+			claimed.push_back(info.claimed);
+			info.claimed = NULL;
+		}
+		if (!mine || !dropInfo)
+			kept.push_back(info);
+	}
+	fOverlayPlanes = kept;
+
+	// The legacy buffers sit on planes of their own.
+	std::vector<DrmOverlayBuffer*> buffers;
+	for (size_t i = 0; i < fOverlayBuffers.size(); i++) {
+		DrmOverlayPlane* plane = fOverlayBuffers[i]->plane;
+		if (std::find(claimed.begin(), claimed.end(), plane)
+				!= claimed.end()) {
+			buffers.push_back(fOverlayBuffers[i]);
+			fOverlayBuffers.erase(fOverlayBuffers.begin() + i);
+			i--;
 		}
 	}
-	fOverlayPlanes.clear();
-	std::vector<DrmOverlayBuffer*> buffers = fOverlayBuffers;
-	fOverlayBuffers.clear();
 	pthread_mutex_unlock(&fOverlayMutex);
 
 	for (size_t i = 0; i < buffers.size(); i++)
 		delete buffers[i];
 
+	// The users hear of it, and go back to the painter.
 	for (size_t i = 0; i < claimed.size(); i++) {
+		claimed[i]->Abandon();
 		claimed[i]->Disable();
 		claimed[i]->Free();
 		delete claimed[i];

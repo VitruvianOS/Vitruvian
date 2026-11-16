@@ -3928,6 +3928,41 @@ DrmHWInterface::ProposeMode(display_mode* candidate,
 }
 
 
+static float
+mode_refresh_rate(const display_mode& mode)
+{
+	if (mode.timing.h_total == 0 || mode.timing.v_total == 0)
+		return 0;
+	return float(mode.timing.pixel_clock * 1000.0)
+		/ float(mode.timing.h_total * mode.timing.v_total);
+}
+
+
+// Whether a is a better pick than b among modes of one size: the refresh
+// closest to the candidate's, else the highest not above the preferred
+// mode's (the first of the list).
+static bool
+better_refresh(const display_mode& a, const display_mode& b,
+	const display_mode& preferred, const display_mode& candidate)
+{
+	const float ra = mode_refresh_rate(a);
+	const float rb = mode_refresh_rate(b);
+
+	const float wanted = mode_refresh_rate(candidate);
+	if (wanted > 0)
+		return fabsf(ra - wanted) < fabsf(rb - wanted);
+
+	const float limit = mode_refresh_rate(preferred);
+	if (limit <= 0)
+		return false;
+	const bool fitsA = ra <= limit + 0.5f;
+	const bool fitsB = rb <= limit + 0.5f;
+	if (fitsA != fitsB)
+		return fitsA;
+	return fitsA ? ra > rb : ra < rb;
+}
+
+
 status_t
 DrmHWInterface::ProposeModeFromList(display_mode* modeList, uint32 count,
 	display_mode* candidate, const display_mode* low,
@@ -3964,7 +3999,9 @@ DrmHWInterface::ProposeModeFromList(display_mode* modeList, uint32 count,
 		uint32 dh = (m.virtual_height > targetH) ? m.virtual_height - targetH
 		                                          : targetH - m.virtual_height;
 		uint32 diff = dw * dw + dh * dh;
-		if (diff < bestDiff) {
+		if (diff < bestDiff || (diff == bestDiff && best >= 0
+				&& better_refresh(m, modeList[best], modeList[0],
+					*candidate))) {
 			bestDiff = diff;
 			best = (int)i;
 		}
@@ -3980,7 +4017,9 @@ DrmHWInterface::ProposeModeFromList(display_mode* modeList, uint32 count,
 			uint32 dh = (m.virtual_height > targetH) ? m.virtual_height - targetH
 			                                          : targetH - m.virtual_height;
 			uint32 diff = dw * dw + dh * dh;
-			if (diff < bestDiff) {
+			if (diff < bestDiff || (diff == bestDiff
+					&& better_refresh(m, modeList[best], modeList[0],
+						*candidate))) {
 				bestDiff = diff;
 				best = (int)i;
 			}

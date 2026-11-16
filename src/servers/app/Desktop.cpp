@@ -59,6 +59,7 @@
 #include "GlobalFontManager.h"
 #include "HWInterface.h"
 #include "InputManager.h"
+#include "ProfileMessageSupport.h"
 #include "Screen.h"
 #include "ScreenManager.h"
 #include "ScreenRelayout.h"
@@ -3771,7 +3772,7 @@ void
 Desktop::_GetLooperName(char* name, size_t length)
 {
 	snprintf(name, length, "d:%d:%s", fUserID,
-		fTargetScreen == NULL ? "baron" : fTargetScreen);
+		fTargetScreen == NULL ? "default" : fTargetScreen);
 }
 
 
@@ -4097,8 +4098,23 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		}
 
 		default:
-			printf("Desktop %d:%s received unexpected code %" B_PRId32 "\n", 0,
-				"baron", code);
+		{
+			// Once per code; a misrouted sender must not flood the log.
+			static int32 sSeen[16];
+			static int32 sSeenCount = 0;
+			bool known = false;
+			for (int32 i = 0; i < sSeenCount; i++) {
+				if (sSeen[i] == code)
+					known = true;
+			}
+			if (!known && sSeenCount < 16) {
+				sSeen[sSeenCount++] = code;
+				const char* name = string_for_message_code(code);
+				printf("Desktop %d:%s received unexpected code %" B_PRId32
+					" (%s)\n", (int)fUserID,
+					fTargetScreen != NULL ? fTargetScreen : "", code,
+					name != NULL ? name : "unknown");
+			}
 
 			if (link.NeedsReply()) {
 				// the client is now blocking and waiting for a reply!
@@ -4106,6 +4122,7 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fLink.Flush();
 			}
 			break;
+		}
 	}
 }
 

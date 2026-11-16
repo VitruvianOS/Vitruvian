@@ -747,6 +747,7 @@ private:
 			bool				fPacingLockHeld;
 			bigtime_t			fFlipIssueTime;
 			bigtime_t			fLastFlipIssue;
+			std::atomic<bigtime_t>	fLastFlipDone;
 			// Completions arrive on a real vblank, so no issue pacing.
 			bool				fFlipVblank;
 

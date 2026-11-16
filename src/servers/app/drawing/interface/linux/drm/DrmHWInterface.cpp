@@ -300,6 +300,7 @@ DrmHWInterface::DrmHWInterface()
 	fPacingLockHeld(false),
 	fFlipIssueTime(0),
 	fLastFlipIssue(0),
+	fLastFlipDone(0),
 	fFlipVblank(false),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
@@ -2636,6 +2637,7 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		hw->_Wake();
 		return;
 	}
+	hw->fLastFlipDone = system_time();
 	std::vector<PlaneNote> planes;
 	planes.swap(token->planes);
 	delete token;
@@ -2956,6 +2958,25 @@ DrmHWInterface::_EventThreadMain()
 			if (!dirty)
 				fWakeQueued = false;
 			fDirtyMutex.Unlock();
+
+			// Wanted a frame for seconds and none reached the screen.
+			static bigtime_t sDirtySince = 0;
+			static bigtime_t sSeenDone = 0;
+			static bigtime_t sStallReport = 0;
+			const bigtime_t at = system_time();
+			const bigtime_t done = fLastFlipDone.load();
+			if (!dirty || done != sSeenDone)
+				sDirtySince = dirty ? at : 0;
+			sSeenDone = done;
+			if (dirty && sDirtySince != 0 && at - sDirtySince > 2000000
+					&& at - sStallReport > 5000000) {
+				sStallReport = at;
+				fprintf(stderr, "[drm] no frame completed for %lld ms while "
+					"dirty (pending %d, cursor in flight %d)\n",
+					(long long)((at - sDirtySince) / 1000),
+					(int)fPageFlipPending.load(),
+					(int)(fCursorInFlightAt.load() != 0));
+			}
 			if (dirty) {
 				const bigtime_t flipDue = fFlipVblank
 					? 0 : fLastFlipIssue + _FramePeriod();

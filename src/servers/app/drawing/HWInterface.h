@@ -184,6 +184,8 @@ public:
 	virtual status_t			AcquireOverlayPlaneForBitmap(
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane);
+	// Desktop rect of the output the claimed planes scan out on.
+	virtual	BRect				OverlayOutputFrame() { return BRect(); }
 
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);

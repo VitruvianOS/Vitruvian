@@ -9,6 +9,7 @@
 #include <new>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <Autolock.h>
 #include <PortLink.h>
@@ -19,6 +20,7 @@
 #include "Desktop.h"
 #include "DrawingEngine.h"
 #include "HWInterface.h"
+#include "OverlayPlane.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
 #include "ServerWindow.h"
@@ -74,18 +76,31 @@ struct ViewSwapChain::Generation {
 };
 
 
-struct ViewSwapChain::Release {
-	int32		token;
-	int32		index;
-	bigtime_t	when;
-	int32		period;
+// At most one line a second.
+static void
+note_plane(const char* what)
+{
+	static bigtime_t last = 0;
+	const bigtime_t now = system_time();
+	if (now - last < 1000000)
+		return;
+
+	last = now;
+	fprintf(stderr, "swap chain: plane released, %s\n", what);
+}
+
+
+struct ViewSwapChain::Pending {
+	uint64			serial;
+	Generation*		generation;
+	int32			index;
 };
 
 
 // Draws the buffer through the server painter, like any bitmap.
 class CpuConsumer : public SwapChainConsumer {
 public:
-	virtual bool Show(const SwapChainFrame& frame)
+	virtual bool Show(SwapChainFrame& frame)
 	{
 		if (frame.engine == NULL || frame.bitmap == NULL
 				|| frame.clipping == NULL)
@@ -130,16 +145,218 @@ public:
 };
 
 
+// Scans the buffers out on an overlay plane, no copy at all. The plane
+// belongs to the output the desktop reports; a buffer that is not wholly
+// visible there is left to the painter.
+class PlaneConsumer : public SwapChainConsumer, public OverlayPlaneListener {
+public:
+	PlaneConsumer(ViewSwapChain* chain)
+		:
+		fChain(chain),
+		fPlane(NULL),
+		fHardware(NULL),
+		fToken(0),
+		fRefused(0),
+		fLost(false)
+	{
+	}
+
+	virtual ~PlaneConsumer()
+	{
+		Release(UINT64_MAX, "destroyed");
+	}
+
+	bool Active()
+	{
+		_CheckLost();
+		return fPlane != NULL;
+	}
+
+	int32 Token() const
+	{
+		return fToken;
+	}
+
+	BRect Destination() const
+	{
+		return fDestination;
+	}
+
+	virtual bool Show(SwapChainFrame& frame)
+	{
+		_CheckLost();
+
+		const BRect output = frame.outputFrame;
+		if (frame.hardware == NULL || !frame.fullyVisible || !output.IsValid()
+				|| !output.Contains(frame.destination)
+				|| frame.count < 1) {
+			Release(frame.serial, !frame.fullyVisible ? "not visible"
+				: "geometry");
+			return false;
+		}
+
+		// A resized chain takes a second plane first, so the screen is
+		// never left without the picture between the two.
+		OverlayPlane* previous = NULL;
+		if (fPlane != NULL && fToken != frame.token) {
+			previous = fPlane;
+			const int32 previousToken = fToken;
+			fPlane = NULL;
+			fToken = 0;
+			if (fRefused != frame.token && _Claim(frame)) {
+				fHardware->ReleaseOverlayPlane(previous);
+				previous = NULL;
+				fChain->NotifyReleased(frame.serial);
+			} else {
+				fPlane = previous;
+				fToken = previousToken;
+				Release(frame.serial, "resized, no second plane");
+			}
+		}
+		if (fPlane == NULL) {
+			if (fRefused == frame.token || !_Claim(frame)) {
+				fRefused = frame.token;
+				return false;
+			}
+		}
+
+		const BRect source(0, 0, frame.bitmap->Width() - 1,
+			frame.bitmap->Height() - 1);
+		if (fPlane->Show(frame.index, frame.serial, source, frame.destination)
+				!= B_OK) {
+			fRefused = frame.token;
+			Release(frame.serial, "plane refused the buffer");
+			return false;
+		}
+
+		fDestination = frame.destination;
+		fSource = source;
+		frame.async = true;
+		return true;
+	}
+
+	virtual void Hide()
+	{
+		Release(UINT64_MAX, "hidden");
+	}
+
+	// A moved view keeps its plane: only the position changes.
+	bool Follow(const BRect& destination)
+	{
+		_CheckLost();
+		if (fPlane == NULL || fSource.Width() < 0)
+			return false;
+
+		const BRect source = fSource;
+		if (fPlane->Configure(source, destination) != B_OK)
+			return false;
+
+		fDestination = destination;
+		return true;
+	}
+
+	// Gives the plane back. Updates staged before keepFrom are dead.
+	void Release(uint64 keepFrom, const char* reason)
+	{
+		_CheckLost();
+		if (fPlane == NULL)
+			return;
+
+		note_plane(reason);
+		OverlayPlane* plane = fPlane;
+		fPlane = NULL;
+		fToken = 0;
+		fHardware->ReleaseOverlayPlane(plane);
+		fChain->NotifyReleased(keepFrom);
+	}
+
+	virtual void PlaneShown(uint64 serial, bigtime_t when)
+	{
+		fChain->NotifyShown(serial, when);
+	}
+
+	virtual void PlaneDropped(uint64 serial)
+	{
+		fChain->NotifyDropped(serial);
+	}
+
+	virtual void PlaneLost()
+	{
+		fLost = true;
+		fChain->NotifyLost();
+	}
+
+private:
+	void _CheckLost()
+	{
+		// The hardware deleted the plane; there is nothing to give back.
+		if (fLost) {
+			fPlane = NULL;
+			fToken = 0;
+			fLost = false;
+		}
+	}
+
+	bool _Claim(const SwapChainFrame& frame)
+	{
+#ifndef HAVE_GBM
+		return false;
+#else
+		OverlayPlane* plane = NULL;
+		if (frame.hardware->AcquireOverlayPlaneForBitmap(frame.buffers[0],
+				&plane) != B_OK)
+			return false;
+
+		for (int32 i = 1; i < frame.count; i++) {
+			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
+			int fd = memory != NULL ? memory->ExportFd() : -1;
+			int32 index = -1;
+			status_t status = fd >= 0
+				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
+					memory->Format(), memory->Stride(), memory->Handle(),
+					&index)
+				: B_ERROR;
+			if (fd >= 0)
+				close(fd);
+			if (status != B_OK || index != i) {
+				frame.hardware->ReleaseOverlayPlane(plane);
+				return false;
+			}
+		}
+
+		plane->SetListener(this);
+		fPlane = plane;
+		fHardware = frame.hardware;
+		fToken = frame.token;
+		return true;
+#endif
+	}
+
+	ViewSwapChain*	fChain;
+	OverlayPlane*	fPlane;
+	::HWInterface*	fHardware;
+	int32			fToken;
+	int32			fRefused;
+	BRect			fDestination;
+	BRect			fSource;
+	volatile bool	fLost;
+};
+
+
 ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	:
 	fApp(app),
 	fWindow(window),
 	fView(view),
+	fOwnerWindow(NULL),
 	fLock("view swap chain"),
 	fCurrent(NULL),
 	fShownGeneration(NULL),
 	fShownIndex(-1),
-	fConsumer(NULL),
+	fCpu(NULL),
+	fPlane(NULL),
+	fSerial(0),
+	fPeriod(0),
 	fCounted(false)
 {
 }
@@ -147,11 +364,17 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 
 ViewSwapChain::~ViewSwapChain()
 {
-	Hide();
+	// The plane first: nothing may be reported once the buffers go.
+	Hide(false, "chain deleted");
+
+	::Window* owner = fOwnerWindow;
+	if (owner != NULL)
+		owner->RemoveSwapChain(this);
 
 	BAutolock locker(fLock);
 	fWindow = NULL;
 	fView = NULL;
+	fOwnerWindow = NULL;
 	for (size_t i = 0; i < fGenerations.size(); i++) {
 		fApp->ReleaseSwapChain(fGenerations[i]->bytes, false);
 		delete fGenerations[i];
@@ -159,7 +382,12 @@ ViewSwapChain::~ViewSwapChain()
 	fGenerations.clear();
 	if (fCounted)
 		fApp->ReleaseSwapChain(0, true);
-	delete fConsumer;
+
+	PlaneConsumer* plane = fPlane;
+	fPlane = NULL;
+	delete fCpu;
+	locker.Unlock();
+	delete plane;
 }
 
 
@@ -253,9 +481,15 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 
 	generation->token = atomic_add(&sNextToken, 1) + 1;
 	fCurrent = generation;
-	if (!resize)
+	if (!resize) {
 		fCounted = true;
+		fOwnerWindow = fView->Window();
+	}
 	_Prune();
+	locker.Unlock();
+
+	if (!resize && fOwnerWindow != NULL)
+		fOwnerWindow->AddSwapChain(this);
 	return B_OK;
 }
 
@@ -302,6 +536,8 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 {
 	SwapChainFrame frame;
 	Generation* generation;
+	::HWInterface* hardware = fWindow->Desktop()->HWInterface();
+	_UpdatePeriod(hardware);
 
 	{
 		BAutolock locker(fLock);
@@ -313,6 +549,15 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			return;
 		}
 
+		// Named before anything can report on it.
+		Pending pending = { ++fSerial, generation, index };
+		try {
+			fPending.push_back(pending);
+		} catch (std::bad_alloc&) {
+			_Retire(generation, index, system_time());
+			return;
+		}
+
 		generation->held[index] = true;
 		generation->presented = true;
 		frame.bitmap = generation->buffers[index].Get();
@@ -321,30 +566,58 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 		frame.destination = _Destination(generation);
 		frame.damage = &damage;
 		frame.engine = engine;
-		frame.engineLocked = false;
 		frame.clipping = clipping;
 		frame.flags = flags;
+		frame.hardware = hardware;
+		frame.count = generation->count;
+		for (int32 i = 0; i < generation->count; i++)
+			frame.buffers[i] = generation->buffers[i].Get();
+		frame.serial = pending.serial;
 
-		if (fConsumer == NULL)
-			fConsumer = new(std::nothrow) CpuConsumer;
+		if (fCpu == NULL)
+			fCpu = new(std::nothrow) CpuConsumer;
+		if (fPlane == NULL && hardware != NULL)
+			fPlane = new(std::nothrow) PlaneConsumer(this);
 	}
 
-	// Drawing takes the engine lock; ours is not held meanwhile.
-	bool shown = fConsumer != NULL && fConsumer->Show(frame);
+	if (hardware != NULL) {
+		frame.outputFrame = hardware->OverlayOutputFrame();
+		frame.fullyVisible = fOwnerWindow != NULL
+			&& fOwnerWindow->IsRectFullyVisible(fView, frame.destination);
+	}
+
+	// Neither consumer runs under our lock: both take others.
+	bool shown = false;
+	if (fPlane != NULL)
+		shown = fPlane->Show(frame);
+	if (!shown && fCpu != NULL)
+		shown = fCpu->Show(frame);
 
 	BAutolock locker(fLock);
-	Generation* previous = fShownGeneration;
-	const int32 previousIndex = fShownIndex;
+	if (shown && frame.async) {
+		// The plane tells when it is on screen.
+		_Prune();
+		return;
+	}
+
+	for (size_t i = 0; i < fPending.size(); i++) {
+		if (fPending[i].serial == frame.serial) {
+			fPending.erase(fPending.begin() + i);
+			break;
+		}
+	}
 
 	if (shown) {
+		Generation* previous = fShownGeneration;
+		const int32 previousIndex = fShownIndex;
 		fShownGeneration = generation;
 		fShownIndex = index;
+		if (previous != NULL)
+			_Retire(previous, previousIndex, system_time());
 	} else {
 		// Nothing was shown, so nothing stays held.
 		_Retire(generation, index, system_time());
 	}
-	if (previous != NULL && shown)
-		_Retire(previous, previousIndex, system_time());
 	_Prune();
 }
 
@@ -366,6 +639,9 @@ ViewSwapChain::Drop(int32 token, int32 index)
 void
 ViewSwapChain::Redraw(DrawingEngine* engine, const BRegion& region)
 {
+	if (fPlane != NULL && fPlane->Active())
+		return;
+
 	BReference<ServerBitmap> bitmap;
 	BRect destination;
 	int32 index;
@@ -381,51 +657,130 @@ ViewSwapChain::Redraw(DrawingEngine* engine, const BRegion& region)
 
 	SwapChainFrame frame;
 	frame.bitmap = bitmap.Get();
-	frame.token = 0;
 	frame.index = index;
 	frame.destination = destination;
-	frame.damage = NULL;
 	frame.engine = engine;
 	frame.engineLocked = true;
 	frame.clipping = &region;
-	frame.flags = 0;
 	CpuConsumer().Show(frame);
 }
 
 
 void
-ViewSwapChain::Hide()
+ViewSwapChain::Hide(bool redraw, const char* reason)
 {
-	SwapChainConsumer* consumer;
-	{
-		BAutolock locker(fLock);
-		consumer = fConsumer;
+	PlaneConsumer* plane = fPlane;
+	if (plane == NULL || !plane->Active())
+		return;
+
+	const BRect destination = plane->Destination();
+	plane->Release(UINT64_MAX, reason);
+
+	::Window* owner = fOwnerWindow;
+	if (redraw && owner != NULL) {
+		BRegion dirty(destination);
+		owner->MarkContentDirtyAsync(dirty);
 	}
-	if (consumer != NULL)
-		consumer->Hide();
 }
 
 
 void
-ViewSwapChain::SendReleases()
+ViewSwapChain::Revalidate()
 {
-	std::vector<Release> releases;
-	ServerWindow* window;
-	{
-		BAutolock locker(fLock);
-		releases.swap(fReleases);
-		window = fWindow;
-	}
-	if (window == NULL)
+	PlaneConsumer* plane = fPlane;
+	if (plane == NULL || !plane->Active() || fOwnerWindow == NULL)
 		return;
 
-	for (size_t i = 0; i < releases.size(); i++) {
-		BMessage message(B_SWAP_CHAIN_RELEASED);
-		message.AddInt32("token", releases[i].token);
-		message.AddInt32("index", releases[i].index);
-		message.AddInt64("when", releases[i].when);
-		message.AddInt32("period", releases[i].period);
-		window->SendMessageToClient(&message);
+	BRect destination;
+	{
+		BAutolock locker(fLock);
+		Generation* generation = _Find(plane->Token());
+		if (generation == NULL || fView == NULL) {
+			destination = BRect();
+		} else
+			destination = _Destination(generation);
+	}
+
+	::HWInterface* hardware = fWindow->Desktop()->HWInterface();
+	const char* reason = NULL;
+	if (hardware == NULL || !destination.IsValid())
+		reason = "no destination";
+	else if (!hardware->OverlayOutputFrame().Contains(destination))
+		reason = "off output";
+	else if (!fOwnerWindow->IsRectFullyVisible(fView, destination))
+		reason = "covered";
+	else if (destination != plane->Destination()
+			&& !plane->Follow(destination))
+		reason = "moved";
+
+	if (reason != NULL)
+		Hide(true, reason);
+}
+
+
+void
+ViewSwapChain::Detach()
+{
+	BAutolock locker(fLock);
+	fOwnerWindow = NULL;
+}
+
+
+void
+ViewSwapChain::NotifyShown(uint64 serial, bigtime_t when)
+{
+	{
+		BAutolock locker(fLock);
+		for (size_t i = 0; i < fPending.size(); i++) {
+			if (fPending[i].serial != serial)
+				continue;
+
+			Generation* previous = fShownGeneration;
+			const int32 previousIndex = fShownIndex;
+			fShownGeneration = fPending[i].generation;
+			fShownIndex = fPending[i].index;
+			fPending.erase(fPending.begin() + i);
+			if (previous != NULL)
+				_Retire(previous, previousIndex, when);
+			break;
+		}
+		_Prune();
+	}
+}
+
+
+void
+ViewSwapChain::NotifyDropped(uint64 serial)
+{
+	{
+		BAutolock locker(fLock);
+		for (size_t i = 0; i < fPending.size(); i++) {
+			if (fPending[i].serial != serial)
+				continue;
+
+			_Retire(fPending[i].generation, fPending[i].index, system_time());
+			fPending.erase(fPending.begin() + i);
+			break;
+		}
+		_Prune();
+	}
+}
+
+
+void
+ViewSwapChain::NotifyLost()
+{
+	NotifyReleased(UINT64_MAX);
+}
+
+
+void
+ViewSwapChain::NotifyReleased(uint64 serial)
+{
+	{
+		BAutolock locker(fLock);
+		_DropPending(serial);
+		_Prune();
 	}
 }
 
@@ -450,33 +805,43 @@ ViewSwapChain::_Retire(Generation* generation, int32 index, bigtime_t when)
 {
 	generation->held[index] = false;
 
-	int32 period = 0;
-	::HWInterface* hardware = fWindow != NULL
-		? fWindow->Desktop()->HWInterface() : NULL;
-	if (hardware != NULL) {
-		display_mode mode;
-		hardware->GetMode(&mode);
-		const uint64 pixels = (uint64)mode.timing.h_total
-			* mode.timing.v_total;
-		if (mode.timing.pixel_clock != 0)
-			period = (int32)(pixels * 1000 / mode.timing.pixel_clock);
-	}
-
+	const int32 period = fPeriod;
 	swap_chain_state* state = generation->state;
 	state->releaseTime = when;
 	state->refreshPeriod = period;
 	__atomic_store_n(&state->buffer[index], (int32)kSwapBufferFree,
 		__ATOMIC_RELEASE);
 
-	Release release;
-	release.token = generation->token;
-	release.index = index;
-	release.when = when;
-	release.period = period;
-	try {
-		fReleases.push_back(release);
-	} catch (std::bad_alloc&) {
+}
+
+
+// Retires every staged buffer older than serial. fLock held.
+void
+ViewSwapChain::_DropPending(uint64 below)
+{
+	for (size_t i = fPending.size(); i-- > 0;) {
+		if (fPending[i].serial >= below)
+			continue;
+
+		_Retire(fPending[i].generation, fPending[i].index, system_time());
+		fPending.erase(fPending.begin() + i);
 	}
+}
+
+
+void
+ViewSwapChain::_UpdatePeriod(::HWInterface* hardware)
+{
+	if (hardware == NULL)
+		return;
+
+	display_mode mode;
+	hardware->GetMode(&mode);
+	if (mode.timing.pixel_clock == 0)
+		return;
+
+	const uint64 pixels = (uint64)mode.timing.h_total * mode.timing.v_total;
+	fPeriod = (int32)(pixels * 1000 / mode.timing.pixel_clock);
 }
 
 

@@ -16,10 +16,13 @@
 
 
 class DrawingEngine;
+class HWInterface;
+class PlaneConsumer;
 class ServerApp;
 class ServerBitmap;
 class ServerWindow;
 class View;
+class Window;
 
 namespace BPrivate {
 	class PortLink;
@@ -41,6 +44,38 @@ struct SwapChainFrame {
 	// Drawing clipping of the view.
 	const BRegion*		clipping;
 	uint32				flags;
+
+	// Plane consumer: every buffer of the chain, the output the planes
+	// belong to and whether the whole destination can be seen.
+	::HWInterface*		hardware;
+	ServerBitmap*		buffers[BPrivate::kSwapChainMaxBuffers];
+	int32				count;
+	BRect				outputFrame;
+	bool				fullyVisible;
+	// Names the update in the plane callbacks.
+	uint64				serial;
+	// Set by a consumer that reports completion later.
+	bool				async;
+
+	SwapChainFrame()
+		:
+		bitmap(NULL),
+		token(0),
+		index(0),
+		damage(NULL),
+		engine(NULL),
+		engineLocked(false),
+		clipping(NULL),
+		flags(0),
+		hardware(NULL),
+		count(0),
+		fullyVisible(false),
+		serial(0),
+		async(false)
+	{
+		for (int32 i = 0; i < BPrivate::kSwapChainMaxBuffers; i++)
+			buffers[i] = NULL;
+	}
 };
 
 
@@ -50,7 +85,7 @@ public:
 	virtual						~SwapChainConsumer() {}
 
 	// False when the buffer cannot be shown this way.
-	virtual	bool				Show(const SwapChainFrame& frame) = 0;
+	virtual	bool				Show(SwapChainFrame& frame) = 0;
 	virtual	void				Hide() = 0;
 };
 
@@ -79,33 +114,47 @@ public:
 			// The shown buffer under an exposed region.
 			void				Redraw(DrawingEngine* engine,
 									const BRegion& region);
-			void				Hide();
-			// Sends the queued release events; call outside any lock.
-			void				SendReleases();
+			// Takes the buffer off its plane; the painter shows it again.
+			void				Hide(bool redraw, const char* reason);
+			// The window changed under a plane.
+			void				Revalidate();
+			void				Detach();
+
+			// From the plane consumer.
+			void				NotifyShown(uint64 serial, bigtime_t when);
+			void				NotifyDropped(uint64 serial);
+			void				NotifyLost();
+			// Staged updates older than serial will not be shown.
+			void				NotifyReleased(uint64 serial);
 
 private:
 			struct Generation;
-			struct Release;
+			struct Pending;
 
 			Generation*			_Find(int32 token) const;
 			void				_Retire(Generation* generation, int32 index,
 									bigtime_t when);
+			void				_DropPending(uint64 below);
 			void				_Prune();
 			BRect				_Destination(const Generation* generation)
 									const;
-			bool				_Visible() const;
+			void				_UpdatePeriod(::HWInterface* hardware);
 
 			ServerApp*			fApp;
 			ServerWindow*		fWindow;
 			View*				fView;
+			::Window*			fOwnerWindow;
 			mutable BLocker		fLock;
 			std::vector<Generation*> fGenerations;
 			Generation*			fCurrent;
-			// Buffer the consumer shows now.
+			// Buffer on screen now.
 			Generation*			fShownGeneration;
 			int32				fShownIndex;
-			SwapChainConsumer*	fConsumer;
-			std::vector<Release> fReleases;
+			SwapChainConsumer*	fCpu;
+			PlaneConsumer*		fPlane;
+			std::vector<Pending> fPending;
+			uint64				fSerial;
+			int32				fPeriod;
 			bool				fCounted;
 };
 

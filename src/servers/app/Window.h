@@ -23,9 +23,11 @@
 #include "WindowList.h"
 
 #include <AutoDeleter.h>
+#include <Locker.h>
 #include <ObjectList.h>
 #include <Referenceable.h>
 #include <Region.h>
+#include <vector>
 #include <String.h>
 
 
@@ -76,6 +78,7 @@ class Desktop;
 class DrawingEngine;
 class EventDispatcher;
 class OverlayPlane;
+class ViewSwapChain;
 class Screen;
 class WindowBehaviour;
 class WorkspacesView;
@@ -153,6 +156,15 @@ public:
 									const BRect& source,
 									const BRect& screenRect);
 			void				ReleaseOverlay(bool redraw = false);
+			void				ReleaseBitmapOverlay(bool redraw);
+
+			// Swap chains of the window's views that may sit on planes.
+			void				AddSwapChain(ViewSwapChain* chain);
+			void				RemoveSwapChain(ViewSwapChain* chain);
+			// Nothing of the rect is clipped or covered. Desktop window
+			// lock held.
+			bool				IsRectFullyVisible(View* view,
+									const BRect& screenRect);
 
 			// generic version, used by the Desktop
 			void				ProcessDirtyRegion(const BRegion& dirtyRegion,
@@ -357,6 +369,8 @@ protected:
 			const ::Screen*		fScreen;
 
 			OverlayPlane*		fOverlayPlane;
+			BLocker				fSwapChainLock;
+			std::vector<ViewSwapChain*> fSwapChains;
 			BReference<ServerBitmap> fOverlayBitmap;
 			BRect				fOverlayRect;
 			BRect				fOverlayFrame;

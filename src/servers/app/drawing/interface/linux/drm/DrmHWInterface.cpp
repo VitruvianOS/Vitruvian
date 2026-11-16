@@ -299,6 +299,7 @@ DrmHWInterface::DrmHWInterface()
 	fPacingLockHeld(false),
 	fFlipIssueTime(0),
 	fLastFlipIssue(0),
+	fFlipVblank(false),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
@@ -2579,6 +2580,9 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	const uint64_t generation = token->generation;
 	const uint32_t output = token->output;
 
+	const bigtime_t when = sec != 0 || usec != 0
+		? (bigtime_t)sec * 1000000 + usec : system_time();
+
 	pthread_mutex_lock(&hw->fFlipMutex);
 	for (size_t i = 0; i < hw->fFlipTokens.size(); i++) {
 		if (hw->fFlipTokens[i] == token) {
@@ -2586,6 +2590,8 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 			break;
 		}
 	}
+	std::vector<PlaneNote> planes;
+	planes.swap(token->planes);
 	delete token;
 
 	if (output != 0) {
@@ -2597,10 +2603,19 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	if (generation != hw->fFlipGeneration) {
 		// Stale completion for a flip whose buffers are already gone.
 		pthread_mutex_unlock(&hw->fFlipMutex);
+		hw->_NotifyPlanes(planes, true, when);
 		return;
 	}
 
+	// Back at once means no vblank behind the event.
+	const bigtime_t took = system_time() - hw->fLastFlipIssue;
+	if (took >= hw->_FramePeriod() / 4)
+		hw->fFlipVblank = true;
+	else if (took < 1000)
+		hw->fFlipVblank = false;
+
 	hw->_FinishFrameSwap();
+	hw->_NotifyPlanes(planes, true, when);
 }
 
 
@@ -2891,9 +2906,13 @@ DrmHWInterface::_EventThreadMain()
 			fDirtyMutex.Lock();
 			const bool dirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
+			// Nothing left to do: the next change must write the wake.
+			if (!dirty)
+				fWakeQueued = false;
 			fDirtyMutex.Unlock();
 			if (dirty) {
-				const bigtime_t flipDue = fLastFlipIssue + _FramePeriod();
+				const bigtime_t flipDue = fFlipVblank
+					? 0 : fLastFlipIssue + _FramePeriod();
 				const bigtime_t now = system_time();
 				timeout = flipDue > now
 					? (int)((flipDue - now + 999) / 1000) : 16;
@@ -2997,7 +3016,8 @@ DrmHWInterface::_EventThreadMain()
 		// refresh period.
 		if (active && fPageFlipEnabled && !fPageFlipPending
 				&& fDpmsState == B_DPMS_ON && fStandIn == 0
-				&& system_time() >= fLastFlipIssue + _FramePeriod()) {
+				&& (fFlipVblank
+					|| system_time() >= fLastFlipIssue + _FramePeriod())) {
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
 			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip
@@ -3012,6 +3032,7 @@ DrmHWInterface::_EventThreadMain()
 			CursorUpdate staged;
 			staged.valid = false;
 			std::vector<PlaneUpdate> planes;
+			std::vector<PlaneNote> lost;
 			bool usedAtomic = false;
 			// What changed since the last frame, and that plus what the
 			// target missed while it was on screen.
@@ -3029,6 +3050,18 @@ DrmHWInterface::_EventThreadMain()
 					fStagedCursor.valid = false;
 				}
 				planes.swap(fStagedPlanes);
+				for (size_t i = 0; i < planes.size(); i++) {
+					const bigtime_t now = system_time();
+					static bigtime_t sLastReport = 0;
+					if (planes[i].staged != 0
+							&& now - planes[i].staged > 20000
+							&& now - sLastReport > 1000000) {
+						sLastReport = now;
+						fprintf(stderr, "[drm] plane %u staged %lld ms "
+							"before its commit\n", planes[i].planeId,
+							(long long)((now - planes[i].staged) / 1000));
+					}
+				}
 				present = fAccumulatedDirty;
 				// Direct render keeps its damage for the completion.
 				if (!fDirectRender) {
@@ -3072,6 +3105,13 @@ DrmHWInterface::_EventThreadMain()
 
 						if (atomic) {
 							usedAtomic = true;
+							for (size_t i = 0; i < planes.size(); i++) {
+								if (planes[i].serial == 0)
+									continue;
+								PlaneNote note = { planes[i].planeId,
+									planes[i].serial };
+								token->planes.push_back(note);
+							}
 							r = (_AtomicCommitFrame(fb,
 								present.CountRects() > 0 ? &present : NULL,
 								staged.valid ? &staged : NULL,
@@ -3121,14 +3161,30 @@ DrmHWInterface::_EventThreadMain()
 						}
 						if (!newer)
 							fStagedPlanes.push_back(planes[i]);
+						else if (planes[i].serial != 0) {
+							PlaneNote note = { planes[i].planeId,
+								planes[i].serial };
+							lost.push_back(note);
+						}
 					}
 				}
 				fDirtyMutex.Unlock();
+				if (!lost.empty())
+					_NotifyPlanes(lost, false, 0);
 			}
 
 			if (hasDirty && r == 0 && !usedAtomic) {
-				for (size_t i = 0; i < planes.size(); i++)
+				std::vector<PlaneNote> shown;
+				for (size_t i = 0; i < planes.size(); i++) {
 					_SetPlaneNow(planes[i]);
+					if (planes[i].serial != 0) {
+						PlaneNote note = { planes[i].planeId,
+							planes[i].serial };
+						shown.push_back(note);
+					}
+				}
+				if (!shown.empty())
+					_NotifyPlanes(shown, true, system_time());
 			}
 
 			if (hasDirty && r == 0) {
@@ -5899,6 +5955,7 @@ DrmHWInterface::_DiscoverProperties()
 				stillThere = true;
 		}
 		if (!stillThere) {
+			fOverlayPlanes[j].claimed->Abandon();
 			fOverlayPlanes[j].claimed->Disable();
 			fOverlayPlanes[j].claimed->Free();
 			delete fOverlayPlanes[j].claimed;
@@ -6639,6 +6696,9 @@ DrmOverlayPlane::DrmOverlayPlane(DrmHWInterface* interface, uint32_t planeId,
 	fProps(props),
 	fHandle(0),
 	fFbId(0),
+	fShowFb(0),
+	fSerial(0),
+	fListener(NULL),
 	fAdopted(false),
 	fCloseHandle(false),
 	fBits(NULL),
@@ -6753,10 +6813,19 @@ void
 DrmOverlayPlane::Free()
 {
 	// Drop any staged change and unbind at once; the fb goes away below.
+	fListener = NULL;
 	fInterface->_DropStagedPlane(fPlaneId);
 	if (fFbId != 0 && fHasGeometry)
 		_UnbindNow();
 	fArmed = false;
+
+	for (size_t i = 0; i < fExtra.size(); i++) {
+		drmModeRmFB(fFd, fExtra[i].fbId);
+		if (fExtra[i].closeHandle)
+			_CloseGem(fFd, fExtra[i].handle);
+	}
+	fExtra.clear();
+	fShowFb = 0;
 
 	if (fFbId != 0) {
 		drmModeRmFB(fFd, fFbId);
@@ -6849,7 +6918,9 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 	update.planeId = fPlaneId;
 	update.props = fProps;
 	update.enable = true;
-	update.fb_id = fFbId;
+	update.fb_id = fShowFb != 0 ? fShowFb : fFbId;
+	update.serial = fSerial;
+	fSerial = 0;
 	update.crtcX = crtcX;
 	update.crtcY = crtcY;
 	update.crtcW = crtcW;
@@ -6865,10 +6936,90 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 		fInterface->_SetPlaneNow(update);
 		if (locked)
 			fInterface->UnlockExclusiveAccess();
+
+		if (update.serial != 0) {
+			std::vector<PlaneNote> notes;
+			PlaneNote note = { fPlaneId, update.serial };
+			notes.push_back(note);
+			fInterface->_NotifyPlanes(notes, true, system_time());
+		}
 	}
 
 	fArmed = true;
 	return B_OK;
+}
+
+
+status_t
+DrmOverlayPlane::AddBuffer(int dmabufFd, uint32 width, uint32 height,
+	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index)
+{
+	if (fFbId == 0 || !fAdopted || dmabufFd < 0 || stride == 0
+			|| width != fWidth || height != fHeight || _index == NULL
+			|| fExtra.size() >= 7)
+		return B_BAD_VALUE;
+
+	uint32 handle = 0;
+	if (drmPrimeFDToHandle(fFd, dmabufFd, &handle) < 0)
+		return B_ERROR;
+
+	const bool closeHandle = handle != sharedHandle;
+	uint32 handles[4] = { handle, 0, 0, 0 };
+	uint32 pitches[4] = { stride, 0, 0, 0 };
+	uint32 offsets[4] = { 0, 0, 0, 0 };
+	uint32 fbId = 0;
+	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
+			offsets, &fbId, 0) < 0) {
+		if (closeHandle)
+			_CloseGem(fFd, handle);
+		return B_ERROR;
+	}
+
+	ExtraBuffer extra = { fbId, handle, closeHandle };
+	try {
+		fExtra.push_back(extra);
+	} catch (std::bad_alloc&) {
+		drmModeRmFB(fFd, fbId);
+		if (closeHandle)
+			_CloseGem(fFd, handle);
+		return B_NO_MEMORY;
+	}
+
+	*_index = (int32)fExtra.size();
+	return B_OK;
+}
+
+
+status_t
+DrmOverlayPlane::Show(int32 index, uint64 serial, const BRect& source,
+	const BRect& destination)
+{
+	if (index < 0 || (size_t)index > fExtra.size())
+		return B_BAD_VALUE;
+
+	fShowFb = index == 0 ? fFbId : fExtra[index - 1].fbId;
+	fSerial = serial;
+	status_t status = Configure(source, destination);
+	if (status != B_OK)
+		fSerial = 0;
+	return status;
+}
+
+
+void
+DrmOverlayPlane::SetListener(OverlayPlaneListener* listener)
+{
+	fListener = listener;
+}
+
+
+void
+DrmOverlayPlane::Abandon()
+{
+	OverlayPlaneListener* listener = fListener;
+	fListener = NULL;
+	if (listener != NULL)
+		listener->PlaneLost();
 }
 
 
@@ -6932,21 +7083,66 @@ DrmHWInterface::_StagePlane(const PlaneUpdate& update)
 			|| !fSessionActive || !fRunning || !fPageFlipEnabled)
 		return false;
 
+	std::vector<PlaneNote> dropped;
+	PlaneUpdate stamped = update;
+	stamped.staged = system_time();
 	fDirtyMutex.Lock();
 	bool replaced = false;
 	for (size_t i = 0; i < fStagedPlanes.size(); i++) {
 		if (fStagedPlanes[i].planeId == update.planeId) {
-			fStagedPlanes[i] = update;
+			PlaneUpdate merged = stamped;
+			if (fStagedPlanes[i].serial != 0) {
+				if (update.serial == 0 && update.enable
+						&& update.fb_id == fStagedPlanes[i].fb_id) {
+					// Same buffer again: it still has to be reported.
+					merged.serial = fStagedPlanes[i].serial;
+				} else {
+					// Never reached the screen.
+					PlaneNote note = { update.planeId,
+						fStagedPlanes[i].serial };
+					dropped.push_back(note);
+				}
+			}
+			fStagedPlanes[i] = merged;
 			replaced = true;
 		}
 	}
 	if (!replaced)
-		fStagedPlanes.push_back(update);
+		fStagedPlanes.push_back(stamped);
 	fNeedsFlip = true;
 	fDirtyMutex.Unlock();
 
 	_Wake();
+	if (!dropped.empty())
+		_NotifyPlanes(dropped, false, 0);
 	return true;
+}
+
+
+void
+DrmHWInterface::_NotifyPlanes(const std::vector<PlaneNote>& notes, bool shown,
+	bigtime_t when)
+{
+	pthread_mutex_lock(&fOverlayMutex);
+	for (size_t i = 0; i < notes.size(); i++) {
+		OverlayPlaneInfo* info = _FindOverlayPlaneInfo(notes[i].planeId);
+		if (info == NULL || info->claimed == NULL
+				|| info->claimed->Listener() == NULL)
+			continue;
+
+		if (shown)
+			info->claimed->Listener()->PlaneShown(notes[i].serial, when);
+		else
+			info->claimed->Listener()->PlaneDropped(notes[i].serial);
+	}
+	pthread_mutex_unlock(&fOverlayMutex);
+}
+
+
+BRect
+DrmHWInterface::OverlayOutputFrame()
+{
+	return _Frame();
 }
 
 

@@ -85,6 +85,15 @@ struct PlaneUpdate {
 	int32_t		crtcX, crtcY;
 	uint32_t	crtcW, crtcH;
 	uint32_t	srcX, srcY, srcW, srcH;	// 16.16
+	// Nonzero: the plane's listener hears when this update is on screen.
+	uint64_t	serial;
+	bigtime_t	staged;
+};
+
+// A staged update waiting for its commit to complete.
+struct PlaneNote {
+	uint32_t	planeId;
+	uint64_t	serial;
 };
 
 class DrmHWInterface;
@@ -108,6 +117,17 @@ public:
 								color_space space, uint32 sharedHandle = 0);
 			void			Free();
 			status_t		Reapply();
+			// The plane was deleted behind its user's back.
+			void			Abandon();
+
+	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
+								uint32 height, uint32 fourcc, uint32 stride,
+								uint32 sharedHandle, int32* _index);
+	virtual	status_t		Show(int32 index, uint64 serial,
+								const BRect& source,
+								const BRect& destination);
+	virtual	void			SetListener(OverlayPlaneListener* listener);
+			OverlayPlaneListener* Listener() const { return fListener; }
 
 	virtual	void*			Bits() const;
 	virtual	uint32			BytesPerRow() const;
@@ -129,6 +149,16 @@ private:
 			PlaneProps		fProps;
 			uint32_t		fHandle;
 			uint32_t		fFbId;
+			// Buffers added after the first, and the one on show.
+			struct ExtraBuffer {
+				uint32_t	fbId;
+				uint32_t	handle;
+				bool		closeHandle;
+			};
+			std::vector<ExtraBuffer> fExtra;
+			uint32_t		fShowFb;
+			uint64_t		fSerial;
+			OverlayPlaneListener* fListener;
 			bool			fAdopted;
 			bool			fCloseHandle;
 			uint8_t*		fBits;
@@ -286,6 +316,7 @@ public:
 	virtual	status_t			AcquireOverlayPlaneForBitmap(
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane);
+	virtual	BRect				OverlayOutputFrame();
 	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
 	virtual	bool				CheckOverlayRestrictions(int32 width,
@@ -630,6 +661,8 @@ private:
 				uint64_t		generation;
 				// Connector of the output flipped; 0 is the first one.
 				uint32_t		output;
+				// Plane updates riding this flip.
+				std::vector<PlaneNote> planes;
 			};
 			std::vector<FlipToken*> fFlipTokens;
 			pthread_cond_t		fFlipCond;
@@ -672,6 +705,8 @@ private:
 			bool				fPacingLockHeld;
 			bigtime_t			fFlipIssueTime;
 			bigtime_t			fLastFlipIssue;
+			// Completions arrive on a real vblank, so no issue pacing.
+			bool				fFlipVblank;
 
 			int					fWakeFd;
 
@@ -699,6 +734,10 @@ private:
 			std::vector<PlaneUpdate>	fStagedPlanes;
 			// False when the caller must apply the update itself.
 			bool				_StagePlane(const PlaneUpdate& update);
+			// Reports staged updates to the listeners of their planes.
+			void				_NotifyPlanes(
+									const std::vector<PlaneNote>& notes,
+									bool shown, bigtime_t when);
 			void				_DropStagedPlane(uint32_t planeId);
 			void				_SetPlaneNow(const PlaneUpdate& update);
 		// Armed once unsupported flip errors reach the limit: the

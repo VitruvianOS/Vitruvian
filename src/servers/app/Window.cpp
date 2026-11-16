@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <Autolock.h>
 #include <Debug.h>
 
 #include <DirectWindow.h>
@@ -40,6 +41,7 @@
 #include "PortLink.h"
 #include "ServerApp.h"
 #include "ServerWindow.h"
+#include "ViewSwapChain.h"
 #include "WindowBehaviour.h"
 #include "Workspace.h"
 #include "WorkspacesView.h"
@@ -175,6 +177,11 @@ Window::Window(const BRect& frame, const char *name,
 Window::~Window()
 {
 	ReleaseOverlay();
+	fSwapChainLock.Lock();
+	for (size_t i = 0; i < fSwapChains.size(); i++)
+		fSwapChains[i]->Detach();
+	fSwapChains.clear();
+	fSwapChainLock.Unlock();
 
 	if (fTopView.IsSet()) {
 		fTopView->DetachedFromWindow();
@@ -216,8 +223,52 @@ Window::SetClipping(BRegion* stillAvailableOnScreen)
 		uncovered.Exclude(&VisibleContentRegion());
 		if (fFrame != fOverlayFrame || !IsVisible()
 				|| uncovered.CountRects() > 0)
-			ReleaseOverlay(true);
+			ReleaseBitmapOverlay(true);
 	}
+
+	BAutolock locker(fSwapChainLock);
+	for (size_t i = 0; i < fSwapChains.size(); i++)
+		fSwapChains[i]->Revalidate();
+}
+
+
+void
+Window::AddSwapChain(ViewSwapChain* chain)
+{
+	BAutolock locker(fSwapChainLock);
+	try {
+		fSwapChains.push_back(chain);
+	} catch (std::bad_alloc&) {
+	}
+}
+
+
+void
+Window::RemoveSwapChain(ViewSwapChain* chain)
+{
+	BAutolock locker(fSwapChainLock);
+	for (size_t i = 0; i < fSwapChains.size(); i++) {
+		if (fSwapChains[i] == chain) {
+			fSwapChains.erase(fSwapChains.begin() + i);
+			break;
+		}
+	}
+}
+
+
+bool
+Window::IsRectFullyVisible(View* view, const BRect& screenRect)
+{
+	if (!IsVisible())
+		return false;
+
+	if (!fContentRegionValid)
+		_UpdateContentRegion();
+	BRegion visible(VisibleContentRegion());
+	visible.IntersectWith(&view->ScreenAndUserClipping(&fContentRegion));
+	BRegion uncovered(screenRect);
+	uncovered.Exclude(&visible);
+	return uncovered.CountRects() == 0;
 }
 
 
@@ -241,18 +292,11 @@ Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
 		&& screenRect.top == floorf(screenRect.top);
 
 	// nothing of the view's rect may be clipped or covered
-	if (eligible) {
-		if (!fContentRegionValid)
-			_UpdateContentRegion();
-		BRegion visible(VisibleContentRegion());
-		visible.IntersectWith(&view->ScreenAndUserClipping(&fContentRegion));
-		BRegion uncovered(screenRect);
-		uncovered.Exclude(&visible);
-		eligible = uncovered.CountRects() == 0;
-	}
+	if (eligible)
+		eligible = IsRectFullyVisible(view, screenRect);
 
 	if (!eligible) {
-		ReleaseOverlay(false);
+		ReleaseBitmapOverlay(false);
 		return false;
 	}
 
@@ -260,7 +304,7 @@ Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
 		if (fOverlayBitmap.Get() == bitmap && fOverlayRect == screenRect
 				&& fOverlayFrame == fFrame)
 			return true;
-		ReleaseOverlay(false);
+		ReleaseBitmapOverlay(false);
 	}
 
 	::HWInterface* hw = fScreen->HWInterface();
@@ -282,6 +326,19 @@ Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
 
 void
 Window::ReleaseOverlay(bool redraw)
+{
+	fSwapChainLock.Lock();
+	for (size_t i = 0; i < fSwapChains.size(); i++)
+		fSwapChains[i]->Hide(redraw, "window overlay released");
+	fSwapChainLock.Unlock();
+
+	ReleaseBitmapOverlay(redraw);
+}
+
+
+// Only the plane of a drawn bitmap; swap chains keep theirs.
+void
+Window::ReleaseBitmapOverlay(bool redraw)
 {
 	if (fOverlayPlane == NULL)
 		return;
@@ -1208,6 +1265,10 @@ Window::SetHidden(bool hidden)
 	// the desktop takes care of dirty regions
 	if (fHidden != hidden) {
 		fHidden = hidden;
+
+		// The planes go with the frame, not with the teardown.
+		if (hidden)
+			ReleaseOverlay(false);
 
 		fTopView->SetHidden(hidden);
 

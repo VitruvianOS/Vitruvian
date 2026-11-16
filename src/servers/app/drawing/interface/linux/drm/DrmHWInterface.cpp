@@ -470,9 +470,7 @@ DrmHWInterface::_OnSessionEnable()
 		_RestoreDisplay();
 
 		// Re-arm the plane _OnSessionDisable() cleared, from last known state.
-		if (fHardwareCursorEnabled && fCursor.IsSet())
-			SetCursor(fCursor);
-
+		_RearmCursor();
 		_RearmOverlayPlanes();
 
 		LockExclusiveAccess();
@@ -5612,6 +5610,8 @@ DrmHWInterface::_HandleHotplug()
 		// here would fail or steal master from whoever now owns it.
 		if (resizePrimary && fSessionActive.load())
 			_ScheduleResize();
+		else if (fSessionActive.load())
+			_RearmCursor();
 	}
 
 	udev_device_unref(dev);
@@ -5702,6 +5702,7 @@ DrmHWInterface::_OnResume()
 		UnlockExclusiveAccess();
 
 		// The planes may have lost their state with the CRTC.
+		_RearmCursor();
 		_RearmOverlayPlanes();
 
 		fDirtyMutex.Lock();
@@ -5712,6 +5713,7 @@ DrmHWInterface::_OnResume()
 	}
 
 	UnlockExclusiveAccess();
+	_RearmCursor();
 	_RearmOverlayPlanes();
 }
 
@@ -8124,6 +8126,15 @@ DrmHWInterface::_FindOverlayBuffer(const overlay_buffer* buffer)
 			return fOverlayBuffers[i];
 	}
 	return NULL;
+}
+
+
+// The hardware lost or dropped the plane state; stage the pointer again.
+void
+DrmHWInterface::_RearmCursor()
+{
+	if (fHardwareCursorEnabled && fCursor.IsSet())
+		SetCursor(fCursor);
 }
 
 

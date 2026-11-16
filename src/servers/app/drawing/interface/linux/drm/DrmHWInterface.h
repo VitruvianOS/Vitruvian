@@ -823,6 +823,7 @@ private:
 			bool				_CommitCursorOnly(const CursorUpdate& update);
 			void				_ResetFlipState();
 			void				_RearmOverlayPlanes();
+			void				_RearmCursor();
 			// Claims go back; with dropInfo the planes are forgotten too.
 			// kAllOutputs is every output.
 			void				_ReleaseOverlayPlanes(

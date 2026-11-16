@@ -9,7 +9,12 @@
 #include <new>
 #include <stdio.h>
 #include <string.h>
+#include <poll.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#ifdef HAVE_GBM
+#	include <linux/dma-buf.h>
+#endif
 
 #include <Autolock.h>
 #include <PortLink.h>
@@ -76,6 +81,52 @@ struct ViewSwapChain::Generation {
 };
 
 
+SwapChainCpuRead::SwapChainCpuRead(ServerBitmap* bitmap)
+	:
+	fFd(-1)
+{
+#ifdef HAVE_GBM
+	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
+	if (memory == NULL)
+		return;
+
+	fFd = memory->ExportFd();
+	if (fFd < 0)
+		return;
+
+	// Implicit fences: wait for the pending writer, bounded.
+	struct dma_buf_export_sync_file exported;
+	exported.flags = DMA_BUF_SYNC_READ;
+	exported.fd = -1;
+	if (ioctl(fFd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &exported) == 0
+			&& exported.fd >= 0) {
+		struct pollfd wait = { exported.fd, POLLIN, 0 };
+		poll(&wait, 1, 100);
+		close(exported.fd);
+	}
+
+	// Cache coherency; also waits where the export is unsupported.
+	struct dma_buf_sync sync = { DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ };
+	ioctl(fFd, DMA_BUF_IOCTL_SYNC, &sync);
+#else
+	(void)bitmap;
+#endif
+}
+
+
+SwapChainCpuRead::~SwapChainCpuRead()
+{
+#ifdef HAVE_GBM
+	if (fFd < 0)
+		return;
+
+	struct dma_buf_sync sync = { DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ };
+	ioctl(fFd, DMA_BUF_IOCTL_SYNC, &sync);
+	close(fFd);
+#endif
+}
+
+
 // At most one line a second.
 static void
 note_plane(const char* what)
@@ -110,6 +161,7 @@ public:
 		const int32 height = frame.bitmap->Height();
 		const BRect bounds(0, 0, width - 1, height - 1);
 
+		SwapChainCpuRead reading(frame.bitmap);
 		if (!frame.engineLocked)
 			frame.engine->LockParallelAccess();
 		frame.engine->ConstrainClippingRegion(frame.clipping);

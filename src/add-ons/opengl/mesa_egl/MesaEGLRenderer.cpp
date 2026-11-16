@@ -1068,8 +1068,13 @@ MesaEGLRenderer::_ChainBlit(struct gbm_bo* bo, int32 index)
 	if (scissor)
 		glEnable(GL_SCISSOR_TEST);
 
-	// The server reads the buffer next.
-	glFinish();
+	// The kernel's implicit fences order the server's read after this.
+	static const bool finish = getenv("VOS_SWAP_CHAIN_FINISH") != NULL
+		&& atoi(getenv("VOS_SWAP_CHAIN_FINISH")) != 0;
+	if (finish)
+		glFinish();
+	else
+		glFlush();
 	return true;
 }
 

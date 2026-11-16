@@ -29,6 +29,18 @@ namespace BPrivate {
 }
 
 
+// Waits (bounded) for the GPU to finish writing a chain buffer and brackets
+// CPU reads of it. Does nothing without GBM.
+class SwapChainCpuRead {
+public:
+								SwapChainCpuRead(ServerBitmap* bitmap);
+								~SwapChainCpuRead();
+
+private:
+			int					fFd;
+};
+
+
 // One presented buffer on its way to the screen.
 struct SwapChainFrame {
 	ServerBitmap*		bitmap;

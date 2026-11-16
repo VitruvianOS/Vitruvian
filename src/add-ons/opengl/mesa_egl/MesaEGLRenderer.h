@@ -17,6 +17,8 @@
 
 #include <opengl/GlDeviceSelect.h>
 
+#include <interface/SwapChain.h>
+
 class BBitmap;
 struct gbm_device;
 struct gbm_surface;
@@ -58,6 +60,28 @@ private:
 	void						_PaceToRefresh();
 	void						_Cleanup();
 	void						_RecreateSurface(int32 width, int32 height);
+	void						_UpdateFramePeriod();
+
+	// VOS_SWAP_CHAIN=1: the GPU copies each frame into a buffer the server
+	// scans out; nothing is read back. Any failure leaves the bitmap path.
+	bool						_ChainProbe();
+	void						_ChainStart();
+	void						_ChainRetire();
+	bool						_ChainBlit(struct gbm_bo* bo, int32 index);
+	void						_ChainPresent(int32 index);
+	void						_ChainNote(const char* what,
+										bigtime_t waited);
+	bool						_ChainTarget(int32 index);
+	int32						_ChainSource(struct gbm_bo* bo);
+	bool						_ChainBuild(EGLImageKHR image, GLuint* renderbuffer,
+									GLuint* framebuffer);
+	EGLImageKHR					_ChainImport(int fd, int32 width, int32 height,
+									uint32 fourcc, uint32 offset,
+									uint32 stride, uint64 modifier);
+	void						_ChainDestroyTargets();
+	void						_ChainDestroySources();
+	void						_ChainFree(EGLImageKHR* image,
+									GLuint* renderbuffer, GLuint* framebuffer);
 
 private:
 	int							fDrmFd;
@@ -91,6 +115,43 @@ private:
 	bigtime_t					fFramePeriod;
 	pthread_mutex_t				fBitmapLock;
 	pthread_mutex_t				fContextLock;
+
+	struct ChainImage {
+		EGLImageKHR				image;
+		GLuint					renderbuffer;
+		GLuint					framebuffer;
+		struct gbm_bo*			bo;
+	};
+	enum { kChainUntried, kChainOn, kChainOff };
+	static const int32			kChainSources = 6;
+
+	int32						fChainState;
+	bool						fChainCapable;
+	bool						fChainModifiers;
+	BPrivate::SwapChain			fChain;
+	pthread_mutex_t				fChainLock;
+	// Acquired and rendered, not yet presented.
+	int32						fChainPending;
+	ChainImage					fChainTargets[BPrivate::kSwapChainMaxBuffers];
+	ChainImage					fChainSources[kChainSources];
+	int32						fChainSourceCount;
+
+	PFNEGLCREATEIMAGEKHRPROC	fCreateImage;
+	PFNEGLDESTROYIMAGEKHRPROC	fDestroyImage;
+	void						(*fImageTargetRenderbuffer)(GLenum, void*);
+	void						(*fGenFramebuffers)(GLsizei, GLuint*);
+	void						(*fDeleteFramebuffers)(GLsizei, const GLuint*);
+	void						(*fBindFramebuffer)(GLenum, GLuint);
+	void						(*fFramebufferRenderbuffer)(GLenum, GLenum,
+									GLenum, GLuint);
+	GLenum						(*fCheckFramebufferStatus)(GLenum);
+	void						(*fGenRenderbuffers)(GLsizei, GLuint*);
+	void						(*fDeleteRenderbuffers)(GLsizei,
+									const GLuint*);
+	void						(*fBindRenderbuffer)(GLenum, GLuint);
+	void						(*fBlitFramebuffer)(GLint, GLint, GLint, GLint,
+									GLint, GLint, GLint, GLint, GLbitfield,
+									GLenum);
 };
 
 

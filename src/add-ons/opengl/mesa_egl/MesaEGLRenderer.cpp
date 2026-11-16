@@ -16,6 +16,8 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <GL/glext.h>
+
 #include <Bitmap.h>
 #include <GLView.h>
 #include <Rect.h>
@@ -24,6 +26,10 @@
 
 #ifndef EGL_PLATFORM_GBM_KHR
 #define EGL_PLATFORM_GBM_KHR 0x31D7
+#endif
+
+#ifndef DRM_FORMAT_MOD_INVALID
+#define DRM_FORMAT_MOD_INVALID 0x00ffffffffffffffULL
 #endif
 
 #ifndef EGL_OPENGL_ES3_BIT_KHR
@@ -57,13 +63,34 @@ MesaEGLRenderer::MesaEGLRenderer(BGLView* view, ulong options,
 	fInitialized(false),
 	fBitmap(NULL),
 	fLastSwap(0),
-	fFramePeriod(0)
+	fFramePeriod(0),
+	fChainState(kChainUntried),
+	fChainCapable(false),
+	fChainModifiers(false),
+	fChainPending(-1),
+	fChainSourceCount(0),
+	fCreateImage(NULL),
+	fDestroyImage(NULL),
+	fImageTargetRenderbuffer(NULL),
+	fGenFramebuffers(NULL),
+	fDeleteFramebuffers(NULL),
+	fBindFramebuffer(NULL),
+	fFramebufferRenderbuffer(NULL),
+	fCheckFramebufferStatus(NULL),
+	fGenRenderbuffers(NULL),
+	fDeleteRenderbuffers(NULL),
+	fBindRenderbuffer(NULL),
+	fBlitFramebuffer(NULL)
 {
+	memset(fChainTargets, 0, sizeof(fChainTargets));
+	memset(fChainSources, 0, sizeof(fChainSources));
+
 	fDevicePath[0] = '\0';
 	memset(&fDevice, 0, sizeof(fDevice));
 	fDebug = getenv("VOS_GL_DEBUG") != NULL;
 
 	pthread_mutex_init(&fBitmapLock, NULL);
+	pthread_mutex_init(&fChainLock, NULL);
 
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
@@ -89,6 +116,7 @@ MesaEGLRenderer::~MesaEGLRenderer()
 	_Cleanup();
 	pthread_mutex_destroy(&fBitmapLock);
 	pthread_mutex_destroy(&fContextLock);
+	pthread_mutex_destroy(&fChainLock);
 }
 
 
@@ -548,6 +576,7 @@ MesaEGLRenderer::_TryInit()
 	_LogGlStrings();
 	_VerifyZink();
 	_PublishStatus();
+	fChainCapable = _ChainProbe();
 	eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
 		EGL_NO_CONTEXT);
 
@@ -593,6 +622,12 @@ void
 MesaEGLRenderer::_Cleanup()
 {
 	if (fDisplay != EGL_NO_DISPLAY) {
+		if (fContext != EGL_NO_CONTEXT && fSurface != EGL_NO_SURFACE
+				&& fChainCapable
+				&& eglMakeCurrent(fDisplay, fSurface, fSurface, fContext)) {
+			_ChainDestroyTargets();
+			_ChainDestroySources();
+		}
 		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
 			EGL_NO_CONTEXT);
 		if (fContext != EGL_NO_CONTEXT) {
@@ -628,6 +663,10 @@ MesaEGLRenderer::_Cleanup()
 void
 MesaEGLRenderer::_RecreateSurface(int32 width, int32 height)
 {
+	if (fChainCapable && fChainSourceCount > 0
+			&& eglMakeCurrent(fDisplay, fSurface, fSurface, fContext))
+		_ChainDestroySources();
+
 	eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 
 	if (fSurface != EGL_NO_SURFACE) {
@@ -682,6 +721,31 @@ MesaEGLRenderer::SwapBuffers(bool vSync)
 	if (!fInitialized || fSurface == EGL_NO_SURFACE)
 		return;
 
+	BGLView* chainView = GLView();
+	if (fChainState == kChainUntried && fChainCapable && chainView != NULL
+			&& chainView->LockLooperWithTimeout(20000) == B_OK) {
+		_ChainStart();
+		chainView->UnlockLooper();
+	}
+
+	// The buffer the frame goes to, taken before the context is held.
+	int32 chainIndex = -1;
+	if (fChainState == kChainOn) {
+		_UpdateFramePeriod();
+		pthread_mutex_lock(&fChainLock);
+		chainIndex = fChainPending;
+		if (chainIndex < 0) {
+			const bigtime_t start = system_time();
+			chainIndex = fChain.Acquire(fFramePeriod);
+			if (chainIndex < 0)
+				chainIndex = -2;
+			if (chainIndex < 0 || system_time() - start > 20000)
+				_ChainNote(chainIndex < 0 ? "no buffer, frame dropped"
+					: "waited for a buffer", system_time() - start);
+		}
+		pthread_mutex_unlock(&fChainLock);
+	}
+
 	pthread_mutex_lock(&fContextLock);
 
 	if (eglGetCurrentContext() != fContext)
@@ -696,7 +760,34 @@ MesaEGLRenderer::SwapBuffers(bool vSync)
 		fprintf(stderr, "MesaEGLRenderer::SwapBuffers: "
 			"gbm_surface_lock_front_buffer failed\n");
 		pthread_mutex_unlock(&fContextLock);
+		if (chainIndex >= 0) {
+			pthread_mutex_lock(&fChainLock);
+			fChainPending = chainIndex;
+			pthread_mutex_unlock(&fChainLock);
+		}
 		return;
+	}
+
+	if (chainIndex != -1 && fChainState == kChainOn) {
+		// -2: no buffer came free within a refresh, the frame is dropped.
+		if (chainIndex >= 0 && !_ChainBlit(bo, chainIndex)) {
+			pthread_mutex_lock(&fChainLock);
+			fChainState = kChainOff;
+			fChainPending = -1;
+			pthread_mutex_unlock(&fChainLock);
+			fprintf(stderr, "MesaEGLRenderer: swap chain failed, "
+				"using the bitmap path\n");
+			chainIndex = -1;
+		}
+		if (chainIndex != -1) {
+			gbm_surface_release_buffer(fGbmSurface, bo);
+			pthread_mutex_unlock(&fContextLock);
+			if (chainIndex >= 0)
+				_ChainPresent(chainIndex);
+			if (vSync)
+				_PaceToRefresh();
+			return;
+		}
 	}
 
 	uint32_t stride = 0;
@@ -781,7 +872,7 @@ MesaEGLRenderer::SwapBuffers(bool vSync)
 
 
 void
-MesaEGLRenderer::_PaceToRefresh()
+MesaEGLRenderer::_UpdateFramePeriod()
 {
 	if (fFramePeriod == 0) {
 		fFramePeriod = 16667;
@@ -804,6 +895,407 @@ MesaEGLRenderer::_PaceToRefresh()
 				fFramePeriod = period;
 		}
 	}
+}
+
+
+// #pragma mark - swap chain
+
+
+static bool
+has_word(const char* list, const char* word)
+{
+	if (list == NULL)
+		return false;
+
+	const size_t length = strlen(word);
+	for (const char* at = list; (at = strstr(at, word)) != NULL;
+			at += length) {
+		const bool start = at == list || at[-1] == ' ';
+		const bool end = at[length] == ' ' || at[length] == '\0';
+		if (start && end)
+			return true;
+	}
+	return false;
+}
+
+
+// Context current.
+bool
+MesaEGLRenderer::_ChainProbe()
+{
+	if (!BPrivate::swap_chain_enabled() || fContextMajor < 3)
+		return false;
+
+	const char* eglExtensions = eglQueryString(fDisplay, EGL_EXTENSIONS);
+	if (!has_word(eglExtensions, "EGL_KHR_image_base")
+			|| !has_word(eglExtensions, "EGL_EXT_image_dma_buf_import"))
+		return false;
+	fChainModifiers = has_word(eglExtensions,
+		"EGL_EXT_image_dma_buf_import_modifiers");
+
+	bool hasImage = has_word((const char*)glGetString(GL_EXTENSIONS),
+		"GL_OES_EGL_image");
+	if (!hasImage) {
+		// core profiles list them one by one
+		typedef const GLubyte* (*GetStringi)(GLenum, GLuint);
+		GetStringi getStringi = (GetStringi)eglGetProcAddress("glGetStringi");
+		GLint count = 0;
+		glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+		for (GLint i = 0; getStringi != NULL && i < count && !hasImage; i++) {
+			hasImage = strcmp((const char*)getStringi(GL_EXTENSIONS, i),
+				"GL_OES_EGL_image") == 0;
+		}
+	}
+	if (!hasImage)
+		return false;
+
+	fCreateImage = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress(
+		"eglCreateImageKHR");
+	fDestroyImage = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress(
+		"eglDestroyImageKHR");
+	fImageTargetRenderbuffer = (void (*)(GLenum, void*))eglGetProcAddress(
+		"glEGLImageTargetRenderbufferStorageOES");
+	fGenFramebuffers = (void (*)(GLsizei, GLuint*))eglGetProcAddress(
+		"glGenFramebuffers");
+	fDeleteFramebuffers = (void (*)(GLsizei, const GLuint*))
+		eglGetProcAddress("glDeleteFramebuffers");
+	fBindFramebuffer = (void (*)(GLenum, GLuint))eglGetProcAddress(
+		"glBindFramebuffer");
+	fFramebufferRenderbuffer = (void (*)(GLenum, GLenum, GLenum, GLuint))
+		eglGetProcAddress("glFramebufferRenderbuffer");
+	fCheckFramebufferStatus = (GLenum (*)(GLenum))eglGetProcAddress(
+		"glCheckFramebufferStatus");
+	fGenRenderbuffers = (void (*)(GLsizei, GLuint*))eglGetProcAddress(
+		"glGenRenderbuffers");
+	fDeleteRenderbuffers = (void (*)(GLsizei, const GLuint*))
+		eglGetProcAddress("glDeleteRenderbuffers");
+	fBindRenderbuffer = (void (*)(GLenum, GLuint))eglGetProcAddress(
+		"glBindRenderbuffer");
+	fBlitFramebuffer = (void (*)(GLint, GLint, GLint, GLint, GLint, GLint,
+		GLint, GLint, GLbitfield, GLenum))eglGetProcAddress(
+		"glBlitFramebuffer");
+
+	return fCreateImage != NULL && fDestroyImage != NULL
+		&& fImageTargetRenderbuffer != NULL && fGenFramebuffers != NULL
+		&& fDeleteFramebuffers != NULL && fBindFramebuffer != NULL
+		&& fFramebufferRenderbuffer != NULL
+		&& fCheckFramebufferStatus != NULL && fGenRenderbuffers != NULL
+		&& fDeleteRenderbuffers != NULL && fBindRenderbuffer != NULL
+		&& fBlitFramebuffer != NULL;
+}
+
+
+// The view's window is locked.
+void
+MesaEGLRenderer::_ChainStart()
+{
+	BGLView* view = GLView();
+	if (fChainState != kChainUntried || view == NULL
+			|| view->Window() == NULL)
+		return;
+
+	pthread_mutex_lock(&fChainLock);
+	if (!fChainCapable) {
+		fChainState = kChainOff;
+	} else {
+		const BPrivate::swap_chain_format format = {
+			BPrivate::kSwapFormatXRGB8888, BPrivate::kSwapModifierLinear };
+		status_t status = fChain.Create(view, fWidth, fHeight,
+			BPrivate::kSwapChainMaxBuffers,
+			BPrivate::kSwapUsageRender, &format, 1);
+		fChainState = status == B_OK ? kChainOn : kChainOff;
+		fChainPending = -1;
+		if (status != B_OK) {
+			fprintf(stderr, "MesaEGLRenderer: no swap chain (%s), "
+				"using the bitmap path\n", strerror(status));
+		} else
+			printf("MesaEGLRenderer: swap chain %dx%d\n", fWidth, fHeight);
+	}
+	pthread_mutex_unlock(&fChainLock);
+}
+
+
+// The view's window is locked. Frees the chain and what was built on it.
+void
+MesaEGLRenderer::_ChainRetire()
+{
+	if (fChainState == kChainUntried)
+		return;
+
+	pthread_mutex_lock(&fContextLock);
+	if (fSurface != EGL_NO_SURFACE
+			&& eglMakeCurrent(fDisplay, fSurface, fSurface, fContext)) {
+		_ChainDestroyTargets();
+		_ChainDestroySources();
+		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			EGL_NO_CONTEXT);
+	}
+	pthread_mutex_unlock(&fContextLock);
+
+	pthread_mutex_lock(&fChainLock);
+	fChain.Delete();
+	fChainPending = -1;
+	fChainState = kChainUntried;
+	pthread_mutex_unlock(&fChainLock);
+}
+
+
+// Context current, fContextLock held.
+bool
+MesaEGLRenderer::_ChainBlit(struct gbm_bo* bo, int32 index)
+{
+	if (!_ChainTarget(index))
+		return false;
+	const int32 source = _ChainSource(bo);
+	if (source < 0)
+		return false;
+
+	GLint readBinding = 0;
+	GLint drawBinding = 0;
+	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readBinding);
+	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawBinding);
+	const GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
+	if (scissor)
+		glDisable(GL_SCISSOR_TEST);
+
+	fBindFramebuffer(GL_READ_FRAMEBUFFER, fChainSources[source].framebuffer);
+	fBindFramebuffer(GL_DRAW_FRAMEBUFFER, fChainTargets[index].framebuffer);
+	fBlitFramebuffer(0, 0, fWidth, fHeight, 0, 0, fWidth, fHeight,
+		GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+	fBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)readBinding);
+	fBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)drawBinding);
+	if (scissor)
+		glEnable(GL_SCISSOR_TEST);
+
+	// The server reads the buffer next.
+	glFinish();
+	return true;
+}
+
+
+// At most one line a second.
+void
+MesaEGLRenderer::_ChainNote(const char* what, bigtime_t waited)
+{
+	static bigtime_t last = 0;
+	const bigtime_t now = system_time();
+	if (now - last < 1000000)
+		return;
+
+	last = now;
+	fprintf(stderr, "MesaEGLRenderer: %s (%lld ms)\n", what,
+		(long long)(waited / 1000));
+}
+
+
+// Hands the rendered buffer to the server. Takes no looper lock: the
+// window thread may be waiting for the GL lock.
+void
+MesaEGLRenderer::_ChainPresent(int32 index)
+{
+	pthread_mutex_lock(&fChainLock);
+	if (fChainState == kChainOn && fChain.IsValid())
+		fChain.Present(index);
+	fChainPending = -1;
+	pthread_mutex_unlock(&fChainLock);
+}
+
+
+// Context current. Imports chain buffer index on first use.
+bool
+MesaEGLRenderer::_ChainTarget(int32 index)
+{
+	if (fChainTargets[index].framebuffer != 0)
+		return true;
+
+	pthread_mutex_lock(&fChainLock);
+	BPrivate::swap_chain_buffer buffer;
+	bool valid = fChain.BufferAt(index, &buffer) == B_OK;
+	int fd = valid ? fChain.BufferFd(index) : -1;
+	pthread_mutex_unlock(&fChainLock);
+	if (fd < 0)
+		return false;
+
+	EGLImageKHR image = _ChainImport(fd, fWidth, fHeight, buffer.fourcc,
+		buffer.offset, buffer.stride, buffer.modifier);
+	close(fd);
+	if (image == EGL_NO_IMAGE_KHR)
+		return false;
+
+	ChainImage& target = fChainTargets[index];
+	if (!_ChainBuild(image, &target.renderbuffer, &target.framebuffer)) {
+		fDestroyImage(fDisplay, image);
+		return false;
+	}
+
+	target.image = image;
+	return true;
+}
+
+
+// Context current. Index into fChainSources of the image of a front
+// buffer of the gbm surface, or -1.
+int32
+MesaEGLRenderer::_ChainSource(struct gbm_bo* bo)
+{
+	for (int32 i = 0; i < fChainSourceCount; i++) {
+		if (fChainSources[i].bo == bo)
+			return i;
+	}
+
+	// The surface cycles a handful of buffers; anything else is a leak.
+	if (fChainSourceCount == kChainSources)
+		_ChainDestroySources();
+
+	int fd = gbm_bo_get_fd(bo);
+	if (fd < 0)
+		return -1;
+
+	static bool reported = false;
+	if (!reported && gbm_bo_get_modifier(bo) != 0) {
+		reported = true;
+		fprintf(stderr, "MesaEGLRenderer: front buffer modifier %#llx\n",
+			(unsigned long long)gbm_bo_get_modifier(bo));
+	}
+
+	EGLImageKHR image = _ChainImport(fd, (int32)gbm_bo_get_width(bo),
+		(int32)gbm_bo_get_height(bo), gbm_bo_get_format(bo),
+		gbm_bo_get_offset(bo, 0), gbm_bo_get_stride(bo),
+		gbm_bo_get_modifier(bo));
+	close(fd);
+	if (image == EGL_NO_IMAGE_KHR)
+		return -1;
+
+	ChainImage& source = fChainSources[fChainSourceCount];
+	if (!_ChainBuild(image, &source.renderbuffer, &source.framebuffer)) {
+		fDestroyImage(fDisplay, image);
+		return -1;
+	}
+
+	source.image = image;
+	source.bo = bo;
+	return fChainSourceCount++;
+}
+
+
+// Context current. A framebuffer with the image as its only attachment;
+// what the client had bound is put back.
+bool
+MesaEGLRenderer::_ChainBuild(EGLImageKHR image, GLuint* _renderbuffer,
+	GLuint* _framebuffer)
+{
+	GLint renderbufferBinding = 0;
+	GLint readBinding = 0;
+	GLint drawBinding = 0;
+	glGetIntegerv(GL_RENDERBUFFER_BINDING, &renderbufferBinding);
+	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readBinding);
+	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawBinding);
+
+	GLuint renderbuffer = 0;
+	GLuint framebuffer = 0;
+	fGenRenderbuffers(1, &renderbuffer);
+	fBindRenderbuffer(GL_RENDERBUFFER, renderbuffer);
+	fImageTargetRenderbuffer(GL_RENDERBUFFER, image);
+	fGenFramebuffers(1, &framebuffer);
+	fBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	fFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		GL_RENDERBUFFER, renderbuffer);
+	const bool complete
+		= fCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+
+	fBindRenderbuffer(GL_RENDERBUFFER, (GLuint)renderbufferBinding);
+	fBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)readBinding);
+	fBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)drawBinding);
+
+	if (!complete) {
+		fDeleteFramebuffers(1, &framebuffer);
+		fDeleteRenderbuffers(1, &renderbuffer);
+		return false;
+	}
+
+	*_renderbuffer = renderbuffer;
+	*_framebuffer = framebuffer;
+	return true;
+}
+
+
+EGLImageKHR
+MesaEGLRenderer::_ChainImport(int fd, int32 width, int32 height,
+	uint32 fourcc, uint32 offset, uint32 stride, uint64 modifier)
+{
+	EGLint attributes[24];
+	int n = 0;
+	attributes[n++] = EGL_WIDTH;
+	attributes[n++] = width;
+	attributes[n++] = EGL_HEIGHT;
+	attributes[n++] = height;
+	attributes[n++] = EGL_LINUX_DRM_FOURCC_EXT;
+	attributes[n++] = (EGLint)fourcc;
+	attributes[n++] = EGL_DMA_BUF_PLANE0_FD_EXT;
+	attributes[n++] = fd;
+	attributes[n++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
+	attributes[n++] = (EGLint)offset;
+	attributes[n++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
+	attributes[n++] = (EGLint)stride;
+	if (fChainModifiers && modifier != DRM_FORMAT_MOD_INVALID) {
+		attributes[n++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT;
+		attributes[n++] = (EGLint)(modifier & 0xffffffff);
+		attributes[n++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT;
+		attributes[n++] = (EGLint)(modifier >> 32);
+	}
+	attributes[n] = EGL_NONE;
+
+	return fCreateImage(fDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, NULL,
+		attributes);
+}
+
+
+void
+MesaEGLRenderer::_ChainFree(EGLImageKHR* image, GLuint* renderbuffer,
+	GLuint* framebuffer)
+{
+	if (*framebuffer != 0)
+		fDeleteFramebuffers(1, framebuffer);
+	if (*renderbuffer != 0)
+		fDeleteRenderbuffers(1, renderbuffer);
+	if (*image != EGL_NO_IMAGE_KHR && *image != NULL)
+		fDestroyImage(fDisplay, *image);
+
+	*framebuffer = 0;
+	*renderbuffer = 0;
+	*image = EGL_NO_IMAGE_KHR;
+}
+
+
+// Context current.
+void
+MesaEGLRenderer::_ChainDestroyTargets()
+{
+	for (int32 i = 0; i < BPrivate::kSwapChainMaxBuffers; i++) {
+		ChainImage& target = fChainTargets[i];
+		_ChainFree(&target.image, &target.renderbuffer, &target.framebuffer);
+	}
+}
+
+
+// Context current.
+void
+MesaEGLRenderer::_ChainDestroySources()
+{
+	for (int32 i = 0; i < fChainSourceCount; i++) {
+		ChainImage& source = fChainSources[i];
+		_ChainFree(&source.image, &source.renderbuffer, &source.framebuffer);
+		source.bo = NULL;
+	}
+	fChainSourceCount = 0;
+}
+
+
+void
+MesaEGLRenderer::_PaceToRefresh()
+{
+	_UpdateFramePeriod();
 
 	bigtime_t now = system_time();
 	bigtime_t deadline = fLastSwap + fFramePeriod;
@@ -894,6 +1386,10 @@ MesaEGLRenderer::Draw(BRect /*updateRect*/)
 	if (view == NULL)
 		return;
 
+	// The chain is on screen; a stale bitmap would fight it for the plane.
+	if (fChainState == kChainOn)
+		return;
+
 	pthread_mutex_lock(&fBitmapLock);
 	if (fBitmap != NULL && fBitmap->IsValid())
 		view->DrawBitmap(fBitmap, BPoint(0.0f, 0.0f));
@@ -905,6 +1401,8 @@ void
 MesaEGLRenderer::AttachedToWindow()
 {
 	// Context already created in constructor
+	if (fInitialized && fChainCapable)
+		_ChainStart();
 }
 
 
@@ -912,6 +1410,8 @@ void
 MesaEGLRenderer::DetachedFromWindow()
 {
 	// Context kept alive until destructor
+	if (fInitialized && fChainCapable)
+		_ChainRetire();
 }
 
 
@@ -930,7 +1430,24 @@ MesaEGLRenderer::FrameResized(float width, float height)
 		return;
 
 	pthread_mutex_lock(&fContextLock);
+	if (fChainState == kChainOn && eglMakeCurrent(fDisplay, fSurface,
+			fSurface, fContext))
+		_ChainDestroyTargets();
 	_RecreateSurface(newW, newH);
+
+	if (fChainState == kChainOn) {
+		// The window is locked; the old buffers stay with the server
+		// until the first frame of the new size.
+		pthread_mutex_lock(&fChainLock);
+		fChainPending = -1;
+		if (fChain.Resize(newW, newH) != B_OK) {
+			fprintf(stderr, "MesaEGLRenderer: swap chain resize failed, "
+				"using the bitmap path\n");
+			fChain.Delete();
+			fChainState = kChainOff;
+		}
+		pthread_mutex_unlock(&fChainLock);
+	}
 	pthread_mutex_unlock(&fContextLock);
 }
 

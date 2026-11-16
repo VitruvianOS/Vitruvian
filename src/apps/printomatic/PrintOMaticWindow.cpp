@@ -167,7 +167,14 @@ static status_t
 WriteBitmapFile(BBitmap* bitmap, const char* path, const char* mimeType,
 	uint32 translatorType)
 {
-	BBitmapStream stream(bitmap);
+	// The stream owns the bitmap it is given and deletes it with itself, while
+	// the page list still needs the original: hand it a copy.
+	BBitmap* copy = new (std::nothrow) BBitmap(*bitmap);
+	if (copy == NULL || copy->InitCheck() != B_OK) {
+		delete copy;
+		return B_NO_MEMORY;
+	}
+	BBitmapStream stream(copy);
 	BFile file(path, B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 	if (file.InitCheck() != B_OK)
 		return B_ERROR;
@@ -554,37 +561,75 @@ PrintOMaticWindow::MessageReceived(BMessage* message)
 				|| message->FindString("name", &name) != B_OK)
 				break;
 
+			const char* format = fFormatMenu->FindMarked()->Label();
+
+			// The panel hands back whatever was typed: add the extension of
+			// the chosen format when it is missing.
+			const char* extension = ".jpeg";
+			if (strcmp(format, "PDF") == 0)
+				extension = ".pdf";
+			else if (strcmp(format, "PNG") == 0)
+				extension = ".png";
+
+			BString fileName(name);
+			bool hasExtension = fileName.IFindLast(extension)
+				== fileName.Length() - (int32)strlen(extension)
+				&& fileName.Length() > (int32)strlen(extension);
+			if (strcmp(format, "JPEG") == 0 && !hasExtension) {
+				// .jpg is the same format; leave it as typed.
+				hasExtension = fileName.IFindLast(".jpg")
+					== fileName.Length() - 4 && fileName.Length() > 4;
+			}
+			if (!hasExtension)
+				fileName << extension;
+
 			BPath path(&ref);
-			path.Append(name);
+			path.Append(fileName.String());
 
 			status_t status = B_ERROR;
-			const char* format = fFormatMenu->FindMarked()->Label();
 			if (strcmp(format, "PDF") == 0) {
 				BList& pages = fPages;
 				// PDF assembles every scanned page.
 				BList spoolPages;
 				float paperWidth = 595;
 				float paperHeight = 842;
-				for (int32 i = 0; i < pages.CountItems(); i++) {
+				// A view can only record a picture while it belongs to a
+				// window, so attach a scratch one just for this.
+				PageDrawView* drawView = new PageDrawView();
+				AddChild(drawView);
+				drawView->Hide();
+				if (drawView->Window() == NULL) {
+					fprintf(stderr, "printomatic: page view not attached, "
+						"cannot render the PDF\n");
+					delete drawView;
+					drawView = NULL;
+				}
+				for (int32 i = 0; drawView != NULL
+					&& i < pages.CountItems(); i++) {
 					BBitmap* bitmap = static_cast<BBitmap*>(
 						pages.ItemAt(i));
 					SpooledPage* page = printcups_new_page();
-					fPageDrawView->ResizeTo(paperWidth,
-						paperHeight);
-					fPageDrawView->SetBitmap(bitmap);
+					drawView->ResizeTo(paperWidth, paperHeight);
+					drawView->SetBitmap(bitmap);
 					BPicture* picture = new BPicture;
-					fPageDrawView->BeginPicture(picture);
-					fPageDrawView->Draw(fPageDrawView->Bounds());
-					picture = fPageDrawView->EndPicture();
+					drawView->BeginPicture(picture);
+					drawView->Draw(drawView->Bounds());
+					picture = drawView->EndPicture();
 					printcups_add_picture(page, picture,
 						BRect(0, 0, paperWidth - 1,
 							paperHeight - 1),
 						BPoint(0, 0));
 					spoolPages.AddItem(page);
 				}
-				status = printcups_render_pages_pdf(path.Path(),
-					&spoolPages, paperWidth, paperHeight, 1.0f,
-					"PrintOMatic");
+				if (drawView != NULL) {
+					RemoveChild(drawView);
+					delete drawView;
+				}
+				if (spoolPages.CountItems() > 0) {
+					status = printcups_render_pages_pdf(path.Path(),
+						&spoolPages, paperWidth, paperHeight, 1.0f,
+						"PrintOMatic");
+				}
 				for (int32 i = 0; i < spoolPages.CountItems();
 					i++)
 					printcups_free_page(

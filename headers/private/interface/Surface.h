@@ -18,6 +18,7 @@ class BMessage;
 namespace BPrivate {
 
 class PortLink;
+class SwapChain;
 
 
 // A top level window without a looper or a lock. The owner drives it from
@@ -67,6 +68,8 @@ public:
 			BRect				Frame() const;
 
 			// B_RGB32, sized to the frame; reallocated on a size change.
+			// Contents persist across presents. The bitmap may change
+			// after Present(): fetch it again for every frame.
 			BBitmap*			Buffer();
 			void				Present(BRect rect);
 			void				Present(const BRegion& region);
@@ -74,6 +77,9 @@ public:
 private:
 			void				_HandleUpdate();
 			void				_DrawBuffer(BRect rect);
+			BBitmap*			_ChainBuffer();
+			bool				_ChainPresent(const BRegion& region);
+			void				_ChainDelete();
 
 			PortLink*			fLink;
 			port_id				fReplyPort;
@@ -86,6 +92,12 @@ private:
 			float				fMinHeight;
 			float				fMaxHeight;
 			BBitmap*			fBuffer;
+			// Swap chain of the root view, when VOS_SWAP_CHAIN allows.
+			SwapChain*			fChain;
+			BBitmap*			fChainBitmaps[4];
+			int32				fChainIndex;
+			int32				fLastIndex;
+			bool				fChainFailed;
 			status_t			fInitStatus;
 };
 

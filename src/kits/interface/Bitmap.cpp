@@ -1106,14 +1106,23 @@ BBitmap::_InitObject(BRect bounds, color_space colorSpace, uint32 flags,
 		size_t size = bytesPerRow * (bounds.IntegerHeight() + 1);
 
 		if ((flags & B_BITMAP_NO_SERVER_LINK) != 0) {
-			fBasePointer = (uint8*)malloc(size);
-			if (fBasePointer) {
+			// With an area, the bits are the caller's, mapped here.
+			area_info info;
+			if (area >= B_OK && get_area_info(area, &info) == B_OK
+					&& areaOffset + size <= info.size) {
+				fBasePointer = (uint8*)info.address + areaOffset;
+				fArea = area;
+			} else if (area < B_OK)
+				fBasePointer = (uint8*)malloc(size);
+			else
+				error = B_BAD_VALUE;
+			if (error == B_OK && fBasePointer) {
 				fSize = size;
 				fColorSpace = colorSpace;
 				fBounds = bounds;
 				fBytesPerRow = bytesPerRow;
 				fFlags = flags;
-			} else
+			} else if (error == B_OK)
 				error = B_NO_MEMORY;
 		} else {
 			BPrivate::AppServerLink link;
@@ -1277,7 +1286,9 @@ BBitmap::_CleanUp()
 		return;
 
 	if ((fFlags & B_BITMAP_NO_SERVER_LINK) != 0) {
-		free(fBasePointer);
+		if (fArea < B_OK)
+			free(fBasePointer);
+		fArea = -1;
 	} else if (fServerToken != -1) {
 		// During shutdown, app_server connection may be gone. Check be_app
 		// to detect shutdown and skip cleanup if needed.

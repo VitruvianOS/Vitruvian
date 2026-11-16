@@ -97,6 +97,12 @@ public:
 									int32 count, uint32 usage,
 									const swap_chain_format* formats,
 									int32 formatCount);
+			// A surface has no view: its root view token and link.
+			status_t			Create(PortLink* link, int32 viewToken,
+									int32 width, int32 height, int32 count,
+									uint32 usage,
+									const swap_chain_format* formats,
+									int32 formatCount);
 			status_t			Resize(int32 width, int32 height);
 			void				Delete();
 
@@ -121,11 +127,19 @@ public:
 			int32				RefreshPeriod() const;
 
 private:
+			status_t			_Create(PortLink* link, int32 width,
+									int32 height, int32 count, uint32 usage,
+									const swap_chain_format* formats,
+									int32 formatCount);
+			status_t			_Resize(PortLink* link, int32 width,
+									int32 height);
 			status_t			_ReadReply(PortLink& link);
 			void				_Unmap();
 			void				_Abandon(PortLink& link);
 
 			BView*				fView;
+			// Set instead of fView for a surface.
+			PortLink*			fSurfaceLink;
 			int32				fToken;
 			int32				fViewToken;
 			// Presents go straight to the window port: no window lock.

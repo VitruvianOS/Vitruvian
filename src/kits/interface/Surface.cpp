@@ -7,6 +7,7 @@
 #include <Surface.h>
 
 #include <math.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include <AppServerLink.h>
@@ -18,6 +19,7 @@
 #include <PortLink.h>
 #include <ServerProtocol.h>
 #include <ServerProtocolStructs.h>
+#include <SwapChain.h>
 #include <TokenSpace.h>
 #include <View.h>
 
@@ -39,8 +41,13 @@ BSurface::BSurface(BRect frame, const char* title, window_look look,
 	fMinHeight(0),
 	fMaxHeight(32768),
 	fBuffer(NULL),
+	fChain(NULL),
+	fChainIndex(-1),
+	fLastIndex(-1),
+	fChainFailed(false),
 	fInitStatus(B_NO_INIT)
 {
+	memset(fChainBitmaps, 0, sizeof(fChainBitmaps));
 	fReplyPort = create_port(1, "s<app_server");
 	// The server drops events when this port is full and never resends an
 	// exposure; leave room for an owner that is busy for a while.
@@ -120,6 +127,7 @@ BSurface::BSurface(BRect frame, const char* title, window_look look,
 
 BSurface::~BSurface()
 {
+	_ChainDelete();
 	if (fLink != NULL && fInitStatus == B_OK) {
 		fLink->StartMessage(AS_DELETE_WINDOW);
 		int32 code;
@@ -406,6 +414,12 @@ BSurface::Frame() const
 BBitmap*
 BSurface::Buffer()
 {
+	if (fInitStatus == B_OK && !fChainFailed && swap_chain_enabled()) {
+		BBitmap* chained = _ChainBuffer();
+		if (chained != NULL)
+			return chained;
+	}
+
 	BRect bounds(0, 0, fFrame.IntegerWidth(), fFrame.IntegerHeight());
 	if (fBuffer != NULL && fBuffer->Bounds() == bounds)
 		return fBuffer;
@@ -423,6 +437,9 @@ BSurface::Buffer()
 void
 BSurface::Present(BRect rect)
 {
+	if (fChain != NULL && _ChainPresent(BRegion(rect)))
+		return;
+
 	_DrawBuffer(rect);
 	fLink->Flush();
 }
@@ -431,9 +448,148 @@ BSurface::Present(BRect rect)
 void
 BSurface::Present(const BRegion& region)
 {
+	if (fChain != NULL && _ChainPresent(region))
+		return;
+
 	for (int32 i = 0; i < region.CountRects(); i++)
 		_DrawBuffer(region.RectAt(i));
 	fLink->Flush();
+}
+
+
+// The chain buffer to render into, or NULL for the bitmap path.
+BBitmap*
+BSurface::_ChainBuffer()
+{
+	const int32 width = fFrame.IntegerWidth() + 1;
+	const int32 height = fFrame.IntegerHeight() + 1;
+
+	if (fChain != NULL && (fChain->Width() != width
+			|| fChain->Height() != height)) {
+		for (int32 i = 0; i < 4; i++) {
+			delete fChainBitmaps[i];
+			fChainBitmaps[i] = NULL;
+		}
+		fChainIndex = -1;
+		fLastIndex = -1;
+		if (fChain->Resize(width, height) != B_OK)
+			_ChainDelete();
+	}
+
+	if (fChain == NULL && !fChainFailed) {
+		fChain = new(std::nothrow) SwapChain;
+		const swap_chain_format format = { kSwapFormatXRGB8888,
+			kSwapModifierLinear };
+		if (fChain == NULL || fChain->Create(fLink, fViewToken, width, height,
+				3, kSwapUsageRender, &format, 1) != B_OK)
+			_ChainDelete();
+	}
+	if (fChain == NULL) {
+		fChainFailed = true;
+		return NULL;
+	}
+
+	bool acquired = false;
+	if (fChainIndex < 0) {
+		const int32 index = fChain->Acquire(1000000);
+		if (index < 0) {
+			_ChainDelete();
+			fChainFailed = true;
+			return NULL;
+		}
+		fChainIndex = index;
+		acquired = true;
+	}
+
+	for (int32 i = 0; i < fChain->CountBuffers(); i++) {
+		if (fChainBitmaps[i] != NULL)
+			continue;
+
+		swap_chain_buffer buffer;
+		if (fChain->BufferAt(i, &buffer) != B_OK)
+			break;
+		fChainBitmaps[i] = new(std::nothrow) BBitmap(buffer.area,
+			buffer.offset, BRect(0, 0, width - 1, height - 1),
+			B_BITMAP_NO_SERVER_LINK, B_RGB32, buffer.stride);
+		if (fChainBitmaps[i] != NULL && fChainBitmaps[i]->InitCheck() != B_OK) {
+			delete fChainBitmaps[i];
+			fChainBitmaps[i] = NULL;
+		}
+	}
+
+	BBitmap* bitmap = fChainBitmaps[fChainIndex];
+	if (bitmap == NULL) {
+		_ChainDelete();
+		fChainFailed = true;
+		return NULL;
+	}
+
+	// The contents persist: bring the new buffer up to date.
+	BBitmap* last = fLastIndex >= 0 ? fChainBitmaps[fLastIndex] : NULL;
+	if (acquired && last != NULL && fLastIndex != fChainIndex) {
+		const int32 rows = bitmap->Bounds().IntegerHeight() + 1;
+		const int32 bytes = min_c(bitmap->BytesPerRow(), last->BytesPerRow());
+		for (int32 y = 0; y < rows; y++) {
+			memcpy((uint8*)bitmap->Bits() + y * bitmap->BytesPerRow(),
+				(uint8*)last->Bits() + y * last->BytesPerRow(), bytes);
+		}
+	}
+	return bitmap;
+}
+
+
+bool
+BSurface::_ChainPresent(const BRegion& region)
+{
+	if (fChain == NULL)
+		return false;
+
+	// Presenting again without drawing shows the same contents.
+	if (fChainIndex < 0 && _ChainBuffer() == NULL)
+		return false;
+	if (fChain == NULL || fChainIndex < 0)
+		return false;
+
+	BRect rects[kSwapChainMaxDamage];
+	int32 count = 0;
+	bool overflow = false;
+	const BRect bounds(0, 0, fChain->Width() - 1, fChain->Height() - 1);
+	for (int32 i = 0; i < region.CountRects(); i++) {
+		const BRect rect = region.RectAt(i) & bounds;
+		if (!rect.IsValid())
+			continue;
+		if (count == kSwapChainMaxDamage) {
+			// Too many: the whole buffer.
+			overflow = true;
+			break;
+		}
+		rects[count++] = rect;
+	}
+	if (overflow)
+		count = 0;
+	else if (count == 0)
+		return true;
+
+	if (fChain->Present(fChainIndex, rects, count) != B_OK)
+		return true;
+
+	fLastIndex = fChainIndex;
+	fChainIndex = -1;
+	return true;
+}
+
+
+void
+BSurface::_ChainDelete()
+{
+	for (int32 i = 0; i < 4; i++) {
+		delete fChainBitmaps[i];
+		fChainBitmaps[i] = NULL;
+	}
+	delete fChain;
+	fChain = NULL;
+	fChainIndex = -1;
+	fLastIndex = -1;
 }
 
 

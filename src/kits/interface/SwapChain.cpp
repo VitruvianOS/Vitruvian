@@ -25,6 +25,7 @@ namespace BPrivate {
 SwapChain::SwapChain()
 	:
 	fView(NULL),
+	fSurfaceLink(NULL),
 	fToken(0),
 	fViewToken(-1),
 	fPresentLink(NULL),
@@ -53,19 +54,53 @@ status_t
 SwapChain::Create(BView* view, int32 width, int32 height, int32 count,
 	uint32 usage, const swap_chain_format* formats, int32 formatCount)
 {
-	if (!swap_chain_enabled())
-		return B_UNSUPPORTED;
+	if (view == NULL || view->Window() == NULL)
+		return swap_chain_enabled() ? B_BAD_VALUE : B_UNSUPPORTED;
 	if (IsValid())
 		return B_BUSY;
-	if (view == NULL || view->Window() == NULL || width <= 0 || height <= 0
-			|| count < 2 || count > kSwapChainMaxBuffers || formatCount < 0
-			|| formatCount > 4 || (formatCount > 0 && formats == NULL))
-		return B_BAD_VALUE;
 
 	BView::Private viewPrivate(view);
 	if (!viewPrivate.LockAndSwitch())
 		return B_ERROR;
-	PortLink* link = viewPrivate.Link();
+
+	fViewToken = _get_object_token_(view);
+	status_t status = _Create(viewPrivate.Link(), width, height, count, usage,
+		formats, formatCount);
+	if (status == B_OK)
+		fView = view;
+	return status;
+}
+
+
+status_t
+SwapChain::Create(PortLink* link, int32 viewToken, int32 width, int32 height,
+	int32 count, uint32 usage, const swap_chain_format* formats,
+	int32 formatCount)
+{
+	if (link == NULL)
+		return B_BAD_VALUE;
+	if (IsValid())
+		return B_BUSY;
+
+	fViewToken = viewToken;
+	status_t status = _Create(link, width, height, count, usage, formats,
+		formatCount);
+	if (status == B_OK)
+		fSurfaceLink = link;
+	return status;
+}
+
+
+status_t
+SwapChain::_Create(PortLink* link, int32 width, int32 height, int32 count,
+	uint32 usage, const swap_chain_format* formats, int32 formatCount)
+{
+	if (!swap_chain_enabled())
+		return B_UNSUPPORTED;
+	if (width <= 0 || height <= 0
+			|| count < 2 || count > kSwapChainMaxBuffers || formatCount < 0
+			|| formatCount > 4 || (formatCount > 0 && formats == NULL))
+		return B_BAD_VALUE;
 
 	link->StartMessage(AS_VIEW_CREATE_SWAP_CHAIN);
 	link->Attach<int32>(width);
@@ -84,8 +119,6 @@ SwapChain::Create(BView* view, int32 width, int32 height, int32 count,
 	if (status != B_OK)
 		return status;
 
-	fView = view;
-	fViewToken = _get_object_token_(view);
 	fWidth = width;
 	fHeight = height;
 	fUsage = usage;
@@ -108,11 +141,19 @@ SwapChain::Resize(int32 width, int32 height)
 	if (width <= 0 || height <= 0)
 		return B_BAD_VALUE;
 
+	if (fSurfaceLink != NULL)
+		return _Resize(fSurfaceLink, width, height);
+
 	BView::Private viewPrivate(fView);
 	if (!viewPrivate.LockAndSwitch())
 		return B_ERROR;
-	PortLink* link = viewPrivate.Link();
+	return _Resize(viewPrivate.Link(), width, height);
+}
 
+
+status_t
+SwapChain::_Resize(PortLink* link, int32 width, int32 height)
+{
 	link->StartMessage(AS_VIEW_RESIZE_SWAP_CHAIN);
 	link->Attach<int32>(fToken);
 	link->Attach<int32>(width);
@@ -139,6 +180,16 @@ SwapChain::Delete()
 	if (!IsValid())
 		return;
 
+	if (fSurfaceLink != NULL) {
+		fSurfaceLink->StartMessage(AS_VIEW_DELETE_SWAP_CHAIN);
+		fSurfaceLink->Attach<int32>(fToken);
+		fSurfaceLink->Flush();
+		_Unmap();
+		fToken = 0;
+		fSurfaceLink = NULL;
+		return;
+	}
+
 	// Without the window the server drops the chain with the view.
 	BWindow* window = fView != NULL ? fView->Window() : NULL;
 	if (window != NULL && window->IsLocked()) {
@@ -154,6 +205,7 @@ SwapChain::Delete()
 	_Unmap();
 	fToken = 0;
 	fView = NULL;
+	fSurfaceLink = NULL;
 }
 
 

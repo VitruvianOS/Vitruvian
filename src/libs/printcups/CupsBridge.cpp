@@ -16,6 +16,7 @@
 #include <fcntl.h>
 
 #include <File.h>
+#include <OS.h>
 #include <FindDirectory.h>
 #include <Message.h>
 #include <Path.h>
@@ -468,6 +469,25 @@ CupsBridge::ListQueues(printcups_queue_info* queues, int maxQueues)
 }
 
 
+// cupsd can still be coming up (socket activation, first boot) when the first
+// request arrives; the library then reports no destinations or no server.
+// Give it a moment before treating that as a real failure.
+static int
+GetDestsWithRetry(cups_dest_t** dests)
+{
+	int count = 0;
+	for (int attempt = 0; attempt < 6; attempt++) {
+		count = cupsGetDests(dests);
+		if (count > 0)
+			break;
+		cupsFreeDests(count > 0 ? count : 0, *dests);
+		*dests = NULL;
+		snooze(500000);
+	}
+	return count;
+}
+
+
 status_t
 CupsBridge::QueueInfo(const char* name, printcups_queue_info* info)
 {
@@ -475,7 +495,15 @@ CupsBridge::QueueInfo(const char* name, printcups_queue_info* info)
 		return B_BAD_VALUE;
 
 	// cupsGetDest() only searches an array the caller already holds.
-	cups_dest_t* dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, name, NULL);
+	cups_dest_t* dest = NULL;
+	for (int attempt = 0; attempt < 6 && dest == NULL; attempt++) {
+		dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, name, NULL);
+		if (dest == NULL
+			&& cupsLastError() == IPP_STATUS_ERROR_SERVICE_UNAVAILABLE)
+			snooze(500000);
+		else if (dest == NULL)
+			break;
+	}
 	if (dest == NULL) {
 		_SetError(cupsLastErrorString());
 		return B_ERROR;
@@ -496,7 +524,7 @@ CupsBridge::DefaultQueue(char* name, size_t size)
 	name[0] = '\0';
 
 	cups_dest_t* dests = NULL;
-	int count = cupsGetDests(&dests);
+	int count = GetDestsWithRetry(&dests);
 	if (count <= 0)
 		return B_ERROR;
 

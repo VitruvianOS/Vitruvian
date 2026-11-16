@@ -38,7 +38,7 @@ namespace GLRendererSelect {
 
 const char* kSelectionPath = "opengl/renderer_selection";
 
-const int32 kSettingsSchema = 1;
+const int32 kSettingsSchema = 2;
 
 const char* kSchemaKey = "schema";
 const char* kStampKey = "stamp";

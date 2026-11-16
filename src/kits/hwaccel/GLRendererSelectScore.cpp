@@ -32,9 +32,14 @@ ZinkWorthIt(bool archAmd64, unsigned int vendorId, unsigned int deviceId)
 static int
 _PrecedenceIndex(const char* name)
 {
-	if (strcmp(name, "mesa_egl") == 0)
+	// Candidates are named after the add-on file, with or without ".so".
+	size_t length = strlen(name);
+	if (length > 3 && strcmp(name + length - 3, ".so") == 0)
+		length -= 3;
+
+	if (length == 8 && strncmp(name, "mesa_egl", length) == 0)
 		return 0;
-	if (strcmp(name, "mesa_surfaceless") == 0)
+	if (length == 16 && strncmp(name, "mesa_surfaceless", length) == 0)
 		return 1;
 	return 1000;
 }

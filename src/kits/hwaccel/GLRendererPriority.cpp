@@ -35,6 +35,7 @@ GetInstalledRenderers(BStringList& renderers)
 		return B_OK;
 	}
 
+	BStringList found;
 	BEntry entry;
 	while (dir.GetNextEntry(&entry) == B_OK) {
 		if (!entry.IsFile())
@@ -42,7 +43,25 @@ GetInstalledRenderers(BStringList& renderers)
 
 		char name[B_FILE_NAME_LENGTH];
 		if (entry.GetName(name) == B_OK && name[0] != '\0')
-			renderers.Add(BString(name));
+			found.Add(BString(name));
+	}
+
+	// The shipped default order first, the rest as the directory lists them.
+	static const char* kDefaultOrder[] = { "mesa_egl", "mesa_surfaceless" };
+	for (size_t i = 0; i < sizeof(kDefaultOrder) / sizeof(kDefaultOrder[0]);
+			i++) {
+		for (int32 index = 0; index < found.CountStrings(); index++) {
+			BString name = found.StringAt(index);
+			BString base = name;
+			if (base.EndsWith(".so"))
+				base.Truncate(base.Length() - 3);
+			if (base == kDefaultOrder[i] && !renderers.HasString(name))
+				renderers.Add(name);
+		}
+	}
+	for (int32 index = 0; index < found.CountStrings(); index++) {
+		if (!renderers.HasString(found.StringAt(index)))
+			renderers.Add(found.StringAt(index));
 	}
 
 	return B_OK;
@@ -129,7 +148,7 @@ GetEffective(BStringList& priority)
 	}
 
 	// ...then installed renderers the saved list does not mention, in
-	// directory order (what BGLView would try without a priority file).
+	// default order (what BGLView would try without a priority file).
 	for (int32 index = 0; index < installed.CountStrings(); index++) {
 		BString name = installed.StringAt(index);
 		if (!priority.HasString(name))

@@ -3806,6 +3806,40 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_GET_VARIABLE_REFRESH:
+		{
+			bool supported = false;
+			bool enabled = false;
+			if (fDesktop->HWInterface() != NULL) {
+				supported = fDesktop->HWInterface()->VariableRefreshSupported();
+				DesktopSettings settings(fDesktop);
+				enabled = settings.VariableRefresh();
+			}
+			fLink.StartMessage(B_OK);
+			fLink.Attach<bool>(supported);
+			fLink.Attach<bool>(enabled);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SET_VARIABLE_REFRESH:
+		{
+			bool enable;
+			status_t status = link.Read<bool>(&enable);
+			if (status == B_OK) {
+				if (fDesktop->HWInterface() == NULL
+						|| !fDesktop->HWInterface()->VariableRefreshSupported())
+					status = B_UNSUPPORTED;
+				else {
+					LockedDesktopSettings settings(fDesktop);
+					settings.SetVariableRefresh(enable);
+				}
+			}
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
 		case AS_SET_HINTING:
 		{
 			uint8 hinting;

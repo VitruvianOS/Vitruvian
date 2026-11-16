@@ -67,6 +67,10 @@
 #include "Utility.h"
 
 
+extern status_t get_variable_refresh(bool* supported, bool* enabled);
+extern status_t set_variable_refresh(bool enable);
+
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Screen"
 
@@ -254,6 +258,17 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			"This display does not support colour temperature."));
 	}
 
+	fVariableRefreshBox = new BCheckBox("variable refresh",
+		B_TRANSLATE("Variable refresh rate"),
+		new BMessage(kMsgVariableRefresh));
+	bool vrrSupported = false;
+	bool vrrEnabled = false;
+	if (get_variable_refresh(&vrrSupported, &vrrEnabled) != B_OK
+			|| !vrrSupported)
+		fVariableRefreshBox->Hide();
+	else
+		fVariableRefreshBox->SetValue(vrrEnabled ? B_CONTROL_ON : B_CONTROL_OFF);
+
 	// box on the left below the screen box with workspaces
 
 	BBox* workspacesBox = new BBox("workspaces box");
@@ -411,7 +426,8 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			.Add(fReflectionField->CreateLabelLayoutItem(), 0, 4)
 			.Add(fReflectionField->CreateMenuBarLayoutItem(), 1, 4)
 		.End()
-		.Add(fTemperatureField);
+		.Add(fTemperatureField)
+		.Add(fVariableRefreshBox);
 
 	// Profile save / delete
 
@@ -1307,6 +1323,16 @@ ScreenWindow::MessageReceived(BMessage* message)
 			bool wasPending = _BeginDisplayChange();
 			_EndDisplayChange(wasPending,
 				BPrivate::BPrivateScreen::SetMainScreen(output->screen));
+			break;
+		}
+
+		case kMsgVariableRefresh:
+		{
+			const bool enable = fVariableRefreshBox->Value() == B_CONTROL_ON;
+			if (set_variable_refresh(enable) != B_OK) {
+				fVariableRefreshBox->SetValue(
+					enable ? B_CONTROL_OFF : B_CONTROL_ON);
+			}
 			break;
 		}
 

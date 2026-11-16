@@ -142,6 +142,7 @@ private:
 			BCheckBox*		fUseOutputBox;
 			BCheckBox*		fPrimaryBox;
 			BCheckBox*		fMirrorBox;
+			BCheckBox*		fVariableRefreshBox;
 			BButton*		fIdentifyButton;
 
 			BPopUpMenu*		fProfileMenu;

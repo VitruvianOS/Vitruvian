@@ -337,6 +337,8 @@ public:
 	virtual	overlay_token		AcquireOverlayChannel();
 	virtual	void				ReleaseOverlayChannel(overlay_token token);
 	virtual	status_t			SetVariableRefresh(bool enable);
+	virtual	bool				VariableRefreshSupported() const
+									{ return fVRRSupported; }
 
 	virtual	status_t			AcquireOverlayPlane(color_space space,
 									uint32 width, uint32 height,

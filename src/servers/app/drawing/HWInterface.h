@@ -180,13 +180,15 @@ public:
 									uint32 width, uint32 height,
 									OverlayPlane** _plane);
 	virtual void				ReleaseOverlayPlane(OverlayPlane* plane);
-	// Scans a GBM-backed bitmap out on a plane without copying.
-	// The plane belongs to the output that wholly contains destination;
-	// an empty destination means the first output.
 	// Adaptive refresh, where the display and driver have it.
 	virtual	status_t			SetVariableRefresh(bool /*enable*/)
 									{ return B_UNSUPPORTED; }
+	virtual	bool				VariableRefreshSupported() const
+									{ return false; }
 
+	// Scans a GBM-backed bitmap out on a plane without copying.
+	// The plane belongs to the output that wholly contains destination;
+	// an empty destination means the first output.
 	virtual status_t			AcquireOverlayPlaneForBitmap(
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane,

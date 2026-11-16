@@ -377,6 +377,35 @@ get_subpixel_antialiasing(bool* subpix)
 }
 
 
+status_t
+get_variable_refresh(bool* supported, bool* enabled)
+{
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_GET_VARIABLE_REFRESH);
+	int32 status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK || status < B_OK)
+		return status;
+	link.Read<bool>(supported);
+	link.Read<bool>(enabled);
+	return B_OK;
+}
+
+
+status_t
+set_variable_refresh(bool enable)
+{
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_SET_VARIABLE_REFRESH);
+	link.Attach<bool>(enable);
+	int32 status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK)
+		return B_ERROR;
+	return status;
+}
+
+
 void
 set_hinting_mode(uint8 hinting)
 {

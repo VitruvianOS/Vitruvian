@@ -50,6 +50,9 @@ static const uint32 kMsgMirror = 'mirr';
 static const uint32 kMsgIdentify = 'idnt';
 static const uint32 kMsgPollOutputs = 'poll';
 
+// Adaptive refresh
+static const uint32 kMsgVariableRefresh = 'vrrt';
+
 // Color temperature presets
 static const uint32 POP_TEMPERATURE_MSG = 'ptmp';
 

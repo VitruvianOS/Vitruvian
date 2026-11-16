@@ -96,6 +96,7 @@ Server(
 		ServerWindow.cpp
 		SystemPalette.cpp
 		View.cpp
+		ViewSwapChain.cpp
 		VirtualOutput.cpp
 		VirtualScreen.cpp
 		Window.cpp

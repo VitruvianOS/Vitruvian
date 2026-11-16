@@ -28,6 +28,7 @@
 #include "ServerCursor.h"
 #include "ServerPicture.h"
 #include "ServerWindow.h"
+#include "ViewSwapChain.h"
 #include "Window.h"
 
 #include "BitmapHWInterface.h"
@@ -133,6 +134,8 @@ View::View(IntRect frame, IntPoint scrollingOffset, const char* name,
 
 View::~View()
 {
+	fSwapChain.Unset();
+
 	// iterate over children and delete each one
 	View* view = fFirstChild;
 	while (view) {
@@ -140,6 +143,13 @@ View::~View()
 		view = view->fNextSibling;
 		delete toast;
 	}
+}
+
+
+void
+View::SetSwapChain(ViewSwapChain* chain)
+{
+	fSwapChain.SetTo(chain);
 }
 
 
@@ -1182,6 +1192,17 @@ View::Draw(DrawingEngine* drawingEngine, const BRegion* effectiveClipping,
 		}
 
 		fWindow->RecycleRegion(redraw);
+	}
+
+	if (fSwapChain.IsSet()) {
+		// what the client presented, under the exposed part of the view
+		BRegion* exposed = fWindow->GetRegion(
+			ScreenAndUserClipping(windowContentClipping));
+		if (exposed != NULL) {
+			exposed->IntersectWith(effectiveClipping);
+			fSwapChain->Redraw(drawingEngine, *exposed);
+			fWindow->RecycleRegion(exposed);
+		}
 	}
 
 	fBackgroundDirty = false;

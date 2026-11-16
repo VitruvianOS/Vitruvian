@@ -61,6 +61,7 @@
 #include "OffscreenServerWindow.h"
 #include "Screen.h"
 #include "ScreenManager.h"
+#include "VirtualScreen.h"
 #include "ServerBitmap.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -106,6 +107,8 @@ ServerApp::ServerApp(Desktop* desktop, port_id clientReplyPort,
 		// TODO: this should probably be retrieved when the app is loaded!
 	fTemporaryDisplayModeChange(0),
 	fMapLocker("server app maps"),
+	fSwapChainBytes(0),
+	fSwapChainCount(0),
 	fAppCursor(NULL),
 	fViewCursor(NULL),
 	fCursorHideLevel(0),
@@ -4041,6 +4044,37 @@ ServerApp::_HasWindowUnderMouse()
 	}
 
 	return false;
+}
+
+
+bool
+ServerApp::ReserveSwapChain(size_t bytes, bool newChain)
+{
+	const BRect frame = fDesktop->VirtualScreen().Frame();
+	const size_t screen = (size_t)(frame.IntegerWidth() + 1)
+		* (size_t)(frame.IntegerHeight() + 1) * 4;
+	const size_t limit = screen * 4 * 2;
+
+	BAutolock _(fMapLocker);
+	if (newChain && fSwapChainCount >= 2)
+		return false;
+	if (bytes > limit || fSwapChainBytes + bytes > limit)
+		return false;
+
+	fSwapChainBytes += bytes;
+	if (newChain)
+		fSwapChainCount++;
+	return true;
+}
+
+
+void
+ServerApp::ReleaseSwapChain(size_t bytes, bool chain)
+{
+	BAutolock _(fMapLocker);
+	fSwapChainBytes = bytes > fSwapChainBytes ? 0 : fSwapChainBytes - bytes;
+	if (chain && fSwapChainCount > 0)
+		fSwapChainCount--;
 }
 
 

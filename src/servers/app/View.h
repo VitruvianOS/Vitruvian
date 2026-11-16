@@ -40,6 +40,7 @@ class Window;
 class ServerBitmap;
 class ServerCursor;
 class ServerPicture;
+class ViewSwapChain;
 class BGradient;
 
 class View: public Canvas {
@@ -146,6 +147,11 @@ public:
 
 			ServerBitmap*	ViewBitmap() const
 								{ return fViewBitmap; }
+
+			// Swap chain the client renders this view with, if any.
+			ViewSwapChain*	SwapChain() const
+								{ return fSwapChain.Get(); }
+			void			SetSwapChain(ViewSwapChain* chain);
 			void			SetViewBitmap(ServerBitmap* bitmap,
 								IntRect sourceRect, IntRect destRect,
 								int32 resizingMode, int32 options);
@@ -285,6 +291,9 @@ protected:
 							fUserClipping;
 	mutable	ObjectDeleter<BRegion>
 							fScreenAndUserClipping;
+
+			ObjectDeleter<ViewSwapChain>
+							fSwapChain;
 };
 
 #endif	// VIEW_H

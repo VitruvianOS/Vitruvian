@@ -56,6 +56,11 @@ enum {
 };
 
 
+namespace BPrivate {
+	class PortLink;
+}
+
+
 class BView::Private {
 public:
 								Private(BView* view)
@@ -75,6 +80,10 @@ public:
 			int32				CountLayoutItems();
 			void				RegisterLayoutItem(BLayoutItem* item);
 			void				DeregisterLayoutItem(BLayoutItem* item);
+
+			// Locks the window and selects the view in app_server.
+			bool				LockAndSwitch();
+			BPrivate::PortLink*	Link();
 
 			bool				RemoveSelf()
 									{ return fView->_RemoveSelf(); }

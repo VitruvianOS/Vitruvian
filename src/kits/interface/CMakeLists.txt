@@ -98,6 +98,7 @@ target_sources(be PRIVATE
 	StringItem.cpp
 	StringView.cpp
 	Surface.cpp
+	SwapChain.cpp
 	TabView.cpp
 	TextControl.cpp
 	TextInput.cpp

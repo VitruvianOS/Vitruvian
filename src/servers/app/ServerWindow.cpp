@@ -76,6 +76,7 @@
 #include "RenderingBuffer.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
+#include "ViewSwapChain.h"
 #include "ServerPicture.h"
 #include "ServerProtocol.h"
 #include "Window.h"
@@ -1147,6 +1148,11 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		// Sent without the window lock, names its view.
+		case AS_VIEW_PRESENT:
+			_PresentSwapChain(link);
+			break;
+
 		case AS_VIEW_CREATE_ROOT:
 		{
 			DTRACE(("ServerWindow %s: Message AS_VIEW_CREATE_ROOT\n", fTitle));
@@ -1237,6 +1243,12 @@ ServerWindow::_DispatchViewMessage(int32 code,
 			fWindow->ScrollViewBy(fCurrentView, dh, dv);
 			break;
 		}
+		case AS_VIEW_CREATE_SWAP_CHAIN:
+		case AS_VIEW_RESIZE_SWAP_CHAIN:
+		case AS_VIEW_DELETE_SWAP_CHAIN:
+			_DispatchSwapChainMessage(code, link);
+			break;
+
 		case AS_VIEW_COPY_BITS:
 		{
 			BRect src;
@@ -2598,6 +2610,151 @@ fDesktop->LockSingleWindow();
 			}
 			break;
 	}
+}
+
+
+/*!	Swap chain requests of the current view. Anything the client sent is
+	checked here: token, index, counts, sizes.
+*/
+void
+ServerWindow::_DispatchSwapChainMessage(int32 code,
+	BPrivate::LinkReceiver& link)
+{
+	using namespace BPrivate;
+
+	ViewSwapChain* chain = fCurrentView->SwapChain();
+
+	switch (code) {
+		case AS_VIEW_CREATE_SWAP_CHAIN:
+		case AS_VIEW_RESIZE_SWAP_CHAIN:
+		{
+			status_t status = B_BAD_VALUE;
+			bool created = false;
+			int32 token = 0;
+			int32 width = 0;
+			int32 height = 0;
+			int32 count = 0;
+
+			if (code == AS_VIEW_CREATE_SWAP_CHAIN) {
+				uint32 usage = 0;
+				int32 formatCount = 0;
+				link.Read<int32>(&width);
+				link.Read<int32>(&height);
+				link.Read<int32>(&count);
+				link.Read<uint32>(&usage);
+				if (link.Read<int32>(&formatCount) == B_OK
+						&& formatCount >= 0 && formatCount <= 4) {
+					// Only linear XRGB is accepted.
+					bool acceptable = formatCount == 0;
+					for (int32 i = 0; i < formatCount; i++) {
+						uint32 fourcc = 0;
+						uint64 modifier = 0;
+						link.Read<uint32>(&fourcc);
+						link.Read<uint64>(&modifier);
+						if (fourcc == kSwapFormatXRGB8888
+								&& (modifier == kSwapModifierLinear
+									|| modifier == kSwapModifierInvalid))
+							acceptable = true;
+					}
+
+					if (!acceptable)
+						status = B_NOT_SUPPORTED;
+					else if (chain != NULL)
+						status = B_BUSY;
+					else {
+						chain = new(std::nothrow) ViewSwapChain(fServerApp,
+							this, fCurrentView);
+						created = chain != NULL;
+						status = created
+							? chain->Allocate(width, height, count, false)
+							: B_NO_MEMORY;
+					}
+				}
+			} else {
+				link.Read<int32>(&token);
+				link.Read<int32>(&width);
+				if (link.Read<int32>(&height) == B_OK && chain != NULL
+						&& chain->Accepts(token))
+					status = chain->Allocate(width, height, 0, true);
+			}
+
+			if (status == B_OK) {
+				if (created)
+					fCurrentView->SetSwapChain(chain);
+				fLink.StartMessage(B_OK);
+				chain->Describe(fLink);
+				fLink.Attach<port_id>(fMessagePort);
+			} else {
+				if (created)
+					delete chain;
+				fLink.StartMessage(status);
+			}
+			fLink.Flush();
+			break;
+		}
+
+		case AS_VIEW_DELETE_SWAP_CHAIN:
+		{
+			int32 token = 0;
+			if (link.Read<int32>(&token) == B_OK && chain != NULL
+					&& chain->Accepts(token))
+				fCurrentView->SetSwapChain(NULL);
+			break;
+		}
+	}
+}
+
+
+/*!	A present the client wrote straight to the window port, so it never
+	waits for the client's window lock. Everything in it is checked here.
+*/
+void
+ServerWindow::_PresentSwapChain(BPrivate::LinkReceiver& link)
+{
+	using namespace BPrivate;
+
+	int32 viewToken = 0;
+	int32 token = 0;
+	int32 index = 0;
+	int32 rectCount = 0;
+	uint32 flags = 0;
+	link.Read<int32>(&viewToken);
+	link.Read<int32>(&token);
+	link.Read<int32>(&index);
+	link.Read<uint32>(&flags);
+	if (link.Read<int32>(&rectCount) != B_OK || rectCount < 0
+			|| rectCount > kSwapChainMaxDamage)
+		return;
+
+	BRegion damage;
+	for (int32 i = 0; i < rectCount; i++) {
+		BRect rect;
+		if (link.Read<BRect>(&rect) != B_OK)
+			return;
+		if (rect.IsValid())
+			damage.Include(rect);
+	}
+
+	View* view;
+	if (App()->ViewTokens().GetToken(viewToken, B_HANDLER_TOKEN,
+			(void**)&view) != B_OK || view->Window() == NULL
+		|| view->Window()->ServerWindow() != this)
+		return;
+
+	ViewSwapChain* chain = view->SwapChain();
+	if (chain == NULL || !chain->Accepts(token))
+		return;
+
+	DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
+	if (!view->IsVisible() || !fWindow->IsVisible()
+			|| drawingEngine == NULL) {
+		chain->Drop(token, index);
+		return;
+	}
+
+	BRegion clipping;
+	fWindow->GetEffectiveDrawingRegion(view, clipping);
+	chain->Present(token, index, damage, flags, drawingEngine, &clipping);
 }
 
 

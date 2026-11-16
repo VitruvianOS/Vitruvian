@@ -9,6 +9,9 @@ Application(testwatch SOURCES testwatch.cpp)
 
 Application(testsuspend SOURCES testsuspend.cpp)
 
+Application(testswapchain SOURCES testswapchain.cpp)
+UsePrivateHeaders(testswapchain interface)
+
 add_executable(testinject testinject.cpp)
 
 # Unconfirmed display change revert state machine (pure helpers, the

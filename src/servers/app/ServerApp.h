@@ -85,6 +85,10 @@ public:
 
 			ServerBitmap*		GetBitmap(int32 token) const;
 
+			// Swap chain budget: 2 chains of 4 screen sized buffers.
+			bool				ReserveSwapChain(size_t bytes, bool newChain);
+			void				ReleaseSwapChain(size_t bytes, bool chain);
+
 			ServerPicture*		CreatePicture(
 									const ServerPicture* original = NULL);
 			ServerPicture*		GetPicture(int32 token) const;
@@ -152,6 +156,8 @@ private:
 			// they quit.
 	mutable	BLocker				fMapLocker;
 			BitmapMap			fBitmapMap;
+			size_t				fSwapChainBytes;
+			int32				fSwapChainCount;
 			PictureMap			fPictureMap;
 
 			BReference<ServerCursor>

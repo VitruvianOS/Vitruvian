@@ -126,6 +126,10 @@ private:
 									BPrivate::LinkReceiver &link);
 			void				_DispatchViewMessage(int32 code,
 									BPrivate::LinkReceiver &link);
+			void				_DispatchSwapChainMessage(int32 code,
+									BPrivate::LinkReceiver& link);
+			void				_PresentSwapChain(
+									BPrivate::LinkReceiver& link);
 			void				_DispatchViewDrawingMessage(int32 code,
 									BPrivate::LinkReceiver &link);
 			bool				_DispatchPictureMessage(int32 code,

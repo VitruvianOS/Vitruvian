@@ -7283,6 +7283,20 @@ BView::Private::MinMaxValid()
 
 
 bool
+BView::Private::LockAndSwitch()
+{
+	return fView->_CheckOwnerLockAndSwitchCurrent();
+}
+
+
+BPrivate::PortLink*
+BView::Private::Link()
+{
+	return fView->fOwner != NULL ? fView->fOwner->fLink : NULL;
+}
+
+
+bool
 BView::Private::WillLayout()
 {
 	BView::LayoutData* data = fView->fLayoutData;

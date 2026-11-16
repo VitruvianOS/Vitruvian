@@ -407,6 +407,12 @@ enum {
 	AS_SET_SCREEN_LAYOUT,
 	AS_SET_MAIN_SCREEN,
 
+	// Per-view swap chain of server allocated dma-buf buffers.
+	AS_VIEW_CREATE_SWAP_CHAIN,
+	AS_VIEW_RESIZE_SWAP_CHAIN,
+	AS_VIEW_PRESENT,
+	AS_VIEW_DELETE_SWAP_CHAIN,
+
 	AS_LAST_CODE
 };
 

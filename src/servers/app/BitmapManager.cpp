@@ -99,6 +99,15 @@ _AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
 	if (bo == NULL)
 		return NULL;
 
+	if (gbm_bo_get_modifier(bo) != 0) {
+		static bool reported = false;
+		if (!reported) {
+			reported = true;
+			fprintf(stderr, "app_server: gbm buffer modifier %#llx is not "
+				"linear\n", (unsigned long long)gbm_bo_get_modifier(bo));
+		}
+	}
+
 	uint32 stride = 0;
 	void* mapData = NULL;
 	void* map = gbm_bo_map(bo, 0, 0, (uint32)width, (uint32)height,
@@ -115,6 +124,8 @@ _AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
 		return NULL;
 	}
 
+	// The map's stride belongs to its copy; the pages use the bo's own.
+	stride = gbm_bo_get_stride(bo);
 	size_t size = (size_t)stride * (size_t)height;
 	void* areaBase = NULL;
 	area_id area = _kern_create_gbm_area("bitmap gbm buffer", &areaBase,
@@ -131,8 +142,10 @@ _AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
 	}
 
 	GbmMemory* memory = new(std::nothrow) GbmMemory;
-	if (memory == NULL || memory->Adopt(bo, area, (uint8*)map, mapData)
-			!= B_OK) {
+	// The painter reads the dma-buf pages themselves; the gbm map may be
+	// a private copy the GPU never writes.
+	uint8* base = (uint8*)areaBase;
+	if (memory == NULL || memory->Adopt(bo, area, base, mapData) != B_OK) {
 		delete memory;
 		delete_area(area);
 		gbm_bo_unmap(bo, mapData);
@@ -144,7 +157,7 @@ _AllocateGbmBuffer(HWInterface& hwInterface, ServerBitmap* bitmap,
 	// same way the overlay path adopts the hardware bytes-per-row.
 	*_stride = stride;
 	*_memory = memory;
-	return (uint8*)map;
+	return base;
 }
 #endif	// HAVE_GBM
 

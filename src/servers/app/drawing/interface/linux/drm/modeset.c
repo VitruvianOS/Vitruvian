@@ -268,6 +268,7 @@ int modeset_prepare(int fd)
 				fprintf(stderr, "cannot setup device for connector %u:%u (%d): %m\n",
 					i, res->connectors[i], errno);
 			}
+			free(dev->scanout_mods);
 			free(dev);
 			drmModeFreeConnector(conn);
 			continue;
@@ -996,6 +997,7 @@ modeset_dev_create(int fd, uint32_t connector_id)
 	drmModeFreeResources(res);
 
 	if (ret != 0) {
+		free(dev->scanout_mods);
 		free(dev);
 		return NULL;
 	}
@@ -1059,6 +1061,7 @@ modeset_dev_destroy(int fd, struct modeset_dev* dev)
 		dev->cursor_handle = 0;
 	}
 
+	free(dev->scanout_mods);
 	free(dev);
 }
 
@@ -1191,20 +1194,37 @@ void modeset_cleanup(int fd)
 		}
 
 		/* free allocated memory */
+		free(iter->scanout_mods);
 		free(iter);
 	}
 }
 
 
 #ifdef HAVE_GBM
+/* Scanout buffer of the primary plane's own modifiers, else the plain one. */
+static struct gbm_bo*
+create_scanout_bo(struct gbm_device* gbm, struct modeset_dev* dev)
+{
+	struct gbm_bo* bo = NULL;
+
+	if (dev->scanout_mods != NULL && dev->scanout_mod_count > 0) {
+		bo = gbm_bo_create_with_modifiers2(gbm, dev->width, dev->height,
+			GBM_FORMAT_XRGB8888, dev->scanout_mods, dev->scanout_mod_count,
+			GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	}
+	if (bo == NULL) {
+		bo = gbm_bo_create(gbm, dev->width, dev->height, GBM_FORMAT_XRGB8888,
+			GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	}
+	return bo;
+}
+
+
 int
 modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
                       struct modeset_dev* dev, bool isBack)
 {
-	struct gbm_bo* bo = gbm_bo_create(gbm,
-		dev->width, dev->height,
-		GBM_FORMAT_XRGB8888,
-		GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	struct gbm_bo* bo = create_scanout_bo(gbm, dev);
 
 	if (!bo) {
 		fprintf(stderr, "gbm_bo_create failed\n");
@@ -1278,10 +1298,7 @@ int
 modeset_create_render_fb(int fd, struct gbm_device* gbm,
                        struct modeset_dev* dev)
 {
-	struct gbm_bo* bo = gbm_bo_create(gbm,
-		dev->width, dev->height,
-		GBM_FORMAT_XRGB8888,
-		GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	struct gbm_bo* bo = create_scanout_bo(gbm, dev);
 
 	if (!bo) {
 		fprintf(stderr, "gbm_bo_create failed for render buffer\n");

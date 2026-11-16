@@ -187,6 +187,12 @@ private:
 			BRect			fDestination;
 };
 
+// A format and modifier a plane scans out (IN_FORMATS).
+struct PlaneFormat {
+	uint32_t	format;
+	uint64_t	modifier;
+};
+
 // One discovered DRM_PLANE_TYPE_OVERLAY plane plus its claim state.
 struct OverlayPlaneInfo {
 	uint32_t				planeId;
@@ -197,6 +203,8 @@ struct OverlayPlaneInfo {
 	uint32					minHeight;
 	uint32					maxHeight;
 	std::vector<uint32_t>	formats;
+	// Empty when the plane has no IN_FORMATS.
+	std::vector<PlaneFormat>	modifiers;
 	DrmOverlayPlane*		claimed;
 	// The output it scans out on (0 is the first), its card and CRTC.
 	uint32_t				output;
@@ -824,9 +832,16 @@ private:
 			bool				_PlaneTarget(uint32 output, int* fd,
 									uint32_t* crtc, BPoint* origin);
 	static	const uint32		kAllOutputs = 0xffffffff;
+			// Whether the plane takes the format with the modifier; a
+			// plane without IN_FORMATS takes any listed format as linear.
+	static	bool				_PlaneAccepts(const OverlayPlaneInfo& info,
+									uint32 format, uint64 modifier);
 			OverlayPlaneInfo*	_FindOverlayPlaneInfo(uint32_t output,
 									uint32_t planeId);
 			DrmOverlayBuffer*	_FindOverlayBuffer(const overlay_buffer* buffer);
+
+			// Primary plane of the first output, for scanout buffers.
+			std::vector<PlaneFormat>	fPrimaryFormats;
 
 			bool				fVRRSupported;
 			bool				fVRREnabled;

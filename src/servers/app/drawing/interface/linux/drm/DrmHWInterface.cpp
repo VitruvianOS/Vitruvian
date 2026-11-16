@@ -6082,6 +6082,67 @@ DrmHWInterface::_CrtcIndex(uint32_t crtc_id)
 }
 
 
+// The (format, modifier) pairs of the plane's IN_FORMATS blob.
+static void
+_ReadInFormats(int fd, uint32_t planeId, std::vector<PlaneFormat>* _list)
+{
+	_list->clear();
+	drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, planeId,
+		DRM_MODE_OBJECT_PLANE);
+	if (props == NULL)
+		return;
+
+	for (uint32_t i = 0; i < props->count_props; i++) {
+		drmModePropertyPtr prop = drmModeGetProperty(fd, props->props[i]);
+		if (prop == NULL)
+			continue;
+
+		const bool match = strcmp(prop->name, "IN_FORMATS") == 0;
+		drmModeFreeProperty(prop);
+		if (!match)
+			continue;
+
+		drmModePropertyBlobPtr blob = drmModeGetPropertyBlob(fd,
+			(uint32_t)props->prop_values[i]);
+		if (blob == NULL || blob->length < sizeof(drm_format_modifier_blob)) {
+			if (blob != NULL)
+				drmModeFreePropertyBlob(blob);
+			break;
+		}
+
+		const uint8* base = (const uint8*)blob->data;
+		const drm_format_modifier_blob* header
+			= (const drm_format_modifier_blob*)base;
+		const uint32_t* formats = (const uint32_t*)(base
+			+ header->formats_offset);
+		const drm_format_modifier* mods
+			= (const drm_format_modifier*)(base + header->modifiers_offset);
+		const size_t end = (size_t)header->modifiers_offset
+			+ (size_t)header->count_modifiers * sizeof(drm_format_modifier);
+		if (end <= blob->length && (size_t)header->formats_offset
+				+ (size_t)header->count_formats * sizeof(uint32_t)
+				<= blob->length) {
+			for (uint32_t m = 0; m < header->count_modifiers; m++) {
+				for (uint32_t b = 0; b < 64; b++) {
+					if ((mods[m].formats & (1ull << b)) == 0)
+						continue;
+
+					const uint32_t index = mods[m].offset + b;
+					if (index >= header->count_formats)
+						continue;
+
+					PlaneFormat entry = { formats[index], mods[m].modifier };
+					_list->push_back(entry);
+				}
+			}
+		}
+		drmModeFreePropertyBlob(blob);
+		break;
+	}
+	drmModeFreeObjectProperties(props);
+}
+
+
 // The plane's type and size limits.
 static void
 _ReadPlaneLimits(int fd, uint32_t planeId, OverlayPlaneInfo* info,
@@ -6140,12 +6201,14 @@ DrmHWInterface::_DiscoverProperties()
 
 			if (typeValue == DRM_PLANE_TYPE_PRIMARY && !fPrimaryPlaneId) {
 				fPrimaryPlaneId = planes->planes[i];
+				_ReadInFormats(fFd, planes->planes[i], &fPrimaryFormats);
 				_DiscoverPlaneProps(fFd, planes->planes[i], fPlaneProps);
 			} else if (typeValue == DRM_PLANE_TYPE_CURSOR && !fCursorPlaneId) {
 				fCursorPlaneId = planes->planes[i];
 				_DiscoverPlaneProps(fFd, planes->planes[i], fCursorPlaneProps);
 			} else if (typeValue == DRM_PLANE_TYPE_OVERLAY) {
 				_DiscoverPlaneProps(fFd, planes->planes[i], info.props);
+				_ReadInFormats(fFd, planes->planes[i], &info.modifiers);
 				info.formats.assign(plane->formats,
 					plane->formats + plane->count_formats);
 				overlayPlanes.push_back(info);
@@ -6195,6 +6258,25 @@ DrmHWInterface::_DiscoverProperties()
 
 	_DiscoverCrtcProps(dev->crtc);
 	_DiscoverConnProps(dev->conn);
+
+	// Scanout buffers of the gbm path take what the primary plane lists.
+	free(dev->scanout_mods);
+	dev->scanout_mods = NULL;
+	dev->scanout_mod_count = 0;
+	for (size_t i = 0; i < fPrimaryFormats.size(); i++) {
+		if (fPrimaryFormats[i].format != DRM_FORMAT_XRGB8888
+				|| fPrimaryFormats[i].modifier == DRM_FORMAT_MOD_INVALID)
+			continue;
+
+		uint64_t* grown = (uint64_t*)realloc(dev->scanout_mods,
+			(dev->scanout_mod_count + 1) * sizeof(uint64_t));
+		if (grown == NULL)
+			break;
+
+		dev->scanout_mods = grown;
+		dev->scanout_mods[dev->scanout_mod_count++]
+			= fPrimaryFormats[i].modifier;
+	}
 
 	printf("DRM: primary plane=%u cursor plane=%u overlay planes=%u "
 		"crtc=%u conn=%u VRR=%s\n", fPrimaryPlaneId, fCursorPlaneId,
@@ -7550,6 +7632,7 @@ DrmHWInterface::_DiscoverOutputPlanes(Output* output)
 			if (type == DRM_PLANE_TYPE_OVERLAY) {
 				_DiscoverPlaneProps(output->fd, planes->planes[i],
 					info.props);
+				_ReadInFormats(output->fd, planes->planes[i], &info.modifiers);
 				info.formats.assign(plane->formats,
 					plane->formats + plane->count_formats);
 				found.push_back(info);
@@ -7692,6 +7775,9 @@ DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 			continue;
 		if (std::find(info.formats.begin(), info.formats.end(), fourcc)
 				== info.formats.end())
+			continue;
+		// Chains and dumb buffers are linear.
+		if (!_PlaneAccepts(info, fourcc, DRM_FORMAT_MOD_LINEAR))
 			continue;
 		if ((info.minWidth != 0 && width < info.minWidth)
 				|| (info.maxWidth != 0 && width > info.maxWidth)
@@ -7918,6 +8004,22 @@ DrmHWInterface::HideOverlay(Overlay* overlay)
 		return;
 
 	entry->plane->Disable();
+}
+
+
+bool
+DrmHWInterface::_PlaneAccepts(const OverlayPlaneInfo& info, uint32 format,
+	uint64 modifier)
+{
+	if (info.modifiers.empty())
+		return modifier == DRM_FORMAT_MOD_LINEAR;
+
+	for (size_t i = 0; i < info.modifiers.size(); i++) {
+		if (info.modifiers[i].format == format
+				&& info.modifiers[i].modifier == modifier)
+			return true;
+	}
+	return false;
 }
 
 

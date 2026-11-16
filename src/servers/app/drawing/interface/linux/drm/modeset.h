@@ -51,6 +51,11 @@ struct modeset_dev {
 	uint32_t        render_fb;
 #endif
 
+	/* XRGB8888 modifiers the primary plane takes; scanout buffers of the
+	   gbm path are allocated from them when present. */
+	uint64_t *scanout_mods;
+	uint32_t scanout_mod_count;
+
 	uint32_t cursor_handle;
 	uint32_t cursor_fb;
 	uint32_t cursor_w;

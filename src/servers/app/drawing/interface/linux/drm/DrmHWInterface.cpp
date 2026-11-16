@@ -324,6 +324,7 @@ DrmHWInterface::DrmHWInterface()
 	fConnProps{},
 	fVRRSupported(false),
 	fVRREnabled(false),
+	fVRRWanted(false),
 	fPanelOrientation(PANEL_ORIENTATION_NORMAL),
 	fMountingOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
@@ -591,6 +592,10 @@ DrmHWInterface::_OnSessionEnable()
 	_ClearBufferToBlack(fBackBuffer);
 
 	_ProbeAtomic();
+	{
+		const char* vrr = getenv("VOS_VRR");
+		fVRRWanted = vrr != NULL && vrr[0] != '\0' && strcmp(vrr, "0") != 0;
+	}
 	if (fAtomicSupported)
 		_DiscoverProperties();
 
@@ -5675,6 +5680,9 @@ DrmHWInterface::_OnResume()
 		Invalidate(_DesktopBounds());
 		UnlockExclusiveAccess();
 
+		// The planes may have lost their state with the CRTC.
+		_RearmOverlayPlanes();
+
 		fDirtyMutex.Lock();
 		fNeedsFlip = true;
 		fDirtyMutex.Unlock();
@@ -5683,6 +5691,7 @@ DrmHWInterface::_OnResume()
 	}
 
 	UnlockExclusiveAccess();
+	_RearmOverlayPlanes();
 }
 
 
@@ -5937,6 +5946,57 @@ DrmHWInterface::_CommitCursorOnly(const CursorUpdate& update)
 		_NoteCursorBusy(err);
 #endif
 	return false;
+}
+
+
+status_t
+DrmHWInterface::SetVariableRefresh(bool enable)
+{
+	// VOS_VRR=1 wins over the setting.
+	const char* vrr = getenv("VOS_VRR");
+	const bool forced = vrr != NULL && vrr[0] != '\0'
+		&& strcmp(vrr, "0") != 0;
+	const bool wanted = enable || forced;
+	if (!fVRRSupported)
+		return B_UNSUPPORTED;
+	if (wanted == fVRRWanted && wanted == fVRREnabled)
+		return B_OK;
+
+	fVRRWanted = wanted;
+	if (!LockExclusiveAccess())
+		return B_ERROR;
+	_ApplyVRR();
+	UnlockExclusiveAccess();
+	return B_OK;
+}
+
+
+void
+DrmHWInterface::_ApplyVRR()
+{
+	struct modeset_dev* dev = fDev;
+	if (dev == NULL || !fAtomicSupported || !fCrtcProps.vrr_enabled
+			|| fVRREnabled == fVRRWanted || !fSessionActive.load())
+		return;
+
+	drmModeAtomicReq* req = drmModeAtomicAlloc();
+	if (req == NULL)
+		return;
+
+	drmModeAtomicAddProperty(req, dev->crtc, fCrtcProps.vrr_enabled,
+		fVRRWanted ? 1 : 0);
+	const int ret = drmModeAtomicCommit(fFd, req,
+		DRM_MODE_ATOMIC_ALLOW_MODESET, NULL);
+	drmModeAtomicFree(req);
+	if (ret == 0) {
+		fVRREnabled = fVRRWanted;
+		fprintf(stderr, "DRM: variable refresh %s\n",
+			fVRREnabled ? "on" : "off");
+	} else {
+		fprintf(stderr, "DRM: variable refresh refused (%s)\n",
+			strerror(errno));
+		fVRRWanted = fVRREnabled;
+	}
 }
 
 
@@ -6347,8 +6407,7 @@ DrmHWInterface::_DiscoverCrtcProps(uint32_t crtc_id)
 		else if (strcmp(prop->name, "VRR_ENABLED") == 0) {
 			fCrtcProps.vrr_enabled = prop->prop_id;
 			fVRRSupported = true;
-			// TODO wire to DesktopSettings
-			fVRREnabled   = false;
+			fVRREnabled   = fVRRWanted;
 		}
 		drmModeFreeProperty(prop);
 	}
@@ -6745,8 +6804,9 @@ DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 	drmModeAtomicAddProperty(req, dev->crtc,         fCrtcProps.active,     1);
 	drmModeAtomicAddProperty(req, dev->crtc,         fCrtcProps.mode_id,    fModeBlobId);
 
-	if (fVRREnabled && fCrtcProps.vrr_enabled)
-		drmModeAtomicAddProperty(req, dev->crtc,     fCrtcProps.vrr_enabled, 1);
+	if (fCrtcProps.vrr_enabled)
+		drmModeAtomicAddProperty(req, dev->crtc,     fCrtcProps.vrr_enabled,
+			fVRREnabled ? 1 : 0);
 
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId,   fPlaneProps.crtc_id,   dev->crtc);
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId,   fPlaneProps.fb_id,     fb_id);

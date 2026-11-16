@@ -662,6 +662,7 @@ Desktop::Init()
 	}
 
 	HWInterface()->SetDPMSMode(B_DPMS_ON);
+	HWInterface()->SetVariableRefresh(fSettings->VariableRefresh());
 
 	if (fVirtualScreen.ScreenByID(fStoredMainScreenID) != NULL)
 		fMainScreenID = fVirtualScreen.ScreenByID(fStoredMainScreenID)->ID();

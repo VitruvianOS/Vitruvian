@@ -27,6 +27,7 @@
 #include "FontCacheEntry.h"
 #include "GlobalFontManager.h"
 #include "GlobalSubpixelSettings.h"
+#include "HWInterface.h"
 #include "ServerConfig.h"
 #include "SystemPalette.h"
 
@@ -57,6 +58,7 @@ DesktopSettingsPrivate::_SetDefaults()
 	fFocusFollowsMouseMode = B_NORMAL_FOCUS_FOLLOWS_MOUSE;
 	fAcceptFirstClick = true;
 	fShowAllDraggers = true;
+	fVariableRefresh = false;
 
 	// init scrollbar info
 	fScrollBarInfo.proportional = true;
@@ -335,6 +337,21 @@ DesktopSettingsPrivate::_Load()
 		}
 	}
 
+	// read display settings
+
+	path = basePath;
+	path.Append("display");
+
+	status = file.SetTo(path.Path(), B_READ_ONLY);
+	if (status == B_OK) {
+		BMessage settings;
+		status = settings.Unflatten(&file);
+		if (status == B_OK) {
+			if (settings.FindBool("vrr", &fVariableRefresh) != B_OK)
+				fVariableRefresh = false;
+		}
+	}
+
 	return B_OK;
 }
 
@@ -422,6 +439,21 @@ DesktopSettingsPrivate::Save(uint32 mask)
 		if (path.Append("dragger") == B_OK) {
 			BMessage settings('asdg');
 			settings.AddBool("show", fShowAllDraggers);
+
+			BFile file;
+			status = file.SetTo(path.Path(), B_CREATE_FILE | B_ERASE_FILE
+				| B_READ_WRITE);
+			if (status == B_OK) {
+				status = settings.Flatten(&file, NULL);
+			}
+		}
+	}
+
+	if (mask & kDisplaySettings) {
+		BPath path(basePath);
+		if (path.Append("display") == B_OK) {
+			BMessage settings('asdp');
+			settings.AddBool("vrr", fVariableRefresh);
 
 			BFile file;
 			status = file.SetTo(path.Path(), B_CREATE_FILE | B_ERASE_FILE
@@ -611,6 +643,21 @@ bool
 DesktopSettingsPrivate::ShowAllDraggers() const
 {
 	return fShowAllDraggers;
+}
+
+
+void
+DesktopSettingsPrivate::SetVariableRefresh(bool enable)
+{
+	fVariableRefresh = enable;
+	Save(kDisplaySettings);
+}
+
+
+bool
+DesktopSettingsPrivate::VariableRefresh() const
+{
+	return fVariableRefresh;
 }
 
 
@@ -908,6 +955,13 @@ DesktopSettings::ShowAllDraggers() const
 }
 
 
+bool
+DesktopSettings::VariableRefresh() const
+{
+	return fSettings->VariableRefresh();
+}
+
+
 int32
 DesktopSettings::WorkspacesCount() const
 {
@@ -1062,6 +1116,15 @@ void
 LockedDesktopSettings::SetShowAllDraggers(bool show)
 {
 	fSettings->SetShowAllDraggers(show);
+}
+
+
+void
+LockedDesktopSettings::SetVariableRefresh(bool enable)
+{
+	fSettings->SetVariableRefresh(enable);
+	if (fDesktop != NULL && fDesktop->HWInterface() != NULL)
+		fDesktop->HWInterface()->SetVariableRefresh(enable);
 }
 
 

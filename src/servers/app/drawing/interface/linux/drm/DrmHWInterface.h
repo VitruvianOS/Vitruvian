@@ -336,6 +336,8 @@ public:
 
 	virtual	overlay_token		AcquireOverlayChannel();
 	virtual	void				ReleaseOverlayChannel(overlay_token token);
+	virtual	status_t			SetVariableRefresh(bool enable);
+
 	virtual	status_t			AcquireOverlayPlane(color_space space,
 									uint32 width, uint32 height,
 									OverlayPlane** _plane);
@@ -845,6 +847,9 @@ private:
 
 			bool				fVRRSupported;
 			bool				fVRREnabled;
+			// The setting or VOS_VRR; enabled needs the property too.
+			bool				fVRRWanted;
+			void				_ApplyVRR();
 
 			// Elaborated as "enum PanelOrientation": the PanelOrientation()
 			// accessor above hides the bare type name inside this class.

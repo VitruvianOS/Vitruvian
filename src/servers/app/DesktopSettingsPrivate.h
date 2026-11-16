@@ -65,6 +65,9 @@ public:
 			void				SetShowAllDraggers(bool show);
 			bool				ShowAllDraggers() const;
 
+			void				SetVariableRefresh(bool enable);
+			bool				VariableRefresh() const;
+
 			void				SetWorkspacesLayout(int32 columns,
 									int32 rows, bool save = true);
 			int32				WorkspacesCount() const;
@@ -117,6 +120,7 @@ private:
 			mode_focus_follows_mouse	fFocusFollowsMouseMode;
 			bool				fAcceptFirstClick;
 			bool				fShowAllDraggers;
+			bool				fVariableRefresh;
 			int32				fWorkspacesColumns;
 			int32				fWorkspacesRows;
 			BMessage			fWorkspaceMessages[kMaxWorkspaces];

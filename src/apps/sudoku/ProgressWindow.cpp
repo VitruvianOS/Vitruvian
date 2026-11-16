@@ -75,7 +75,7 @@ ProgressWindow::_Center(BWindow* referenceWindow)
 	if (referenceWindow != NULL)
 		frame = referenceWindow->Frame();
 	else
-		frame = BScreen().Frame();
+		frame = BScreen(this).Frame();
 
 	MoveTo(frame.left + (frame.Width() - Bounds().Width()) / 2,
 		frame.top + (frame.Height() - Bounds().Height()) / 2);

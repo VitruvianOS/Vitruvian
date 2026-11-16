@@ -11,6 +11,7 @@
 #include <Locale.h>
 #include <Message.h>
 #include <Path.h>
+#include <PrivateScreen.h>
 #include <Screen.h>
 
 #include <algorithm>
@@ -59,11 +60,15 @@ Application::ReadyToRun()
 				if (settings.FindRect("frame", &saved) == B_OK
 					&& settings.FindInt32("section", &savedSection) == B_OK) {
 					BRect screen = BScreen().Frame();
+					const bool onScreen = saved.Intersects(screen)
+						|| BPrivate::BPrivateScreen::ScreenAt(BPoint(
+							(saved.left + saved.right) / 2,
+							(saved.top + saved.bottom) / 2)) >= 0;
 					if (saved.right > saved.left
 						&& saved.bottom > saved.top
 						&& saved.Width() >= 200.0f
 						&& saved.Height() >= 150.0f
-						&& saved.Intersects(screen)) {
+						&& onScreen) {
 						// Pull a partly off-screen frame back on screen.
 						saved.OffsetBy(
 							std::max(0.0f, screen.left - saved.left)

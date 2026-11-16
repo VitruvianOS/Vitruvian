@@ -273,32 +273,31 @@ class InputServer : public BApplication {
 
 extern InputServer* gInputServer;
 
-#if DEBUG >= 1
-#	if DEBUG == 2
-#		undef PRINT
-		inline void _iprint(const char *fmt, ...) {
-			FILE* log = fopen("/var/log/input_server.log", "a");
-			char buf[1024];
-			va_list ap;
-			va_start(ap, fmt);
-			vsprintf(buf, fmt, ap);
-			va_end(ap);
-			fputs(buf, log);
-			fflush(log);
-			fclose(log);
-        }
-#		define PRINT(x)	_iprint x
-#	else
-#		undef PRINT
-#		define PRINT(x)	SERIAL_PRINT(x)
-#	endif
-#	define PRINTERR(x)		PRINT(x)
-#	define EXIT()          PRINT(("EXIT %s\n", __PRETTY_FUNCTION__))
-#	define CALLED()        PRINT(("CALLED %s\n", __PRETTY_FUNCTION__))
+inline void
+_iprint(const char* fmt, ...)
+{
+	static FILE* log = fopen("/var/log/input_server.log", "a");
+	if (log == NULL)
+		return;
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(log, fmt, ap);
+	va_end(ap);
+	fflush(log);
+}
+
+#undef PRINT
+#undef PRINTERR
+#define PRINTERR(x)		_iprint x
+
+#if INPUT_SERVER_TRACE
+#	define PRINT(x)		_iprint x
+#	define EXIT()		PRINT(("EXIT %s\n", __PRETTY_FUNCTION__))
+#	define CALLED()		PRINT(("CALLED %s\n", __PRETTY_FUNCTION__))
 #else
-#	define EXIT()          ((void)0)
-#	define CALLED()        ((void)0)
-#	define PRINTERR(x)		SERIAL_PRINT(x)
+#	define PRINT(x)		((void)0)
+#	define EXIT()		((void)0)
+#	define CALLED()		((void)0)
 #endif
 
 #endif	/* INPUT_SERVER_APP_H */

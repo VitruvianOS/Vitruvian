@@ -284,11 +284,19 @@ void
 HWInterface::SetDragBitmap(const ServerBitmap* bitmap,
 	const BPoint& offsetFromCursor)
 {
+	// The old cursor area, the new image and its redraw show as one frame.
+	const bool batch = BeginPublishBatch();
 	if (fFloatingOverlaysLock.Lock()) {
 		fDragBitmap.SetTo((ServerBitmap*)bitmap, false);
 		fDragBitmapOffset = offsetFromCursor;
 		_AdoptDragBitmap();
 		fFloatingOverlaysLock.Unlock();
+	}
+	if (batch) {
+		if (LockParallelAccess()) {
+			EndPublishBatch();
+			UnlockParallelAccess();
+		}
 	}
 }
 

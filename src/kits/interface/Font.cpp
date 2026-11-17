@@ -29,6 +29,7 @@
 
 #include <new>
 #include <string>
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 #include <stdio.h>
@@ -1067,6 +1068,8 @@ struct EscapementCache {
 	BLocker lock;
 	std::unordered_map<std::string, std::vector<float> > entries;
 
+	std::unordered_map<std::string, std::vector<BPoint> > pointEntries;
+
 	static EscapementCache& Get()
 	{
 		static EscapementCache sCache;
@@ -1225,6 +1228,39 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	if (charArray == NULL || numChars < 1 || escapementArray == NULL)
 		return;
 
+	uint32 bytesInBuffer = UTF8CountBytes(charArray, numChars);
+	float nonspace = delta ? delta->nonspace : 0.0f;
+	float space = delta ? delta->space : 0.0f;
+	bool wantOffsets = offsetArray != NULL;
+
+	std::string key((const char*)&fFamilyID, sizeof(fFamilyID));
+	key.append((const char*)&fStyleID, sizeof(fStyleID));
+	key.append((const char*)&fSize, sizeof(fSize));
+	key.append((const char*)&fSpacing, sizeof(fSpacing));
+	key.append((const char*)&fRotation, sizeof(fRotation));
+	key.append((const char*)&fFlags, sizeof(fFlags));
+	key.append((const char*)&nonspace, sizeof(nonspace));
+	key.append((const char*)&space, sizeof(space));
+	key.append((const char*)&wantOffsets, sizeof(wantOffsets));
+	key.append((const char*)&numChars, sizeof(numChars));
+	key.append(charArray, bytesInBuffer);
+
+	EscapementCache& cache = EscapementCache::Get();
+	{
+		BAutolock locker(cache.lock);
+		std::unordered_map<std::string, std::vector<BPoint> >::iterator found
+			= cache.pointEntries.find(key);
+		if (found != cache.pointEntries.end()) {
+			std::copy(found->second.begin(), found->second.begin() + numChars,
+				escapementArray);
+			if (wantOffsets) {
+				std::copy(found->second.begin() + numChars,
+					found->second.end(), offsetArray);
+			}
+			return;
+		}
+	}
+
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_ESCAPEMENTS);
 	link.Attach<uint16>(fFamilyID);
@@ -1234,13 +1270,12 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	link.Attach<float>(fRotation);
 	link.Attach<uint32>(fFlags);
 
-	link.Attach<float>(delta ? delta->nonspace : 0.0);
-	link.Attach<float>(delta ? delta->space : 0.0);
-	link.Attach<bool>(offsetArray != NULL);
+	link.Attach<float>(nonspace);
+	link.Attach<float>(space);
+	link.Attach<bool>(wantOffsets);
 	link.Attach<int32>(numChars);
 
 	// TODO: Should we not worry about the port capacity here?!?
-	uint32 bytesInBuffer = UTF8CountBytes(charArray, numChars);
 	link.Attach<int32>(bytesInBuffer);
 	link.Attach(charArray, bytesInBuffer);
 
@@ -1248,9 +1283,20 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	if (link.FlushWithReply(code) != B_OK || code != B_OK)
 		return;
 
-	link.Read(escapementArray, sizeof(BPoint) * numChars);
-	if (offsetArray)
-		link.Read(offsetArray, sizeof(BPoint) * numChars);
+	if (link.Read(escapementArray, sizeof(BPoint) * numChars) != B_OK)
+		return;
+	if (wantOffsets
+		&& link.Read(offsetArray, sizeof(BPoint) * numChars) != B_OK) {
+		return;
+	}
+
+	BAutolock locker(cache.lock);
+	if (cache.pointEntries.size() > 2048)
+		cache.pointEntries.clear();
+	std::vector<BPoint>& entry = cache.pointEntries[key];
+	entry.assign(escapementArray, escapementArray + numChars);
+	if (wantOffsets)
+		entry.insert(entry.end(), offsetArray, offsetArray + numChars);
 }
 
 

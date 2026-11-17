@@ -325,6 +325,7 @@ DrmHWInterface::DrmHWInterface()
 	fFlipFailures(0),
 	fFlipRecovered(false),
 	fCursorRetryAt(0),
+	fCursorBackoff(0),
 	fModesetActive(false),
 	fModeBlobId(0),
 	fPlaneProps{},
@@ -3083,6 +3084,10 @@ DrmHWInterface::_EventThreadMain()
 			// A buffer on screen leaves the desktop alone.
 			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
 				dirty = fScanoutFb != 0;
+			// Only a refused cursor staged: sleep until its retry.
+			const bool cursorOnly = fAccumulatedDirty.CountRects() == 0
+				&& !fNeedsFlip && fStagedPlanes.empty()
+				&& fScanoutFb == 0 && fStagedCursor.valid;
 			// Nothing left to do: the next change must write the wake.
 			if (!dirty)
 				fWakeQueued = false;
@@ -3106,7 +3111,11 @@ DrmHWInterface::_EventThreadMain()
 					(int)fPageFlipPending.load(),
 					(int)(fCursorInFlightAt.load() != 0));
 			}
-			if (dirty) {
+			if (dirty && cursorOnly) {
+				const bigtime_t at = system_time();
+				timeout = fCursorRetryAt > at
+					? (int)((fCursorRetryAt - at + 999) / 1000) : 16;
+			} else if (dirty) {
 				const bigtime_t flipDue = fFlipVblank
 					? 0 : fLastFlipIssue + _FramePeriod();
 				const bigtime_t now = system_time();
@@ -6169,8 +6178,10 @@ DrmHWInterface::_CommitCursorOnly(const CursorUpdate& update)
 	fCursorInFlightAt = system_time();
 	pthread_mutex_unlock(&fFlipMutex);
 
-	if (_AtomicCommitFrame(0, NULL, &update, NULL, token) == B_OK)
+	if (_AtomicCommitFrame(0, NULL, &update, NULL, token) == B_OK) {
+		fCursorBackoff = 0;
 		return true;
+	}
 
 	const int err = errno;
 	pthread_mutex_lock(&fFlipMutex);
@@ -6189,7 +6200,7 @@ DrmHWInterface::_CommitCursorOnly(const CursorUpdate& update)
 			sLogged = true;
 			fprintf(stderr, "[drm] cursor commit EINVAL, staged\n");
 		}
-		fCursorRetryAt = system_time() + _FramePeriod();
+		_BackOffCursor();
 	} else
 		_NoteCursorBusy(err);
 #endif
@@ -6249,9 +6260,19 @@ DrmHWInterface::_ApplyVRR()
 
 
 void
+DrmHWInterface::_BackOffCursor()
+{
+	// A refusal that repeats must not wake the thread every frame.
+	fCursorBackoff = fCursorBackoff == 0 ? _FramePeriod()
+		: std::min<bigtime_t>(fCursorBackoff * 2, 250000);
+	fCursorRetryAt = system_time() + fCursorBackoff;
+}
+
+
+void
 DrmHWInterface::_NoteCursorBusy(int err)
 {
-	fCursorRetryAt = system_time() + _FramePeriod();
+	_BackOffCursor();
 	static bigtime_t sLast = 0;
 	static uint32 sCount = 0;
 	sCount++;

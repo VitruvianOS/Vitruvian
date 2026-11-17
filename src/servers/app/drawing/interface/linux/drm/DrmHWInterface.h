@@ -863,6 +863,7 @@ private:
 		uint32_t			fFlipFailures;
 		bool				fFlipRecovered;
 		bigtime_t			fCursorRetryAt;
+		bigtime_t			fCursorBackoff;
 		// Set while a modeset is in flight; a flip EINVAL during a
 		// modeset is transient, not proof the flip is broken.
 		std::atomic<bool>	fModesetActive;
@@ -890,6 +891,7 @@ private:
 									uint32 stride, uint32 sharedHandle,
 									OverlayPlane** _plane, uint32 output = 0,
 									int sharedFd = -1);
+			void				_BackOffCursor();
 			void				_NoteCursorBusy(int err);
 			bool				_CommitInFlight();
 			bool				_CommitCursorOnly(const CursorUpdate& update);

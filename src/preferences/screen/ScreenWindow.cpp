@@ -228,33 +228,18 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		fOriginalTemperature = currentTemp;
 	}
 
-	struct {
-		const char*	label;
-		float		kelvin;
-	} kTemperaturePresets[] = {
-		{ B_TRANSLATE_MARK("Very cold (9000 K)"), 9000.0f },
-		{ B_TRANSLATE_MARK("Cold (7500 K)"), 7500.0f },
-		{ B_TRANSLATE_MARK("Mild (6500 K)"), 6500.0f },
-		{ B_TRANSLATE_MARK("Warm (4500 K)"), 4500.0f },
-		{ B_TRANSLATE_MARK("Very warm (3400 K)"), 3400.0f },
-	};
-
-	fTemperatureMenu = new BPopUpMenu("temperature", true, true);
-	for (uint32 i = 0; i < B_COUNT_OF(kTemperaturePresets); i++) {
-		BMessage* message = new BMessage(POP_TEMPERATURE_MSG);
-		message->AddFloat("kelvin", kTemperaturePresets[i].kelvin);
-		fTemperatureMenu->AddItem(new BMenuItem(
-			B_TRANSLATE_NOCOLLECT(kTemperaturePresets[i].label), message));
-	}
-
-	fTemperatureField = new BMenuField("TemperatureMenu",
-		B_TRANSLATE("Colour temperature:"), fTemperatureMenu);
-	fTemperatureField->SetAlignment(B_ALIGN_RIGHT);
-	_MarkTemperaturePreset(fTemperature);
+	fTemperatureSlider = new BSlider("temperature",
+		B_TRANSLATE("Colour temperature:"), NULL, kTemperatureMin,
+		kTemperatureMax, B_HORIZONTAL);
+	fTemperatureSlider->SetKeyIncrementValue(kTemperatureStep);
+	fTemperatureSlider->SetValue((int32)fTemperature);
+	fTemperatureSlider->SetModificationMessage(
+		new BMessage(SLIDER_TEMPERATURE_MSG));
+	groupView->AddChild(fTemperatureSlider);
 
 	if (!fTemperatureSupported) {
-		fTemperatureField->Hide();
-		fTemperatureField->SetToolTip(B_TRANSLATE(
+		fTemperatureSlider->Hide();
+		fTemperatureSlider->SetToolTip(B_TRANSLATE(
 			"This display does not support colour temperature."));
 	}
 
@@ -426,7 +411,6 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			.Add(fReflectionField->CreateLabelLayoutItem(), 0, 4)
 			.Add(fReflectionField->CreateMenuBarLayoutItem(), 1, 4)
 		.End()
-		.Add(fTemperatureField)
 		.Add(fVariableRefreshBox);
 
 	// Profile save / delete
@@ -750,32 +734,6 @@ ScreenWindow::_UpdateMonitorView()
 
 
 void
-ScreenWindow::_MarkTemperaturePreset(float kelvin)
-{
-	if (fTemperatureMenu == NULL)
-		return;
-
-	BMenuItem* best = NULL;
-	float bestDelta = 0.0f;
-	for (int32 i = 0; i < fTemperatureMenu->CountItems(); i++) {
-		BMenuItem* item = fTemperatureMenu->ItemAt(i);
-		float preset;
-		if (item->Message()->FindFloat("kelvin", &preset) != B_OK)
-			continue;
-		float delta = fabsf(preset - kelvin);
-		if (best == NULL || delta < bestDelta) {
-			best = item;
-			bestDelta = delta;
-		}
-	}
-	// One mark only: nearest preset, even for a stored non-preset value.
-	for (int32 i = 0; i < fTemperatureMenu->CountItems(); i++)
-		fTemperatureMenu->ItemAt(i)->SetMarked(
-			fTemperatureMenu->ItemAt(i) == best);
-}
-
-
-void
 ScreenWindow::_UpdateTemperatureControls()
 {
 	BScreen screen(_ScreenID());
@@ -785,19 +743,18 @@ ScreenWindow::_UpdateTemperatureControls()
 	// Hide()/Show() nest (fShowLevel); only toggle on a real change.
 	if (supported != fTemperatureSupported) {
 		if (supported)
-			fTemperatureField->Show();
+			fTemperatureSlider->Show();
 		else
-			fTemperatureField->Hide();
+			fTemperatureSlider->Hide();
 
 		fTemperatureSupported = supported;
 	}
 
 	if (supported) {
-		fTemperatureField->SetToolTip("");
-		// Keep the applied value; only re-mark the menu.
-		_MarkTemperaturePreset(fTemperature);
+		fTemperatureSlider->SetToolTip("");
+		fTemperatureSlider->SetValue((int32)fTemperature);
 	} else
-		fTemperatureField->SetToolTip(B_TRANSLATE(
+		fTemperatureSlider->SetToolTip(B_TRANSLATE(
 			"This display does not support colour temperature."));
 }
 
@@ -1233,7 +1190,7 @@ ScreenWindow::MessageReceived(BMessage* message)
 			if (fTemperatureSupported) {
 				screen.SetTemperature(fOriginalTemperature);
 				fTemperature = fOriginalTemperature;
-				_MarkTemperaturePreset(fTemperature);
+				fTemperatureSlider->SetValue((int32)fTemperature);
 			}
 
 			fScreenMode.SetRotation(fOriginalRotation);
@@ -1271,19 +1228,17 @@ ScreenWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
-		case POP_TEMPERATURE_MSG:
+		case SLIDER_TEMPERATURE_MSG:
 		{
 			if (!fTemperatureSupported)
 				break;
 
-			float kelvin;
-			if (message->FindFloat("kelvin", &kelvin) != B_OK)
-				break;
-
-			fTemperature = kelvin;
+			// Snap to the step so the presets stay reachable points.
+			int32 value = message->FindInt32("be:value");
+			fTemperature = ((value + kTemperatureStep / 2) / kTemperatureStep)
+				* kTemperatureStep;
 			BScreen screen(_ScreenID());
 			screen.SetTemperature(fTemperature);
-			_MarkTemperaturePreset(fTemperature);
 			break;
 		}
 
@@ -2141,7 +2096,7 @@ ScreenWindow::_SetModeControlsEnabled(bool enabled)
 	fRotationField->SetEnabled(enabled);
 	fReflectionField->SetEnabled(enabled);
 	fBrightnessSlider->SetEnabled(enabled);
-	fTemperatureField->SetEnabled(enabled);
+	fTemperatureSlider->SetEnabled(enabled);
 	if (enabled)
 		_CheckApplyEnabled();
 	else

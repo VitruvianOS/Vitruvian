@@ -3556,7 +3556,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			float kelvin;
 			link.Read<float>(&kelvin);
 
-			status_t status = _ScreenInterface(id)->SetTemperature(kelvin);
+			status_t status = fDesktop->SetTemperature(id, kelvin);
 			fLink.StartMessage(status);
 
 			fLink.Flush();

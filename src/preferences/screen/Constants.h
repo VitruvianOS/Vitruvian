@@ -53,8 +53,11 @@ static const uint32 kMsgPollOutputs = 'poll';
 // Adaptive refresh
 static const uint32 kMsgVariableRefresh = 'vrrt';
 
-// Color temperature presets
-static const uint32 POP_TEMPERATURE_MSG = 'ptmp';
+// Colour temperature slider (Kelvin)
+static const uint32 SLIDER_TEMPERATURE_MSG = 'ptmp';
+static const int32 kTemperatureMin = 3400;
+static const int32 kTemperatureMax = 9000;
+static const int32 kTemperatureStep = 100;
 
 
 // Profile save/delete

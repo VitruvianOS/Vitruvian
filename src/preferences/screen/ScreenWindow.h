@@ -63,7 +63,6 @@ private:
 			void			_UpdateMonitorView();
 			void			_UpdateControls();
 			void			_UpdateTemperatureControls();
-			void			_MarkTemperaturePreset(float kelvin);
 			void			_UpdateOriginal();
 			void			_UpdateMonitor();
 			void			_UpdateColorLabel();
@@ -131,8 +130,7 @@ private:
 
 			BSlider*		fBrightnessSlider;
 
-			BMenuField*		fTemperatureField;
-			BPopUpMenu*		fTemperatureMenu;
+			BSlider*		fTemperatureSlider;
 			float			fTemperature;
 			bool			fTemperatureSupported;
 			float			fOriginalTemperature;

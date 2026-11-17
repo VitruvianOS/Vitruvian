@@ -282,6 +282,10 @@ public:
 			// Output thread; parallel access must be held.
 			void				ExpirePublishes();
 			bool				HasDeferredPublish();
+			// When the first deferred or held region expires, 0 when none.
+			bigtime_t			NextPublishDeadline(bool* held);
+	// Called when a deferral or hold is added; wakes the output thread.
+	virtual	void				WakePublisher() {}
 	// What the output shows, for reading back.
 	virtual	RenderingBuffer*	PublishedBuffer() const;
 			void				NoteBatchTimeout()

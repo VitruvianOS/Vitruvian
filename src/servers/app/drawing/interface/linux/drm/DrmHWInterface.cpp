@@ -1000,6 +1000,25 @@ static std::atomic<bigtime_t> sMissDamageAt(0);
 static bigtime_t sMissPrinted = 0;
 static int sMissSleepMs = 0;
 static bool sMissPending = false;
+// Poll timeouts by what chose them: deferred, held, damage, cursor, pending,
+// pacing.
+static uint32 sPollWhy[6];
+static bigtime_t sPollWhyAt = 0;
+
+
+static void
+poll_why_report(bigtime_t now)
+{
+	if (sPollWhyAt == 0)
+		sPollWhyAt = now;
+	if (now - sPollWhyAt < 1000000)
+		return;
+	sPollWhyAt = now;
+	fprintf(stderr, "poll16 reasons: deferred %u, held %u, damage %u, "
+		"cursor %u, pending %u, pacing %u\n", sPollWhy[0], sPollWhy[1],
+		sPollWhy[2], sPollWhy[3], sPollWhy[4], sPollWhy[5]);
+	memset(sPollWhy, 0, sizeof(sPollWhy));
+}
 
 
 static bool
@@ -3202,14 +3221,21 @@ DrmHWInterface::_EventThreadMain()
 		// Idle unless a frame is in flight or waiting; one held back by
 		// the pacing below wakes when it is due.
 		_ReportHoldStats();
+		if (miss_enabled())
+			poll_why_report(system_time());
 		if (HasDeferredPublish() && LockParallelAccess()) {
 			ExpirePublishes();
 			UnlockParallelAccess();
 		}
 		int timeout = 500;
-		if (fPageFlipPending || fPacingLockHeld || HasDeferredPublish())
+		int why = -1;
+		if (fPageFlipPending) {
 			timeout = 16;
-		else if (fPageFlipEnabled && fStandIn == 0) {
+			why = 4;
+		} else if (fPacingLockHeld) {
+			timeout = 16;
+			why = 5;
+		} else if (fPageFlipEnabled && fStandIn == 0) {
 			fDirtyMutex.Lock();
 			bool dirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
@@ -3247,17 +3273,36 @@ DrmHWInterface::_EventThreadMain()
 				const bigtime_t at = system_time();
 				timeout = fCursorRetryAt > at
 					? (int)((fCursorRetryAt - at + 999) / 1000) : 16;
+				why = 3;
 			} else if (dirty) {
 				const bigtime_t flipDue = fFlipVblank
 					? 0 : fLastFlipIssue + _FramePeriod();
 				const bigtime_t now = system_time();
 				timeout = flipDue > now
 					? (int)((flipDue - now + 999) / 1000) : 16;
+				why = 2;
+			}
+		}
+		// Only held state: sleep to its expiry; new holds wake the thread.
+		if (why < 0 || timeout > 16) {
+			bool held = false;
+			const bigtime_t due = NextPublishDeadline(&held);
+			if (due != 0) {
+				const bigtime_t now = system_time();
+				const int ms = due > now ? (int)((due - now + 999) / 1000) : 1;
+				if (ms < timeout) {
+					timeout = ms;
+					why = held ? 1 : 0;
+				}
 			}
 		}
 		const bool outputsWaiting = _OutputsWaiting();
-		if (outputsWaiting && timeout > 16)
+		if (outputsWaiting && timeout > 16) {
 			timeout = 16;
+			why = 2;
+		}
+		if (why >= 0 && timeout <= 16 && miss_enabled())
+			sPollWhy[why]++;
 		if (miss_enabled()) {
 			sMissSleepMs = timeout;
 			sMissPending = fPageFlipPending;

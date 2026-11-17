@@ -611,6 +611,7 @@ private:
 			// Unexpired holds, screen coordinates; fDirtyMutex held.
 			void				_Publish(const BRect& frame);
 			void				_ReportHoldStats();
+	virtual	void				WakePublisher()	{ _Wake(); }
 			Output*				_FindOutput(uint32 connector) const;
 			status_t			_SetupOutput(Output* output);
 			void				_TeardownOutput(Output* output);

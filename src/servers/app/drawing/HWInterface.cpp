@@ -469,6 +469,8 @@ HWInterface::BeginUpdateRegion(const void* owner, const BRegion& region)
 	hold.region = region;
 	hold.thread = find_thread(NULL);
 	hold.at = system_time();
+	locker.Unlock();
+	WakePublisher();
 }
 
 
@@ -494,8 +496,11 @@ HWInterface::EndUpdateRegion(const void* owner, bool publish)
 		Publish(ready);
 		sPublishKind = NULL;
 	} else if (ready.CountRects() > 0) {
-		BAutolock locker(fPublishLock);
-		fHeld.Include(&ready);
+		{
+			BAutolock locker(fPublishLock);
+			fHeld.Include(&ready);
+		}
+		WakePublisher();
 	}
 }
 
@@ -588,6 +593,8 @@ HWInterface::DeferPublish(const void* owner, const BRegion& region,
 	entry.region = region;
 	entry.at = system_time();
 	entry.maxAge = maxAge;
+	locker.Unlock();
+	WakePublisher();
 }
 
 
@@ -665,6 +672,33 @@ HWInterface::HasDeferredPublish()
 	BAutolock locker(fPublishLock);
 	return !fDeferred.empty() || !fUpdating.empty()
 		|| fHeld.CountRects() > 0;
+}
+
+
+bigtime_t
+HWInterface::NextPublishDeadline(bool* held)
+{
+	BAutolock locker(fPublishLock);
+	bigtime_t due = 0;
+	*held = false;
+	for (std::map<const void*, DeferredPublish>::iterator it
+			= fDeferred.begin(); it != fDeferred.end(); ++it) {
+		const bigtime_t at = it->second.at + it->second.maxAge;
+		if (due == 0 || at < due)
+			due = at;
+	}
+	for (std::map<const void*, UpdateHold>::iterator it
+			= fUpdating.begin(); it != fUpdating.end(); ++it) {
+		const bigtime_t at = it->second.at + kUpdateHoldMax;
+		if (due == 0 || at < due)
+			due = at;
+	}
+	if (fHeld.CountRects() > 0) {
+		*held = due == 0 || fDeferred.empty();
+		if (fUpdating.empty())
+			due = 1;
+	}
+	return due;
 }
 
 

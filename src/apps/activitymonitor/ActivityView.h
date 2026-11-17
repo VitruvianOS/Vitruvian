@@ -7,6 +7,7 @@
 
 
 #include <map>
+#include <vector>
 
 #include <Locker.h>
 #include <Message.h>
@@ -112,6 +113,7 @@ private:
 			float		_PositionForValue(DataSource* source,
 							DataHistory* values, int64 value);
 			void		_DrawHistory();
+			void		_RefreshUpdated();
 			void		_UpdateResolution(int32 resolution,
 							bool broadcast = true);
 
@@ -125,6 +127,7 @@ private:
 	rgb_color			fHistoryBackgroundColor;
 	rgb_color			fLegendBackgroundColor;
 	BBitmap*			fOffscreen;
+	std::vector<BString> fLegendText;
 #if defined(__VOS__)
 	BLayoutItem*		fHistoryLayoutItem;
 	BLayoutItem*		fLegendLayoutItem;

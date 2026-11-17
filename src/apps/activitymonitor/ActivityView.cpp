@@ -176,6 +176,7 @@ const bigtime_t kInitialRefreshInterval = 250000LL;
 const uint32 kMsgToggleDataSource = 'tgds';
 const uint32 kMsgToggleLegend = 'tglg';
 const uint32 kMsgUpdateResolution = 'ures';
+const uint32 kMsgRefreshed = 'rfsh';
 
 extern const char* kAppName;
 extern const char* kSignature;
@@ -1129,6 +1130,10 @@ ActivityView::MessageReceived(BMessage* message)
 
 			break;
 		}
+		case kMsgRefreshed:
+			_RefreshUpdated();
+			break;
+
 		case kMsgUpdateResolution:
 		{
 			int32 resolution;
@@ -1331,6 +1336,33 @@ ActivityView::_PositionForValue(DataSource* source, DataHistory* values,
 
 
 void
+ActivityView::_RefreshUpdated()
+{
+	Invalidate(_HistoryFrame());
+
+	if (!fShowLegend)
+		return;
+
+	BAutolock _(fSourcesLock);
+
+	BRect legendFrame = _LegendFrame();
+	int32 count = fSources.CountItems();
+	if ((int32)fLegendText.size() != count)
+		fLegendText.resize(count);
+
+	for (int32 i = 0; i < count; i++) {
+		DataHistory* values = fValues.ItemAt(i);
+		BString text;
+		fSources.ItemAt(i)->Print(text, values->ValueAt(values->End()));
+		if (text != fLegendText[i]) {
+			fLegendText[i] = text;
+			Invalidate(_LegendFrameAt(legendFrame, i));
+		}
+	}
+}
+
+
+void
 ActivityView::_DrawHistory()
 {
 	_UpdateOffscreenBitmap();
@@ -1473,7 +1505,8 @@ ActivityView::_UpdateResolution(int32 resolution, bool broadcast)
 void
 ActivityView::Draw(BRect updateRect)
 {
-	_DrawHistory();
+	if (updateRect.Intersects(_HistoryFrame().InsetByCopy(-2, -2)))
+		_DrawHistory();
 
 	if (!fShowLegend)
 		return;
@@ -1558,7 +1591,7 @@ ActivityView::_Refresh()
 
 		fSourcesLock.Unlock();
 
-		target.SendMessage(B_INVALIDATE);
+		target.SendMessage(kMsgRefreshed);
 	}
 }
 

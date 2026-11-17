@@ -992,6 +992,9 @@ BPoseView::Pulse()
 
 	if (fAutoScrollState != kAutoScrollOff)
 		HandleAutoScroll();
+	else if (window->PulseRate() != 500000)
+		window->SetPulseRate(500000);
+		// never stay on the fast autoscroll rate once idle
 
 	// do we need to update scrollbars?
 	BRect extent = Extent();
@@ -7825,6 +7828,11 @@ BPoseView::MouseUp(BPoint where)
 {
 	if (fSelectionRectInfo.isDragging)
 		_EndSelectionRect();
+
+	if (fAutoScrollState != kAutoScrollOff) {
+		fAutoScrollState = kAutoScrollOff;
+		Window()->SetPulseRate(500000);
+	}
 
 	// dispose of drag data from previous drag lazily
 	DragStop();

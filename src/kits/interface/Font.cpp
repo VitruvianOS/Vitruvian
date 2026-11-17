@@ -1061,6 +1061,19 @@ struct StringWidthCache {
 	}
 };
 
+// Per-glyph escapements already measured by the server, keyed by font
+// parameters, delta and string.
+struct EscapementCache {
+	BLocker lock;
+	std::unordered_map<std::string, std::vector<float> > entries;
+
+	static EscapementCache& Get()
+	{
+		static EscapementCache sCache;
+		return sCache;
+	}
+};
+
 }	// namespace
 
 
@@ -1138,6 +1151,33 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	if (charArray == NULL || numChars < 1 || escapementArray == NULL)
 		return;
 
+	uint32 bytesInBuffer = UTF8CountBytes(charArray, numChars);
+	float nonspace = delta ? delta->nonspace : 0.0f;
+	float space = delta ? delta->space : 0.0f;
+
+	std::string key((const char*)&fFamilyID, sizeof(fFamilyID));
+	key.append((const char*)&fStyleID, sizeof(fStyleID));
+	key.append((const char*)&fSize, sizeof(fSize));
+	key.append((const char*)&fSpacing, sizeof(fSpacing));
+	key.append((const char*)&fRotation, sizeof(fRotation));
+	key.append((const char*)&fFlags, sizeof(fFlags));
+	key.append((const char*)&nonspace, sizeof(nonspace));
+	key.append((const char*)&space, sizeof(space));
+	key.append((const char*)&numChars, sizeof(numChars));
+	key.append(charArray, bytesInBuffer);
+
+	EscapementCache& cache = EscapementCache::Get();
+	{
+		BAutolock locker(cache.lock);
+		std::unordered_map<std::string, std::vector<float> >::iterator found
+			= cache.entries.find(key);
+		if (found != cache.entries.end()) {
+			memcpy(escapementArray, &found->second[0],
+				numChars * sizeof(float));
+			return;
+		}
+	}
+
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_ESCAPEMENTS_AS_FLOATS);
 	link.Attach<uint16>(fFamilyID);
@@ -1147,12 +1187,11 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	link.Attach<float>(fRotation);
 	link.Attach<uint32>(fFlags);
 
-	link.Attach<float>(delta ? delta->nonspace : 0.0f);
-	link.Attach<float>(delta ? delta->space : 0.0f);
+	link.Attach<float>(nonspace);
+	link.Attach<float>(space);
 	link.Attach<int32>(numChars);
 
 	// TODO: Should we not worry about the port capacity here?!?
-	uint32 bytesInBuffer = UTF8CountBytes(charArray, numChars);
 	link.Attach<int32>(bytesInBuffer);
 	link.Attach(charArray, bytesInBuffer);
 
@@ -1160,7 +1199,13 @@ BFont::GetEscapements(const char charArray[], int32 numChars,
 	if (link.FlushWithReply(code) != B_OK || code != B_OK)
 		return;
 
-	link.Read(escapementArray, numChars * sizeof(float));
+	if (link.Read(escapementArray, numChars * sizeof(float)) != B_OK)
+		return;
+
+	BAutolock locker(cache.lock);
+	if (cache.entries.size() > 2048)
+		cache.entries.clear();
+	cache.entries[key].assign(escapementArray, escapementArray + numChars);
 }
 
 

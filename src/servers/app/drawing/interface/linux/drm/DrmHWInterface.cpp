@@ -2116,15 +2116,28 @@ void
 DrmHWInterface::_BindDdc()
 {
 	fDdc.Stop();
-	if (fFd < 0 || fDev == NULL)
+
+	// The monitor showing the first screen, a stand-in one included.
+	int fd = fFd;
+	uint32_t connector = fDev != NULL ? fDev->conn : 0;
+	if (fStandIn != 0) {
+		fDirtyMutex.Lock();
+		Output* output = _FindOutput(fStandIn);
+		if (output != NULL) {
+			fd = output->fd;
+			connector = output->rawConnector;
+		}
+		fDirtyMutex.Unlock();
+	}
+	if (fd < 0 || connector == 0)
 		return;
 
 	struct stat st;
-	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, fDev->conn);
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fd, connector);
 	if (conn == NULL)
 		return;
 	const char* typeName = drmModeGetConnectorTypeName(conn->connector_type);
-	if (fstat(fFd, &st) == 0 && typeName != NULL && typeName[0] != '\0') {
+	if (fstat(fd, &st) == 0 && typeName != NULL && typeName[0] != '\0') {
 		char name[96];
 		snprintf(name, sizeof(name), "card%u-%s-%u", minor(st.st_rdev),
 			typeName, conn->connector_type_id);
@@ -2296,6 +2309,7 @@ DrmHWInterface::AdoptOutput(uint32 connector)
 	fDirtyMutex.Unlock();
 
 	_SyncStandIn(output);
+	_BindDdc();
 
 	fprintf(stderr, "DRM: the first card has no output left, connector %u "
 		"of card%d shows the desktop\n", key_connector(connector),
@@ -2366,6 +2380,7 @@ DrmHWInterface::ReleaseStandIn()
 		_NotifyFrameBufferChanged();
 	}
 
+	_BindDdc();
 	fprintf(stderr, "DRM: the first output scans out again\n");
 
 	UnlockExclusiveAccess();

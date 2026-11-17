@@ -253,6 +253,10 @@ public:
 	// Publishing copies a finished region of the drawing buffer to what
 	// the output shows; drawing threads call it, never the output thread.
 	virtual	status_t			Publish(const BRegion& region);
+	// Names the publishes of the calling thread for VOS_COMPOSE_HOLD_STATS.
+	static	void				SetPublishKind(const char* kind);
+			void				_TracePublish(const BRect& frame,
+									const char* kind);
 	// Invalidations of the calling thread wait for EndPublishBatch().
 	// True when this call opened the batch.
 	virtual	bool				BeginPublishBatch();
@@ -373,6 +377,7 @@ protected:
 			BLocker				fPublishLock;
 			std::map<const void*, DeferredPublish> fDeferred;
 			bool				fDefersPublish;
+			bool				fTracePublish;
 			int32				fStatRects;
 			int32				fStatBatches;
 			int32				fStatTimeouts;

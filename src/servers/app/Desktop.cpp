@@ -2479,7 +2479,9 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 	if (engine->LockParallelAccess()) {
 		if (copyToFront && copyRegion.CountRects() > 0)
 			engine->CopyToFront(copyRegion);
+		HWInterface::SetPublishKind("move");
 		engine->EndPublishBatch(batch);
+		HWInterface::SetPublishKind(NULL);
 		engine->UnlockParallelAccess();
 	} else if (batch)
 		HWInterface()->FinishPublishBatch();

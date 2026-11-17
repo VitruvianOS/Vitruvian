@@ -340,6 +340,7 @@ DrmHWInterface::DrmHWInterface()
 	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
+	fTracePublish = fHoldStats;
 	fDefersPublish = true;
 	memset(fAgeFbIds, 0, sizeof(fAgeFbIds));
 	pthread_mutex_init(&fFlipMutex, NULL);

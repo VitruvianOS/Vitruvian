@@ -2043,7 +2043,9 @@ Window::DrawExposedBorder(BRegion& dirty)
 		engine->SetCopyToFrontEnabled(false);
 		decorator->Draw(border.Frame());
 		engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+		HWInterface::SetPublishKind("decorator");
 		engine->CopyToFront(border);
+		HWInterface::SetPublishKind(NULL);
 		fWindow->ResyncDrawState();
 		engine->UnlockParallelAccess();
 		dirty.Exclude(&border);
@@ -2264,8 +2266,10 @@ Window::EndUpdate()
 		// Publishing copies the render buffer; SetMode rebuilds it under
 		// the exclusive lock, so hold the parallel lock across it.
 		if (fDrawingEngine->LockParallelAccess()) {
+			HWInterface::SetPublishKind("update-end");
 			if (dirty)
 				fDrawingEngine->CopyToFront(*dirty);
+			HWInterface::SetPublishKind(NULL);
 			if (fScreen != NULL && fScreen->HWInterface() != NULL)
 				fScreen->HWInterface()->FlushPublish(&fExposeHold);
 			fDrawingEngine->UnlockParallelAccess();

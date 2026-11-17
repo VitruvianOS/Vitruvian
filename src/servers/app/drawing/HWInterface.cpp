@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <OS.h>
 
 #include <vesa/vesa_info.h>
 
@@ -48,6 +49,7 @@ HWInterface::HWInterface()
 	fFloatingOverlaysLock("floating overlays lock"),
 	fPublishLock("publish lock"),
 	fDefersPublish(false),
+	fTracePublish(false),
 	fStatRects(0),
 	fStatBatches(0),
 	fStatTimeouts(0),
@@ -312,6 +314,59 @@ HWInterface::DrawingBuffer() const
 // Invalidations of the thread inside a drawing batch.
 static __thread HWInterface* sBatchOwner = NULL;
 static __thread BRegion* sBatch = NULL;
+// How the publish in progress on this thread was reached.
+static __thread const char* sPublishKind = NULL;
+
+
+void
+HWInterface::SetPublishKind(const char* kind)
+{
+	sPublishKind = kind;
+}
+
+
+// VOS_COMPOSE_HOLD_STATS: big publishes, and the same one twice in 20 ms.
+void
+HWInterface::_TracePublish(const BRect& frame, const char* kind)
+{
+	if (!fTracePublish || !frame.IsValid()
+		|| (frame.Width() + 1) * (frame.Height() + 1) < 10000)
+		return;
+
+	static BLocker sLock;
+	static bigtime_t sSecond = 0;
+	static int32 sLines = 0;
+	static BRect sLastFrame;
+	static bigtime_t sLastAt = 0;
+	static thread_id sLastThread = -1;
+
+	const bigtime_t now = system_time();
+	thread_info info;
+	const thread_id thread = find_thread(NULL);
+	if (get_thread_info(thread, &info) != B_OK)
+		info.name[0] = '\0';
+
+	BAutolock locker(sLock);
+	const bool twice = sLastThread == thread && sLastFrame == frame
+		&& now - sLastAt < 20000;
+	const bigtime_t gap = now - sLastAt;
+	sLastFrame = frame;
+	sLastAt = now;
+	sLastThread = thread;
+	if (now - sSecond >= 1000000) {
+		sSecond = now;
+		sLines = 0;
+	}
+	if (sLines >= 20)
+		return;
+	sLines++;
+	fprintf(stderr, "publish-big: %s thread=\"%s\" rect=(%d,%d,%d,%d) "
+		"kind=%s\n", twice ? "TWICE" : "once", info.name,
+		(int)frame.left, (int)frame.top, (int)frame.right, (int)frame.bottom,
+		kind != NULL ? kind : "direct");
+	if (twice)
+		fprintf(stderr, "publish-big: twice gap=%lldus\n", (long long)gap);
+}
 
 
 /*! The object needs to be already locked!
@@ -343,6 +398,7 @@ HWInterface::Invalidate(const BRect& frame)
 	}
 
 	_NotifyFrameCommitted(frame);
+	_TracePublish(frame, sPublishKind);
 
 	if (IsDoubleBuffered())
 		return CopyBackToFront(frame);
@@ -394,8 +450,13 @@ HWInterface::EndPublishBatch()
 	BRegion* region = sBatch;
 	sBatch = NULL;
 	sBatchOwner = NULL;
-	if (region->CountRects() > 0)
+	if (region->CountRects() > 0) {
+		const char* outer = sPublishKind;
+		if (outer == NULL)
+			sPublishKind = "batch-end";
 		Publish(*region);
+		sPublishKind = outer;
+	}
 	delete region;
 }
 
@@ -424,7 +485,9 @@ HWInterface::DeferPublish(const void* owner, const BRegion& region,
 	}
 	// No output thread to expire it: publish at once, as legacy did.
 	if (!fDefersPublish) {
+		sPublishKind = "defer-now";
 		Publish(region);
+		sPublishKind = NULL;
 		return;
 	}
 	BAutolock locker(fPublishLock);
@@ -449,7 +512,9 @@ HWInterface::FlushPublish(const void* owner)
 		region = it->second.region;
 		fDeferred.erase(it);
 	}
+	sPublishKind = "flush";
 	Publish(region);
+	sPublishKind = NULL;
 }
 
 
@@ -478,8 +543,11 @@ HWInterface::ExpirePublishes()
 				++it;
 		}
 	}
-	if (due.CountRects() > 0)
+	if (due.CountRects() > 0) {
+		sPublishKind = "expire-timeout";
 		Publish(due);
+		sPublishKind = NULL;
+	}
 }
 
 

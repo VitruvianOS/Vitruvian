@@ -291,6 +291,11 @@ DrmHWInterface::DrmHWInterface()
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
 	fCursorInFlightAt(0),
+	fHoldStats(getenv("VOS_COMPOSE_HOLD_STATS") != NULL
+		&& atoi(getenv("VOS_COMPOSE_HOLD_STATS")) != 0),
+	fHoldDeferred(0),
+	fHoldExpired(0),
+	fHoldStatsAt(0),
 	fNeedsFlip(false),
 	fDamageFlush(false),
 	fWakeQueued(false),
@@ -939,6 +944,106 @@ DrmHWInterface::_AddOutputDamage(const BRect& frame)
 }
 
 
+// Logical rects of region from the buffer on screen into the one about to be
+// shown, so held areas keep showing what is on screen now.
+static void
+copy_scanout_rects(RenderingBuffer* from, RenderingBuffer* to,
+	const BRegion& region, int32 logicalW, int32 logicalH, int32 orientation,
+	int32 reflection)
+{
+	const int32 count = region.CountRects();
+	for (int32 i = 0; i < count; i++) {
+		BRect r = region.RectAt(i);
+		int32 x0 = (int32)r.left, y0 = (int32)r.top;
+		int32 x1 = (int32)r.right, y1 = (int32)r.bottom;
+		x0 = max_c(x0, 0);
+		y0 = max_c(y0, 0);
+		x1 = min_c(x1, logicalW - 1);
+		y1 = min_c(y1, logicalH - 1);
+		if (x1 < x0 || y1 < y0)
+			continue;
+		int32 ax, ay, bx, by;
+		rotate_point(orientation, x0, y0, logicalW, logicalH, ax, ay,
+			reflection);
+		rotate_point(orientation, x1, y1, logicalW, logicalH, bx, by,
+			reflection);
+		const int32 px0 = min_c(ax, bx), px1 = max_c(ax, bx);
+		const int32 py0 = min_c(ay, by), py1 = max_c(ay, by);
+		if (px1 >= (int32)from->Width() || py1 >= (int32)from->Height()
+				|| px1 >= (int32)to->Width() || py1 >= (int32)to->Height())
+			continue;
+		for (int32 y = py0; y <= py1; y++) {
+			memcpy((uint8*)to->Bits() + (size_t)y * to->BytesPerRow()
+					+ px0 * 4,
+				(const uint8*)from->Bits() + (size_t)y * from->BytesPerRow()
+					+ px0 * 4,
+				(px1 - px0 + 1) * 4);
+		}
+	}
+}
+
+
+void
+DrmHWInterface::SetComposeHold(const void* owner, const BRegion* region)
+{
+	fDirtyMutex.Lock();
+	if (region == NULL || region->CountRects() == 0)
+		fComposeHolds.erase(owner);
+	else {
+		ComposeHold& hold = fComposeHolds[owner];
+		hold.region = *region;
+		hold.at = system_time();
+	}
+	fDirtyMutex.Unlock();
+}
+
+
+// A hold older than this is a hung client; its area is shown anyway.
+static const bigtime_t kComposeHoldMax = 100000;
+
+
+void
+DrmHWInterface::_HeldRegion(BRegion& held)
+{
+	held.MakeEmpty();
+	if (fComposeHolds.empty())
+		return;
+	const bigtime_t now = system_time();
+	for (std::map<const void*, ComposeHold>::iterator it
+			= fComposeHolds.begin(); it != fComposeHolds.end();) {
+		if (now - it->second.at > kComposeHoldMax) {
+			fHoldExpired++;
+			fComposeHolds.erase(it++);
+			continue;
+		}
+		held.Include(&it->second.region);
+		++it;
+	}
+}
+
+
+void
+DrmHWInterface::_ReportHoldStats()
+{
+	if (!fHoldStats)
+		return;
+	const bigtime_t now = system_time();
+	if (fHoldStatsAt == 0)
+		fHoldStatsAt = now;
+	if (now - fHoldStatsAt < 1000000)
+		return;
+	fDirtyMutex.Lock();
+	const uint32 deferred = fHoldDeferred;
+	const uint32 expired = fHoldExpired;
+	fHoldDeferred = 0;
+	fHoldExpired = 0;
+	fDirtyMutex.Unlock();
+	fHoldStatsAt = now;
+	fprintf(stderr, "compose hold: deferred %u rects/s, expired %u\n",
+		deferred, expired);
+}
+
+
 void
 DrmHWInterface::_DamageOutputs()
 {
@@ -1123,8 +1228,13 @@ DrmHWInterface::_PresentOutputs()
 
 		BRegion damage;
 		fDirtyMutex.Lock();
+		BRegion held;
+		_HeldRegion(held);
+		held.OffsetBy(-output->origin.x, -output->origin.y);
 		damage = output->dirty;
-		output->dirty.MakeEmpty();
+		damage.Exclude(&held);
+		output->dirty.IntersectWith(&held);
+		fHoldDeferred += output->dirty.CountRects();
 		// Draws from here on wake the thread again.
 		fWakeQueued = false;
 		fDirtyMutex.Unlock();
@@ -1133,7 +1243,16 @@ DrmHWInterface::_PresentOutputs()
 			continue;
 
 		BRegion present(damage);
-		present.Include(&output->stale);
+		BRegion keepStale(output->stale);
+		keepStale.IntersectWith(&held);
+		BRegion stale(output->stale);
+		stale.Exclude(&held);
+		present.Include(&stale);
+		if (output->back != NULL && keepStale.CountRects() > 0) {
+			copy_scanout_rects(output->front, output->target, keepStale,
+				(int32)output->source.Width(), (int32)output->source.Height(),
+				output->orientation, output->reflection);
+		}
 
 		const int32 count = present.CountRects();
 		for (int32 j = 0; j < count; j++) {
@@ -1196,9 +1315,10 @@ DrmHWInterface::_PresentOutputs()
 		output->lastFlip = now;
 		if (r == 0) {
 			// The buffer leaving the screen has all but this frame.
-			if (output->back != NULL)
+			if (output->back != NULL) {
 				output->stale = damage;
-			else
+				output->stale.Include(&keepStale);
+			} else
 				output->stale.MakeEmpty();
 		} else {
 			fDirtyMutex.Lock();
@@ -2945,6 +3065,7 @@ DrmHWInterface::_EventThreadMain()
 
 		// Idle unless a frame is in flight or waiting; one held back by
 		// the pacing below wakes when it is due.
+		_ReportHoldStats();
 		int timeout = 500;
 		if (fPageFlipPending || fPacingLockHeld)
 			timeout = 16;
@@ -3088,7 +3209,12 @@ DrmHWInterface::_EventThreadMain()
 					|| system_time() >= fLastFlipIssue + _FramePeriod())) {
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
-			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip
+			BRegion held;
+			_HeldRegion(held);
+			held.OffsetBy(-fOrigin.x, -fOrigin.y);
+			BRegion composable(fAccumulatedDirty);
+			composable.Exclude(&held);
+			bool wantFlip = composable.CountRects() > 0 || fNeedsFlip
 				|| !fStagedPlanes.empty();
 			fDirtyMutex.Unlock();
 			if (wantFlip)
@@ -3129,7 +3255,17 @@ DrmHWInterface::_EventThreadMain()
 			BRegion present;
 
 			fDirtyMutex.Lock();
-			const bool hasDirty = fAccumulatedDirty.CountRects() > 0
+			BRegion held;
+			BRegion keep;
+			BRegion keepStale;
+			_HeldRegion(held);
+			held.OffsetBy(-fOrigin.x, -fOrigin.y);
+			// Direct render draws on screen: holds do not apply.
+			if (fDirectRender)
+				held.MakeEmpty();
+			BRegion composable(fAccumulatedDirty);
+			composable.Exclude(&held);
+			const bool hasDirty = composable.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
 			if (hasDirty) {
 				// Draws from here on wake the thread again.
@@ -3151,18 +3287,34 @@ DrmHWInterface::_EventThreadMain()
 							(long long)((now - planes[i].staged) / 1000));
 					}
 				}
-				present = fAccumulatedDirty;
 				// Direct render keeps its damage for the completion.
 				if (!fDirectRender) {
-					damage = fAccumulatedDirty;
-					fAccumulatedDirty.MakeEmpty();
-					present.Include(&fBackStale);
-				}
+					// Held areas wait for their session to end.
+					keep = fAccumulatedDirty;
+					keep.IntersectWith(&held);
+					keepStale = fBackStale;
+					keepStale.IntersectWith(&held);
+					damage = composable;
+					fAccumulatedDirty = keep;
+					present = composable;
+					BRegion stale(fBackStale);
+					stale.Exclude(&held);
+					present.Include(&stale);
+					fHoldDeferred += keep.CountRects();
+				} else
+					present = fAccumulatedDirty;
 			}
 			fDirtyMutex.Unlock();
 
-			if (hasDirty && !fDirectRender)
+			if (hasDirty && !fDirectRender) {
+				if (keepStale.CountRects() > 0 && fFrontBuffer != NULL
+						&& fWriteTarget != fFrontBuffer) {
+					copy_scanout_rects(fFrontBuffer, fWriteTarget, keepStale,
+						(int32)fSource.Width(), (int32)fSource.Height(),
+						fPanelOrientation, fPanelReflection);
+				}
 				_ComposeFrame(present);
+			}
 
 			const bool paced = fVblankPacedFlip;
 			bool attempted = false;
@@ -3236,8 +3388,10 @@ DrmHWInterface::_EventThreadMain()
 				if (r == 0) {
 					fNeedsFlip = false;
 					// The buffer leaving the screen has all but this frame.
-					if (!fDirectRender && !fDamageFlush)
+					if (!fDirectRender && !fDamageFlush) {
 						fBackStale = damage;
+						fBackStale.Include(&keepStale);
+					}
 				} else {
 					// Not shown: damage and cursor ride the retry.
 					fAccumulatedDirty.Include(&damage);

@@ -176,6 +176,7 @@ Window::Window(const BRect& frame, const char *name,
 
 Window::~Window()
 {
+	_ReleaseComposeHold();
 	ReleaseOverlay();
 	fSwapChainLock.Lock();
 	for (size_t i = 0; i < fSwapChains.size(); i++)
@@ -487,6 +488,7 @@ Window::MoveBy(int32 x, int32 y, bool moveStack)
 	if (x == 0 && y == 0)
 		return;
 
+	_ReleaseComposeHold();
 	fFrame.OffsetBy(x, y);
 	_PropagatePosition();
 
@@ -538,6 +540,8 @@ void
 Window::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion, bool resizeStack)
 {
 	// this function is only called from the desktop thread
+
+	_ReleaseComposeHold();
 
 	int32 wantWidth = fFrame.IntegerWidth() + x;
 	int32 wantHeight = fFrame.IntegerHeight() + y;
@@ -1318,6 +1322,8 @@ Window::SetHidden(bool hidden)
 	// the desktop takes care of dirty regions
 	if (fHidden != hidden) {
 		fHidden = hidden;
+		if (hidden)
+			_ReleaseComposeHold();
 
 		// The planes go with the frame, not with the teardown.
 		if (hidden)
@@ -1347,6 +1353,8 @@ Window::SetMinimized(bool minimized)
 		return;
 
 	fMinimized = minimized;
+	if (minimized)
+		_ReleaseComposeHold();
 }
 
 
@@ -2170,6 +2178,10 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 	// suppress back to front buffer copies in the drawing engine
 	fDrawingEngine->SetCopyToFrontEnabled(false);
 
+	// keep the half-drawn session out of the composed frame
+	if (fScreen != NULL && fScreen->HWInterface() != NULL)
+		fScreen->HWInterface()->SetComposeHold(this, dirty);
+
 	if (fDrawingEngine->LockParallelAccess()) {
 		fTopView->Draw(GetDrawingEngine(), dirty, &fContentRegion, true);
 
@@ -2181,6 +2193,14 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 
 
 void
+Window::_ReleaseComposeHold()
+{
+	if (fScreen != NULL && fScreen->HWInterface() != NULL)
+		fScreen->HWInterface()->SetComposeHold(this, NULL);
+}
+
+
+void
 Window::EndUpdate()
 {
 	// NOTE: see comment in _BeginUpdate()
@@ -2188,6 +2208,7 @@ Window::EndUpdate()
 	if (fInUpdate) {
 		// re-enable copy to front
 		fDrawingEngine->SetCopyToFrontEnabled(true);
+		_ReleaseComposeHold();
 
 		BRegion* dirty = fRegionPool.GetRegion(
 			fCurrentUpdateSession->DirtyRegion());

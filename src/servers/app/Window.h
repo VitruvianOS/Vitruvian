@@ -355,6 +355,7 @@ public:
 			bool				MoveToStackPosition(int32 index,
 									bool isMoving);
 protected:
+			void				_ReleaseComposeHold();
 			void				_ShiftPartOfRegion(BRegion* region,
 									BRegion* regionToShift, int32 xOffset,
 									int32 yOffset);

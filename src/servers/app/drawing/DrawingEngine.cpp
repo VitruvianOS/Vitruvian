@@ -604,7 +604,8 @@ DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 		inDegreeZeroNodes.pop();
 
 		BRect touched = CopyRect(n->rect, xOffset, yOffset);
-		fGraphicsCard->Invalidate(touched);
+		if (fCopyToFront)
+			fGraphicsCard->Invalidate(touched);
 
 		for (int32 k = 0; k < n->next_pointer; k++) {
 			n->pointers[k]->in_degree--;

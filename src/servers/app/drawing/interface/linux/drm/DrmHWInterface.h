@@ -18,6 +18,7 @@ extern "C" {
 #include <BFutexLocker.h>
 #include <pthread.h>
 #include <atomic>
+#include <map>
 #include <vector>
 
 struct drm_extra_card;
@@ -317,6 +318,8 @@ public:
 
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
+	virtual	void				SetComposeHold(const void* owner,
+									const BRegion* region);
 	virtual	void				MoveCursorTo(float x, float y);
 	virtual	void				_DrawCursor(IntRect area) const;
 
@@ -548,6 +551,9 @@ private:
 			void				_SplitDamage(const BRect& frame,
 									bool outputsOnly);
 			void				_DamageOutputs();
+			// Unexpired holds, screen coordinates; fDirtyMutex held.
+			void				_HeldRegion(BRegion& held);
+			void				_ReportHoldStats();
 			Output*				_FindOutput(uint32 connector) const;
 			status_t			_SetupOutput(Output* output);
 			void				_TeardownOutput(Output* output);
@@ -722,6 +728,16 @@ private:
 			// about to be shown.
 			BRegion				fAccumulatedDirty;
 			BRegion				fBackStale;
+			// Update sessions still drawing; their area waits (fDirtyMutex).
+			struct ComposeHold {
+				BRegion			region;
+				bigtime_t		at;
+			};
+			std::map<const void*, ComposeHold> fComposeHolds;
+			bool				fHoldStats;
+			uint32				fHoldDeferred;
+			uint32				fHoldExpired;
+			bigtime_t			fHoldStatsAt;
 			bool				fNeedsFlip;
 			BFutexLocker		fDirtyMutex;
 

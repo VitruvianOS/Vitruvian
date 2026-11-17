@@ -190,7 +190,8 @@ ViewState::ViewState()
 
 
 // Fields app_server copies into a pushed state and restores on pop.
-// View color, clipping and parent composite are not part of it.
+// View color and clipping are not part of it. The parent composite only
+// depends on the states below the current one, so it is restored as saved.
 struct ViewState::SavedState {
 	SavedState*			next;
 	BPoint				pen_location;
@@ -216,6 +217,9 @@ struct ViewState::SavedState {
 	uint16				font_flags;
 	bool				font_aliasing;
 	uint32				valid_flags;
+	BAffineTransform	parent_composite_transform;
+	float				parent_composite_scale;
+	BPoint				parent_composite_origin;
 };
 
 static const uint32 kNotSavedBits = B_VIEW_VIEW_COLOR_BIT
@@ -247,7 +251,8 @@ ViewState::Push()
 	SAVE(scale) SAVE(transform) SAVE(line_join) SAVE(line_cap)
 	SAVE(miter_limit) SAVE(fill_rule) SAVE(alpha_source_mode)
 	SAVE(alpha_function_mode) SAVE(font) SAVE(font_flags) SAVE(font_aliasing)
-	SAVE(valid_flags)
+	SAVE(valid_flags) SAVE(parent_composite_transform)
+	SAVE(parent_composite_scale) SAVE(parent_composite_origin)
 #undef SAVE
 	saved->next = fSaved;
 	fSaved = saved;
@@ -272,11 +277,13 @@ ViewState::Pop()
 	LOAD(scale) LOAD(transform) LOAD(line_join) LOAD(line_cap)
 	LOAD(miter_limit) LOAD(fill_rule) LOAD(alpha_source_mode)
 	LOAD(alpha_function_mode) LOAD(font) LOAD(font_flags) LOAD(font_aliasing)
+	LOAD(parent_composite_transform) LOAD(parent_composite_scale)
+	LOAD(parent_composite_origin)
 #undef LOAD
 
-	valid_flags = (valid_flags & kNotSavedBits & ~(B_VIEW_CLIP_REGION_BIT
-			| B_VIEW_PARENT_COMPOSITE_BIT))
-		| (saved->valid_flags & ~kNotSavedBits);
+	valid_flags = (valid_flags & kNotSavedBits & ~B_VIEW_CLIP_REGION_BIT
+			& ~B_VIEW_PARENT_COMPOSITE_BIT)
+		| (saved->valid_flags & (~kNotSavedBits | B_VIEW_PARENT_COMPOSITE_BIT));
 	delete saved;
 }
 
@@ -1956,7 +1963,7 @@ BView::PopState()
 	fOwner->fLink->StartMessage(AS_VIEW_POP_STATE);
 	_FlushIfNotInTransaction();
 
-	// restore the pushed values, clipping and composite are asked again
+	// restore the pushed values and parent composite, clipping is asked again
 	fState->Pop();
 }
 

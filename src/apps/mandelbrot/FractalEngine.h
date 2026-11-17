@@ -14,9 +14,11 @@
 #include <Messenger.h>
 
 class BBitmap;
+class BRegion;
 
 
 #define MAX_RENDER_THREADS 16
+#define RENDER_GROUP_ROWS 4
 
 
 class FractalEngine : public BLooper {
@@ -37,7 +39,8 @@ public:
 	~FractalEngine();
 
 	virtual void MessageReceived(BMessage* msg);
-	void WriteToBitmap(BBitmap*);
+	void WriteToBitmap(BBitmap*, BRegion* dirty = NULL);
+		// imports finished row groups (all if dirty is NULL)
 
 private:
 	uint16 fWidth;
@@ -45,6 +48,12 @@ private:
 
 	uint8* fRenderBuffer;
 	uint32 fRenderBufferLen;
+
+	int32* fGroupState;
+		// 0 pending, 1 rendered, 2 imported
+	int32 fGroupCount;
+	int32 fGroupSlots;
+	int32 fNextSlot;
 
 	uint8 fSubsampling;
 		// 1 disables subsampling.

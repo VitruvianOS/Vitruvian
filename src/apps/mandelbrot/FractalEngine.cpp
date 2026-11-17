@@ -10,8 +10,11 @@
 
 #include <algorithm>
 #include <math.h>
+#include <string.h>
 
 #include <Bitmap.h>
+#include <OS.h>
+#include <Region.h>
 #include <String.h>
 
 #include "Colorsets.h"
@@ -32,6 +35,10 @@ FractalEngine::FractalEngine(BHandler* parent, BLooper* looper)
 	fWidth(0), fHeight(0),
 	fRenderBuffer(NULL),
 	fRenderBufferLen(0),
+	fGroupState(NULL),
+	fGroupCount(0),
+	fGroupSlots(0),
+	fNextSlot(0),
 	fSubsampling(2),
 	fMessenger(parent, looper),
 	fRenderStopping(false),
@@ -65,6 +72,7 @@ FractalEngine::~FractalEngine()
 {
 	delete_sem(fRenderSem);
 	delete_sem(fRenderStoppedSem);
+	delete[] fGroupState;
 }
 
 
@@ -124,6 +132,15 @@ void FractalEngine::MessageReceived(BMessage* msg)
 
 		memset(fRenderBuffer, 0, fRenderBufferLen);
 
+		delete[] fGroupState;
+		fGroupCount = (fHeight + RENDER_GROUP_ROWS - 1) / RENDER_GROUP_ROWS;
+		fGroupSlots = 1;
+		while (fGroupSlots < fGroupCount)
+			fGroupSlots <<= 1;
+		fGroupState = new int32[fGroupCount];
+		for (int32 i = 0; i < fGroupCount; i++)
+			fGroupState[i] = 2;
+
 		BMessage message(MSG_BUFFER_CREATED);
 		fMessenger.SendMessage(&message);
 
@@ -163,7 +180,7 @@ void FractalEngine::MessageReceived(BMessage* msg)
 }
 
 
-void FractalEngine::WriteToBitmap(BBitmap* bitmap)
+void FractalEngine::WriteToBitmap(BBitmap* bitmap, BRegion* dirty)
 {
 	Lock();
 	BSize size = bitmap->Bounds().Size();
@@ -172,10 +189,31 @@ void FractalEngine::WriteToBitmap(BBitmap* bitmap)
 		Unlock();
 		return;
 	}
-	TRACE("Drawing from = %p\n",fRenderBuffer);
-	bitmap->ImportBits(fRenderBuffer,
-		fRenderBufferLen, fWidth * 4, 0,
-		B_RGB32);
+	if (dirty == NULL) {
+		bitmap->ImportBits(fRenderBuffer,
+			fRenderBufferLen, fWidth * 4, 0,
+			B_RGB32);
+		for (int32 g = 0; g < fGroupCount; g++) {
+			if (fGroupState[g] == 1)
+				atomic_set(&fGroupState[g], 2);
+		}
+		Unlock();
+		return;
+	}
+	for (int32 g = 0; g < fGroupCount; g++) {
+		if (atomic_get(&fGroupState[g]) != 1)
+			continue;
+		int32 top = g * RENDER_GROUP_ROWS;
+		int32 rows = min_c(RENDER_GROUP_ROWS, fHeight - top);
+		uint8* to = (uint8*)bitmap->Bits();
+		int32 bpr = bitmap->BytesPerRow();
+		for (int32 r = 0; r < rows; r++) {
+			memcpy(to + (top + r) * bpr, fRenderBuffer + (top + r) * fWidth * 4,
+				fWidth * 4);
+		}
+		atomic_set(&fGroupState[g], 2);
+		dirty->Include(BRect(0, top, fWidth - 1, top + rows - 1));
+	}
 	Unlock();
 }
 
@@ -214,6 +252,10 @@ void FractalEngine::Render(double locationX, double locationY, double size)
 	if (!fRenderStopped)
 		debugger("Error: Render already running\n");
 
+	for (int32 g = 0; g < fGroupCount; g++)
+		fGroupState[g] = 0;
+	fNextSlot = 0;
+
 	fRenderStopped = false;
 		// This means that future Render calls will need to call stop render
 
@@ -247,33 +289,33 @@ status_t FractalEngine::RenderThread(void* data)
 
 		uint16 width = engine->fWidth;
 		uint16 height = engine->fHeight;
-		uint16 halfHeight = height / 2;
-		uint16 threadWidth = width / engine->fThreadCount;
 
-		uint16 startX = threadWidth * threadNum;
-		uint16 endX = threadWidth * (threadNum + 1);
-
-		for (uint16 y = 0; y<halfHeight; y++) {
-			for (uint16 x = startX; x<endX; x++) {
-				engine->RenderPixel(x, halfHeight + y);
-					// max y to RenderPixel will be
-					// floor(height/2)*2 = height-height%2.
-					// Thus there will be a line of blank pixels if height
-					// is not even. Is this a problem?
-				engine->RenderPixel(x, halfHeight - y - 1);
-					// min y to RenderPixel will be
-					// halfHeight-(halfHeight-1)-1 = 0
-			}
-
-			if (engine->fRenderStopping) {
-				TRACE("Thread %d stopping\n", threadNum);
-
-				// Restart the loop to release fRenderStoppedSem and tell
-				// the main thread that this thread is stopped, as well as
-				// to update width, height, etc.
+		while (!engine->fRenderStopping) {
+			int32 slot = atomic_add(&engine->fNextSlot, 1);
+			if (slot >= engine->fGroupSlots)
 				break;
+
+			// bit-reversed order fills the image evenly, coarse to fine
+			int32 group = 0;
+			for (int32 n = engine->fGroupSlots >> 1, k = 1; n > 0;
+					n >>= 1, k <<= 1) {
+				if (slot & n)
+					group |= k;
 			}
+			if (group >= engine->fGroupCount)
+				continue;
+
+			uint16 top = group * RENDER_GROUP_ROWS;
+			uint16 bottom = min_c(top + RENDER_GROUP_ROWS, height);
+			for (uint16 y = top; y < bottom; y++) {
+				for (uint16 x = 0; x < width; x++)
+					engine->RenderPixel(x, y);
+			}
+			atomic_set(&engine->fGroupState[group], 1);
 		}
+
+		if (engine->fRenderStopping)
+			TRACE("Thread %d stopping\n", threadNum);
 
 		if (!engine->fRenderStopping) {
 			// if we got here, then this thread has finished rendering.

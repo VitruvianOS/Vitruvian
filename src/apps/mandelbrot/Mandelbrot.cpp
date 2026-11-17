@@ -11,6 +11,7 @@
 #include <AboutWindow.h>
 #include <Application.h>
 #include <Bitmap.h>
+#include <Region.h>
 #include <BitmapStream.h>
 #include <String.h>
 #include <Catalog.h>
@@ -37,7 +38,7 @@
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "MandelbrotWindow"
 
-#define MANDELBROT_VIEW_REFRESH_FPS 10
+#define MANDELBROT_VIEW_REFRESH_FPS 60
 
 // #pragma mark - FractalView
 
@@ -342,7 +343,13 @@ void FractalView::MessageReceived(BMessage* msg)
 
 void FractalView::Pulse()
 {
-	ImportBitsAndInvalidate();
+	if (fSaving)
+		return;
+
+	BRegion dirty;
+	fFractalEngine->WriteToBitmap(fDisplayBitmap, &dirty);
+	if (dirty.CountRects() > 0)
+		Invalidate(&dirty);
 }
 
 

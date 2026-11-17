@@ -87,6 +87,7 @@ struct DrmHWInterface::Output {
 	DrmBuffer*			back;
 	DrmBuffer*			target;
 	DrmBufferView		source;
+	DrmBufferView		pubSource;
 	BPoint				origin;
 	display_mode		mode;
 	int32				orientation;
@@ -286,6 +287,7 @@ DrmHWInterface::DrmHWInterface()
 	fGbmDevice(NULL),
 #endif
 	fRenderBuffer(NULL),
+	fPublished(NULL),
 	fDev(NULL),
 	fOrigin(B_ORIGIN),
 	fPageFlipEnabled(false),
@@ -293,9 +295,6 @@ DrmHWInterface::DrmHWInterface()
 	fCursorInFlightAt(0),
 	fHoldStats(getenv("VOS_COMPOSE_HOLD_STATS") != NULL
 		&& atoi(getenv("VOS_COMPOSE_HOLD_STATS")) != 0),
-	fHoldDeferred(0),
-	fHoldExpired(0),
-	fHoldBatches(0),
 	fHoldStatsAt(0),
 	fNeedsFlip(false),
 	fDamageFlush(false),
@@ -341,6 +340,7 @@ DrmHWInterface::DrmHWInterface()
 	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
+	fDefersPublish = true;
 	memset(fAgeFbIds, 0, sizeof(fAgeFbIds));
 	pthread_mutex_init(&fFlipMutex, NULL);
 	pthread_mutex_init(&fCursorBlendMutex, NULL);
@@ -869,13 +869,33 @@ DrmHWInterface::_RebuildRenderBuffer(uint32 width, uint32 height)
 
 		delete fRenderBuffer;
 		fRenderBuffer = buffer;
+
+		MallocBuffer* published = new MallocBuffer(totalWidth, totalHeight);
+		_ClearBufferToBlack(published);
+		if (fPublished != NULL && fPublished->Bits() != NULL
+				&& published->Bits() != NULL) {
+			const uint32 rows = std::min(fPublished->Height(), totalHeight);
+			const uint32 bytes = std::min(fPublished->Width(), totalWidth) * 4;
+			for (uint32 y = 0; y < rows; y++) {
+				memcpy((uint8*)published->Bits() + y * published->BytesPerRow(),
+					(const uint8*)fPublished->Bits()
+						+ y * fPublished->BytesPerRow(), bytes);
+			}
+		}
+		delete fPublished;
+		fPublished = published;
 	}
 
 	fSource.SetTo(fRenderBuffer, (int32)fOrigin.x, (int32)fOrigin.y, width,
 		height);
+	fPubSource.SetTo(fPublished, (int32)fOrigin.x, (int32)fOrigin.y, width,
+		height);
 	for (size_t i = 0; i < fOutputs.size(); i++) {
 		Output* output = fOutputs[i];
 		output->source.SetTo(fRenderBuffer, (int32)output->origin.x,
+			(int32)output->origin.y, output->mode.virtual_width,
+			output->mode.virtual_height);
+		output->pubSource.SetTo(fPublished, (int32)output->origin.x,
 			(int32)output->origin.y, output->mode.virtual_width,
 			output->mode.virtual_height);
 	}
@@ -949,94 +969,6 @@ DrmHWInterface::_AddOutputDamage(const BRect& frame)
 }
 
 
-// Logical rects of region from the buffer on screen into the one about to be
-// shown, so held areas keep showing what is on screen now.
-static void
-copy_scanout_rects(RenderingBuffer* from, RenderingBuffer* to,
-	const BRegion& region, int32 logicalW, int32 logicalH, int32 orientation,
-	int32 reflection)
-{
-	const int32 count = region.CountRects();
-	for (int32 i = 0; i < count; i++) {
-		BRect r = region.RectAt(i);
-		int32 x0 = (int32)r.left, y0 = (int32)r.top;
-		int32 x1 = (int32)r.right, y1 = (int32)r.bottom;
-		x0 = max_c(x0, 0);
-		y0 = max_c(y0, 0);
-		x1 = min_c(x1, logicalW - 1);
-		y1 = min_c(y1, logicalH - 1);
-		if (x1 < x0 || y1 < y0)
-			continue;
-		int32 ax, ay, bx, by;
-		rotate_point(orientation, x0, y0, logicalW, logicalH, ax, ay,
-			reflection);
-		rotate_point(orientation, x1, y1, logicalW, logicalH, bx, by,
-			reflection);
-		const int32 px0 = min_c(ax, bx), px1 = max_c(ax, bx);
-		const int32 py0 = min_c(ay, by), py1 = max_c(ay, by);
-		if (px1 >= (int32)from->Width() || py1 >= (int32)from->Height()
-				|| px1 >= (int32)to->Width() || py1 >= (int32)to->Height())
-			continue;
-		for (int32 y = py0; y <= py1; y++) {
-			memcpy((uint8*)to->Bits() + (size_t)y * to->BytesPerRow()
-					+ px0 * 4,
-				(const uint8*)from->Bits() + (size_t)y * from->BytesPerRow()
-					+ px0 * 4,
-				(px1 - px0 + 1) * 4);
-		}
-	}
-}
-
-
-void
-DrmHWInterface::NoteDrawBatch()
-{
-	if (fHoldStats)
-		atomic_add((int32*)&fHoldBatches, 1);
-}
-
-
-// A hold older than this is a hung client; its area is shown anyway.
-static const bigtime_t kComposeHoldMax = 100000;
-
-
-void
-DrmHWInterface::SetComposeHold(const void* owner, const BRegion* region,
-	bigtime_t maxAge)
-{
-	fDirtyMutex.Lock();
-	if (region == NULL || region->CountRects() == 0)
-		fComposeHolds.erase(owner);
-	else {
-		ComposeHold& hold = fComposeHolds[owner];
-		hold.region = *region;
-		hold.at = system_time();
-		hold.maxAge = maxAge > 0 ? maxAge : kComposeHoldMax;
-	}
-	fDirtyMutex.Unlock();
-}
-
-
-void
-DrmHWInterface::_HeldRegion(BRegion& held)
-{
-	held.MakeEmpty();
-	if (fComposeHolds.empty())
-		return;
-	const bigtime_t now = system_time();
-	for (std::map<const void*, ComposeHold>::iterator it
-			= fComposeHolds.begin(); it != fComposeHolds.end();) {
-		if (now - it->second.at > it->second.maxAge) {
-			fHoldExpired++;
-			fComposeHolds.erase(it++);
-			continue;
-		}
-		held.Include(&it->second.region);
-		++it;
-	}
-}
-
-
 void
 DrmHWInterface::_ReportHoldStats()
 {
@@ -1047,17 +979,11 @@ DrmHWInterface::_ReportHoldStats()
 		fHoldStatsAt = now;
 	if (now - fHoldStatsAt < 1000000)
 		return;
-	fDirtyMutex.Lock();
-	const uint32 deferred = fHoldDeferred;
-	const uint32 expired = fHoldExpired;
-	const uint32 batches = atomic_get((int32*)&fHoldBatches);
-	atomic_set((int32*)&fHoldBatches, 0);
-	fHoldDeferred = 0;
-	fHoldExpired = 0;
-	fDirtyMutex.Unlock();
+	uint32 rects, batches, timeouts;
+	TakePublishStats(rects, batches, timeouts);
 	fHoldStatsAt = now;
-	fprintf(stderr, "compose hold: deferred %u rects/s, expired %u, "
-		"batched %u batches/s\n", deferred, expired, batches);
+	fprintf(stderr, "publish: %u rects/s, deferred-batches %u/s, "
+		"expose timeouts %u\n", rects, batches, timeouts);
 }
 
 
@@ -1245,13 +1171,8 @@ DrmHWInterface::_PresentOutputs()
 
 		BRegion damage;
 		fDirtyMutex.Lock();
-		BRegion held;
-		_HeldRegion(held);
-		held.OffsetBy(-output->origin.x, -output->origin.y);
 		damage = output->dirty;
-		damage.Exclude(&held);
-		output->dirty.IntersectWith(&held);
-		fHoldDeferred += output->dirty.CountRects();
+		output->dirty.MakeEmpty();
 		// Draws from here on wake the thread again.
 		fWakeQueued = false;
 		fDirtyMutex.Unlock();
@@ -1260,20 +1181,11 @@ DrmHWInterface::_PresentOutputs()
 			continue;
 
 		BRegion present(damage);
-		BRegion keepStale(output->stale);
-		keepStale.IntersectWith(&held);
-		BRegion stale(output->stale);
-		stale.Exclude(&held);
-		present.Include(&stale);
-		if (output->back != NULL && keepStale.CountRects() > 0) {
-			copy_scanout_rects(output->front, output->target, keepStale,
-				(int32)output->source.Width(), (int32)output->source.Height(),
-				output->orientation, output->reflection);
-		}
+		present.Include(&output->stale);
 
 		const int32 count = present.CountRects();
 		for (int32 j = 0; j < count; j++) {
-			_BlitRect(&output->source, output->target, present.RectAt(j),
+			_BlitRect(&output->pubSource, output->target, present.RectAt(j),
 				output->orientation, output->reflection);
 		}
 
@@ -1284,7 +1196,7 @@ DrmHWInterface::_PresentOutputs()
 				-(int32)output->origin.y);
 			if (!output->spriteShown
 					&& present.Intersects((BRect)cursorFrame)) {
-				_BlendCursor(&output->source, output->target, cursorFrame,
+				_BlendCursor(&output->pubSource, output->target, cursorFrame,
 					output->origin, output->orientation, output->reflection);
 			}
 		}
@@ -1336,7 +1248,6 @@ DrmHWInterface::_PresentOutputs()
 			// The buffer leaving the screen has all but this frame.
 			if (output->back != NULL) {
 				output->stale = damage;
-				output->stale.Include(&keepStale);
 			} else
 				output->stale.MakeEmpty();
 		} else {
@@ -2360,8 +2271,10 @@ DrmHWInterface::SetOutputMode(uint32 connector, const display_mode& mode)
 
 	_RebuildRenderBuffer(fDisplayMode.virtual_width,
 		fDisplayMode.virtual_height);
-	if (status == B_OK)
+	if (status == B_OK) {
 		_ClearBufferToBlack(&output->source);
+		_ClearBufferToBlack(&output->pubSource);
+	}
 	_DamageAll();
 	_DamageOutputs();
 	_NotifyFrameBufferChanged();
@@ -2852,7 +2765,7 @@ DrmHWInterface::_ComposeFrame(const BRegion& region)
 
 	const int32 count = region.CountRects();
 	for (int32 i = 0; i < count; i++)
-		_BlitRect(&fSource, target, region.RectAt(i));
+		_BlitRect(&fPubSource, target, region.RectAt(i));
 
 	if (fHardwareCursorEnabled)
 		return;
@@ -2862,7 +2775,7 @@ DrmHWInterface::_ComposeFrame(const BRegion& region)
 	if (cursorFrame.IsValid()) {
 		cursorFrame.OffsetBy(-(int32)fOrigin.x, -(int32)fOrigin.y);
 		if (region.Intersects((BRect)cursorFrame)) {
-			_BlendCursor(&fSource, target, cursorFrame, fOrigin,
+			_BlendCursor(&fPubSource, target, cursorFrame, fOrigin,
 				fPanelOrientation, fPanelReflection);
 		}
 	}
@@ -2994,7 +2907,9 @@ DrmHWInterface::_LeaveDirectRender()
 	const BRect full(0, 0, fDisplayMode.virtual_width - 1,
 		fDisplayMode.virtual_height - 1);
 	_BlitRect(fFrontBuffer, fRenderBuffer, full);
-	_BlitRect(fRenderBuffer, fWriteTarget, full);
+	_Publish(BRect(0, 0, fRenderBuffer->Width() - 1,
+		fRenderBuffer->Height() - 1));
+	_BlitRect(&fPubSource, fWriteTarget, full);
 
 	fDirtyMutex.Lock();
 	fAccumulatedDirty.Include(full);
@@ -3104,8 +3019,12 @@ DrmHWInterface::_EventThreadMain()
 		// Idle unless a frame is in flight or waiting; one held back by
 		// the pacing below wakes when it is due.
 		_ReportHoldStats();
+		if (HasDeferredPublish() && LockParallelAccess()) {
+			ExpirePublishes();
+			UnlockParallelAccess();
+		}
 		int timeout = 500;
-		if (fPageFlipPending || fPacingLockHeld)
+		if (fPageFlipPending || fPacingLockHeld || HasDeferredPublish())
 			timeout = 16;
 		else if (fPageFlipEnabled && fStandIn == 0) {
 			fDirtyMutex.Lock();
@@ -3253,12 +3172,7 @@ DrmHWInterface::_EventThreadMain()
 					|| system_time() >= fLastFlipIssue + _FramePeriod())) {
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
-			BRegion held;
-			_HeldRegion(held);
-			held.OffsetBy(-fOrigin.x, -fOrigin.y);
-			BRegion composable(fAccumulatedDirty);
-			composable.Exclude(&held);
-			bool wantFlip = composable.CountRects() > 0 || fNeedsFlip
+			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip
 				|| !fStagedPlanes.empty();
 			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
 				wantFlip = fScanoutFb != 0;
@@ -3315,17 +3229,7 @@ DrmHWInterface::_EventThreadMain()
 					&& fPrimaryPlaneId != 0;
 				scanHold = scanFb != 0 || fScanoutOnScreen;
 			}
-			BRegion held;
-			BRegion keep;
-			BRegion keepStale;
-			_HeldRegion(held);
-			held.OffsetBy(-fOrigin.x, -fOrigin.y);
-			// Direct render draws on screen: holds do not apply.
-			if (fDirectRender)
-				held.MakeEmpty();
-			BRegion composable(fAccumulatedDirty);
-			composable.Exclude(&held);
-			bool hasDirty = composable.CountRects() > 0
+			bool hasDirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
 			if (scanHold)
 				hasDirty = scanFlip;
@@ -3353,30 +3257,16 @@ DrmHWInterface::_EventThreadMain()
 				if (scanFlip) {
 					// The desktop's damage waits for its own frame.
 				} else if (!fDirectRender) {
-					// Held areas wait for their session to end.
-					keep = fAccumulatedDirty;
-					keep.IntersectWith(&held);
-					keepStale = fBackStale;
-					keepStale.IntersectWith(&held);
-					damage = composable;
-					fAccumulatedDirty = keep;
-					present = composable;
-					BRegion stale(fBackStale);
-					stale.Exclude(&held);
-					present.Include(&stale);
-					fHoldDeferred += keep.CountRects();
+					damage = fAccumulatedDirty;
+					fAccumulatedDirty.MakeEmpty();
+					present = damage;
+					present.Include(&fBackStale);
 				} else
 					present = fAccumulatedDirty;
 			}
 			fDirtyMutex.Unlock();
 
 			if (hasDirty && !fDirectRender && !scanFlip) {
-				if (keepStale.CountRects() > 0 && fFrontBuffer != NULL
-						&& fWriteTarget != fFrontBuffer) {
-					copy_scanout_rects(fFrontBuffer, fWriteTarget, keepStale,
-						(int32)fSource.Width(), (int32)fSource.Height(),
-						fPanelOrientation, fPanelReflection);
-				}
 				_ComposeFrame(present);
 			}
 
@@ -3469,7 +3359,6 @@ DrmHWInterface::_EventThreadMain()
 					// The buffer leaving the screen has all but this frame.
 					if (!fDirectRender && !fDamageFlush) {
 						fBackStale = damage;
-						fBackStale.Include(&keepStale);
 					}
 				} else {
 					// Not shown: damage and cursor ride the retry.
@@ -3667,6 +3556,8 @@ DrmHWInterface::~DrmHWInterface()
 	fOutputs.clear();
 	delete fRenderBuffer;
 	fRenderBuffer = NULL;
+	delete fPublished;
+	fPublished = NULL;
 
 #ifdef HAVE_GBM
 	for (size_t i = 0; i < fCards.size(); i++) {
@@ -3939,6 +3830,7 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	_ClearBufferToBlack(fFrontBuffer);
 	_ClearBufferToBlack(fBackBuffer);
 	_ClearBufferToBlack(&fSource);
+	_ClearBufferToBlack(&fPubSource);
 
 	// A flip attempted while the CRTC is being reprogrammed fails
 	// with EINVAL; mark the window so that failure is not counted
@@ -5000,6 +4892,45 @@ DrmHWInterface::BackBuffer() const
 }
 
 
+RenderingBuffer*
+DrmHWInterface::PublishedBuffer() const
+{
+	if (fPublished != NULL && !fDirectRender)
+		return fPublished;
+	return fFrontBuffer;
+}
+
+
+// Parallel access held, so no compose runs; other writers have their
+// own visible regions.
+void
+DrmHWInterface::_Publish(const BRect& frame)
+{
+	if (fRenderBuffer == NULL || fPublished == NULL || fDirectRender)
+		return;
+
+	const int32 x0 = max_c((int32)frame.left, 0);
+	const int32 y0 = max_c((int32)frame.top, 0);
+	const int32 x1 = min_c((int32)frame.right,
+		(int32)min_c(fRenderBuffer->Width(), fPublished->Width()) - 1);
+	const int32 y1 = min_c((int32)frame.bottom,
+		(int32)min_c(fRenderBuffer->Height(), fPublished->Height()) - 1);
+	if (x1 < x0 || y1 < y0)
+		return;
+
+	const uint32 bytes = (x1 - x0 + 1) * 4;
+	const uint8* from = (const uint8*)fRenderBuffer->Bits()
+		+ (size_t)y0 * fRenderBuffer->BytesPerRow() + x0 * 4;
+	uint8* to = (uint8*)fPublished->Bits()
+		+ (size_t)y0 * fPublished->BytesPerRow() + x0 * 4;
+	for (int32 y = y0; y <= y1; y++) {
+		memcpy(to, from, bytes);
+		from += fRenderBuffer->BytesPerRow();
+		to += fPublished->BytesPerRow();
+	}
+}
+
+
 bool
 DrmHWInterface::IsDoubleBuffered() const
 {
@@ -5228,6 +5159,7 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 
 	// The event thread composes and presents the frame.
 	if (fPageFlipEnabled) {
+		_Publish(frame);
 		_AddDamage(frame);
 		_Wake();
 		return B_OK;
@@ -5238,6 +5170,7 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 
 	BRect local = frame;
 	if (!_SingleOutput()) {
+		_Publish(frame);
 		_AddOutputDamage(frame);
 		_Wake();
 		local = frame & _Frame();
@@ -5271,6 +5204,8 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 		return B_OK;
 
 	if (fPageFlipEnabled) {
+		for (int32 i = 0; i < count; i++)
+			_Publish(region.RectAt(i));
 		_AddDamage(region);
 		_Wake();
 		return B_OK;

@@ -177,7 +177,6 @@ Window::Window(const BRect& frame, const char *name,
 Window::~Window()
 {
 	_ReleaseExposeHold();
-	_ReleaseComposeHold();
 	ReleaseOverlay();
 	fSwapChainLock.Lock();
 	for (size_t i = 0; i < fSwapChains.size(); i++)
@@ -489,7 +488,6 @@ Window::MoveBy(int32 x, int32 y, bool moveStack)
 	if (x == 0 && y == 0)
 		return;
 
-	_ReleaseComposeHold();
 	if (fExposeHold.CountRects() > 0) {
 		fExposeHold.OffsetBy(x, y);
 		_SetExposeHold();
@@ -545,8 +543,6 @@ void
 Window::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion, bool resizeStack)
 {
 	// this function is only called from the desktop thread
-
-	_ReleaseComposeHold();
 
 	int32 wantWidth = fFrame.IntegerWidth() + x;
 	int32 wantHeight = fFrame.IntegerHeight() + y;
@@ -1328,7 +1324,6 @@ Window::SetHidden(bool hidden)
 	if (fHidden != hidden) {
 		fHidden = hidden;
 		if (hidden) {
-			_ReleaseComposeHold();
 			_ReleaseExposeHold();
 		}
 
@@ -1361,7 +1356,6 @@ Window::SetMinimized(bool minimized)
 
 	fMinimized = minimized;
 	if (minimized) {
-		_ReleaseComposeHold();
 		_ReleaseExposeHold();
 	}
 }
@@ -2011,7 +2005,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		// draw exposed region background right now to avoid stamping artifacts
 		if (fDrawingEngine->LockParallelAccess()) {
 			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
-			fDrawingEngine->SetCopyToFrontEnabled(true);
+			fDrawingEngine->SetCopyToFrontEnabled(false);
 			// the server background waits for the client's redraw
 			fExposeHold.Include(&expose);
 			_SetExposeHold();
@@ -2190,10 +2184,6 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 	// suppress back to front buffer copies in the drawing engine
 	fDrawingEngine->SetCopyToFrontEnabled(false);
 
-	// keep the half-drawn session out of the composed frame
-	if (fScreen != NULL && fScreen->HWInterface() != NULL)
-		fScreen->HWInterface()->SetComposeHold(this, dirty);
-
 	if (fDrawingEngine->LockParallelAccess()) {
 		fTopView->Draw(GetDrawingEngine(), dirty, &fContentRegion, true);
 
@@ -2204,21 +2194,12 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 }
 
 
-void
-Window::_ReleaseComposeHold()
-{
-	if (fScreen != NULL && fScreen->HWInterface() != NULL)
-		fScreen->HWInterface()->SetComposeHold(this, NULL);
-}
-
-
-// Exposed area: held up to one refresh for the client to paint it.
+// Exposed area: published when the client painted it, or after a refresh.
 void
 Window::_SetExposeHold()
 {
 	if (fScreen != NULL && fScreen->HWInterface() != NULL) {
-		fScreen->HWInterface()->SetComposeHold(&fExposeHold, &fExposeHold,
-			20000);
+		fScreen->HWInterface()->DeferPublish(&fExposeHold, fExposeHold, 20000);
 	}
 }
 
@@ -2228,7 +2209,7 @@ Window::_ReleaseExposeHold()
 {
 	fExposeHold.MakeEmpty();
 	if (fScreen != NULL && fScreen->HWInterface() != NULL)
-		fScreen->HWInterface()->SetComposeHold(&fExposeHold, NULL);
+		fScreen->HWInterface()->CancelPublish(&fExposeHold);
 }
 
 
@@ -2240,24 +2221,24 @@ Window::EndUpdate()
 	if (fInUpdate) {
 		// re-enable copy to front
 		fDrawingEngine->SetCopyToFrontEnabled(true);
-		_ReleaseComposeHold();
-		_ReleaseExposeHold();
-
 		BRegion* dirty = fRegionPool.GetRegion(
 			fCurrentUpdateSession->DirtyRegion());
 
-		if (dirty) {
+		if (dirty)
 			dirty->IntersectWith(&VisibleContentRegion());
 
-			// CopyToFront blits the render buffer into the scanout
-			// buffer; SetMode rebuilds and unmaps those under the
-			// exclusive lock, so hold the parallel lock across it.
-			if (fDrawingEngine->LockParallelAccess()) {
+		// Publishing copies the render buffer; SetMode rebuilds it under
+		// the exclusive lock, so hold the parallel lock across it.
+		if (fDrawingEngine->LockParallelAccess()) {
+			if (dirty)
 				fDrawingEngine->CopyToFront(*dirty);
-				fDrawingEngine->UnlockParallelAccess();
-			}
-			fRegionPool.Recycle(dirty);
+			if (fScreen != NULL && fScreen->HWInterface() != NULL)
+				fScreen->HWInterface()->FlushPublish(&fExposeHold);
+			fDrawingEngine->UnlockParallelAccess();
 		}
+		fExposeHold.MakeEmpty();
+		if (dirty)
+			fRegionPool.Recycle(dirty);
 
 		fCurrentUpdateSession->SetUsed(false);
 

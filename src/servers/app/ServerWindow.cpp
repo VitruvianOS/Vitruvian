@@ -4835,18 +4835,14 @@ ServerWindow::_UpdateCurrentDrawingRegion()
 }
 
 
-// a batch is shown at the latest one refresh after it began
-static const bigtime_t kBatchHoldMax = 20000;
-
-
+// Invalidations of a message batch are published together at its end.
 bool
 ServerWindow::_BeginDrawBatch()
 {
 	HWInterface* hw = fDesktop->HWInterface();
 	if (hw == NULL || fWindow->Screen() == NULL)
 		return false;
-	hw->SetComposeHold(this, &fWindow->VisibleContentRegion(), kBatchHoldMax);
-	hw->NoteDrawBatch();
+	hw->BeginPublishBatch();
 	return true;
 }
 
@@ -4855,8 +4851,12 @@ void
 ServerWindow::_EndDrawBatch()
 {
 	HWInterface* hw = fDesktop->HWInterface();
-	if (hw != NULL)
-		hw->SetComposeHold(this, NULL);
+	if (hw == NULL)
+		return;
+	if (hw->LockParallelAccess()) {
+		hw->EndPublishBatch();
+		hw->UnlockParallelAccess();
+	}
 }
 
 

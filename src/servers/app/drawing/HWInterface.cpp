@@ -19,6 +19,8 @@
 
 #include "drawing_support.h"
 
+#include <Autolock.h>
+
 #include "DrawingEngine.h"
 #include "RenderingBuffer.h"
 #include "SystemPalette.h"
@@ -44,6 +46,11 @@ HWInterface::HWInterface()
 	:
 	BRWLocker("hw interface lock"),
 	fFloatingOverlaysLock("floating overlays lock"),
+	fPublishLock("publish lock"),
+	fDefersPublish(false),
+	fStatRects(0),
+	fStatBatches(0),
+	fStatTimeouts(0),
 	fCursor(NULL),
 	fDragBitmap(NULL),
 	fDragBitmapOffset(0, 0),
@@ -298,6 +305,11 @@ HWInterface::DrawingBuffer() const
 }
 
 
+// Invalidations of the thread inside a drawing batch.
+static __thread HWInterface* sBatchOwner = NULL;
+static __thread BRegion* sBatch = NULL;
+
+
 /*! The object needs to be already locked!
 */
 status_t
@@ -319,12 +331,147 @@ HWInterface::InvalidateRegion(const BRegion& region)
 status_t
 HWInterface::Invalidate(const BRect& frame)
 {
+	if (sBatchOwner == this && sBatch != NULL) {
+		if (sBatch->CountRects() > 64)
+			sBatch->Set(sBatch->Frame());
+		sBatch->Include(frame);
+		return B_OK;
+	}
+
 	_NotifyFrameCommitted(frame);
 
 	if (IsDoubleBuffered())
 		return CopyBackToFront(frame);
 
 	return B_OK;
+}
+
+
+status_t
+HWInterface::Publish(const BRegion& region)
+{
+	atomic_add(&fStatRects, region.CountRects());
+	return InvalidateRegion(region);
+}
+
+
+void
+HWInterface::BeginPublishBatch()
+{
+	if (sBatch != NULL)
+		return;
+	sBatch = new(nothrow) BRegion;
+	sBatchOwner = sBatch != NULL ? this : NULL;
+	if (sBatch != NULL)
+		atomic_add(&fStatBatches, 1);
+}
+
+
+// Parallel access held by the caller.
+void
+HWInterface::EndPublishBatch()
+{
+	if (sBatch == NULL || sBatchOwner != this)
+		return;
+	BRegion* region = sBatch;
+	sBatch = NULL;
+	sBatchOwner = NULL;
+	if (region->CountRects() > 0)
+		Publish(*region);
+	delete region;
+}
+
+
+void
+HWInterface::DeferPublish(const void* owner, const BRegion& region,
+	bigtime_t maxAge)
+{
+	if (region.CountRects() == 0) {
+		CancelPublish(owner);
+		return;
+	}
+	// No output thread to expire it: publish at once, as legacy did.
+	if (!fDefersPublish) {
+		Publish(region);
+		return;
+	}
+	BAutolock locker(fPublishLock);
+	DeferredPublish& entry = fDeferred[owner];
+	entry.region = region;
+	entry.at = system_time();
+	entry.maxAge = maxAge;
+}
+
+
+// Parallel access held by the caller.
+void
+HWInterface::FlushPublish(const void* owner)
+{
+	BRegion region;
+	{
+		BAutolock locker(fPublishLock);
+		std::map<const void*, DeferredPublish>::iterator it
+			= fDeferred.find(owner);
+		if (it == fDeferred.end())
+			return;
+		region = it->second.region;
+		fDeferred.erase(it);
+	}
+	Publish(region);
+}
+
+
+void
+HWInterface::CancelPublish(const void* owner)
+{
+	BAutolock locker(fPublishLock);
+	fDeferred.erase(owner);
+}
+
+
+void
+HWInterface::ExpirePublishes()
+{
+	BRegion due;
+	{
+		BAutolock locker(fPublishLock);
+		const bigtime_t now = system_time();
+		for (std::map<const void*, DeferredPublish>::iterator it
+				= fDeferred.begin(); it != fDeferred.end();) {
+			if (now - it->second.at >= it->second.maxAge) {
+				due.Include(&it->second.region);
+				atomic_add(&fStatTimeouts, 1);
+				fDeferred.erase(it++);
+			} else
+				++it;
+		}
+	}
+	if (due.CountRects() > 0)
+		Publish(due);
+}
+
+
+bool
+HWInterface::HasDeferredPublish()
+{
+	BAutolock locker(fPublishLock);
+	return !fDeferred.empty();
+}
+
+
+RenderingBuffer*
+HWInterface::PublishedBuffer() const
+{
+	return FrontBuffer();
+}
+
+
+void
+HWInterface::TakePublishStats(uint32& rects, uint32& batches, uint32& timeouts)
+{
+	rects = (uint32)atomic_get_and_set(&fStatRects, 0);
+	batches = (uint32)atomic_get_and_set(&fStatBatches, 0);
+	timeouts = (uint32)atomic_get_and_set(&fStatTimeouts, 0);
 }
 
 

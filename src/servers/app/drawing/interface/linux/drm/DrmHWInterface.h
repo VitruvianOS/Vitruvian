@@ -365,10 +365,7 @@ public:
 
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
-	virtual	void				NoteDrawBatch();
-	virtual	void				SetComposeHold(const void* owner,
-									const BRegion* region,
-									bigtime_t maxAge = 0);
+	virtual	RenderingBuffer*	PublishedBuffer() const;
 	virtual	void				MoveCursorTo(float x, float y);
 	virtual	void				_DrawCursor(IntRect area) const;
 
@@ -607,7 +604,7 @@ private:
 									bool outputsOnly);
 			void				_DamageOutputs();
 			// Unexpired holds, screen coordinates; fDirtyMutex held.
-			void				_HeldRegion(BRegion& held);
+			void				_Publish(const BRect& frame);
 			void				_ReportHoldStats();
 			Output*				_FindOutput(uint32 connector) const;
 			status_t			_SetupOutput(Output* output);
@@ -718,10 +715,15 @@ private:
 
 			// Spans every output; each one presents its own rectangle.
 			MallocBuffer*		fRenderBuffer;
+			// What the outputs compose from: the drawing threads copy
+			// finished regions here from fRenderBuffer under parallel
+			// access, which the compose excludes.
+			MallocBuffer*		fPublished;
 			// The first output: connector, place, part of the buffer.
 			struct modeset_dev*	fDev;
 			BPoint				fOrigin;
 			DrmBufferView		fSource;
+			DrmBufferView		fPubSource;
 			// Changed under the exclusive lock and fDirtyMutex; read
 			// under either.
 			std::vector<Output*>	fOutputs;
@@ -786,17 +788,7 @@ private:
 			// about to be shown.
 			BRegion				fAccumulatedDirty;
 			BRegion				fBackStale;
-			// Update sessions still drawing; their area waits (fDirtyMutex).
-			struct ComposeHold {
-				BRegion			region;
-				bigtime_t		at;
-				bigtime_t		maxAge;
-			};
-			std::map<const void*, ComposeHold> fComposeHolds;
 			bool				fHoldStats;
-			uint32				fHoldDeferred;
-			uint32				fHoldExpired;
-			uint32				fHoldBatches;
 			bigtime_t			fHoldStatsAt;
 			bool				fNeedsFlip;
 			BFutexLocker		fDirtyMutex;

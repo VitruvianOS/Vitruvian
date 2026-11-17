@@ -20,6 +20,7 @@
 
 #include <video_overlay.h>
 
+#include <map>
 #include <new>
 
 #include "IntRect.h"
@@ -246,13 +247,25 @@ public:
 	// Invalidate is used for scheduling an area for updating
 	virtual	status_t			InvalidateRegion(const BRegion& region);
 	virtual	status_t			Invalidate(const BRect& frame);
-	// Keeps a half-drawn update session out of the presented frame;
-	// a NULL region releases the owner's hold. Screen coordinates.
-	// maxAge 0 is the default expiry.
-	virtual	void				SetComposeHold(const void* owner,
-									const BRegion* region,
-									bigtime_t maxAge = 0) {}
-	virtual	void				NoteDrawBatch() {}
+	// Publishing copies a finished region of the drawing buffer to what
+	// the output shows; drawing threads call it, never the output thread.
+	virtual	status_t			Publish(const BRegion& region);
+	// Invalidations of the calling thread wait for EndPublishBatch().
+	virtual	void				BeginPublishBatch();
+	virtual	void				EndPublishBatch();
+	// Publishes region at FlushPublish(owner), or after maxAge.
+	// Screen coordinates; a repeated call replaces the owner's region.
+	virtual	void				DeferPublish(const void* owner,
+									const BRegion& region, bigtime_t maxAge);
+	virtual	void				FlushPublish(const void* owner);
+			void				CancelPublish(const void* owner);
+			// Output thread; parallel access must be held.
+			void				ExpirePublishes();
+			bool				HasDeferredPublish();
+	// What the output shows, for reading back.
+	virtual	RenderingBuffer*	PublishedBuffer() const;
+			void				TakePublishStats(uint32& rects,
+									uint32& batches, uint32& timeouts);
 	// while CopyBackToFront() actually performs the operation
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 	virtual	status_t			CopyBackToFront(const BRegion& region);
@@ -344,6 +357,18 @@ protected:
 			ObjectDeleter<buffer_clip>
 								fCursorAreaBackup;
 	mutable	BLocker				fFloatingOverlaysLock;
+
+			struct DeferredPublish {
+				BRegion			region;
+				bigtime_t		at;
+				bigtime_t		maxAge;
+			};
+			BLocker				fPublishLock;
+			std::map<const void*, DeferredPublish> fDeferred;
+			bool				fDefersPublish;
+			int32				fStatRects;
+			int32				fStatBatches;
+			int32				fStatTimeouts;
 
 			ServerCursorReference
 								fCursor;

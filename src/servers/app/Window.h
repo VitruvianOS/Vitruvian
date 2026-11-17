@@ -159,6 +159,8 @@ public:
 			void				ReleaseBitmapOverlay(bool redraw);
 
 			// Swap chains of the window's views that may sit on planes.
+			// Shows the frames the CPU path holds back.
+			void				FlushSwapChains();
 			void				AddSwapChain(ViewSwapChain* chain);
 			void				RemoveSwapChain(ViewSwapChain* chain);
 			// Nothing of the rect is clipped or covered. Desktop window

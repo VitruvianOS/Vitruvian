@@ -6,6 +6,8 @@
 #define VIEW_SWAP_CHAIN_H
 
 
+#include <condition_variable>
+#include <mutex>
 #include <vector>
 
 #include <Locker.h>
@@ -137,6 +139,8 @@ public:
 			// The window changed under a plane.
 			void				Revalidate();
 			void				Detach();
+			// Shows the frame the CPU path holds back; once per refresh.
+			void				Flush(DrawingEngine* engine);
 
 			// From the plane consumer.
 			void				NotifyShown(uint64 serial, bigtime_t when);
@@ -158,6 +162,12 @@ private:
 									int32 height) const;
 			BRect				_Destination(const Generation* generation)
 									const;
+			bool				_Post(const SwapChainFrame& frame,
+									Generation* generation);
+			void				_DropMailbox();
+			void				_ResetMailbox();
+	static	int32				_PumpEntry(void* self);
+			void				_Pump();
 			void				_UpdatePeriod(::HWInterface* hardware);
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();
@@ -189,6 +199,17 @@ private:
 			uint32				fPresented;
 			uint32				fShown;
 			uint32				fReplaced;
+
+			// CPU path: the newest frame, shown by the pump.
+			thread_id			fPump;
+			std::mutex			fPumpMutex;
+			std::condition_variable	fPumpCondition;
+			bool				fPumpWake;
+			bool				fPumpQuit;
+			uint64				fMailSerial;
+			Generation*			fMailGeneration;
+			bool				fMailWhole;
+			BRegion				fMailDamage;
 };
 
 

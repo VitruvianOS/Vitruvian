@@ -626,6 +626,9 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_INTERNAL_HIDE_WINDOW:
 			_Hide();
 			break;
+		case AS_INTERNAL_FLUSH_SWAP_CHAINS:
+			fWindow->FlushSwapChains();
+			break;
 		case AS_MINIMIZE_WINDOW:
 		{
 			bool minimize;

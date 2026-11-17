@@ -233,6 +233,15 @@ Window::SetClipping(BRegion* stillAvailableOnScreen)
 
 
 void
+Window::FlushSwapChains()
+{
+	BAutolock locker(fSwapChainLock);
+	for (size_t i = 0; i < fSwapChains.size(); i++)
+		fSwapChains[i]->Flush(fDrawingEngine.Get());
+}
+
+
+void
 Window::AddSwapChain(ViewSwapChain* chain)
 {
 	BAutolock locker(fSwapChainLock);

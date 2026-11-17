@@ -429,7 +429,13 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fWorstGap(0),
 	fPresented(0),
 	fShown(0),
-	fReplaced(0)
+	fReplaced(0),
+	fPump(-1),
+	fPumpWake(false),
+	fPumpQuit(false),
+	fMailSerial(0),
+	fMailGeneration(NULL),
+	fMailWhole(false)
 {
 	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
 	fStats = stats != NULL && atoi(stats) != 0;
@@ -438,6 +444,17 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 
 ViewSwapChain::~ViewSwapChain()
 {
+	// The pump first: it posts to the window.
+	if (fPump >= 0) {
+		{
+			std::lock_guard<std::mutex> guard(fPumpMutex);
+			fPumpQuit = true;
+		}
+		fPumpCondition.notify_all();
+		status_t result;
+		wait_for_thread(fPump, &result);
+	}
+
 	// The plane first: nothing may be reported once the buffers go.
 	Hide(false, "chain deleted");
 
@@ -687,15 +704,24 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	if (fPlane != NULL)
 		shown = fPlane->Show(frame);
 	if (!shown && fCpu != NULL) {
-		// The plane refused a steady present: the painter needs its region.
-		if (clipping == NULL && steady && fOwnerWindow != NULL)
-			fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
-		shown = fCpu->Show(frame);
+		// Newest frame wins; the copy waits for the next refresh.
+		if (_Post(frame, generation)) {
+			shown = true;
+			frame.async = true;
+		} else {
+			// The plane refused a steady present: the painter needs its
+			// region.
+			if (clipping == NULL && steady && fOwnerWindow != NULL)
+				fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
+			shown = fCpu->Show(frame);
+		}
 	}
 
 	BAutolock locker(fLock);
 	if (shown && frame.async) {
-		// The plane tells when it is on screen.
+		// The plane tells when it is on screen; the mailbox, when flushed.
+		if (fMailSerial != 0 && fMailSerial != frame.serial)
+			_DropMailbox();
 		_Prune();
 		return;
 	}
@@ -720,6 +746,181 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 		_Retire(generation, index, system_time());
 	}
 	_Prune();
+}
+
+
+// Records the newest frame for the pump; the one it replaces is dropped,
+// its damage carried over.
+bool
+ViewSwapChain::_Post(const SwapChainFrame& frame, Generation* generation)
+{
+	BAutolock locker(fLock);
+	if (fOwnerWindow == NULL || fWindow == NULL || frame.engine == NULL)
+		return false;
+
+	if (fPump < 0) {
+		fPump = spawn_thread(_PumpEntry, "swap chain pump",
+			B_DISPLAY_PRIORITY, this);
+		if (fPump < 0)
+			return false;
+		resume_thread(fPump);
+	}
+
+	bool whole = frame.damage == NULL || frame.damage->CountRects() == 0;
+	BRegion damage;
+	if (!whole)
+		damage = *frame.damage;
+	if (fMailSerial != 0) {
+		if (fMailWhole || fMailGeneration != generation)
+			whole = true;
+		else if (!whole)
+			damage.Include(&fMailDamage);
+		_DropMailbox();
+	}
+
+	fMailSerial = frame.serial;
+	fMailGeneration = generation;
+	fMailWhole = whole;
+	fMailDamage = damage;
+	locker.Unlock();
+
+	{
+		std::lock_guard<std::mutex> guard(fPumpMutex);
+		fPumpWake = true;
+	}
+	fPumpCondition.notify_one();
+	return true;
+}
+
+
+// fLock held.
+void
+ViewSwapChain::_DropMailbox()
+{
+	for (size_t i = 0; i < fPending.size(); i++) {
+		if (fPending[i].serial != fMailSerial)
+			continue;
+
+		_CountReplaced();
+		_Retire(fPending[i].generation, fPending[i].index, system_time());
+		fPending.erase(fPending.begin() + i);
+		break;
+	}
+	_ResetMailbox();
+}
+
+
+// fLock held.
+void
+ViewSwapChain::_ResetMailbox()
+{
+	fMailSerial = 0;
+	fMailGeneration = NULL;
+	fMailWhole = false;
+	fMailDamage.MakeEmpty();
+}
+
+
+int32
+ViewSwapChain::_PumpEntry(void* self)
+{
+	((ViewSwapChain*)self)->_Pump();
+	return 0;
+}
+
+
+// At most one flush per refresh while a frame waits.
+void
+ViewSwapChain::_Pump()
+{
+	bigtime_t next = 0;
+	std::unique_lock<std::mutex> guard(fPumpMutex);
+	while (true) {
+		fPumpCondition.wait(guard, [this] { return fPumpWake || fPumpQuit; });
+		if (fPumpQuit)
+			return;
+		fPumpWake = false;
+		guard.unlock();
+
+		while (true) {
+			const bigtime_t now = system_time();
+			if (next > now)
+				snooze(next - now);
+
+			bool quit;
+			{
+				std::lock_guard<std::mutex> quitGuard(fPumpMutex);
+				quit = fPumpQuit;
+			}
+			BAutolock locker(fLock);
+			if (quit || fMailSerial == 0)
+				break;
+
+			fWindow->PostMessage(AS_INTERNAL_FLUSH_SWAP_CHAINS, 0);
+			next = system_time() + (fPeriod > 0 ? fPeriod : 16667);
+		}
+		guard.lock();
+	}
+}
+
+
+// The window thread, drawing as for Present.
+void
+ViewSwapChain::Flush(DrawingEngine* engine)
+{
+	BReference<ServerBitmap> bitmap;
+	BRegion damage;
+	BRect destination;
+	::Window* owner;
+	{
+		BAutolock locker(fLock);
+		if (fMailSerial == 0)
+			return;
+
+		size_t i = 0;
+		while (i < fPending.size() && fPending[i].serial != fMailSerial)
+			i++;
+		if (i == fPending.size()) {
+			_ResetMailbox();
+			return;
+		}
+
+		Generation* generation = fPending[i].generation;
+		const int32 index = fPending[i].index;
+		fPending.erase(fPending.begin() + i);
+		if (!fMailWhole)
+			damage = fMailDamage;
+		_ResetMailbox();
+
+		const bigtime_t now = system_time();
+		_CountShown(now);
+		Generation* previous = fShownGeneration;
+		const int32 previousIndex = fShownIndex;
+		fShownGeneration = generation;
+		fShownIndex = index;
+		if (previous != NULL)
+			_Retire(previous, previousIndex, now);
+
+		bitmap = generation->buffers[index];
+		destination = _Destination(generation);
+		owner = fOwnerWindow;
+		_Prune();
+	}
+
+	if (owner == NULL || engine == NULL || fCpu == NULL
+			|| !destination.IsValid() || !fView->IsVisible())
+		return;
+
+	BRegion clipping;
+	owner->GetEffectiveDrawingRegion(fView, clipping);
+
+	SwapChainFrame frame;
+	frame.bitmap = bitmap.Get();
+	frame.destination = destination;
+	frame.damage = &damage;
+	frame.engine = engine;
+	frame.clipping = &clipping;
+	fCpu->Show(frame);
 }
 
 
@@ -898,6 +1099,8 @@ ViewSwapChain::NotifyDropped(uint64 serial)
 
 			_CountReplaced();
 			_Retire(fPending[i].generation, fPending[i].index, system_time());
+			if (serial == fMailSerial)
+				_ResetMailbox();
 			fPending.erase(fPending.begin() + i);
 			break;
 		}
@@ -971,6 +1174,8 @@ ViewSwapChain::_DropPending(uint64 below)
 
 		_CountReplaced();
 		_Retire(fPending[i].generation, fPending[i].index, system_time());
+		if (fPending[i].serial == fMailSerial)
+			_ResetMailbox();
 		fPending.erase(fPending.begin() + i);
 	}
 }

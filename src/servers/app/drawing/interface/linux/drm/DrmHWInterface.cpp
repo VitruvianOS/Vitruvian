@@ -1940,6 +1940,8 @@ DrmHWInterface::RemoveOutput(uint32 connector)
 	modeset_remove_connector(fd, raw);
 	drmModeSetCrtc(fd, crtc, 0, 0, 0, NULL, 0, NULL);
 
+	_RepackLayout();
+
 	_RebuildRenderBuffer(fDisplayMode.virtual_width,
 		fDisplayMode.virtual_height);
 	_NotifyFrameBufferChanged();
@@ -2195,6 +2197,7 @@ DrmHWInterface::PromoteOutput(uint32 connector)
 
 	fDev = dev;
 	fOrigin = origin;
+	_RepackLayout();
 
 	drmModeSetCrtc(fFd, oldCrtc, 0, 0, 0, NULL, 0, NULL);
 	modeset_remove_connector(fFd, oldConnector);
@@ -2512,6 +2515,32 @@ BPoint
 DrmHWInterface::Origin() const
 {
 	return fOrigin;
+}
+
+
+// Exclusive lock held. After an output left, the rest keeps its arrangement
+// but the bounding box goes back to 0,0.
+void
+DrmHWInterface::_RepackLayout()
+{
+	fDirtyMutex.Lock();
+	float minX = fOrigin.x;
+	float minY = fOrigin.y;
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		minX = std::min(minX, fOutputs[i]->origin.x);
+		minY = std::min(minY, fOutputs[i]->origin.y);
+	}
+	if (minX > 0 || minY > 0) {
+		fOrigin.x -= minX;
+		fOrigin.y -= minY;
+		for (size_t i = 0; i < fOutputs.size(); i++) {
+			fOutputs[i]->origin.x -= minX;
+			fOutputs[i]->origin.y -= minY;
+		}
+		fprintf(stderr, "DRM: layout moved by %d,%d\n", (int)-minX,
+			(int)-minY);
+	}
+	fDirtyMutex.Unlock();
 }
 
 
@@ -3949,7 +3978,33 @@ DrmHWInterface::Shutdown()
 }
 
 
-// The connector's mode of that size closest to the wanted refresh rate.
+// Whether a refresh rate is one monitors are sold with, as opposed to an
+// odd timing a mode list happens to carry.
+static bool
+standard_refresh(float rate)
+{
+	static const float kRates[] = { 24, 25, 30, 48, 50, 60, 72, 75, 90, 100,
+		120, 144, 165, 175, 180, 240 };
+	for (size_t i = 0; i < sizeof(kRates) / sizeof(kRates[0]); i++) {
+		if (fabsf(rate - kRates[i]) <= 0.5f
+				|| fabsf(rate - kRates[i] * 1000.f / 1001.f) <= 0.1f)
+			return true;
+	}
+	return false;
+}
+
+
+static float
+connector_mode_refresh(const drmModeModeInfo& m)
+{
+	if (m.htotal == 0 || m.vtotal == 0)
+		return 0;
+	return float(m.clock * 1000.0) / float(m.htotal * m.vtotal);
+}
+
+
+// The connector's mode of that size closest to the wanted refresh rate; a
+// tie, or no wanted rate, goes to the preferred mode, then a standard rate.
 static drmModeModeInfo*
 find_connector_mode(drmModeConnector* conn, uint32_t width, uint32_t height,
 	const display_mode& mode)
@@ -3962,27 +4017,27 @@ find_connector_mode(drmModeConnector* conn, uint32_t width, uint32_t height,
 			/ float(mode.timing.h_total * mode.timing.v_total);
 	}
 
-	if (targetRefresh > 0) {
-		float bestDiff = 999;
-		for (int i = 0; i < conn->count_modes; i++) {
-			if (conn->modes[i].hdisplay != width
-					|| conn->modes[i].vdisplay != height)
-				continue;
-			float modeRefresh = float(conn->modes[i].clock * 1000)
-				/ float(conn->modes[i].htotal * conn->modes[i].vtotal);
-			float diff = fabsf(modeRefresh - targetRefresh);
-			if (diff < bestDiff) {
-				bestDiff = diff;
-				found = &conn->modes[i];
-			}
+	float bestDiff = 999;
+	for (int i = 0; i < conn->count_modes; i++) {
+		drmModeModeInfo* m = &conn->modes[i];
+		if (m->hdisplay != width || m->vdisplay != height)
+			continue;
+		const float rate = connector_mode_refresh(*m);
+		const float diff = targetRefresh > 0
+			? fabsf(rate - targetRefresh) : 0;
+		bool better = found == NULL || diff < bestDiff - 0.01f;
+		if (!better && fabsf(diff - bestDiff) <= 0.01f) {
+			const bool prefM = (m->type & DRM_MODE_TYPE_PREFERRED) != 0;
+			const bool prefF = (found->type & DRM_MODE_TYPE_PREFERRED) != 0;
+			if (prefM != prefF)
+				better = prefM;
+			else if (targetRefresh <= 0)
+				better = !standard_refresh(connector_mode_refresh(*found))
+					&& standard_refresh(rate);
 		}
-	} else {
-		for (int i = 0; i < conn->count_modes; i++) {
-			if (conn->modes[i].hdisplay == width
-					&& conn->modes[i].vdisplay == height) {
-				found = &conn->modes[i];
-				break;
-			}
+		if (better) {
+			bestDiff = diff;
+			found = m;
 		}
 	}
 

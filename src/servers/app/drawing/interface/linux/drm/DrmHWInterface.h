@@ -601,6 +601,7 @@ private:
 			BRect				_Frame() const;
 			BRect				_DesktopBounds() const;
 			bool				_SingleOutput() const;
+			void				_RepackLayout();
 			void				_RebuildRenderBuffer(uint32 width,
 									uint32 height);
 			void				_AddDamage(const BRect& frame);

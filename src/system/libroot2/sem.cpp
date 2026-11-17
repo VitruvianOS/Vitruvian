@@ -33,6 +33,7 @@ const int32 kDeadCount = INT32_MIN;
 struct SemSlot {
 	std::atomic<uint64_t>	ctl;
 	std::atomic<int32>		waiters;
+	std::atomic<int32>		bigWaiters;
 	std::atomic<int32>		holder;
 	int32					nextFree;
 	char					name[B_OS_NAME_LENGTH];
@@ -133,17 +134,27 @@ count_for_user(SemSlot* slot, uint64_t ctl)
 struct WaiterRef {
 	SemSlot*	slot;
 	bool		registered;
+	bool		big;
 
-	WaiterRef(SemSlot* slot) : slot(slot), registered(false) {}
+	WaiterRef(SemSlot* slot, bool big)
+		: slot(slot), registered(false), big(big) {}
 	~WaiterRef()
 	{
-		if (registered)
-			slot->waiters.fetch_sub(1);
+		if (registered) {
+			int32 others = slot->waiters.fetch_sub(1) - 1;
+			if (big)
+				slot->bigWaiters.fetch_sub(1);
+			// A wake we did not consume must reach the next waiter.
+			if (others > 0 && count_of(slot->ctl.load()) > 0)
+				futex_wake(futex_word(slot), 1);
+		}
 	}
 	void Register()
 	{
 		registered = true;
 		slot->waiters.fetch_add(1);
+		if (big)
+			slot->bigWaiters.fetch_add(1);
 	}
 };
 
@@ -157,8 +168,10 @@ BKernelPrivate::ReinitSemsAfterFork()
 	int32 used = sUsed.load();
 	for (int32 i = 0; i < used; i++) {
 		SemSlot* slot = slot_at(i);
-		if (slot != NULL)
+		if (slot != NULL) {
 			slot->waiters.store(0);
+			slot->bigWaiters.store(0);
+		}
 	}
 }
 
@@ -261,7 +274,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 			deadline = 1;
 	}
 
-	WaiterRef waiter(slot);
+	WaiterRef waiter(slot, count > 1);
 	for (;;) {
 		uint64_t ctl = slot->ctl.load(std::memory_order_acquire);
 		if (state_of(ctl) != state)
@@ -341,8 +354,14 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 			break;
 	}
 
-	if (slot->waiters.load() > 0)
-		futex_wake_all(futex_word(slot));
+	// A multi-count waiter may need more than one release, wake all then.
+	int32 waiting = slot->waiters.load();
+	if (waiting > 0) {
+		if (slot->bigWaiters.load() > 0 || (flags & B_RELEASE_ALL) != 0)
+			futex_wake_all(futex_word(slot));
+		else
+			futex_wake(futex_word(slot), count < waiting ? count : waiting);
+	}
 	return B_OK;
 }
 

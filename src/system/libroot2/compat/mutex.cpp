@@ -35,8 +35,14 @@ status_t
 _kern_mutex_lock(int32* mutex, const char* name, uint32 flags,
 		bigtime_t timeout)
 {
-	while (__atomic_exchange_n(mutex, 1, __ATOMIC_ACQUIRE) != 0) {
-		int result = futex_wait(mutex, 1, timeout);
+	// 0 free, 1 held, 2 held with waiters.
+	int32 expected = 0;
+	if (__atomic_compare_exchange_n(mutex, &expected, 1, false,
+			__ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+		return B_OK;
+
+	while (__atomic_exchange_n(mutex, 2, __ATOMIC_ACQUIRE) != 0) {
+		int result = futex_wait(mutex, 2, timeout);
 		if (timeout > 0 && result == -1) {
 			if (errno == ETIMEDOUT)
 				return B_TIMED_OUT;
@@ -51,7 +57,7 @@ _kern_mutex_lock(int32* mutex, const char* name, uint32 flags,
 status_t
 _kern_mutex_unlock(int32* mutex, uint32 flags)
 {
-	if (__atomic_exchange_n(mutex, 0, __ATOMIC_RELEASE) == 1)
+	if (__atomic_exchange_n(mutex, 0, __ATOMIC_RELEASE) == 2)
 		futex_wake(mutex);
 	return B_OK;
 }

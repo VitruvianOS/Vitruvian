@@ -5165,6 +5165,19 @@ Desktop::_ScreenChanged(Screen* screen)
 				window->ServerWindow()->ScreenChanged(&update);
 		}
 	}
+
+	// Screen preferences shows every output, so any change concerns it:
+	// a private notice, as B_SCREEN_CHANGED would move the window.
+	if (moved.CountItems() > 0) {
+		BMessage notice('sOch');
+		for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+				window = window->NextWindow(kAllWindowList)) {
+			ServerApp* app = window->ServerWindow()->App();
+			if (app != NULL
+				&& strcmp(app->Signature(), "application/x-vnd.vos-Screen") == 0)
+				window->ServerWindow()->SendMessageToClient(&notice);
+		}
+	}
 }
 
 

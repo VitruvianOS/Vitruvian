@@ -1251,6 +1251,8 @@ ScreenWindow::MessageReceived(BMessage* message)
 		}
 
 		case kMsgPollOutputs:
+		case 'sOch':
+			// Private notice from app_server: some output changed.
 			_RefreshOutputs(false);
 			break;
 

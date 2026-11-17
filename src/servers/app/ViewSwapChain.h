@@ -169,6 +169,9 @@ public:
 	static	void				Snapshot(
 									std::vector<DisplayChainProfile>& chains);
 
+			// When a held frame was posted, 0 when none; for the flip trace.
+	static	bigtime_t			FreshSince();
+
 			// From the plane consumer.
 			void				NotifyShown(uint64 serial, bigtime_t when);
 			void				NotifyDropped(uint64 serial);

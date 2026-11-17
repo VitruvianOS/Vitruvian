@@ -555,6 +555,8 @@ private:
 			// Event thread, exclusive lock held: brings fWriteTarget up
 			// to the render buffer over region.
 			void				_ComposeFrame(const BRegion& region);
+			void				_TraceMissedRefresh(uint32 output, unsigned frame,
+										bigtime_t when, bigtime_t period);
 			status_t			_DirtyFlush(uint32_t fb_id,
 									const BRegion& damage);
 			// Logical damage as physical clips inside the framebuffer.

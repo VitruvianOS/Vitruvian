@@ -15,10 +15,13 @@
 #include "LibEvdevEventStream.h"
 #include "Overlay.h"
 #include "ServerBitmap.h"
+#include "ViewSwapChain.h"
 #include "PanelOrientationTransform.h"
 #include "ScreenManager.h"
 
 #include <algorithm>
+#include <atomic>
+#include <string.h>
 #include <new>
 #include <errno.h>
 #include <fcntl.h>
@@ -980,10 +983,72 @@ DrmHWInterface::_SplitDamage(const BRect& frame, bool outputsOnly)
 }
 
 
+// Missed-refresh trace, VOS_SWAP_CHAIN_STATS: a few clock reads per frame.
+struct MissSlot {
+	uint32		key;
+	bool		used;
+	bigtime_t	lastWhen;
+	unsigned	lastSeq;
+	bigtime_t	issueAt;
+	bigtime_t	lockWait;
+	bigtime_t	compose;
+	int			result;
+};
+
+static MissSlot sMiss[8];
+static std::atomic<bigtime_t> sMissDamageAt(0);
+static bigtime_t sMissPrinted = 0;
+static int sMissSleepMs = 0;
+static bool sMissPending = false;
+
+
+static bool
+miss_enabled()
+{
+	static const bool on = getenv("VOS_SWAP_CHAIN_STATS") != NULL
+		&& atoi(getenv("VOS_SWAP_CHAIN_STATS")) != 0;
+	return on;
+}
+
+
+static MissSlot*
+miss_slot(uint32 key)
+{
+	MissSlot* free = NULL;
+	for (size_t i = 0; i < 8; i++) {
+		if (sMiss[i].used && sMiss[i].key == key)
+			return &sMiss[i];
+		if (!sMiss[i].used && free == NULL)
+			free = &sMiss[i];
+	}
+	if (free != NULL) {
+		memset(free, 0, sizeof(*free));
+		free->key = key;
+		free->used = true;
+	}
+	return free;
+}
+
+
+static void
+miss_issued(uint32 key, bigtime_t lockWait, bigtime_t compose, int result)
+{
+	MissSlot* slot = miss_slot(key);
+	if (slot == NULL)
+		return;
+	slot->issueAt = system_time();
+	slot->lockWait = lockWait;
+	slot->compose = compose;
+	slot->result = result;
+}
+
+
 // Desktop coordinates in, each output's own out.
 void
 DrmHWInterface::_AddDamage(const BRect& frame)
 {
+	if (miss_enabled())
+		sMissDamageAt = system_time();
 	fDirtyMutex.Lock();
 	if (_SingleOutput())
 		fAccumulatedDirty.Include(frame);
@@ -996,6 +1061,8 @@ DrmHWInterface::_AddDamage(const BRect& frame)
 void
 DrmHWInterface::_AddDamage(const BRegion& region)
 {
+	if (miss_enabled())
+		sMissDamageAt = system_time();
 	fDirtyMutex.Lock();
 	if (_SingleOutput())
 		fAccumulatedDirty.Include(&region);
@@ -1214,8 +1281,11 @@ DrmHWInterface::_PresentOutputs()
 	}
 	fDirtyMutex.Unlock();
 
+	const bigtime_t missLockStart = miss_enabled() ? system_time() : 0;
 	if (!due || !LockExclusiveAccess())
 		return;
+	const bigtime_t missLockWait = missLockStart != 0
+		? system_time() - missLockStart : 0;
 
 	_SyncOutputSprites();
 
@@ -1240,6 +1310,7 @@ DrmHWInterface::_PresentOutputs()
 		BRegion present(damage);
 		present.Include(&output->stale);
 
+		const bigtime_t missComposeStart = miss_enabled() ? system_time() : 0;
 		const int32 count = present.CountRects();
 		for (int32 j = 0; j < count; j++) {
 			_BlitRect(&output->pubSource, output->target, present.RectAt(j),
@@ -1301,6 +1372,9 @@ DrmHWInterface::_PresentOutputs()
 		}
 
 		output->lastFlip = now;
+		if (missComposeStart != 0)
+			miss_issued(output->connector, missLockWait,
+				system_time() - missComposeStart, r == 0 ? 0 : -r);
 		if (r == 0) {
 			// The buffer leaving the screen has all but this frame.
 			if (output->back != NULL) {
@@ -2747,6 +2821,13 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		hw->_Wake();
 		return;
 	}
+	if (miss_enabled()) {
+		const bigtime_t period = output == 0 ? hw->_FramePeriod()
+			: (hw->_FindOutput(output) != NULL
+				? _FramePeriodFor(hw->_FindOutput(output)->mode)
+				: hw->_FramePeriod());
+		hw->_TraceMissedRefresh(output, frame, when, period);
+	}
 	hw->fLastFlipDone = system_time();
 	std::vector<PlaneNote> planes;
 	planes.swap(token->planes);
@@ -2787,6 +2868,51 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 
 	hw->_FinishFrameSwap();
 	hw->_NotifyPlanes(planes, true, when);
+}
+
+
+// Event thread, flip completion. Formats only when a refresh was missed.
+void
+DrmHWInterface::_TraceMissedRefresh(uint32 output, unsigned frame,
+	bigtime_t when, bigtime_t period)
+{
+	MissSlot* slot = miss_slot(output);
+	if (slot == NULL)
+		return;
+
+	const bigtime_t last = slot->lastWhen;
+	const unsigned lastSeq = slot->lastSeq;
+	slot->lastWhen = when;
+	slot->lastSeq = frame;
+	if (last == 0 || when - last < period * 3 / 2)
+		return;
+
+	const bigtime_t now = system_time();
+	if (now - sMissPrinted < 50000)
+		return;
+	sMissPrinted = now;
+
+	BString name;
+	if (_ConnectorNameFor(output != 0 ? output : _FirstKey(), name) != B_OK)
+		name = "?";
+	const bigtime_t damageAt = sMissDamageAt.load();
+	const bigtime_t freshAt = ViewSwapChain::FreshSince();
+	const bigtime_t deadline = last + period;
+	char commit[16];
+	if (slot->result == 0)
+		strcpy(commit, "ok");
+	else
+		snprintf(commit, sizeof(commit), "%s",
+			slot->result == EBUSY ? "EBUSY" : strerror(slot->result));
+	fprintf(stderr, "missed-refresh: out=%s gap=%lld seq+%u damage_age=%lld "
+		"lock_wait=%lld compose=%lld commit_at=%lld commit=%s pending=%d "
+		"sleep=%d chain_fresh=%d/%lld\n", name.String(),
+		(long long)(when - last), frame - lastSeq,
+		(long long)(damageAt != 0 ? now - damageAt : -1),
+		(long long)slot->lockWait, (long long)slot->compose,
+		(long long)(slot->issueAt != 0 ? slot->issueAt - deadline : 0),
+		commit, sMissPending ? 1 : 0, sMissSleepMs, freshAt != 0 ? 1 : 0,
+		(long long)(freshAt != 0 ? now - freshAt : 0));
 }
 
 
@@ -3132,6 +3258,10 @@ DrmHWInterface::_EventThreadMain()
 		const bool outputsWaiting = _OutputsWaiting();
 		if (outputsWaiting && timeout > 16)
 			timeout = 16;
+		if (miss_enabled()) {
+			sMissSleepMs = timeout;
+			sMissPending = fPageFlipPending;
+		}
 		int ret = poll(pfds, nfds, timeout);
 		if (ret < 0) {
 			if (errno == EBADF || errno == EINVAL) {
@@ -3225,6 +3355,7 @@ DrmHWInterface::_EventThreadMain()
 		// SetMode() deletes and recreates the buffers under the exclusive
 		// lock; reading fWriteTarget outside it used a freed buffer (#303).
 		bool flipLocked = false;
+		bigtime_t missLockWait = 0;
 		// Without a real vblank (virtio-gpu) a flip completes at once and
 		// every client frame became a full upload. Issue at most one per
 		// refresh period.
@@ -3242,8 +3373,12 @@ DrmHWInterface::_EventThreadMain()
 			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
 				wantFlip = fScanoutFb != 0;
 			fDirtyMutex.Unlock();
-			if (wantFlip)
+			if (wantFlip) {
+				const bigtime_t lockStart = miss_enabled() ? system_time() : 0;
 				flipLocked = LockExclusiveAccess();
+				if (lockStart != 0)
+					missLockWait = system_time() - lockStart;
+			}
 		}
 
 		// Only the cursor moved: commit it alone, it need not wait for a
@@ -3331,8 +3466,13 @@ DrmHWInterface::_EventThreadMain()
 			}
 			fDirtyMutex.Unlock();
 
+			bigtime_t missCompose = 0;
 			if (hasDirty && !fDirectRender && !scanFlip) {
+				const bigtime_t composeStart = miss_enabled()
+					? system_time() : 0;
 				_ComposeFrame(present);
+				if (composeStart != 0)
+					missCompose = system_time() - composeStart;
 			}
 
 			const bool paced = fVblankPacedFlip;
@@ -3470,6 +3610,9 @@ DrmHWInterface::_EventThreadMain()
 				if (!shown.empty())
 					_NotifyPlanes(shown, true, system_time());
 			}
+
+			if (hasDirty && attempted && miss_enabled())
+				miss_issued(0, missLockWait, missCompose, r == 0 ? 0 : flipErr);
 
 			if (hasDirty && r == 0) {
 				fFlipFailures = 0;

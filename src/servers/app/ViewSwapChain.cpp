@@ -11,6 +11,7 @@
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
+#include <atomic>
 #include <string.h>
 #include <poll.h>
 #include <unistd.h>
@@ -616,6 +617,7 @@ private:
 
 static std::mutex sChainsMutex;
 static std::vector<ViewSwapChain*> sChains;
+static std::atomic<bigtime_t> sFreshSince(0);
 
 
 ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
@@ -1031,6 +1033,8 @@ ViewSwapChain::_Post(const SwapChainFrame& frame, Generation* generation)
 		_DropMailbox();
 	}
 
+	if (fStats && sFreshSince.load() == 0)
+		sFreshSince = system_time();
 	fMailSerial = frame.serial;
 	fMailGeneration = generation;
 	fMailWhole = whole;
@@ -1067,6 +1071,7 @@ ViewSwapChain::_DropMailbox()
 void
 ViewSwapChain::_ResetMailbox()
 {
+	sFreshSince = 0;
 	fMailSerial = 0;
 	fMailGeneration = NULL;
 	fMailWhole = false;
@@ -1761,6 +1766,13 @@ ViewSwapChain::_PathName() const
 	if (plane != NULL && plane->Active())
 		return plane->Scanout() ? "scanout" : "plane";
 	return fPath == kPathGpu || fPath == kTrialGpu ? "gpu" : "cpu";
+}
+
+
+bigtime_t
+ViewSwapChain::FreshSince()
+{
+	return sFreshSince.load();
 }
 
 

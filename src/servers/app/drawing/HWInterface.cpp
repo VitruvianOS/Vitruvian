@@ -344,10 +344,7 @@ HWInterface::_TracePublish(const BRect& frame, const char* kind)
 	static thread_id sLastThread = -1;
 
 	const bigtime_t now = system_time();
-	thread_info info;
 	const thread_id thread = find_thread(NULL);
-	if (get_thread_info(thread, &info) != B_OK)
-		info.name[0] = '\0';
 
 	BAutolock locker(sLock);
 	const bool twice = sLastThread == thread && sLastFrame == frame
@@ -363,8 +360,18 @@ HWInterface::_TracePublish(const BRect& frame, const char* kind)
 	if (sLines >= 20)
 		return;
 	sLines++;
+
+	// Looked up once per thread, only when a line is printed.
+	static __thread char sThreadName[32];
+	static __thread bool sThreadNamed = false;
+	if (!sThreadNamed) {
+		thread_info info;
+		if (get_thread_info(thread, &info) == B_OK)
+			strlcpy(sThreadName, info.name, sizeof(sThreadName));
+		sThreadNamed = true;
+	}
 	fprintf(stderr, "publish-big: %s thread=\"%s\" rect=(%d,%d,%d,%d) "
-		"kind=%s\n", twice ? "TWICE" : "once", info.name,
+		"kind=%s\n", twice ? "TWICE" : "once", sThreadName,
 		(int)frame.left, (int)frame.top, (int)frame.right, (int)frame.bottom,
 		kind != NULL ? kind : "direct");
 	if (twice)

@@ -2462,6 +2462,16 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 	newDirtyRegion.Exclude(&copyRegion);
 	copyRegion.Exclude(&window->ExposeHold());
 
+	// borders exposed on other windows are drawn here, inside the batch,
+	// instead of by each window thread in its own publish
+	if (batch) {
+		for (Window* other = CurrentWindows().LastWindow(); other != NULL;
+				other = other->PreviousWindow(fCurrentWorkspace)) {
+			if (other != window && !other->IsHidden())
+				other->DrawExposedBorder(newDirtyRegion);
+		}
+	}
+
 	MarkDirty(newDirtyRegion);
 	_SetBackground(background);
 	_WindowChanged(window);

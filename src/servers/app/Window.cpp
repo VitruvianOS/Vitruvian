@@ -2018,6 +2018,39 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 }
 
 
+/*!	Draws the border part of \a dirty from the calling thread, so it joins
+	the caller's publish batch. \a dirty loses what was drawn. The all
+	window lock must be held.
+*/
+void
+Window::DrawExposedBorder(BRegion& dirty)
+{
+	::Decorator* decorator = Decorator();
+	if (decorator == NULL || !IsVisible() || TopLayerStackWindow() != this)
+		return;
+
+	BRegion border;
+	GetBorderRegion(&border);
+	border.IntersectWith(&fVisibleRegion);
+	border.IntersectWith(&dirty);
+	if (border.CountRects() == 0)
+		return;
+
+	DrawingEngine* engine = decorator->GetDrawingEngine();
+	if (engine->LockParallelAccess()) {
+		engine->ConstrainClippingRegion(&border);
+		bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+		engine->SetCopyToFrontEnabled(false);
+		decorator->Draw(border.Frame());
+		engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+		engine->CopyToFront(border);
+		fWindow->ResyncDrawState();
+		engine->UnlockParallelAccess();
+	}
+	dirty.Exclude(&border);
+}
+
+
 void
 Window::_DrawBorder()
 {

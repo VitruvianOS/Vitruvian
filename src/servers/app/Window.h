@@ -183,6 +183,7 @@ public:
 									const BRegion& exposeRegion);
 			void				ProcessDirtyRegion(const BRegion& exposeRegion)
 									{ ProcessDirtyRegion(exposeRegion, exposeRegion); }
+			void				DrawExposedBorder(BRegion& dirty);
 			void				RedrawDirtyRegion();
 
 			// can be used from inside classes that don't

@@ -75,6 +75,27 @@ extern status_t set_variable_refresh(bool enable);
 #define B_TRANSLATION_CONTEXT "Screen"
 
 
+class TemperatureSlider : public BSlider {
+public:
+	TemperatureSlider(const char* name, const char* label, int32 min,
+		int32 max)
+		:
+		BSlider(name, label, NULL, min, max, B_HORIZONTAL)
+	{
+		fText[0] = '\0';
+	}
+
+	virtual const char* UpdateText() const
+	{
+		snprintf(fText, sizeof(fText), "%d K", (int)Value());
+		return fText;
+	}
+
+private:
+	mutable char	fText[16];
+};
+
+
 static BPath _profileDirectory();
 
 
@@ -228,9 +249,9 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		fOriginalTemperature = currentTemp;
 	}
 
-	fTemperatureSlider = new BSlider("temperature",
-		B_TRANSLATE("Colour temperature:"), NULL, kTemperatureMin,
-		kTemperatureMax, B_HORIZONTAL);
+	fTemperatureSlider = new TemperatureSlider("temperature",
+		B_TRANSLATE("Colour temperature:"), kTemperatureMin,
+		kTemperatureMax);
 	fTemperatureSlider->SetKeyIncrementValue(kTemperatureStep);
 	fTemperatureSlider->SetValue((int32)fTemperature);
 	fTemperatureSlider->SetModificationMessage(
@@ -1239,6 +1260,7 @@ ScreenWindow::MessageReceived(BMessage* message)
 				* kTemperatureStep;
 			BScreen screen(_ScreenID());
 			screen.SetTemperature(fTemperature);
+			_CheckApplyEnabled();
 			break;
 		}
 
@@ -1494,6 +1516,7 @@ ScreenWindow::_CheckApplyEnabled()
 	fRevertButton->SetEnabled(columns != fOriginalWorkspacesColumns
 		|| rows != fOriginalWorkspacesRows
 		|| brightness != fOriginalBrightness
+		|| (fTemperatureSupported && fTemperature != fOriginalTemperature)
 		|| fSelected != fOriginal);
 }
 

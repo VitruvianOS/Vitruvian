@@ -756,6 +756,13 @@ systemctl disable ssh.socket 2>/dev/null || true
 systemctl disable xfs_healer_start.service xfs_scrub_all.timer \
     strongswan-starter.service 2>/dev/null || true
 rm -f /etc/systemd/system/multi-user.target.wants/ModemManager.service
+# Started on demand: cups by its socket (and printer.target on hotplug),
+# wpa_supplicant by NetworkManager, accounts-daemon over D-Bus. cups.path
+# would start cupsd at every boot once its state file exists.
+rm -f /etc/systemd/system/multi-user.target.wants/cups.service \
+    /etc/systemd/system/multi-user.target.wants/cups.path \
+    /etc/systemd/system/multi-user.target.wants/wpa_supplicant.service \
+    /etc/systemd/system/graphical.target.wants/accounts-daemon.service
 
 # Live/raw marker — Installer strips this on --commit-setup.
 mkdir -p /etc/vos

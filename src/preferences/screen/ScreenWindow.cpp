@@ -1339,6 +1339,25 @@ ScreenWindow::MessageReceived(BMessage* message)
 				break;
 			}
 
+			// Position alone is harmless: no countdown, unless one is
+			// already pending and this joins it.
+			if (fAlertWindow == NULL) {
+				status_t status = BPrivate::BPrivateScreen::SetLayout(ids,
+					origins, count);
+				if (status != B_OK) {
+					BString text;
+					text.SetToFormat(B_TRANSLATE("The displays could not be "
+						"changed:\n\t%s\n"), screen_errors(status));
+					BAlert* alert = new BAlert(B_TRANSLATE("Warning"),
+						text.String(), B_TRANSLATE("OK"), NULL, NULL,
+						B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					alert->Go(NULL);
+				}
+				_RefreshOutputs(true);
+				break;
+			}
+
 			bool wasPending = _BeginDisplayChange();
 			_EndDisplayChange(wasPending,
 				BPrivate::BPrivateScreen::SetLayout(ids, origins, count));

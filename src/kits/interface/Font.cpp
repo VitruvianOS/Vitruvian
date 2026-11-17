@@ -28,6 +28,9 @@
 #include <String.h>
 
 #include <new>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -1032,6 +1035,35 @@ BFont::StringWidth(const char* string, int32 length) const
 }
 
 
+namespace {
+
+// Widths already measured by the server, keyed by font and string. They only
+// depend on family, style, size and spacing.
+struct StringWidthCache {
+	BLocker lock;
+	std::unordered_map<std::string, float> widths;
+
+	static StringWidthCache& Get()
+	{
+		static StringWidthCache sCache;
+		return sCache;
+	}
+
+	static std::string Key(uint16 family, uint16 style, float size,
+		uint8 spacing, const char* string, int32 length)
+	{
+		std::string key((const char*)&family, sizeof(family));
+		key.append((const char*)&style, sizeof(style));
+		key.append((const char*)&size, sizeof(size));
+		key.append((const char*)&spacing, sizeof(spacing));
+		key.append(string, length);
+		return key;
+	}
+};
+
+}	// namespace
+
+
 void
 BFont::GetStringWidths(const char* stringArray[], const int32 lengthArray[],
 	int32 numStrings, float widthArray[]) const
@@ -1041,25 +1073,53 @@ BFont::GetStringWidths(const char* stringArray[], const int32 lengthArray[],
 		return;
 	}
 
+	StringWidthCache& cache = StringWidthCache::Get();
+	std::vector<std::string> keys(numStrings);
+	std::vector<int32> missing;
+	{
+		BAutolock locker(cache.lock);
+		for (int32 i = 0; i < numStrings; i++) {
+			keys[i] = StringWidthCache::Key(fFamilyID, fStyleID, fSize,
+				fSpacing, stringArray[i], lengthArray[i]);
+			std::unordered_map<std::string, float>::iterator found
+				= cache.widths.find(keys[i]);
+			if (found != cache.widths.end())
+				widthArray[i] = found->second;
+			else
+				missing.push_back(i);
+		}
+	}
+	if (missing.empty())
+		return;
+
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_STRING_WIDTHS);
 	link.Attach<uint16>(fFamilyID);
 	link.Attach<uint16>(fStyleID);
 	link.Attach<float>(fSize);
 	link.Attach<uint8>(fSpacing);
-	link.Attach<int32>(numStrings);
+	link.Attach<int32>((int32)missing.size());
 
 	// TODO: all strings into a single array???
 	// we do have a maximum message length, and it could be easily touched
 	// here...
-	for (int32 i = 0; i < numStrings; i++)
-		link.AttachString(stringArray[i], lengthArray[i]);
+	for (size_t i = 0; i < missing.size(); i++)
+		link.AttachString(stringArray[missing[i]], lengthArray[missing[i]]);
 
 	status_t status;
 	if (link.FlushWithReply(status) != B_OK || status != B_OK)
 		return;
 
-	link.Read(widthArray, sizeof(float) * numStrings);
+	std::vector<float> measured(missing.size());
+	link.Read(&measured[0], sizeof(float) * missing.size());
+
+	BAutolock locker(cache.lock);
+	if (cache.widths.size() > 2048)
+		cache.widths.clear();
+	for (size_t i = 0; i < missing.size(); i++) {
+		widthArray[missing[i]] = measured[i];
+		cache.widths[keys[missing[i]]] = measured[i];
+	}
 }
 
 

@@ -328,6 +328,10 @@ DrmHWInterface::DrmHWInterface()
 	fCursorPlaneProps{},
 	fCrtcProps{},
 	fConnProps{},
+	fScanout(NULL),
+	fScanoutFb(0),
+	fScanoutSerial(0),
+	fScanoutOnScreen(false),
 	fVRRSupported(false),
 	fVRREnabled(false),
 	fVRRWanted(false),
@@ -1300,6 +1304,8 @@ DrmHWInterface::_PresentOutputs()
 			token->generation = output->generation;
 			token->output = output->connector;
 			token->cursorOnly = false;
+			token->scanout = false;
+			token->scanoutSerial = 0;
 			fFlipTokens.push_back(token);
 
 			r = drmModePageFlip(output->fd, output->dev->crtc,
@@ -2649,6 +2655,8 @@ DrmHWInterface::_OnSessionDisable()
 	// out our stale sprite.
 	_DisableHardwareCursor();
 
+	_ScanoutDetach(NULL, true);
+
 	// Same for overlay planes; geometry is kept for re-arm on resume.
 	pthread_mutex_lock(&fOverlayMutex);
 	for (size_t i = 0; i < fOverlayPlanes.size(); i++) {
@@ -2686,6 +2694,7 @@ DrmHWInterface::_RestoreDisplay()
 	ModesetGuard modesetGuard(&fModesetMutex);
 	// Same window as SetMode: a concurrent flip EINVAL here is the
 	// modeset, not a broken flip.
+	_ScanoutDetach(NULL, true);
 	fModesetActive = true;
 	struct modeset_dev *iter = fStandIn == 0 ? fDev : NULL;
 	if (iter != NULL) {
@@ -2758,7 +2767,20 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	hw->fLastFlipDone = system_time();
 	std::vector<PlaneNote> planes;
 	planes.swap(token->planes);
+	const bool scanout = token->scanout;
+	const uint64_t scanoutSerial = token->scanoutSerial;
 	delete token;
+
+	if (output == 0 && scanout) {
+		// A client buffer, not a desktop frame: nothing to swap.
+		hw->fPageFlipPending = false;
+		pthread_cond_broadcast(&hw->fFlipCond);
+		pthread_mutex_unlock(&hw->fFlipMutex);
+		hw->_NotifyPlanes(planes, true, when);
+		hw->_NotifyScanout(scanoutSerial, true, when);
+		hw->_Wake();
+		return;
+	}
 
 	if (output != 0) {
 		pthread_mutex_unlock(&hw->fFlipMutex);
@@ -2795,6 +2817,9 @@ DrmHWInterface::_FinishFrameSwap()
 	}
 	fPageFlipPending = false;
 	pthread_cond_broadcast(&fFlipCond);
+	// The desktop is on screen again.
+	if (!fScanoutZombies.empty() && fScanout == NULL)
+		_FlushScanoutZombies();
 
 	if (fRenderBuffer != NULL && fDirectRender) {
 		_DirectFlipComplete();
@@ -3071,8 +3096,11 @@ DrmHWInterface::_EventThreadMain()
 			timeout = 16;
 		else if (fPageFlipEnabled && fStandIn == 0) {
 			fDirtyMutex.Lock();
-			const bool dirty = fAccumulatedDirty.CountRects() > 0
+			bool dirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
+			// A buffer on screen leaves the desktop alone.
+			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
+				dirty = fScanoutFb != 0;
 			// Nothing left to do: the next change must write the wake.
 			if (!dirty)
 				fWakeQueued = false;
@@ -3194,6 +3222,9 @@ DrmHWInterface::_EventThreadMain()
 			}
 		}
 
+		if (active)
+			_CheckScanout();
+
 		// SetMode() deletes and recreates the buffers under the exclusive
 		// lock; reading fWriteTarget outside it used a freed buffer (#303).
 		bool flipLocked = false;
@@ -3216,6 +3247,8 @@ DrmHWInterface::_EventThreadMain()
 			composable.Exclude(&held);
 			bool wantFlip = composable.CountRects() > 0 || fNeedsFlip
 				|| !fStagedPlanes.empty();
+			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
+				wantFlip = fScanoutFb != 0;
 			fDirtyMutex.Unlock();
 			if (wantFlip)
 				flipLocked = LockExclusiveAccess();
@@ -3253,8 +3286,22 @@ DrmHWInterface::_EventThreadMain()
 			// target missed while it was on screen.
 			BRegion damage;
 			BRegion present;
+			// A client buffer to show instead of the desktop.
+			bool scanFlip = false;
+			bool scanHold = false;
+			uint32_t scanFb = 0;
+			uint64_t scanSerial = 0;
 
 			fDirtyMutex.Lock();
+			if (fScanout != NULL) {
+				scanFb = fScanoutFb;
+				scanSerial = fScanoutSerial;
+				fScanoutFb = 0;
+				fScanoutSerial = 0;
+				scanFlip = scanFb != 0 && fAtomicSupported
+					&& fPrimaryPlaneId != 0;
+				scanHold = scanFb != 0 || fScanoutOnScreen;
+			}
 			BRegion held;
 			BRegion keep;
 			BRegion keepStale;
@@ -3265,8 +3312,10 @@ DrmHWInterface::_EventThreadMain()
 				held.MakeEmpty();
 			BRegion composable(fAccumulatedDirty);
 			composable.Exclude(&held);
-			const bool hasDirty = composable.CountRects() > 0
+			bool hasDirty = composable.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty();
+			if (scanHold)
+				hasDirty = scanFlip;
 			if (hasDirty) {
 				// Draws from here on wake the thread again.
 				fWakeQueued = false;
@@ -3288,7 +3337,9 @@ DrmHWInterface::_EventThreadMain()
 					}
 				}
 				// Direct render keeps its damage for the completion.
-				if (!fDirectRender) {
+				if (scanFlip) {
+					// The desktop's damage waits for its own frame.
+				} else if (!fDirectRender) {
 					// Held areas wait for their session to end.
 					keep = fAccumulatedDirty;
 					keep.IntersectWith(&held);
@@ -3306,7 +3357,7 @@ DrmHWInterface::_EventThreadMain()
 			}
 			fDirtyMutex.Unlock();
 
-			if (hasDirty && !fDirectRender) {
+			if (hasDirty && !fDirectRender && !scanFlip) {
 				if (keepStale.CountRects() > 0 && fFrontBuffer != NULL
 						&& fWriteTarget != fFrontBuffer) {
 					copy_scanout_rects(fFrontBuffer, fWriteTarget, keepStale,
@@ -3320,7 +3371,7 @@ DrmHWInterface::_EventThreadMain()
 			bool attempted = false;
 			int r = -1;
 			int flipErr = 0;
-			if (hasDirty && paced) {
+			if (hasDirty && paced && !scanFlip) {
 				r = _VblankPacedFlip() ? 0 : -1;
 			} else if (hasDirty) {
 				// Issue under fFlipMutex: SetMode() tears the buffers
@@ -3330,7 +3381,8 @@ DrmHWInterface::_EventThreadMain()
 				pthread_mutex_lock(&fFlipMutex);
 				if (fWriteTarget != NULL) {
 					attempted = true;
-					const uint32_t fb = fWriteTarget->GetFbId();
+					const uint32_t fb = scanFlip ? scanFb
+						: fWriteTarget->GetFbId();
 					const bool atomic = fAtomicSupported
 						&& fPrimaryPlaneId != 0;
 					if (fDamageFlush && !atomic) {
@@ -3343,6 +3395,8 @@ DrmHWInterface::_EventThreadMain()
 						token->generation = fFlipGeneration;
 						token->output = 0;
 						token->cursorOnly = false;
+						token->scanout = scanFlip;
+						token->scanoutSerial = scanSerial;
 						fFlipTokens.push_back(token);
 
 						if (atomic) {
@@ -3385,7 +3439,19 @@ DrmHWInterface::_EventThreadMain()
 
 			if (hasDirty) {
 				fDirtyMutex.Lock();
-				if (r == 0) {
+				if (r == 0 && scanFlip) {
+					fNeedsFlip = false;
+					if (fScanout != NULL)
+						fScanoutOnScreen = true;
+					else {
+						// Released meanwhile: the desktop follows.
+						const BRect full(0, 0, fDisplayMode.virtual_width - 1,
+							fDisplayMode.virtual_height - 1);
+						fAccumulatedDirty.Include(full);
+						fBackStale.Include(full);
+						fNeedsFlip = true;
+					}
+				} else if (r == 0) {
 					fNeedsFlip = false;
 					// The buffer leaving the screen has all but this frame.
 					if (!fDirectRender && !fDamageFlush) {
@@ -3395,6 +3461,11 @@ DrmHWInterface::_EventThreadMain()
 				} else {
 					// Not shown: damage and cursor ride the retry.
 					fAccumulatedDirty.Include(&damage);
+					if (scanFlip && fScanout != NULL && fScanoutFb == 0) {
+						fScanoutFb = scanFb;
+						fScanoutSerial = scanSerial;
+						scanSerial = 0;
+					}
 					if (staged.valid && !fStagedCursor.valid)
 						fStagedCursor = staged;
 					for (size_t i = 0; i < planes.size(); i++) {
@@ -3415,6 +3486,8 @@ DrmHWInterface::_EventThreadMain()
 				fDirtyMutex.Unlock();
 				if (!lost.empty())
 					_NotifyPlanes(lost, false, 0);
+				if (scanFlip && r != 0 && scanSerial != 0)
+					_NotifyScanout(scanSerial, false, 0);
 			}
 
 			if (hasDirty && r == 0 && !usedAtomic) {
@@ -3534,6 +3607,7 @@ DrmHWInterface::~DrmHWInterface()
 	// keeps scanning out after we're gone (janus-shared fd case).
 	_DisableHardwareCursor();
 	_ReleaseOverlayPlanes();
+	_FlushScanoutZombies();
 
 	// Janus-shared fd is a dup() of janus's open — dropping master here
 	// would revoke janus's too, and the non-root successor can't reacquire.
@@ -6065,6 +6139,8 @@ DrmHWInterface::_CommitCursorOnly(const CursorUpdate& update)
 	token->generation = 0;
 	token->output = 0;
 	token->cursorOnly = true;
+	token->scanout = false;
+	token->scanoutSerial = 0;
 	pthread_mutex_lock(&fFlipMutex);
 	fFlipTokens.push_back(token);
 	fCursorInFlightAt = system_time();
@@ -8238,6 +8314,354 @@ DrmHWInterface::HideOverlay(Overlay* overlay)
 }
 
 
+// #pragma mark - direct scanout
+
+
+DrmScanout::DrmScanout(DrmHWInterface* interface, int fd)
+	:
+	fInterface(interface),
+	fFd(fd),
+	fWidth(0),
+	fHeight(0),
+	fListener(NULL)
+{
+}
+
+
+DrmScanout::~DrmScanout()
+{
+}
+
+
+status_t
+DrmScanout::Adopt(int dmabufFd, uint32 width, uint32 height, uint32 fourcc,
+	uint32 stride, uint32 sharedHandle, int32* _index)
+{
+	return AddBuffer(dmabufFd, width, height, fourcc, stride, sharedHandle,
+		_index);
+}
+
+
+status_t
+DrmScanout::AddBuffer(int dmabufFd, uint32 width, uint32 height,
+	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index)
+{
+	if (dmabufFd < 0 || stride == 0 || _index == NULL || fBuffers.size() >= 8
+			|| (!fBuffers.empty() && (width != fWidth || height != fHeight)))
+		return B_BAD_VALUE;
+
+	uint32 handle = 0;
+	if (drmPrimeFDToHandle(fFd, dmabufFd, &handle) < 0)
+		return B_ERROR;
+
+	const bool closeHandle = handle != sharedHandle;
+	uint32 handles[4] = { handle, 0, 0, 0 };
+	uint32 pitches[4] = { stride, 0, 0, 0 };
+	uint32 offsets[4] = { 0, 0, 0, 0 };
+	uint32 fbId = 0;
+	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
+			offsets, &fbId, 0) < 0) {
+		if (closeHandle)
+			_CloseGem(fFd, handle);
+		return B_ERROR;
+	}
+
+	Buffer buffer = { fbId, handle, closeHandle };
+	try {
+		fBuffers.push_back(buffer);
+	} catch (std::bad_alloc&) {
+		drmModeRmFB(fFd, fbId);
+		if (closeHandle)
+			_CloseGem(fFd, handle);
+		return B_NO_MEMORY;
+	}
+
+	fWidth = width;
+	fHeight = height;
+	*_index = (int32)fBuffers.size() - 1;
+	return B_OK;
+}
+
+
+status_t
+DrmScanout::Show(int32 index, uint64 serial, const BRect&, const BRect&)
+{
+	if (index < 0 || (size_t)index >= fBuffers.size())
+		return B_BAD_VALUE;
+
+	return fInterface->_ScanoutShow(this, fBuffers[index].fbId, serial);
+}
+
+
+bool
+DrmHWInterface::_PrimaryAccepts(uint32 format, uint64 modifier) const
+{
+	if (fPrimaryFormats.empty())
+		return modifier == DRM_FORMAT_MOD_LINEAR;
+
+	for (size_t i = 0; i < fPrimaryFormats.size(); i++) {
+		if (fPrimaryFormats[i].format == format
+				&& fPrimaryFormats[i].modifier == modifier)
+			return true;
+	}
+	return false;
+}
+
+
+bool
+DrmHWInterface::ScanoutCapable(int32 width, int32 height)
+{
+	return fFd >= 0 && fDev != NULL && fAtomicSupported && fPrimaryPlaneId != 0
+		&& fPageFlipEnabled && !fDirectRender && !fDamageFlush
+		&& fStandIn == 0 && fHardwareCursorEnabled
+		&& fPanelOrientation == PANEL_ORIENTATION_NORMAL
+		&& fPanelReflection == 0
+		&& (int32)fDisplayMode.virtual_width == width
+		&& (int32)fDisplayMode.virtual_height == height
+		&& _PrimaryAccepts(DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_LINEAR);
+}
+
+
+status_t
+DrmHWInterface::AcquireScanoutForBitmap(ServerBitmap* bitmap,
+	OverlayPlane** _plane, const BRect& destination)
+{
+	if (_plane == NULL)
+		return B_BAD_VALUE;
+	*_plane = NULL;
+
+#if defined(HAVE_GBM) && defined(HAVE_DRM_ATOMIC)
+	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
+	if (memory == NULL)
+		return B_UNSUPPORTED;
+
+	const int32 width = (int32)memory->Width();
+	const int32 height = (int32)memory->Height();
+	if (!fInitialized || fDpmsState != B_DPMS_ON || !ScanoutCapable(width,
+			height) || memory->DeviceFd() != fFd
+			|| memory->Format() != DRM_FORMAT_XRGB8888
+			|| fVblankPacedFlip)
+		return B_UNSUPPORTED;
+
+	// Whole first output only.
+	uint32 output;
+	BRect frame;
+	if (!_OutputFor(destination, &output, &frame) || output != 0
+			|| frame != destination
+			|| frame.IntegerWidth() + 1 != width
+			|| frame.IntegerHeight() + 1 != height)
+		return B_BUSY;
+
+	DrmScanout* scanout = new(std::nothrow) DrmScanout(this, fFd);
+	if (scanout == NULL)
+		return B_NO_MEMORY;
+
+	int fd = memory->ExportFd();
+	if (fd < 0) {
+		delete scanout;
+		return B_ERROR;
+	}
+	int32 index = -1;
+	status_t status = scanout->Adopt(fd, memory->Width(), memory->Height(),
+		memory->Format(), memory->Stride(), memory->Handle(), &index);
+	close(fd);
+
+	// Ask the driver before the desktop is given up.
+	if (status == B_OK) {
+		ModesetGuard modesetGuard(&fModesetMutex);
+		struct modeset_dev* dev = fDev;
+		drmModeAtomicReq* req = dev != NULL ? drmModeAtomicAlloc() : NULL;
+		if (req == NULL)
+			status = B_ERROR;
+		else {
+			const uint32_t plane = fPrimaryPlaneId;
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.crtc_id,
+				dev->crtc);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.fb_id,
+				scanout->fBuffers[0].fbId);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.src_x, 0);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.src_y, 0);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.src_w,
+				(uint64_t)width << 16);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.src_h,
+				(uint64_t)height << 16);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.crtc_x, 0);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.crtc_y, 0);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.crtc_w, width);
+			drmModeAtomicAddProperty(req, plane, fPlaneProps.crtc_h, height);
+			if (drmModeAtomicCommit(fFd, req, DRM_MODE_ATOMIC_TEST_ONLY, NULL)
+					!= 0)
+				status = B_NOT_SUPPORTED;
+			drmModeAtomicFree(req);
+		}
+	}
+
+	if (status == B_OK) {
+		fDirtyMutex.Lock();
+		if (fScanout == NULL)
+			fScanout = scanout;
+		else
+			status = B_BUSY;
+		fDirtyMutex.Unlock();
+	}
+
+	if (status != B_OK) {
+		// Never on screen.
+		pthread_mutex_lock(&fOverlayMutex);
+		for (size_t i = 0; i < scanout->fBuffers.size(); i++)
+			fScanoutZombies.push_back(scanout->fBuffers[i]);
+		pthread_mutex_unlock(&fOverlayMutex);
+		_FlushScanoutZombies();
+		delete scanout;
+		return status;
+	}
+
+	*_plane = scanout;
+	return B_OK;
+#else
+	return B_UNSUPPORTED;
+#endif
+}
+
+
+void
+DrmHWInterface::ReleaseScanout(OverlayPlane* plane)
+{
+	DrmScanout* scanout = static_cast<DrmScanout*>(plane);
+	if (scanout == NULL)
+		return;
+
+	_ScanoutDetach(scanout, false);
+
+	// Possibly still on screen: removed once the desktop is.
+	pthread_mutex_lock(&fOverlayMutex);
+	for (size_t i = 0; i < scanout->fBuffers.size(); i++) {
+		try {
+			fScanoutZombies.push_back(scanout->fBuffers[i]);
+		} catch (std::bad_alloc&) {
+		}
+	}
+	pthread_mutex_unlock(&fOverlayMutex);
+	delete scanout;
+}
+
+
+// Drops the claim; the desktop is composed and flipped again. A claim
+// that is not scanout's is left alone.
+void
+DrmHWInterface::_ScanoutDetach(DrmScanout* only, bool notify)
+{
+	fDirtyMutex.Lock();
+	DrmScanout* scanout = fScanout;
+	if (scanout == NULL || (only != NULL && only != scanout)) {
+		fDirtyMutex.Unlock();
+		return;
+	}
+
+	OverlayPlaneListener* listener = scanout->Listener();
+	fScanout = NULL;
+	fScanoutFb = 0;
+	fScanoutSerial = 0;
+	fScanoutOnScreen = false;
+	const BRect full(0, 0, fDisplayMode.virtual_width - 1,
+		fDisplayMode.virtual_height - 1);
+	fAccumulatedDirty.Include(full);
+	fBackStale.Include(full);
+	fNeedsFlip = true;
+	fDirtyMutex.Unlock();
+
+	_Wake();
+	if (notify && listener != NULL)
+		listener->PlaneLost();
+}
+
+
+// Event thread. A client buffer cannot stay on screen once the display
+// is anything but the plain case it was claimed in.
+void
+DrmHWInterface::_CheckScanout()
+{
+	const char* why = NULL;
+	fDirtyMutex.Lock();
+	if (fScanout != NULL) {
+		if (fVblankPacedFlip)
+			why = "paced flip";
+		else if (!fHardwareCursorEnabled)
+			why = "software cursor";
+		else if (fDirectRender || fDamageFlush || !fAtomicSupported)
+			why = "flip mode";
+		else if (fStandIn != 0 || fDpmsState != B_DPMS_ON)
+			why = "display off";
+		else if (fPanelOrientation != PANEL_ORIENTATION_NORMAL
+				|| fPanelReflection != 0)
+			why = "rotated";
+	}
+	fDirtyMutex.Unlock();
+
+	if (why != NULL) {
+		fprintf(stderr, "[drm] direct scanout lost, %s\n", why);
+		_ScanoutDetach(NULL, true);
+	}
+}
+
+
+status_t
+DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
+	uint64_t serial)
+{
+	fDirtyMutex.Lock();
+	if (fScanout != scanout) {
+		fDirtyMutex.Unlock();
+		return B_NO_INIT;
+	}
+
+	// Never reached the screen.
+	const uint64_t replaced = fScanoutSerial;
+	fScanoutFb = fbId;
+	fScanoutSerial = serial;
+	fNeedsFlip = true;
+	if (replaced != 0 && scanout->Listener() != NULL)
+		scanout->Listener()->PlaneDropped(replaced);
+	fDirtyMutex.Unlock();
+
+	_Wake();
+	return B_OK;
+}
+
+
+void
+DrmHWInterface::_NotifyScanout(uint64_t serial, bool shown, bigtime_t when)
+{
+	if (serial == 0)
+		return;
+
+	fDirtyMutex.Lock();
+	if (fScanout != NULL && fScanout->Listener() != NULL) {
+		if (shown)
+			fScanout->Listener()->PlaneShown(serial, when);
+		else
+			fScanout->Listener()->PlaneDropped(serial);
+	}
+	fDirtyMutex.Unlock();
+}
+
+
+void
+DrmHWInterface::_FlushScanoutZombies()
+{
+	std::vector<DrmScanout::Buffer> buffers;
+	pthread_mutex_lock(&fOverlayMutex);
+	buffers.swap(fScanoutZombies);
+	pthread_mutex_unlock(&fOverlayMutex);
+
+	for (size_t i = 0; i < buffers.size(); i++) {
+		drmModeRmFB(fFd, buffers[i].fbId);
+		if (buffers[i].closeHandle)
+			_CloseGem(fFd, buffers[i].handle);
+	}
+}
+
+
 bool
 DrmHWInterface::_PlaneAccepts(const OverlayPlaneInfo& info, uint32 format,
 	uint64 modifier)
@@ -8305,6 +8729,9 @@ DrmHWInterface::_RearmOverlayPlanes()
 void
 DrmHWInterface::_ReleaseOverlayPlanes(uint32 output, bool dropInfo)
 {
+	if (output == 0 || output == kAllOutputs)
+		_ScanoutDetach(NULL, true);
+
 	pthread_mutex_lock(&fOverlayMutex);
 	std::vector<DrmOverlayPlane*> claimed;
 	std::vector<OverlayPlaneInfo> kept;

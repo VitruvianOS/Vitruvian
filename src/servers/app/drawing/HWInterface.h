@@ -193,6 +193,17 @@ public:
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination = BRect());
+	// Puts the first buffer of a chain on the primary plane of the output
+	// the destination fills; the rest join with AddBuffer(). B_UNSUPPORTED
+	// or B_BUSY leave the desktop as it was.
+	virtual status_t			AcquireScanoutForBitmap(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination);
+	virtual void				ReleaseScanout(OverlayPlane* plane);
+	// Whether a chain of this size could fill an output.
+	virtual	bool				ScanoutCapable(int32 /*width*/,
+									int32 /*height*/)
+									{ return false; }
 	// Desktop rect of the output that wholly contains where (the first
 	// output for an empty one); invalid when none does.
 	virtual	BRect				OverlayOutputFrame(

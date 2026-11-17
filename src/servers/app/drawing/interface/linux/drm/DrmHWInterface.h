@@ -188,6 +188,51 @@ private:
 			BRect			fDestination;
 };
 
+// The primary plane scanning out a client's buffers instead of the desktop.
+class DrmScanout : public OverlayPlane {
+public:
+							DrmScanout(DrmHWInterface* interface, int fd);
+	virtual					~DrmScanout();
+
+			status_t		Adopt(int dmabufFd, uint32 width, uint32 height,
+								uint32 fourcc, uint32 stride,
+								uint32 sharedHandle, int32* _index);
+
+	virtual	void*			Bits() const { return NULL; }
+	virtual	uint32			BytesPerRow() const { return 0; }
+	virtual	uint32			Width() const { return fWidth; }
+	virtual	uint32			Height() const { return fHeight; }
+	virtual	color_space		ColorSpace() const { return B_RGB32; }
+	virtual	status_t		Configure(const BRect&, const BRect&)
+								{ return B_OK; }
+	virtual	void			Disable() {}
+	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
+								uint32 height, uint32 fourcc, uint32 stride,
+								uint32 sharedHandle, int32* _index);
+	virtual	status_t		Show(int32 index, uint64 serial,
+								const BRect& source,
+								const BRect& destination);
+	virtual	void			SetListener(OverlayPlaneListener* listener)
+								{ fListener = listener; }
+			OverlayPlaneListener* Listener() const { return fListener; }
+
+private:
+	friend class DrmHWInterface;
+
+			struct Buffer {
+				uint32_t	fbId;
+				uint32_t	handle;
+				bool		closeHandle;
+			};
+
+			DrmHWInterface*	fInterface;
+			int				fFd;
+			std::vector<Buffer> fBuffers;
+			uint32			fWidth;
+			uint32			fHeight;
+			OverlayPlaneListener* fListener;
+};
+
 // A format and modifier a plane scans out (IN_FORMATS).
 struct PlaneFormat {
 	uint32_t	format;
@@ -353,6 +398,11 @@ public:
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
+	virtual	status_t			AcquireScanoutForBitmap(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination);
+	virtual	void				ReleaseScanout(OverlayPlane* plane);
+	virtual	bool				ScanoutCapable(int32 width, int32 height);
 	virtual	BRect				OverlayOutputFrame(const BRect& where);
 	virtual	bool				HasOverlayPlane(const BRect& where);
 	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
@@ -467,6 +517,7 @@ private:
 									int count);
 			std::vector<Card>	fCards;
 	friend class				DrmOverlayPlane;
+	friend class				DrmScanout;
 
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
@@ -714,6 +765,9 @@ private:
 				bool			cursorOnly;
 				// Plane updates riding this flip.
 				std::vector<PlaneNote> planes;
+				// Shows a client buffer, named by scanoutSerial.
+				bool			scanout;
+				uint64_t		scanoutSerial;
 			};
 			std::vector<FlipToken*> fFlipTokens;
 			pthread_cond_t		fFlipCond;
@@ -865,6 +919,26 @@ private:
 
 			// Primary plane of the first output, for scanout buffers.
 			std::vector<PlaneFormat>	fPrimaryFormats;
+
+			// Direct scanout of a client buffer on the first output;
+			// fDirtyMutex guards it. The fb to show next is staged
+			// until the event thread flips it.
+			DrmScanout*			fScanout;
+			uint32_t			fScanoutFb;
+			uint64_t			fScanoutSerial;
+			bool				fScanoutOnScreen;
+			// Framebuffers of released scanouts, removed once the desktop
+			// is on screen again.
+			std::vector<DrmScanout::Buffer>	fScanoutZombies;
+			status_t			_ScanoutShow(DrmScanout* scanout,
+									uint32_t fbId, uint64_t serial);
+			void				_ScanoutDetach(DrmScanout* only, bool notify);
+			void				_CheckScanout();
+			void				_FlushScanoutZombies();
+			void				_NotifyScanout(uint64_t serial, bool shown,
+									bigtime_t when);
+			bool				_PrimaryAccepts(uint32 format,
+									uint64 modifier) const;
 
 			bool				fVRRSupported;
 			bool				fVRREnabled;

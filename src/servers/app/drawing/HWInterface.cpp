@@ -438,6 +438,22 @@ HWInterface::ReleaseOverlayPlane(OverlayPlane* /*plane*/)
 
 
 status_t
+HWInterface::AcquireScanoutForBitmap(ServerBitmap* /*bitmap*/,
+	OverlayPlane** _plane, const BRect& /*destination*/)
+{
+	if (_plane != NULL)
+		*_plane = NULL;
+	return B_UNSUPPORTED;
+}
+
+
+void
+HWInterface::ReleaseScanout(OverlayPlane* /*plane*/)
+{
+}
+
+
+status_t
 HWInterface::GetOverlayRestrictions(const Overlay* overlay,
 	overlay_restrictions* restrictions)
 {

@@ -170,7 +170,7 @@ SwapChainCpuRead::~SwapChainCpuRead()
 
 // At most one line a second.
 static void
-note_plane(const char* what)
+note_plane(bool scanout, const char* what)
 {
 	static bigtime_t last = 0;
 	const bigtime_t now = system_time();
@@ -178,7 +178,10 @@ note_plane(const char* what)
 		return;
 
 	last = now;
-	fprintf(stderr, "swap chain: plane released, %s\n", what);
+	if (scanout)
+		fprintf(stderr, "swap chain: direct scanout off (%s)\n", what);
+	else
+		fprintf(stderr, "swap chain: plane released, %s\n", what);
 }
 
 
@@ -336,6 +339,7 @@ public:
 		fHardware(NULL),
 		fToken(0),
 		fRefused(0),
+		fScan(false),
 		fLost(false)
 	{
 	}
@@ -366,6 +370,12 @@ public:
 		return fOutputFrame;
 	}
 
+	// The primary plane shows the buffers, not an overlay.
+	bool Scanout() const
+	{
+		return fScan;
+	}
+
 	virtual bool Show(SwapChainFrame& frame)
 	{
 		_CheckLost();
@@ -382,6 +392,10 @@ public:
 		// Another output needs a plane of its own.
 		if (fPlane != NULL && fOutputFrame != output)
 			Release(frame.serial, "moved to another output");
+
+		// The primary plane cannot be shared between two chains.
+		if (fPlane != NULL && fScan && fToken != frame.token)
+			Release(frame.serial, "resized");
 
 		// A resized chain takes a second plane first, so the screen is
 		// never left without the picture between the two.
@@ -432,7 +446,7 @@ public:
 	bool Follow(const BRect& destination)
 	{
 		_CheckLost();
-		if (fPlane == NULL || fSource.Width() < 0)
+		if (fPlane == NULL || fScan || fSource.Width() < 0)
 			return false;
 
 		const BRect source = fSource;
@@ -450,11 +464,15 @@ public:
 		if (fPlane == NULL)
 			return;
 
-		note_plane(reason);
+		note_plane(fScan, reason);
 		OverlayPlane* plane = fPlane;
 		fPlane = NULL;
 		fToken = 0;
-		fHardware->ReleaseOverlayPlane(plane);
+		if (fScan)
+			fHardware->ReleaseScanout(plane);
+		else
+			fHardware->ReleaseOverlayPlane(plane);
+		fScan = false;
 		fChain->NotifyReleased(keepFrom);
 	}
 
@@ -479,8 +497,14 @@ private:
 	{
 		// The hardware deleted the plane; there is nothing to give back.
 		if (fLost) {
+			// A scanout is the chain's to free.
+			if (fScan && fPlane != NULL) {
+				note_plane(true, "display changed");
+				fHardware->ReleaseScanout(fPlane);
+			}
 			fPlane = NULL;
 			fToken = 0;
+			fScan = false;
 			fLost = false;
 		}
 	}
@@ -493,7 +517,7 @@ private:
 		OverlayPlane* plane = NULL;
 		if (frame.hardware->AcquireOverlayPlaneForBitmap(frame.buffers[0],
 				&plane, frame.destination) != B_OK)
-			return false;
+			return _ClaimScanout(frame);
 
 		for (int32 i = 1; i < frame.count; i++) {
 			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
@@ -517,6 +541,50 @@ private:
 		fHardware = frame.hardware;
 		fToken = frame.token;
 		fOutputFrame = frame.outputFrame;
+		fScan = false;
+		return true;
+#endif
+	}
+
+	// The whole output is this chain's: the primary plane takes it.
+	bool _ClaimScanout(const SwapChainFrame& frame)
+	{
+#ifndef HAVE_GBM
+		return false;
+#else
+		if (frame.destination != frame.outputFrame)
+			return false;
+
+		OverlayPlane* plane = NULL;
+		if (frame.hardware->AcquireScanoutForBitmap(frame.buffers[0], &plane,
+				frame.destination) != B_OK)
+			return false;
+
+		for (int32 i = 1; i < frame.count; i++) {
+			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
+			int fd = memory != NULL ? memory->ExportFd() : -1;
+			int32 index = -1;
+			status_t status = fd >= 0
+				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
+					memory->Format(), memory->Stride(), memory->Handle(),
+					&index)
+				: B_ERROR;
+			if (fd >= 0)
+				close(fd);
+			if (status != B_OK || index != i) {
+				frame.hardware->ReleaseScanout(plane);
+				return false;
+			}
+		}
+
+		plane->SetListener(this);
+		fPlane = plane;
+		fHardware = frame.hardware;
+		fToken = frame.token;
+		fOutputFrame = frame.outputFrame;
+		fScan = true;
+		fprintf(stderr, "swap chain: direct scanout on (%dx%d)\n",
+			(int)frame.bitmap->Width(), (int)frame.bitmap->Height());
 		return true;
 #endif
 	}
@@ -526,6 +594,7 @@ private:
 	::HWInterface*	fHardware;
 	int32			fToken;
 	int32			fRefused;
+	bool			fScan;
 	BRect			fDestination;
 	BRect			fSource;
 	BRect			fOutputFrame;
@@ -652,9 +721,10 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	// Where the view lies picks the card that allocates.
 	BRect where = _DestinationFor(width, height);
 
-	// Only a chain a plane can take needs scanout memory; the CPU copy
-	// reads the rest, best kept in system memory.
-	const bool planeCapable = hardware->HasOverlayPlane(where);
+	// Only a chain a plane or a whole output can take needs scanout memory;
+	// the CPU copy reads the rest, best kept in system memory.
+	const bool planeCapable = hardware->HasOverlayPlane(where)
+		|| hardware->ScanoutCapable(width, height);
 
 	const size_t bytes = (size_t)((width * 4 + 255) & ~255) * height * count;
 	if (!fApp->ReserveSwapChain(bytes, !resize))

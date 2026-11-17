@@ -122,6 +122,7 @@ public:
 			// you need to have ReadLock()ed the clipping!
 	inline	BRegion&			VisibleRegion() { return fVisibleRegion; }
 			BRegion&			VisibleContentRegion();
+			const BRegion&		ExposeHold() const { return fExposeHold; }
 
 			// TODO: not protected by a lock, but no one should need this anyways
 			// make private? when used inside Window, it has the ReadLock()

@@ -2444,19 +2444,34 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 
 	// NOTE: Having all windows locked should prevent any
 	// problems with locking the drawing engine here.
-	if (GetDrawingEngine()->LockParallelAccess()) {
-		GetDrawingEngine()->CopyRegion(&copyRegion, (int32)x, (int32)y);
-		GetDrawingEngine()->UnlockParallelAccess();
+	// The moved bits, the new background and the exposed areas are
+	// published as one snapshot; held parts wait for the client.
+	DrawingEngine* engine = GetDrawingEngine();
+	bool batch = engine->BeginPublishBatch();
+	bool copyToFront = engine->CopyToFrontEnabled();
+	if (engine->LockParallelAccess()) {
+		engine->SetCopyToFrontEnabled(false);
+		engine->CopyRegion(&copyRegion, (int32)x, (int32)y);
+		engine->SetCopyToFrontEnabled(copyToFront);
+		engine->UnlockParallelAccess();
 	}
 
 	// in the dirty region, exclude the parts that we
 	// could move by blitting
 	copyRegion.OffsetBy((int32)x, (int32)y);
 	newDirtyRegion.Exclude(&copyRegion);
+	copyRegion.Exclude(&window->ExposeHold());
 
 	MarkDirty(newDirtyRegion);
 	_SetBackground(background);
 	_WindowChanged(window);
+
+	if (engine->LockParallelAccess()) {
+		if (copyToFront && copyRegion.CountRects() > 0)
+			engine->CopyToFront(copyRegion);
+		engine->EndPublishBatch(batch);
+		engine->UnlockParallelAccess();
+	}
 
 	// resume direct frame buffer access
 	if (direct) {

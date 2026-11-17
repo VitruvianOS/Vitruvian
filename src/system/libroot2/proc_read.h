@@ -76,6 +76,14 @@ ssize_t proc_read_all(int fd, char* buffer, size_t size);
 bool proc_slurp(int fd, char** buffer, size_t* length, size_t maxBytes);
 
 
+// schedstat field 1 (run time, ns) of <dirFd>/<name>; false if unreadable.
+bool proc_read_schedstat(int dirFd, const char* name, unsigned long long* ns);
+
+// Total CPU time in us split by the utime:stime tick ratio; all user if 0:0.
+void proc_split_cpu_time(unsigned long long totalUs, unsigned long long utime,
+	unsigned long long stime, bigtime_t* user, bigtime_t* kernel);
+
+
 // Parses after the last ')': a thread name may contain parentheses.
 bool proc_parse_stat(const char* text, struct proc_stat_info* info);
 

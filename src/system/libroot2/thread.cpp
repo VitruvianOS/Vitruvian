@@ -383,6 +383,16 @@ GetThreadCpuTimes(int dirFd, const char* prefix, bigtime_t* userTime,
 	if (!proc_parse_stat(buffer, &stat))
 		return;
 
+	// Ticks are 10 ms steps; schedstat gives the exact total, split by tick ratio.
+	char schedName[48];
+	snprintf(schedName, sizeof(schedName), "%sschedstat", prefix);
+	unsigned long long ns;
+	if (proc_read_schedstat(dirFd, schedName, &ns)) {
+		proc_split_cpu_time(ns / 1000, stat.utimeTicks, stat.stimeTicks,
+			userTime, kernelTime);
+		return;
+	}
+
 	long hz = proc_clk_tck();
 	*userTime = (bigtime_t)((stat.utimeTicks * 1000000ULL) / (uint64)hz);
 	*kernelTime = (bigtime_t)((stat.stimeTicks * 1000000ULL) / (uint64)hz);

@@ -841,3 +841,32 @@ ProcLineReader::Next()
 	fLine[used] = '\0';
 	return fLine;
 }
+
+
+bool
+proc_read_schedstat(int dirFd, const char* name, unsigned long long* ns)
+{
+	int fd = proc_openat_file(dirFd, name);
+	if (fd < 0)
+		return false;
+
+	char buffer[128];
+	ssize_t length = proc_read_all(fd, buffer, sizeof(buffer));
+	close(fd);
+	if (length <= 0)
+		return false;
+
+	*ns = strtoull(buffer, NULL, 10);
+	return true;
+}
+
+
+void
+proc_split_cpu_time(unsigned long long totalUs, unsigned long long utime,
+	unsigned long long stime, bigtime_t* user, bigtime_t* kernel)
+{
+	unsigned long long ticks = utime + stime;
+	unsigned long long kernelUs = ticks == 0 ? 0 : totalUs * stime / ticks;
+	*kernel = (bigtime_t)kernelUs;
+	*user = (bigtime_t)(totalUs - kernelUs);
+}

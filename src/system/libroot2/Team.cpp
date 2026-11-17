@@ -591,25 +591,58 @@ _get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size
 		return B_BAD_TEAM_ID;
 
 	int fd = proc_dir_open_file(&dir, "stat");
-	proc_dir_close(&dir);
-	if (fd < 0)
+	if (fd < 0) {
+		proc_dir_close(&dir);
 		return B_BAD_TEAM_ID;
+	}
 
 	char buffer[1024];
 	ssize_t dataRead = proc_read_all(fd, buffer, sizeof(buffer));
 	close(fd);
-	if (dataRead <= 0)
-		return B_ERROR;
-
 	struct proc_stat_info stat;
-	if (!proc_parse_stat(buffer, &stat))
+	if (dataRead <= 0 || !proc_parse_stat(buffer, &stat)) {
+		proc_dir_close(&dir);
 		return B_ERROR;
+	}
 
 	long hz = proc_clk_tck();
+	unsigned long long tickUs = (stat.utimeTicks + stat.stimeTicks)
+		* 1000000ULL / (uint64)hz;
 	info->user_time = (bigtime_t)((stat.utimeTicks * 1000000ULL)
 		/ (uint64)hz);
 	info->kernel_time = (bigtime_t)((stat.stimeTicks * 1000000ULL)
 		/ (uint64)hz);
+
+	// Exact total: sum of live threads' schedstat, floored by the tick total
+	// (which also covers exited threads) to stay monotonic.
+	int taskFd = proc_dir_open_file(&dir, "task");
+	proc_dir_close(&dir);
+	if (taskFd >= 0) {
+		unsigned long long sumNs = 0;
+		bool any = false;
+		DIR* tasks = fdopendir(taskFd);
+		if (tasks != NULL) {
+			struct dirent* entry;
+			while ((entry = readdir(tasks)) != NULL) {
+				if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+					continue;
+				char name[64];
+				snprintf(name, sizeof(name), "%s/schedstat", entry->d_name);
+				unsigned long long ns;
+				if (proc_read_schedstat(dirfd(tasks), name, &ns)) {
+					sumNs += ns;
+					any = true;
+				}
+			}
+			closedir(tasks);
+		} else
+			close(taskFd);
+
+		if (any && sumNs / 1000 > tickUs) {
+			proc_split_cpu_time(sumNs / 1000, stat.utimeTicks,
+				stat.stimeTicks, &info->user_time, &info->kernel_time);
+		}
+	}
 
 	return B_OK;
 }

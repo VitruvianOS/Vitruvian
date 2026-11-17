@@ -277,11 +277,14 @@ set(CPACK_DEBIAN_DH-VOS_DESCRIPTION
 set(CPACK_DEBIAN_ARCHIVE_PACKAGE_NAME "vos-archive")
 set(CPACK_DEBIAN_ARCHIVE_PACKAGE_ARCHITECTURE "all")
 set(CPACK_DEBIAN_ARCHIVE_DESCRIPTION
-	"V\\\\OS package repository signing key and apt source")
+	"V\\\\OS package repository signing key, apt source and pin")
 set(CPACK_DEBIAN_ARCHIVE_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/archive/postinst")
 install(FILES data/keys/vitruvian-archive-keyring.asc
 	DESTINATION /usr/share/keyrings
+	COMPONENT archive)
+install(FILES data/debian/archive/vitruvian.pref
+	DESTINATION /etc/apt/preferences.d
 	COMPONENT archive)
 
 # These files used to ship in vos itself.

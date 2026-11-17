@@ -542,6 +542,9 @@ apply_session_env(const char* name)
 	setenv("XDG_SESSION_DESKTOP", "vos",       1);
 	// Native plugin first; Qt falls back to X when it is missing.
 	setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
+	// Socket-activated X server (xvitruvian-launcher); nothing runs until
+	// a client connects.
+	setenv("DISPLAY", ":0", 0);
 	// No portal backend runs here, and GTK blocks ~20s on its D-Bus
 	// activation otherwise.
 	setenv("GTK_USE_PORTAL", "0", 0);

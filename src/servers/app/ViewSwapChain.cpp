@@ -84,9 +84,11 @@ struct ViewSwapChain::Generation {
 
 SwapChainCpuRead::SwapChainCpuRead(ServerBitmap* bitmap)
 	:
-	fFd(-1)
+	fFd(-1),
+	fWait(0)
 {
 #ifdef HAVE_GBM
+	const bigtime_t start = system_time();
 	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
 	if (memory == NULL)
 		return;
@@ -109,8 +111,40 @@ SwapChainCpuRead::SwapChainCpuRead(ServerBitmap* bitmap)
 	// Cache coherency; also waits where the export is unsupported.
 	struct dma_buf_sync sync = { DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ };
 	ioctl(fFd, DMA_BUF_IOCTL_SYNC, &sync);
+	fWait = system_time() - start;
 #else
 	(void)bitmap;
+#endif
+}
+
+
+bool
+SwapChainCpuRead::Ready(ServerBitmap* bitmap)
+{
+#ifdef HAVE_GBM
+	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
+	if (memory == NULL)
+		return true;
+
+	const int fd = memory->ExportFd();
+	if (fd < 0)
+		return true;
+
+	bool ready = true;
+	struct dma_buf_export_sync_file exported;
+	exported.flags = DMA_BUF_SYNC_READ;
+	exported.fd = -1;
+	if (ioctl(fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &exported) == 0
+			&& exported.fd >= 0) {
+		struct pollfd wait = { exported.fd, POLLIN, 0 };
+		ready = poll(&wait, 1, 0) != 0;
+		close(exported.fd);
+	}
+	close(fd);
+	return ready;
+#else
+	(void)bitmap;
+	return true;
 #endif
 }
 
@@ -162,10 +196,11 @@ public:
 		const int32 height = frame.bitmap->Height();
 		const BRect bounds(0, 0, width - 1, height - 1);
 
-		const bigtime_t start = system_time();
 		SwapChainCpuRead reading(frame.bitmap);
+		frame.waitTime = reading.WaitTime();
 		if (!frame.engineLocked)
 			frame.engine->LockParallelAccess();
+		const bigtime_t copyStart = system_time();
 		frame.engine->ConstrainClippingRegion(frame.clipping);
 		drawing_mode oldMode;
 		frame.engine->SetDrawingMode(B_OP_COPY, oldMode);
@@ -190,7 +225,7 @@ public:
 		frame.engine->SetDrawingMode(oldMode);
 		if (!frame.engineLocked)
 			frame.engine->UnlockParallelAccess();
-		frame.copyTime = system_time() - start;
+		frame.copyTime = system_time() - copyStart;
 		return true;
 	}
 
@@ -434,6 +469,8 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fReplaced(0),
 	fCopyTime(0),
 	fCopies(0),
+	fWaitTime(0),
+	fDeferSince(0),
 	fPump(-1),
 	fPumpWake(false),
 	fPumpQuit(false),
@@ -722,7 +759,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			if (clipping == NULL && steady && fOwnerWindow != NULL)
 				fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
 			shown = fCpu->Show(frame);
-			_CountCopy(frame.copyTime);
+			_CountCopy(frame.waitTime, frame.copyTime);
 		}
 	}
 
@@ -881,8 +918,36 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 	BRegion damage;
 	BRect destination;
 	::Window* owner;
+
+	// Never wait on the GPU here: keep the shown frame and let the pump
+	// retry, unless the fence stays late for two periods.
+	{
+		BReference<ServerBitmap> next;
+		{
+			BAutolock locker(fLock);
+			if (fMailSerial == 0)
+				return;
+
+			for (size_t i = 0; i < fPending.size(); i++) {
+				if (fPending[i].serial == fMailSerial) {
+					next = fPending[i].generation->buffers[fPending[i].index];
+					break;
+				}
+			}
+		}
+		if (next.Get() != NULL && !SwapChainCpuRead::Ready(next.Get())) {
+			const bigtime_t now = system_time();
+			BAutolock locker(fLock);
+			if (fDeferSince == 0)
+				fDeferSince = now;
+			if (now - fDeferSince < 2 * (fPeriod > 0 ? fPeriod : 16667))
+				return;
+		}
+	}
+
 	{
 		BAutolock locker(fLock);
+		fDeferSince = 0;
 		if (fMailSerial == 0)
 			return;
 
@@ -930,7 +995,7 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 	frame.engine = engine;
 	frame.clipping = &clipping;
 	fCpu->Show(frame);
-	_CountCopy(frame.copyTime);
+	_CountCopy(frame.waitTime, frame.copyTime);
 }
 
 
@@ -1207,11 +1272,12 @@ ViewSwapChain::_CountShown(bigtime_t when)
 
 
 void
-ViewSwapChain::_CountCopy(bigtime_t time)
+ViewSwapChain::_CountCopy(bigtime_t wait, bigtime_t time)
 {
 	if (!fStats || time <= 0)
 		return;
 
+	atomic_add64(&fWaitTime, wait);
 	atomic_add64(&fCopyTime, time);
 	atomic_add(&fCopies, 1);
 }
@@ -1240,13 +1306,15 @@ ViewSwapChain::_Report(bigtime_t now)
 		return;
 
 	const int64 copyTime = atomic_get_and_set64(&fCopyTime, 0);
+	const int64 waitTime = atomic_get_and_set64(&fWaitTime, 0);
 	const int32 copies = atomic_get_and_set(&fCopies, 0);
 	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
-		"replaced %u, worst gap %.1f ms, copy %lld us\n",
+		"replaced %u, worst gap %.1f ms, wait %lld us, copy %lld us\n",
 		fView != NULL ? fView->Name() : "?",
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
 		fWorstGap / 1000.0,
+		(long long)(copies > 0 ? waitTime / copies : 0),
 		(long long)(copies > 0 ? copyTime / copies : 0));
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;

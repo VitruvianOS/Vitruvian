@@ -38,8 +38,15 @@ public:
 								SwapChainCpuRead(ServerBitmap* bitmap);
 								~SwapChainCpuRead();
 
+	// Microseconds spent waiting for the GPU.
+			bigtime_t			WaitTime() const { return fWait; }
+
+	// True when the GPU is done with the buffer; never blocks.
+	static	bool				Ready(ServerBitmap* bitmap);
+
 private:
 			int					fFd;
+			bigtime_t			fWait;
 };
 
 
@@ -72,6 +79,8 @@ struct SwapChainFrame {
 	bool				async;
 	// Set by the CPU consumer: microseconds spent copying.
 	bigtime_t			copyTime;
+	// Set by the CPU consumer: microseconds waiting for the GPU.
+	bigtime_t			waitTime;
 
 	SwapChainFrame()
 		:
@@ -88,7 +97,8 @@ struct SwapChainFrame {
 		fullyVisible(false),
 		serial(0),
 		async(false),
-		copyTime(0)
+		copyTime(0),
+		waitTime(0)
 	{
 		for (int32 i = 0; i < BPrivate::kSwapChainMaxBuffers; i++)
 			buffers[i] = NULL;
@@ -174,7 +184,7 @@ private:
 			void				_UpdatePeriod(::HWInterface* hardware);
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();
-			void				_CountCopy(bigtime_t time);
+			void				_CountCopy(bigtime_t wait, bigtime_t time);
 			void				_Report(bigtime_t now);
 
 			ServerApp*			fApp;
@@ -204,6 +214,8 @@ private:
 			uint32				fShown;
 			uint32				fReplaced;
 			int64				fCopyTime;
+			int64				fWaitTime;
+			bigtime_t			fDeferSince;
 			int32				fCopies;
 
 			// CPU path: the newest frame, shown by the pump.

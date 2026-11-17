@@ -148,6 +148,9 @@ private:
 
 			bool				_BeginDrawBatch();
 			void				_EndDrawBatch();
+	static	bool				_IsDrawMessage(int32 code);
+	static	bool				_KeepsDrawBatch(int32 code);
+			bigtime_t			_RefreshPeriod() const;
 			bool				_MessageNeedsAllWindowsLocked(
 									uint32 code) const;
 

@@ -4536,14 +4536,32 @@ ServerWindow::_MessageLooper()
 
 	BPrivate::LinkReceiver& receiver = fLink.Receiver();
 	bool quitLoop = false;
+	// one batch spans a client frame, across link buffers
+	bool batchHeld = false;
+	bigtime_t batchStart = 0;
+	bigtime_t batchBound = 16667;
 
 	while (!quitLoop) {
 		//STRACE(("info: ServerWindow::MonitorWin listening on port %ld.\n",
 		//	fMessagePort));
 
 		int32 code;
-		status_t status = receiver.GetNextMessage(code);
+		status_t status;
+		if (batchHeld) {
+			bigtime_t left = batchStart + batchBound - system_time();
+			status = left > 0 ? receiver.GetNextMessage(code,
+				left < 1000 ? left : 1000) : B_TIMED_OUT;
+			if (status == B_TIMED_OUT) {
+				// quiet gap or bound: the frame is complete
+				_EndDrawBatch();
+				batchHeld = false;
+				status = receiver.GetNextMessage(code);
+			}
+		} else
+			status = receiver.GetNextMessage(code);
 		if (status != B_OK) {
+			if (batchHeld)
+				_EndDrawBatch();
 			// that shouldn't happen, it's our port
 			printf("Someone deleted our message port!\n");
 
@@ -4569,7 +4587,6 @@ ServerWindow::_MessageLooper()
 		int32 messagesProcessed = 0;
 		bigtime_t processingStart = system_time();
 		bool lockedDesktopSingleWindow = false;
-		bool batchHeld = false;
 
 		while (true) {
 			if (code == AS_DELETE_WINDOW || code == kMsgQuitLooper) {
@@ -4632,9 +4649,15 @@ ServerWindow::_MessageLooper()
 #ifdef PROFILE_MESSAGE_LOOP
 			bigtime_t dispatchStart = system_time();
 #endif
-			// a multi-message batch shows up as one change
-			if (!batchHeld && receiver.HasMessages() && !fWindow->InUpdate())
+			if (batchHeld && !_KeepsDrawBatch(code)) {
+				_EndDrawBatch();
+				batchHeld = false;
+			}
+			if (!batchHeld && _IsDrawMessage(code) && !fWindow->InUpdate()) {
 				batchHeld = _BeginDrawBatch();
+				batchStart = system_time();
+				batchBound = _RefreshPeriod();
+			}
 			_DispatchMessage(code, receiver);
 
 #ifdef PROFILE_MESSAGE_LOOP
@@ -4666,6 +4689,10 @@ ServerWindow::_MessageLooper()
 			}
 
 			// next message
+			if (batchHeld && system_time() - batchStart >= batchBound) {
+				_EndDrawBatch();
+				batchHeld = false;
+			}
 			status_t status = receiver.GetNextMessage(code);
 			if (status != B_OK) {
 				// that shouldn't happen, it's our port
@@ -4679,11 +4706,11 @@ ServerWindow::_MessageLooper()
 			}
 		}
 
-		if (batchHeld)
-			_EndDrawBatch();
-
 		Unlock();
 	}
+
+	if (batchHeld)
+		_EndDrawBatch();
 
 	// We were asked to quit the message loop - either on request or because of
 	// an error.
@@ -4832,6 +4859,62 @@ ServerWindow::_UpdateCurrentDrawingRegion()
 		fWindow->GetEffectiveDrawingRegion(fCurrentView, fCurrentDrawingRegion);
 		fCurrentDrawingRegionValid = true;
 	}
+}
+
+
+bool
+ServerWindow::_IsDrawMessage(int32 code)
+{
+	return (code >= AS_STROKE_ARC && code <= AS_DRAW_STRING_WITH_OFFSETS)
+		|| code == AS_VIEW_DRAW_BITMAP || code == AS_VIEW_COPY_BITS
+		|| code == AS_VIEW_INVERT_RECT || code == AS_VIEW_DRAW_PICTURE
+		|| code == AS_VIEW_INVALIDATE_RECT || code == AS_VIEW_INVALIDATE_REGION;
+}
+
+
+// Frame messages keep a batch open; window and view structure ops, and
+// the client's sync, close it.
+bool
+ServerWindow::_KeepsDrawBatch(int32 code)
+{
+	if (code == AS_SYNC)
+		return false;
+	if (code >= AS_STROKE_ARC && code <= AS_DRAW_STRING_WITH_OFFSETS)
+		return true;
+	switch (code) {
+		case AS_VIEW_CREATE:
+		case AS_VIEW_DELETE:
+		case AS_VIEW_CREATE_ROOT:
+		case AS_VIEW_SHOW:
+		case AS_VIEW_HIDE:
+		case AS_VIEW_MOVE_TO:
+		case AS_VIEW_RESIZE_TO:
+		case AS_VIEW_SCROLL:
+		case AS_VIEW_BEGIN_RECT_TRACK:
+		case AS_VIEW_DRAG_RECT:
+		case AS_VIEW_DRAG_IMAGE:
+			return false;
+	}
+	return code >= AS_VIEW_CREATE && code <= AS_VIEW_CLIP_TO_SHAPE;
+}
+
+
+// The refresh period of the output, as a bound for one batch.
+bigtime_t
+ServerWindow::_RefreshPeriod() const
+{
+	HWInterface* hw = fDesktop->HWInterface();
+	display_mode mode;
+	if (hw != NULL) {
+		hw->GetMode(&mode);
+		if (mode.timing.pixel_clock != 0) {
+			bigtime_t period = (bigtime_t)((uint64)mode.timing.h_total
+				* mode.timing.v_total * 1000 / mode.timing.pixel_clock);
+			if (period >= 4000 && period <= 100000)
+				return period;
+		}
+	}
+	return 16667;
 }
 
 

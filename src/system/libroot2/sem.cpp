@@ -253,6 +253,42 @@ acquire_sem(sem_id id)
 }
 
 
+// Absolute CLOCK_MONOTONIC time for a system_time() (boottime) deadline.
+static bool
+monotonic_deadline(bigtime_t deadline, struct timespec* ts)
+{
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+		return false;
+	bigtime_t left = deadline - system_time();
+	if (left < 0)
+		left = 0;
+	bigtime_t at = (bigtime_t)now.tv_sec * 1000000 + now.tv_nsec / 1000 + left;
+	ts->tv_sec = at / 1000000;
+	ts->tv_nsec = (at % 1000000) * 1000;
+	return true;
+}
+
+
+static status_t
+futex_wait_until(volatile int32* addr, int32 expected,
+	const struct timespec* until)
+{
+	int result = syscall(SYS_futex, (int*)addr,
+		FUTEX_WAIT_BITSET_PRIVATE, expected, until, NULL,
+		FUTEX_BITSET_MATCH_ANY);
+	if (result == 0)
+		return B_OK;
+	if (errno == ETIMEDOUT)
+		return B_TIMED_OUT;
+	if (errno == EINTR)
+		return B_INTERRUPTED;
+	if (errno == EAGAIN)
+		return B_BUSY;
+	return B_ERROR;
+}
+
+
 status_t
 acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
@@ -273,6 +309,11 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 		if (deadline <= 0)
 			deadline = 1;
 	}
+
+	struct timespec until;
+	if (deadline != 0 && !monotonic_deadline(deadline, &until))
+		deadline = 0;
+	bool absolute = deadline != 0;
 
 	WaiterRef waiter(slot, count > 1);
 	for (;;) {
@@ -300,18 +341,13 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 			continue;
 		}
 
-		bigtime_t left = 0;
-		if (deadline != 0) {
-			left = futex_time_left(deadline);
-			if (left < 0)
-				return B_TIMED_OUT;
-		}
-
-		status_t status = futex_wait(futex_word(slot), available, left);
+		status_t status = absolute
+			? futex_wait_until(futex_word(slot), available, &until)
+			: futex_wait(futex_word(slot), available, 0);
 		if (status == B_INTERRUPTED && (flags & B_CAN_INTERRUPT) != 0)
 			return B_INTERRUPTED;
 		if (status == B_TIMED_OUT) {
-			if (deadline != 0)
+			if (absolute)
 				return B_TIMED_OUT;
 		} else if (futex_wait_failed(status))
 			return B_ERROR;

@@ -3,6 +3,9 @@
  * Distributed under the terms of the LGPL License.
  */
 
+#include <errno.h>
+#include <time.h>
+
 #include <linux/futex.h>
 #include <sys/syscall.h>
 
@@ -10,17 +13,12 @@
 
 
 static inline int
-futex_wait(int32* addr, int32 expected, bigtime_t timeout)
+futex_wait(int32* addr, int32 expected, const struct timespec* until)
 {
-	struct timespec ts;
-	struct timespec* tsp = NULL;
-	if (timeout > 0) {
-		ts.tv_sec = timeout / 1000000;
-		ts.tv_nsec = (timeout % 1000000) * 1000;
-		tsp = &ts;
-	}
-	return syscall(SYS_futex, addr, FUTEX_WAIT,
-		expected, tsp, NULL, 0);
+	if (until == NULL)
+		return syscall(SYS_futex, addr, FUTEX_WAIT, expected, NULL, NULL, 0);
+	return syscall(SYS_futex, addr, FUTEX_WAIT_BITSET, expected, until, NULL,
+		FUTEX_BITSET_MATCH_ANY);
 }
 
 
@@ -41,9 +39,20 @@ _kern_mutex_lock(int32* mutex, const char* name, uint32 flags,
 			__ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
 		return B_OK;
 
+	// Absolute CLOCK_MONOTONIC deadline, computed once.
+	struct timespec until;
+	struct timespec* untilp = NULL;
+	if (timeout > 0 && clock_gettime(CLOCK_MONOTONIC, &until) == 0) {
+		bigtime_t at = (bigtime_t)until.tv_sec * 1000000
+			+ until.tv_nsec / 1000 + timeout;
+		until.tv_sec = at / 1000000;
+		until.tv_nsec = (at % 1000000) * 1000;
+		untilp = &until;
+	}
+
 	while (__atomic_exchange_n(mutex, 2, __ATOMIC_ACQUIRE) != 0) {
-		int result = futex_wait(mutex, 2, timeout);
-		if (timeout > 0 && result == -1) {
+		int result = futex_wait(mutex, 2, untilp);
+		if (untilp != NULL && result == -1) {
 			if (errno == ETIMEDOUT)
 				return B_TIMED_OUT;
 			if (errno == EINTR)

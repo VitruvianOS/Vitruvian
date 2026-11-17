@@ -1032,7 +1032,8 @@ DrmHWInterface::_ReportHoldStats()
 	TakePublishStats(rects, batches, timeouts);
 	fHoldStatsAt = now;
 	fprintf(stderr, "publish: %u rects/s, deferred-batches %u/s, "
-		"expose timeouts %u\n", rects, batches, timeouts);
+		"expose timeouts %u, batch timeouts %u/s\n", rects, batches,
+		timeouts, TakeBatchTimeouts());
 }
 
 

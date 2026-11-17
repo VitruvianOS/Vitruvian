@@ -278,6 +278,11 @@ public:
 			bool				HasDeferredPublish();
 	// What the output shows, for reading back.
 	virtual	RenderingBuffer*	PublishedBuffer() const;
+			void				NoteBatchTimeout()
+									{ atomic_add(&fStatBatchTimeouts, 1); }
+			uint32				TakeBatchTimeouts()
+									{ return (uint32)atomic_get_and_set(
+										&fStatBatchTimeouts, 0); }
 			void				TakePublishStats(uint32& rects,
 									uint32& batches, uint32& timeouts);
 	// while CopyBackToFront() actually performs the operation
@@ -384,6 +389,7 @@ protected:
 			int32				fStatRects;
 			int32				fStatBatches;
 			int32				fStatTimeouts;
+			int32				fStatBatchTimeouts;
 
 			ServerCursorReference
 								fCursor;

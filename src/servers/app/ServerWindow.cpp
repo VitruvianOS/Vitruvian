@@ -28,6 +28,7 @@
 
 
 #include "ServerWindow.h"
+#include "PortWaiter.h"
 
 #include <syslog.h>
 #include <new>
@@ -4540,6 +4541,11 @@ ServerWindow::_MessageLooper()
 	bool batchHeld = false;
 	bigtime_t batchStart = 0;
 	bigtime_t batchBound = 16667;
+	// observed client frame length, for the batch deadline
+	bigtime_t frameLength = 0;
+	PortWaiter waiter;
+	bool waiterTried = false;
+	HWInterface* hw = fDesktop->HWInterface();
 
 	while (!quitLoop) {
 		//STRACE(("info: ServerWindow::MonitorWin listening on port %ld.\n",
@@ -4548,11 +4554,27 @@ ServerWindow::_MessageLooper()
 		int32 code;
 		status_t status;
 		if (batchHeld) {
-			bigtime_t left = batchStart + batchBound - system_time();
-			status = left > 0 ? receiver.GetNextMessage(code,
-				left < 1000 ? left : 1000) : B_TIMED_OUT;
+			// sleep to the frame deadline, no polling
+			const bigtime_t deadline = batchStart + batchBound;
+			if (receiver.HasMessages()
+				|| (waiter.IsValid()
+					&& waiter.Wait(deadline) != PortWaiter::kDeadline)) {
+				status = receiver.GetNextMessage(code, 0);
+			} else if (waiter.IsValid()) {
+				status = B_TIMED_OUT;
+			} else {
+				// no fd: bounded blocking read
+				const bigtime_t left = deadline - system_time();
+				status = left > 0 ? receiver.GetNextMessage(code, left)
+					: B_TIMED_OUT;
+			}
 			if (status == B_TIMED_OUT) {
-				// quiet gap or bound: the frame is complete
+				// the frame outlived its estimate
+				bigtime_t length = system_time() - batchStart;
+				frameLength = frameLength > length * 2
+					? frameLength : length * 2;
+				if (hw != NULL)
+					hw->NoteBatchTimeout();
 				_EndDrawBatch();
 				batchHeld = false;
 				status = receiver.GetNextMessage(code);
@@ -4650,13 +4672,22 @@ ServerWindow::_MessageLooper()
 			bigtime_t dispatchStart = system_time();
 #endif
 			if (batchHeld && !_KeepsDrawBatch(code)) {
+				bigtime_t length = system_time() - batchStart;
+				frameLength = frameLength == 0
+					? length : (frameLength * 3 + length) / 4;
 				_EndDrawBatch();
 				batchHeld = false;
 			}
 			if (!batchHeld && _IsDrawMessage(code) && !fWindow->InUpdate()) {
 				batchHeld = _BeginDrawBatch();
 				batchStart = system_time();
-				batchBound = _RefreshPeriod();
+				const bigtime_t period = _RefreshPeriod();
+				batchBound = frameLength == 0 ? period
+					: min_c(max_c(frameLength + 250, 500), period);
+				if (batchHeld && !waiterTried) {
+					waiterTried = true;
+					waiter.SetPort(fMessagePort);
+				}
 			}
 			_DispatchMessage(code, receiver);
 

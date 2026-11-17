@@ -72,6 +72,7 @@ Server(
 		DisplayChangeTracker.cpp
 		DrawState.cpp
 		EventDispatcher.cpp
+		PortWaiter.cpp
 		PowerManager.cpp
 		EventStream.cpp
 		InputManager.cpp

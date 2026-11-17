@@ -55,6 +55,7 @@ HWInterface::HWInterface()
 	fStatRects(0),
 	fStatBatches(0),
 	fStatTimeouts(0),
+	fStatBatchTimeouts(0),
 	fCursor(NULL),
 	fDragBitmap(NULL),
 	fDragBitmapOffset(0, 0),

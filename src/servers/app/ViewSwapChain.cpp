@@ -684,7 +684,6 @@ ViewSwapChain::~ViewSwapChain()
 		sChains.erase(std::remove(sChains.begin(), sChains.end(), this),
 			sChains.end());
 	}
-	delete fGpu;
 	// The pump first: it posts to the window.
 	if (fPump >= 0) {
 		{
@@ -695,6 +694,9 @@ ViewSwapChain::~ViewSwapChain()
 		status_t result;
 		wait_for_thread(fPump, &result);
 	}
+	// Only after the pump: nothing flushes through the context any more.
+	delete fGpu;
+	fGpu = NULL;
 
 	// The plane first: nothing may be reported once the buffers go.
 	Hide(false, "chain deleted");
@@ -1011,7 +1013,7 @@ ViewSwapChain::_Post(const SwapChainFrame& frame, Generation* generation)
 
 	if (fPump < 0) {
 		fPump = spawn_thread(_PumpEntry, "swap chain pump",
-			B_DISPLAY_PRIORITY, this);
+			B_URGENT_DISPLAY_PRIORITY, this);
 		if (fPump < 0)
 			return false;
 		resume_thread(fPump);

@@ -131,8 +131,11 @@ SwapChainGpuCopy::~SwapChainGpuCopy()
 		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
 			EGL_NO_CONTEXT);
 	}
-	if (fContext != NULL)
+	if (fContext != NULL) {
 		eglDestroyContext(fDisplay, fContext);
+		// Drop this thread's EGL state so the driver can retire the context.
+		eglReleaseThread();
+	}
 #endif
 }
 

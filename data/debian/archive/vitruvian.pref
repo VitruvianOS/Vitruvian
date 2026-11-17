@@ -1,3 +1,9 @@
+# Repacks of Debian leaf packages that only add a Recommends on our Qt
+# plugin: at Debian's priority, so a newer Debian version replaces them.
+Package: qt5-gtk-platformtheme qt6-gtk-platformtheme
+Pin: release o=Vitruvian OS
+Pin-Priority: 500
+
 # Our rebuilds of Debian libraries carry vos versions that a Debian
 # +ds-2, +deb13u1 or +b1 would otherwise outrank. Only this origin is
 # pinned, never the Debian base.

@@ -45,6 +45,7 @@
 #include <Path.h>
 #include <PopUpMenu.h>
 #include <Roster.h>
+#include <MessageQueue.h>
 #include <Screen.h>
 #include <SpaceLayoutItem.h>
 #include <Spinner.h>
@@ -468,11 +469,6 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 	fApplyButton = new BButton("ApplyButton", B_TRANSLATE("Apply"),
 		new BMessage(BUTTON_APPLY_MSG));
 	fApplyButton->SetEnabled(false);
-	BLayoutBuilder::Group<>(outerControlsView)
-		.AddGlue()
-		.AddGroup(B_HORIZONTAL)
-			.AddGlue()
-			.Add(fApplyButton);
 
 	fRevertButton = new BButton("RevertButton", B_TRANSLATE("Revert"),
 		new BMessage(BUTTON_REVERT_MSG));
@@ -526,6 +522,7 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(fRevertButton)
 			.AddGlue()
+			.Add(fApplyButton)
 			.End()
 		.SetInsets(B_USE_WINDOW_SPACING);
 
@@ -1243,6 +1240,8 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 		case SLIDER_BRIGHTNESS_MSG:
 		{
+			if (MessageQueue()->FindMessage(SLIDER_BRIGHTNESS_MSG, 0) != NULL)
+				break;
 			BScreen screen(_ScreenID());
 			screen.SetBrightness(message->FindInt32("be:value") / 255.f);
 			_CheckApplyEnabled();
@@ -1254,10 +1253,17 @@ ScreenWindow::MessageReceived(BMessage* message)
 			if (!fTemperatureSupported)
 				break;
 
+			// A newer position is queued: apply only that one.
+			if (MessageQueue()->FindMessage(SLIDER_TEMPERATURE_MSG, 0) != NULL)
+				break;
+
 			// Snap to the step so the presets stay reachable points.
 			int32 value = message->FindInt32("be:value");
-			fTemperature = ((value + kTemperatureStep / 2) / kTemperatureStep)
+			value = ((value + kTemperatureStep / 2) / kTemperatureStep)
 				* kTemperatureStep;
+			if (value == fTemperature)
+				break;
+			fTemperature = value;
 			BScreen screen(_ScreenID());
 			screen.SetTemperature(fTemperature);
 			_CheckApplyEnabled();

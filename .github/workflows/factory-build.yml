@@ -43,7 +43,7 @@ jobs:
       VOS_PKG_REV: ${{ inputs.rev }}
       VOS_BASE_SUITE: ${{ inputs.base_suite }}
       REPO_KEY_URL: https://repo.v-os.dev/repo-key.asc
-      REPO_KEY_FPR: 8276B9B78A0853D17CB0CB0E9B50324D1D38BE53
+      REPO_KEY_FPR: C2FABDFD3CE9E1E4651D0E7431A982E096278A74
     steps:
       - name: Checkout repository
         id: checkout

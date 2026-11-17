@@ -161,6 +161,8 @@ public:
 			void				Detach();
 			// Shows the frame the CPU path holds back; once per refresh.
 			void				Flush(DrawingEngine* engine);
+			void				_FlushFrame(DrawingEngine* engine);
+			void				_UpdateLead(bigtime_t done);
 
 			// From the plane consumer.
 			void				NotifyShown(uint64 serial, bigtime_t when);
@@ -233,6 +235,12 @@ private:
 			int64				fReadTime;
 			int64				fGpuTime;
 			bigtime_t			fDeferSince;
+			// Pump wake to published: lead of the pump before a flip.
+			bigtime_t			fLead;
+			bigtime_t			fLatency;
+			bigtime_t			fWakeAt;
+			bigtime_t			fDeadline;
+			bool				fFlushShown;
 			int32				fCopies;
 
 			// CPU path: the newest frame, shown by the pump.

@@ -626,6 +626,11 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fSerial(0),
 	fPeriod(0),
 	fPeriodAt(0),
+	fLead(6000),
+	fLatency(0),
+	fWakeAt(0),
+	fDeadline(0),
+	fFlushShown(false),
 	fCounted(false),
 	fStats(false),
 	fStatsStart(0),
@@ -1086,6 +1091,8 @@ ViewSwapChain::_Pump()
 			if (quit || fMailSerial == 0)
 				break;
 
+			fWakeAt = system_time();
+			fDeadline = fWakeAt + fLead;
 			fWindow->PostMessage(AS_INTERNAL_FLUSH_SWAP_CHAINS, 0);
 			next = _NextFlush(system_time());
 		}
@@ -1105,7 +1112,7 @@ ViewSwapChain::_NextFlush(bigtime_t now)
 	if (flip == 0 || now - flip > 8 * period)
 		return now + period;
 
-	const bigtime_t lead = 6000;
+	const bigtime_t lead = fLead;
 	bigtime_t next = flip - lead;
 	if (next < now)
 		next += ((now - next) / period + 1) * period;
@@ -1113,9 +1120,48 @@ ViewSwapChain::_NextFlush(bigtime_t now)
 }
 
 
+// Tracks the pump-to-published latency; widens at once on a miss, shrinks
+// slowly. fLock held.
+void
+ViewSwapChain::_UpdateLead(bigtime_t done)
+{
+	const bigtime_t period = fPeriod > 0 ? fPeriod : 16667;
+	const bigtime_t latency = done - fWakeAt;
+	const bool missed = done > fDeadline;
+	fWakeAt = 0;
+	fLatency = fLatency == 0 ? latency : (fLatency * 7 + latency) / 8;
+
+	bigtime_t want = (missed ? latency : fLatency) + 1000 + fLatency / 4;
+	if (missed && want <= fLead)
+		want = fLead + 1000;
+	if (want >= fLead)
+		fLead = want;
+	else
+		fLead -= (fLead - want) / 16;
+	if (fLead < 2000)
+		fLead = 2000;
+	if (fLead > period / 2)
+		fLead = period / 2;
+}
+
+
 // The window thread, drawing as for Present.
 void
 ViewSwapChain::Flush(DrawingEngine* engine)
+{
+	fFlushShown = false;
+	_FlushFrame(engine);
+	if (fFlushShown) {
+		const bigtime_t done = system_time();
+		BAutolock locker(fLock);
+		if (fWakeAt != 0)
+			_UpdateLead(done);
+	}
+}
+
+
+void
+ViewSwapChain::_FlushFrame(DrawingEngine* engine)
 {
 	BReference<ServerBitmap> bitmap;
 	BRegion damage;
@@ -1175,6 +1221,7 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 		const int32 previousIndex = fShownIndex;
 		fShownGeneration = generation;
 		fShownIndex = index;
+		fFlushShown = true;
 		if (previous != NULL)
 			_Retire(previous, previousIndex, now);
 
@@ -1641,7 +1688,7 @@ ViewSwapChain::_Report(bigtime_t now)
 	const int64 gpuTime = atomic_get_and_set64(&fGpuTime, 0);
 	const int32 copies = atomic_get_and_set(&fCopies, 0);
 	fprintf(stderr, "swap chain %s: path %s, shown %llu/s, presented %llu/s, "
-		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us, gpu %lld us\n",
+		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us, gpu %lld us, lead %lld us\n",
 		fView != NULL ? fView->Name() : "?", _PathName(),
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
@@ -1649,7 +1696,7 @@ ViewSwapChain::_Report(bigtime_t now)
 		(long long)(copies > 0 ? waitTime / copies : 0),
 		(long long)(copies > 0 ? readTime / copies : 0),
 		(long long)(copies > 0 ? copyTime / copies : 0),
-		(long long)(copies > 0 ? gpuTime / copies : 0));
+		(long long)(copies > 0 ? gpuTime / copies : 0), (long long)fLead);
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;
 	fWorstGap = 0;

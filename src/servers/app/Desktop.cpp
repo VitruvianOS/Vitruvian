@@ -22,6 +22,7 @@
 
 
 #include "Desktop.h"
+#include "DisplayProfile.h"
 #include "PowerManager.h"
 
 #include <math.h>
@@ -664,6 +665,7 @@ Desktop::Init()
 
 	HWInterface()->SetDPMSMode(B_DPMS_ON);
 	HWInterface()->SetVariableRefresh(fSettings->VariableRefresh());
+	DumpDisplayProfile(HWInterface(), "startup");
 
 	if (fVirtualScreen.ScreenByID(fStoredMainScreenID) != NULL)
 		fMainScreenID = fVirtualScreen.ScreenByID(fStoredMainScreenID)->ID();
@@ -4938,6 +4940,7 @@ void
 Desktop::ScreenAdded(Screen* screen)
 {
 	AutoWriteLocker windowLocker(fWindowLock);
+	DumpDisplayProfile(HWInterface(), "screen added");
 
 	AutoWriteLocker screenLocker(fScreenLock);
 	if (fVirtualScreen.ScreenIndex(screen) >= 0
@@ -4987,6 +4990,7 @@ void
 Desktop::ScreenRemoved(Screen* screen)
 {
 	AutoWriteLocker windowLocker(fWindowLock);
+	DumpDisplayProfile(HWInterface(), "screen removed");
 
 	// The first screen is the one everything is drawn through; it stays.
 	const int32 index = fVirtualScreen.ScreenIndex(screen);
@@ -5097,6 +5101,8 @@ void
 Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_BRW_WRITE_LOCKED(fWindowLock);
+
+	DumpDisplayProfile(HWInterface(), "screen changed");
 
 	// A screen that left or shrank may leave nothing at the top left.
 	fVirtualScreen.Normalize();

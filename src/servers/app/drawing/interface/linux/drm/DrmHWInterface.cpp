@@ -4,6 +4,8 @@
  */
 
 #include "DrmHWInterface.h"
+#include "DisplayProfile.h"
+#include "SwapChainGpuCopy.h"
 
 #include "ClientMemoryAllocator.h"
 #include "DrmBuffer.h"
@@ -28,6 +30,7 @@
 #include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <time.h>
 #include <unistd.h>
 #include <vector>
@@ -8788,5 +8791,291 @@ DrmHWInterface::_ReleaseOverlayPlanes(uint32 output, bool dropInfo)
 		claimed[i]->Disable();
 		claimed[i]->Free();
 		delete claimed[i];
+	}
+}
+
+
+// The panel's vertical range from the EDID range descriptor.
+static void
+_ReadVrrRange(int fd, drmModeConnector* conn, uint32* _min, uint32* _max)
+{
+	*_min = *_max = 0;
+	for (int i = 0; i < conn->count_props; i++) {
+		drmModePropertyPtr prop = drmModeGetProperty(fd, conn->props[i]);
+		if (prop == NULL)
+			continue;
+		const bool match = strcmp(prop->name, "EDID") == 0;
+		drmModeFreeProperty(prop);
+		if (!match)
+			continue;
+
+		drmModePropertyBlobPtr blob = drmModeGetPropertyBlob(fd,
+			(uint32_t)conn->prop_values[i]);
+		if (blob == NULL)
+			return;
+		if (blob->length >= 128) {
+			const uint8* edid = (const uint8*)blob->data;
+			for (int d = 54; d <= 108; d += 18) {
+				if (edid[d] == 0 && edid[d + 1] == 0 && edid[d + 2] == 0
+						&& edid[d + 3] == 0xfd) {
+					*_min = edid[d + 5];
+					*_max = edid[d + 6];
+				}
+			}
+		}
+		drmModeFreePropertyBlob(blob);
+		return;
+	}
+}
+
+
+static bool
+_ConnectorVrrCapable(int fd, drmModeConnector* conn)
+{
+	bool capable = false;
+	for (int i = 0; i < conn->count_props; i++) {
+		drmModePropertyPtr prop = drmModeGetProperty(fd, conn->props[i]);
+		if (prop == NULL)
+			continue;
+		if (strcmp(prop->name, "vrr_capable") == 0)
+			capable = conn->prop_values[i] != 0;
+		drmModeFreeProperty(prop);
+	}
+	return capable;
+}
+
+
+static void
+_FillGpuProfile(int fd, int32 index, DisplayGpuProfile& gpu, struct udev* udev)
+{
+	gpu.index = index;
+	gpu.atomic = gpu.asyncFlip = gpu.modifiers = -1;
+	gpu.cursorWidth = gpu.cursorHeight = 0;
+	gpu.gbm = false;
+	gpu.renders = false;
+	gpu.gpuCopy = false;
+
+	drmVersionPtr version = drmGetVersion(fd);
+	if (version != NULL) {
+		gpu.driver = version->name != NULL ? version->name : "?";
+		gpu.version.SetToFormat("%d.%d.%d", version->version_major,
+			version->version_minor, version->version_patchlevel);
+		drmFreeVersion(version);
+	}
+
+	uint64_t value = 0;
+	if (drmGetCap(fd, DRM_CAP_CURSOR_WIDTH, &value) == 0)
+		gpu.cursorWidth = (uint32)value;
+	if (drmGetCap(fd, DRM_CAP_CURSOR_HEIGHT, &value) == 0)
+		gpu.cursorHeight = (uint32)value;
+	if (drmGetCap(fd, DRM_CAP_ADDFB2_MODIFIERS, &value) == 0)
+		gpu.modifiers = value != 0;
+	gpu.asyncFlip = 0;
+	if (drmGetCap(fd, DRM_CAP_ASYNC_PAGE_FLIP, &value) == 0 && value != 0)
+		gpu.asyncFlip = 1;
+	if (drmGetCap(fd, DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP, &value) == 0
+			&& value != 0)
+		gpu.asyncFlip = 1;
+
+	struct stat st;
+	if (udev != NULL && fstat(fd, &st) == 0) {
+		char node[64];
+		snprintf(node, sizeof(node), "%u:%u", major(st.st_rdev),
+			minor(st.st_rdev));
+		gpu.node = node;
+		struct udev_device* dev
+			= udev_device_new_from_devnum(udev, 'c', st.st_rdev);
+		if (dev != NULL) {
+			const char* path = udev_device_get_devnode(dev);
+			if (path != NULL)
+				gpu.node = path;
+			struct udev_device* pci
+				= udev_device_get_parent_with_subsystem_devtype(dev, "pci",
+					NULL);
+			const char* vendor = pci != NULL
+				? udev_device_get_sysattr_value(pci, "vendor") : NULL;
+			const char* device = pci != NULL
+				? udev_device_get_sysattr_value(pci, "device") : NULL;
+			if (vendor != NULL && device != NULL) {
+				gpu.pciId.SetToFormat("%s:%s", vendor + (strncmp(vendor,
+					"0x", 2) == 0 ? 2 : 0), device + (strncmp(device, "0x", 2)
+						== 0 ? 2 : 0));
+			}
+			udev_device_unref(dev);
+		}
+	}
+}
+
+
+void
+DrmHWInterface::GetDisplayProfile(DisplayProfile& profile)
+{
+	HWInterface::GetDisplayProfile(profile);
+	profile.backend = "drm";
+	profile.outputs.clear();
+	profile.gpus.clear();
+	if (fFd < 0 || fDev == NULL)
+		return;
+
+	for (size_t card = 0; card <= fCards.size(); card++) {
+		const int fd = card == 0 ? fFd : fCards[card - 1].fd;
+		DisplayGpuProfile gpu;
+		_FillGpuProfile(fd, (int32)card, gpu, fUdev);
+#ifdef HAVE_GBM
+		struct gbm_device* gbm = card == 0 ? fGbmDevice : fCards[card - 1].gbm;
+		if (gbm != NULL) {
+			gpu.gbm = true;
+			gpu.gbmBackend = gbm_device_get_backend_name(gbm);
+			gpu.gpuCopy = SwapChainGpuCopy::Mode() != 0;
+		}
+#endif
+		if (card == 0) {
+			gpu.renders = true;
+			gpu.atomic = fAtomicSupported;
+		}
+		profile.gpus.push_back(gpu);
+	}
+
+	profile.publish.batchedCommit = fAtomicBatch;
+	profile.publish.damageFlush = fDamageFlush;
+
+	std::vector<OutputInfo> outputs;
+	ListOutputs(outputs);
+	for (size_t i = 0; i < outputs.size(); i++) {
+		const uint32 key = outputs[i].connector;
+		const int fd = _FdForKey(key);
+		if (fd < 0)
+			continue;
+
+		DisplayOutputProfile output;
+		output.name = outputs[i].name;
+		output.connector = key;
+		output.crtc = 0;
+		output.gpu = 0;
+		for (size_t c = 0; c < fCards.size(); c++) {
+			if (fCards[c].slot == key_slot(key))
+				output.gpu = (int32)c + 1;
+		}
+		output.connected = outputs[i].connected;
+		output.disabled = outputs[i].disabled;
+		output.first = outputs[i].first;
+		output.internal = IsInternalConnector(key);
+		output.x = output.y = 0;
+		output.width = output.height = 0;
+		output.refresh = 0;
+		output.period = 0;
+		output.vrrCapable = false;
+		output.vrrEnabled = output.first && fVRREnabled;
+		output.vrrMin = output.vrrMax = 0;
+		output.cursorPlane = false;
+
+		display_mode current;
+		const bool haveMode = GetOutputMode(key, &current) == B_OK;
+		if (haveMode) {
+			const BPoint origin = OutputOrigin(key);
+			output.x = (int32)origin.x;
+			output.y = (int32)origin.y;
+			output.width = current.virtual_width;
+			output.height = current.virtual_height;
+			output.period = _FramePeriodFor(current);
+			if (output.period > 0)
+				output.refresh = 1000000.0f / output.period;
+		}
+
+		drmModeConnector* conn = drmModeGetConnectorCurrent(fd,
+			key_connector(key));
+		if (conn != NULL) {
+			output.vrrCapable = _ConnectorVrrCapable(fd, conn);
+			_ReadVrrRange(fd, conn, &output.vrrMin, &output.vrrMax);
+			for (int m = 0; m < conn->count_modes; m++) {
+				const drmModeModeInfo& info = conn->modes[m];
+				DisplayModeProfile mode;
+				mode.width = info.hdisplay;
+				mode.height = info.vdisplay;
+				mode.refresh = info.htotal > 0 && info.vtotal > 0
+					? info.clock * 1000.0f / ((float)info.htotal * info.vtotal)
+					: info.vrefresh;
+				mode.preferred = (info.type & DRM_MODE_TYPE_PREFERRED) != 0;
+				mode.current = haveMode && mode.width == output.width
+					&& mode.height == output.height
+					&& fabsf(mode.refresh - output.refresh) < 0.5f;
+				output.modes.push_back(mode);
+			}
+			if (conn->encoder_id != 0) {
+				drmModeEncoder* encoder = drmModeGetEncoder(fd,
+					conn->encoder_id);
+				if (encoder != NULL) {
+					output.crtc = encoder->crtc_id;
+					drmModeFreeEncoder(encoder);
+				}
+			}
+			drmModeFreeConnector(conn);
+		}
+
+		drmModeRes* res = drmModeGetResources(fd);
+		int crtcIndex = -1;
+		if (res != NULL) {
+			for (int c = 0; c < res->count_crtcs; c++) {
+				if (res->crtcs[c] == output.crtc)
+					crtcIndex = c;
+			}
+			drmModeFreeResources(res);
+		}
+		drmModePlaneResPtr planes = crtcIndex >= 0
+			? drmModeGetPlaneResources(fd) : NULL;
+		if (planes != NULL) {
+			for (uint32_t p = 0; p < planes->count_planes; p++) {
+				drmModePlanePtr plane = drmModeGetPlane(fd, planes->planes[p]);
+				if (plane == NULL)
+					continue;
+				if ((plane->possible_crtcs & (1u << crtcIndex)) == 0) {
+					drmModeFreePlane(plane);
+					continue;
+				}
+
+				uint64_t type = 0;
+				OverlayPlaneInfo limits = {};
+				_ReadPlaneLimits(fd, planes->planes[p], &limits, &type);
+				std::vector<PlaneFormat> formats;
+				_ReadInFormats(fd, planes->planes[p], &formats);
+
+				DisplayPlaneProfile entry;
+				entry.id = planes->planes[p];
+				entry.type = type == DRM_PLANE_TYPE_PRIMARY ? "primary"
+					: type == DRM_PLANE_TYPE_CURSOR ? "cursor" : "overlay";
+				entry.formatCount = plane->count_formats;
+				entry.modifierCount = (uint32)formats.size();
+				entry.argb8888 = entry.xrgb8888 = entry.linear = false;
+				for (uint32_t f = 0; f < plane->count_formats; f++) {
+					if (plane->formats[f] == DRM_FORMAT_ARGB8888)
+						entry.argb8888 = true;
+					if (plane->formats[f] == DRM_FORMAT_XRGB8888)
+						entry.xrgb8888 = true;
+				}
+				// Without IN_FORMATS the plane takes linear only.
+				entry.linear = formats.empty();
+				for (size_t f = 0; f < formats.size(); f++) {
+					if (formats[f].modifier == DRM_FORMAT_MOD_LINEAR)
+						entry.linear = true;
+				}
+				entry.minSize = limits.minWidth;
+				entry.maxSize = limits.maxWidth;
+				entry.claimed = false;
+				if (type == DRM_PLANE_TYPE_CURSOR)
+					output.cursorPlane = true;
+				pthread_mutex_lock(&fOverlayMutex);
+				for (size_t o = 0; o < fOverlayPlanes.size(); o++) {
+					if (fOverlayPlanes[o].planeId == entry.id
+							&& fOverlayPlanes[o].fd == fd
+							&& fOverlayPlanes[o].claimed != NULL)
+						entry.claimed = true;
+				}
+				pthread_mutex_unlock(&fOverlayMutex);
+				output.planes.push_back(entry);
+				drmModeFreePlane(plane);
+			}
+			drmModeFreePlaneResources(planes);
+		}
+		profile.outputs.push_back(output);
 	}
 }

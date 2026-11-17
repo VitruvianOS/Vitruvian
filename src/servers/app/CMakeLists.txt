@@ -138,6 +138,7 @@ Server(
 		drawing/Overlay.cpp
 		drawing/BitmapHWInterface.cpp
 		drawing/BBitmapBuffer.cpp
+		drawing/DisplayProfile.cpp
 		drawing/HWInterface.cpp
 
 		drawing/Painter/GlobalSubpixelSettings.cpp

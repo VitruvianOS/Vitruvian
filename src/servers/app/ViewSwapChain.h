@@ -17,6 +17,7 @@
 #include <SwapChain.h>
 
 
+struct DisplayChainProfile;
 class DrawingEngine;
 class HWInterface;
 class PlaneConsumer;
@@ -164,6 +165,10 @@ public:
 			void				_FlushFrame(DrawingEngine* engine);
 			void				_UpdateLead(bigtime_t done);
 
+			// State of every live chain, for the display profile.
+	static	void				Snapshot(
+									std::vector<DisplayChainProfile>& chains);
+
 			// From the plane consumer.
 			void				NotifyShown(uint64 serial, bigtime_t when);
 			void				NotifyDropped(uint64 serial);
@@ -199,6 +204,7 @@ private:
 			// Times GPU and CPU reads in turn and keeps the faster.
 			void				_Measure(bool gpu, bigtime_t time);
 			const char*			_PathName() const;
+			void				_Snapshot(DisplayChainProfile& chain) const;
 			BReference<ServerBitmap> _FillShadow(ServerBitmap* bitmap,
 									const BRegion& damage,
 									SwapChainGpuCopy* gpu);

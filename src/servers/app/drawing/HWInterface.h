@@ -29,6 +29,7 @@
 
 
 class BString;
+struct DisplayProfile;
 class DrawingEngine;
 class EventStream;
 class Overlay;
@@ -94,6 +95,8 @@ public:
 	// frame (desktop coordinates); the mode's one on single output backends.
 	virtual	bigtime_t			RefreshPeriod(const BRect& frame);
 
+	// Capabilities, current choices and measurements; read only.
+	virtual	void				GetDisplayProfile(DisplayProfile& profile);
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info) = 0;
 	virtual status_t			GetModeList(display_mode** _modeList,
 									uint32* _count) = 0;

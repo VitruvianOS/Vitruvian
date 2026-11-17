@@ -10,6 +10,8 @@
 
 #include "HWInterface.h"
 
+#include "DisplayProfile.h"
+
 #include <new>
 #include <stdio.h>
 #include <string.h>
@@ -1387,3 +1389,39 @@ HWInterface::_IsValidMode(const display_mode& mode)
 	return true;
 }
 
+
+
+void
+HWInterface::GetDisplayProfile(DisplayProfile& profile)
+{
+	display_mode mode;
+	GetMode(&mode);
+	DisplayOutputProfile output;
+	output.connector = 0;
+	output.crtc = 0;
+	output.gpu = 0;
+	output.connected = true;
+	output.disabled = false;
+	output.first = true;
+	output.internal = IsInternalPanel();
+	output.x = (int32)Origin().x;
+	output.y = (int32)Origin().y;
+	output.width = mode.virtual_width;
+	output.height = mode.virtual_height;
+	const uint32 total = (uint32)mode.timing.h_total * mode.timing.v_total;
+	output.refresh = total > 0 ? mode.timing.pixel_clock * 1000.0f / total : 0;
+	output.period = RefreshPeriod(BRect());
+	output.vrrCapable = VariableRefreshSupported();
+	output.vrrEnabled = false;
+	output.vrrMin = output.vrrMax = 0;
+	output.cursorPlane = false;
+	GetConnectorName(output.name);
+	profile.outputs.push_back(output);
+
+	BAutolock locker(fPublishLock);
+	profile.publish.deferred = fDefersPublish;
+	profile.publish.rects = (uint32)fStatRects;
+	profile.publish.batches = (uint32)fStatBatches;
+	profile.publish.timeouts = (uint32)fStatTimeouts;
+	profile.publish.pending = (uint32)fDeferred.size();
+}

@@ -6,6 +6,8 @@
 
 #include "ViewSwapChain.h"
 
+#include <algorithm>
+
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +37,7 @@
 #include "ServerApp.h"
 #include "ServerBitmap.h"
 #include "ServerWindow.h"
+#include "DisplayProfile.h"
 #include "SwapChainGpuCopy.h"
 #include "View.h"
 #include "VirtualScreen.h"
@@ -611,6 +614,10 @@ private:
 };
 
 
+static std::mutex sChainsMutex;
+static std::vector<ViewSwapChain*> sChains;
+
+
 ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	:
 	fApp(app),
@@ -661,6 +668,10 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fTrialFrames(0)
 {
 	fTrialTime[0] = fTrialTime[1] = 0;
+	{
+		std::lock_guard<std::mutex> guard(sChainsMutex);
+		sChains.push_back(this);
+	}
 	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
 	fStats = stats != NULL && atoi(stats) != 0;
 }
@@ -668,6 +679,11 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 
 ViewSwapChain::~ViewSwapChain()
 {
+	{
+		std::lock_guard<std::mutex> guard(sChainsMutex);
+		sChains.erase(std::remove(sChains.begin(), sChains.end(), this),
+			sChains.end());
+	}
 	delete fGpu;
 	// The pump first: it posts to the window.
 	if (fPump >= 0) {
@@ -1743,6 +1759,44 @@ ViewSwapChain::_PathName() const
 	if (plane != NULL && plane->Active())
 		return plane->Scanout() ? "scanout" : "plane";
 	return fPath == kPathGpu || fPath == kTrialGpu ? "gpu" : "cpu";
+}
+
+
+void
+ViewSwapChain::Snapshot(std::vector<DisplayChainProfile>& chains)
+{
+	std::lock_guard<std::mutex> guard(sChainsMutex);
+	for (size_t i = 0; i < sChains.size(); i++) {
+		DisplayChainProfile chain;
+		sChains[i]->_Snapshot(chain);
+		chains.push_back(chain);
+	}
+}
+
+
+void
+ViewSwapChain::_Snapshot(DisplayChainProfile& chain) const
+{
+	const bool locked = fLock.LockWithTimeout(20000) == B_OK;
+	chain.view = fView != NULL ? fView->Name() : "?";
+	chain.path = _PathName();
+	chain.trial = fPath == kTrialGpu || fPath == kTrialCpu;
+	chain.left = (int32)fPeriodFrame.left;
+	chain.top = (int32)fPeriodFrame.top;
+	chain.right = (int32)fPeriodFrame.right;
+	chain.bottom = (int32)fPeriodFrame.bottom;
+	chain.period = fPeriod;
+	chain.lead = fLead;
+	chain.latency = fLatency;
+	chain.gpuCost = fTrialTime[0] / 30;
+	chain.cpuCost = fTrialTime[1] / 30;
+	chain.statsOn = fStats;
+	chain.shown = fShown;
+	chain.presented = fPresented;
+	chain.replaced = fReplaced;
+	chain.worstGap = fWorstGap;
+	if (locked)
+		fLock.Unlock();
 }
 
 

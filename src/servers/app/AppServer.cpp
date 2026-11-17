@@ -24,6 +24,7 @@
 
 #include "BitmapManager.h"
 #include "Desktop.h"
+#include "DisplayProfile.h"
 #include "GlobalFontManager.h"
 #include "HWInterface.h"
 #include "InputManager.h"
@@ -42,6 +43,9 @@
 
 
 // Globals
+// Posted by the SIGUSR1 handler: print the display profile.
+static const int32 kMsgDumpDisplayProfile = 'dDsp';
+
 port_id gAppServerPort;
 BTokenSpace gTokenSpace;
 uint32 gAppServerSIMDFlags = 0;
@@ -281,6 +285,17 @@ AppServer::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgDumpDisplayProfile:
+		{
+			BAutolock locker(fDesktopLock);
+			for (int32 i = 0; i < fDesktops.CountItems(); i++) {
+				::HWInterface* hw = fDesktops.ItemAt(i)->HWInterface();
+				if (hw != NULL)
+					DumpDisplayProfile(hw, "SIGUSR1");
+			}
+			break;
+		}
+
 		default:
 			// We don't allow application scripting
 			STRACE(("AppServer received unexpected code %" B_PRId32 "\n",
@@ -382,6 +397,15 @@ signal_quit(int /*signo*/)
 }
 
 
+static void
+signal_dump(int /*signo*/)
+{
+	if (gAppServerPort >= 0)
+		write_port_etc(gAppServerPort, kMsgDumpDisplayProfile, NULL, 0,
+			B_RELATIVE_TIMEOUT, 0);
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -394,6 +418,8 @@ main(int argc, char** argv)
 	sa.sa_flags = SA_RESTART;
 	sigaction(SIGTERM, &sa, NULL);
 	sigaction(SIGINT,  &sa, NULL);
+	sa.sa_handler = signal_dump;
+	sigaction(SIGUSR1, &sa, NULL);
 
 	status_t status;
 	AppServer* server = new AppServer(&status);

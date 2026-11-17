@@ -22,6 +22,7 @@ extern "C" {
 #include <vector>
 
 struct drm_extra_card;
+struct DisplayProfile;
 
 #include "BufferAgeTracker.h"
 #include "DrmBuffer.h"
@@ -308,6 +309,7 @@ public:
 	virtual	status_t			SetMode(const display_mode& mode);
 	virtual	void				GetMode(display_mode* mode);
 	virtual	bigtime_t			RefreshPeriod(const BRect& frame);
+	virtual	void				GetDisplayProfile(DisplayProfile& profile);
 	virtual	status_t			GetPreferredMode(display_mode* mode);
 			// Same mode policy, no connector probe; for the poll.
 			status_t			GetPreferredModeCurrent(display_mode* mode);

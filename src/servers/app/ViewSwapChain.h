@@ -220,6 +220,7 @@ private:
 			uint64				fSerial;
 			int32				fPeriod;
 			bigtime_t			fPeriodAt;
+			BRect				fPeriodFrame;
 			bool				fCounted;
 
 			// Frame timing, reported with VOS_SWAP_CHAIN_STATS=1.

@@ -90,6 +90,9 @@ public:
 	// screen mode stuff
 	virtual	status_t			SetMode(const display_mode& mode) = 0;
 	virtual	void				GetMode(display_mode* mode) = 0;
+	// Refresh period in microseconds of the fastest output showing
+	// frame (desktop coordinates); the mode's one on single output backends.
+	virtual	bigtime_t			RefreshPeriod(const BRect& frame);
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info) = 0;
 	virtual status_t			GetModeList(display_mode** _modeList,

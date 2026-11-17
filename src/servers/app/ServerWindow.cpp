@@ -4904,15 +4904,10 @@ bigtime_t
 ServerWindow::_RefreshPeriod() const
 {
 	HWInterface* hw = fDesktop->HWInterface();
-	display_mode mode;
 	if (hw != NULL) {
-		hw->GetMode(&mode);
-		if (mode.timing.pixel_clock != 0) {
-			bigtime_t period = (bigtime_t)((uint64)mode.timing.h_total
-				* mode.timing.v_total * 1000 / mode.timing.pixel_clock);
-			if (period >= 4000 && period <= 100000)
-				return period;
-		}
+		const bigtime_t period = hw->RefreshPeriod(fWindow->Frame());
+		if (period >= 4000 && period <= 100000)
+			return period;
 	}
 	return 16667;
 }

@@ -1752,19 +1752,16 @@ ViewSwapChain::_UpdatePeriod(::HWInterface* hardware)
 	if (hardware == NULL)
 		return;
 
-	// The mode changes rarely.
+	// The mode changes rarely; the window may move between outputs.
 	const bigtime_t now = system_time();
-	if (fPeriod != 0 && now - fPeriodAt < 1000000)
+	const BRect frame = fWindow->Window() != NULL
+		? fWindow->Window()->Frame() : BRect();
+	if (fPeriod != 0 && frame == fPeriodFrame && now - fPeriodAt < 1000000)
 		return;
 	fPeriodAt = now;
+	fPeriodFrame = frame;
 
-	display_mode mode;
-	hardware->GetMode(&mode);
-	if (mode.timing.pixel_clock == 0)
-		return;
-
-	const uint64 pixels = (uint64)mode.timing.h_total * mode.timing.v_total;
-	fPeriod = (int32)(pixels * 1000 / mode.timing.pixel_clock);
+	fPeriod = (int32)hardware->RefreshPeriod(frame);
 }
 
 

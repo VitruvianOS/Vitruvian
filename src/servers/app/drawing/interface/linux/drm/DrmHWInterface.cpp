@@ -4003,6 +4003,31 @@ DrmHWInterface::GetMode(display_mode* mode)
 }
 
 
+bigtime_t
+DrmHWInterface::RefreshPeriod(const BRect& frame)
+{
+	const bool any = !frame.IsValid();
+	bigtime_t best = 0;
+	if (any || frame.Intersects(_Frame())) {
+		display_mode mode = fDisplayMode;
+		best = _FramePeriodFor(mode);
+	}
+
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		Output* output = fOutputs[i];
+		if (!any && !frame.Intersects(output->Frame()))
+			continue;
+		const bigtime_t period = _FramePeriodFor(output->mode);
+		if (best == 0 || period < best)
+			best = period;
+	}
+	fDirtyMutex.Unlock();
+
+	return best != 0 ? best : _FramePeriod();
+}
+
+
 status_t
 DrmHWInterface::GetPreferredMode(display_mode* mode)
 {

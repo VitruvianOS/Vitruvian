@@ -355,6 +355,18 @@ HWInterface::Publish(const BRegion& region)
 }
 
 
+bigtime_t
+HWInterface::RefreshPeriod(const BRect& frame)
+{
+	display_mode mode;
+	GetMode(&mode);
+	if (mode.timing.pixel_clock == 0)
+		return 16667;
+	return (bigtime_t)((uint64)mode.timing.h_total * mode.timing.v_total
+		* 1000 / mode.timing.pixel_clock);
+}
+
+
 bool
 HWInterface::BeginPublishBatch()
 {

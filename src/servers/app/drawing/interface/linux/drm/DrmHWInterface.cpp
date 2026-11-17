@@ -3079,7 +3079,10 @@ DrmHWInterface::_EventThreadMain()
 		// Without a real vblank (virtio-gpu) a flip completes at once and
 		// every client frame became a full upload. Issue at most one per
 		// refresh period.
+		// A cursor commit in flight holds the frame back too; taking the
+		// lock only to skip the flip starves the presenters.
 		if (active && fPageFlipEnabled && !fPageFlipPending
+				&& !_CommitInFlight()
 				&& fDpmsState == B_DPMS_ON && fStandIn == 0
 				&& (fFlipVblank
 					|| system_time() >= fLastFlipIssue + _FramePeriod())) {
@@ -5367,8 +5370,8 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			fStagedCursor.w = dev->cursor_w;
 			fStagedCursor.h = dev->cursor_h;
 			fDirtyMutex.Unlock();
-
-			_Wake();
+			// The completion event wakes the thread; a wake per move
+			// made it spin on the exclusive lock.
 		} else if (fAtomicBatch) {
 			CursorUpdate update;
 			update.valid = true;

@@ -89,6 +89,9 @@ DisplayProfile::Format(BString& text, const char* reason, bool verbose) const
 				yesno(output.vrrCapable), yesno(output.vrrEnabled));
 		}
 
+		if (output.ddc.Length() > 0)
+			append(text, "    ddc/ci %s\n", output.ddc.String());
+
 		float lowest = 0, highest = 0;
 		for (size_t m = 0; m < output.modes.size(); m++) {
 			const float hz = output.modes[m].refresh;

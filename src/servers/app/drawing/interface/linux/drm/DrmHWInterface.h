@@ -25,6 +25,7 @@ struct drm_extra_card;
 struct DisplayProfile;
 
 #include "BufferAgeTracker.h"
+#include "DdcCi.h"
 #include "DrmBuffer.h"
 #include "HWInterface.h"
 #include "MallocBuffer.h"
@@ -504,6 +505,7 @@ private:
 #endif
 	};
 			void				_BindBacklight();
+			void				_BindDdc();
 			bool				_LoadOutputSprite(Output* output);
 			void				_SyncOutputSprites();
 			void				_RefreshOutputSprites();
@@ -834,6 +836,7 @@ private:
 			std::atomic<uint32>	fDpmsState;
 
 			struct backlight*	fBacklight;
+			DdcCi				fDdc;
 
 			float				fTemperature;
 			// Cleared when gamma_size is 0 or drmModeCrtcSetGamma fails.

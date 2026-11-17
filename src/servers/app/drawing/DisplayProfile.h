@@ -83,6 +83,8 @@ struct DisplayOutputProfile {
 	uint32		vrrMin;
 	uint32		vrrMax;
 	bool		cursorPlane;
+	// DDC/CI brightness state, empty when not probed.
+	BString		ddc;
 	std::vector<DisplayModeProfile>	modes;
 	std::vector<DisplayPlaneProfile>	planes;
 };

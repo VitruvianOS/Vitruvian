@@ -688,6 +688,7 @@ DrmHWInterface::_OnSessionEnable()
 					drmModeFreeConnector(conn);
 				}
 				udev_device_unref(udevDev);
+				_BindDdc();
 			}
 		}
 
@@ -2088,6 +2089,7 @@ DrmHWInterface::_BindBacklight()
 
 	if (fUdev == NULL || fDev == NULL)
 		return;
+	_BindDdc();
 
 	struct stat st;
 	if (fstat(fFd, &st) != 0)
@@ -2104,6 +2106,29 @@ DrmHWInterface::_BindBacklight()
 		drmModeFreeConnector(conn);
 	}
 	udev_device_unref(udevDev);
+}
+
+
+// Monitors without a backlight node may take brightness over DDC/CI.
+void
+DrmHWInterface::_BindDdc()
+{
+	fDdc.Stop();
+	if (fFd < 0 || fDev == NULL)
+		return;
+
+	struct stat st;
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, fDev->conn);
+	if (conn == NULL)
+		return;
+	const char* typeName = drmModeGetConnectorTypeName(conn->connector_type);
+	if (fstat(fFd, &st) == 0 && typeName != NULL && typeName[0] != '\0') {
+		char name[96];
+		snprintf(name, sizeof(name), "card%u-%s-%u", minor(st.st_rdev),
+			typeName, conn->connector_type_id);
+		fDdc.Start(name);
+	}
+	drmModeFreeConnector(conn);
 }
 
 
@@ -3824,6 +3849,7 @@ DrmHWInterface::~DrmHWInterface()
 	}
 #endif
 
+	fDdc.Stop();
 	if (fBacklight) {
 		backlight_destroy(fBacklight);
 		fBacklight = NULL;
@@ -4785,8 +4811,16 @@ _SetBrightnessViaLogind(const struct backlight* backlight, int value)
 status_t
 DrmHWInterface::SetBrightness(float brightness)
 {
-	if (!fBacklight)
-		return B_UNSUPPORTED;
+	if (!fBacklight) {
+		if (!fDdc.Supported())
+			return B_UNSUPPORTED;
+		if (brightness < 0.0f)
+			brightness = 0.0f;
+		if (brightness > 1.0f)
+			brightness = 1.0f;
+		fDdc.Request((int)(brightness * fDdc.Max() + 0.5f));
+		return B_OK;
+	}
 	// Prefer the value cached at init; a re-read can fail on write-only nodes.
 	int max = fBacklight->max_brightness;
 	if (max <= 0)
@@ -4807,8 +4841,16 @@ DrmHWInterface::SetBrightness(float brightness)
 status_t
 DrmHWInterface::GetBrightness(float* brightness)
 {
-	if (!fBacklight || !brightness)
+	if (!brightness)
 		return B_UNSUPPORTED;
+	if (!fBacklight) {
+		const int cur = fDdc.Current();
+		const int ddcMax = fDdc.Max();
+		if (!fDdc.Supported() || ddcMax <= 0)
+			return B_UNSUPPORTED;
+		*brightness = cur < 0 ? 1.0f : (float)cur / ddcMax;
+		return B_OK;
+	}
 	int max = fBacklight->max_brightness;
 	if (max <= 0)
 		max = (int)backlight_get_max_brightness(fBacklight);
@@ -9184,6 +9226,10 @@ DrmHWInterface::GetDisplayProfile(DisplayProfile& profile)
 		output.vrrEnabled = output.first && fVRREnabled;
 		output.vrrMin = output.vrrMax = 0;
 		output.cursorPlane = false;
+		if (output.first) {
+			output.ddc.SetToFormat("%s bus %s, max %d",
+				fDdc.State().c_str(), fDdc.Bus().c_str(), fDdc.Max());
+		}
 
 		display_mode current;
 		const bool haveMode = GetOutputMode(key, &current) == B_OK;

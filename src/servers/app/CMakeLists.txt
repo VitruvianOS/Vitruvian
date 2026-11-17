@@ -12,6 +12,8 @@ pkg_check_modules(GBM gbm)
 
 if(GBM_FOUND)
 	add_definitions(-DHAVE_GBM)
+	# The swap chain GPU copy.
+	pkg_check_modules(GPUCOPY REQUIRED egl glesv2)
 endif()
 
 # 2.4.97 is the committed floor: the last libdrm symbol the DRM backend
@@ -96,6 +98,7 @@ Server(
 		ServerWindow.cpp
 		SystemPalette.cpp
 		View.cpp
+		SwapChainGpuCopy.cpp
 		ViewSwapChain.cpp
 		VirtualOutput.cpp
 		VirtualScreen.cpp
@@ -183,7 +186,7 @@ Server(
 
 	LIBS localestub shared agg icon linprog systemd ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
-		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
+		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} ${GPUCOPY_LIBRARIES} backlight
 
 	RDEF app_server.rdef
 
@@ -192,6 +195,7 @@ Server(
 	${FREETYPE_INCLUDE_DIRS}
 	${LIBEVDEV_INCLUDE_DIRS}
 	${GBM_INCLUDE_DIRS}
+	${GPUCOPY_INCLUDE_DIRS}
 	"${PROJECT_SOURCE_DIR}/src/libs/backlight/"
 	"./drawing"
 	"./drawing/interface/linux"

@@ -35,6 +35,7 @@
 #include "ServerApp.h"
 #include "ServerBitmap.h"
 #include "ServerWindow.h"
+#include "SwapChainGpuCopy.h"
 #include "View.h"
 #include "VirtualScreen.h"
 #include "Window.h"
@@ -558,6 +559,7 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fCopyTime(0),
 	fWaitTime(0),
 	fReadTime(0),
+	fGpuTime(0),
 	fDeferSince(0),
 	fCopies(0),
 	fPump(-1),
@@ -569,7 +571,8 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fShadowLock("swap chain shadow"),
 	fShadowValid(false),
 	fGbmRead(getenv("VOS_SWAP_CHAIN_GBM_READ") != NULL
-		&& atoi(getenv("VOS_SWAP_CHAIN_GBM_READ")) != 0)
+		&& atoi(getenv("VOS_SWAP_CHAIN_GBM_READ")) != 0),
+	fGpu(NULL)
 {
 	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
 	fStats = stats != NULL && atoi(stats) != 0;
@@ -578,6 +581,7 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 
 ViewSwapChain::~ViewSwapChain()
 {
+	delete fGpu;
 	// The pump first: it posts to the window.
 	if (fPump >= 0) {
 		{
@@ -856,7 +860,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 				fShadowValid = false;
 			}
 			shown = fCpu->Show(frame);
-			_CountCopy(frame.waitTime, frame.readTime, frame.copyTime);
+			_CountCopy(frame.waitTime, frame.readTime, frame.copyTime, 0);
 		}
 	}
 
@@ -1093,16 +1097,33 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 	frame.clipping = &clipping;
 
 	BReference<ServerBitmap> shadow;
+	bigtime_t gpuTime = 0;
 	{
-		SwapChainCpuRead reading(bitmap.Get());
-		frame.waitTime = reading.WaitTime();
 		const bigtime_t readStart = system_time();
-		shadow = _FillShadow(bitmap.Get(), damage);
+		SwapChainGpuCopy* gpu = NULL;
+#ifdef HAVE_GBM
+		::HWInterface* hardware = fWindow->Desktop()->HWInterface();
+		if (hardware != NULL && fGpu == NULL && SwapChainGpuCopy::Enabled())
+			fGpu = new(std::nothrow) SwapChainGpuCopy();
+		if (fGpu != NULL && !fGpu->Failed()
+				&& fGpu->Copy(hardware->GbmDeviceFor(destination),
+					bitmap.Get())) {
+			gpu = fGpu;
+			gpuTime = fGpu->Time();
+		}
+#endif
+		if (gpu != NULL) {
+			shadow = _FillShadow(bitmap.Get(), damage, gpu);
+		} else {
+			SwapChainCpuRead reading(bitmap.Get());
+			frame.waitTime = reading.WaitTime();
+			shadow = _FillShadow(bitmap.Get(), damage, NULL);
+		}
 		frame.readTime = system_time() - readStart;
 	}
 	frame.source = shadow.Get();
 	fCpu->Show(frame);
-	_CountCopy(frame.waitTime, frame.readTime, frame.copyTime);
+	_CountCopy(frame.waitTime, frame.readTime, frame.copyTime, gpuTime);
 }
 
 
@@ -1389,7 +1410,8 @@ ViewSwapChain::_CountShown(bigtime_t when)
 
 // Fills the back shadow, then publishes it; the shown one is never written.
 BReference<ServerBitmap>
-ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage)
+ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage,
+	SwapChainGpuCopy* gpu)
 {
 	BReference<ServerBitmap> shown;
 	BReference<ServerBitmap> back;
@@ -1429,9 +1451,19 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage)
 
 	const bool whole = !valid || damage.CountRects() == 0;
 	const BRect bounds = bitmap->Bounds();
+	// The rect from the GPU copy or straight from the buffer.
+	auto read = [&](int32 left, int32 top, int32 right, int32 bottom) {
+		if (gpu != NULL) {
+			copy_rows(back->Bits() + (size_t)top * back->BytesPerRow()
+					+ left * 4, back->BytesPerRow(),
+				gpu->Bits() + (size_t)top * gpu->Stride() + left * 4,
+				gpu->Stride(), (size_t)(right - left + 1) * 4,
+				bottom - top + 1);
+		} else
+			read_rect(bitmap, back.Get(), left, top, right, bottom, fGbmRead);
+	};
 	if (whole) {
-		read_rect(bitmap, back.Get(), 0, 0, bitmap->Width() - 1,
-			bitmap->Height() - 1, fGbmRead);
+		read(0, 0, bitmap->Width() - 1, bitmap->Height() - 1);
 	} else {
 		// The back one is a frame behind: start from the shown one.
 		memcpy(back->Bits(), shown->Bits(),
@@ -1440,9 +1472,8 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage)
 			const BRect rect = damage.RectAt(i) & bounds;
 			if (!rect.IsValid())
 				continue;
-			read_rect(bitmap, back.Get(), (int32)rect.left,
-				(int32)rect.top, (int32)rect.right, (int32)rect.bottom,
-				fGbmRead);
+			read((int32)rect.left, (int32)rect.top, (int32)rect.right,
+				(int32)rect.bottom);
 		}
 	}
 
@@ -1455,12 +1486,14 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage)
 
 
 void
-ViewSwapChain::_CountCopy(bigtime_t wait, bigtime_t read, bigtime_t time)
+ViewSwapChain::_CountCopy(bigtime_t wait, bigtime_t read, bigtime_t time,
+	bigtime_t gpu)
 {
 	if (!fStats || time <= 0)
 		return;
 
 	atomic_add64(&fReadTime, read);
+	atomic_add64(&fGpuTime, gpu);
 	atomic_add64(&fWaitTime, wait);
 	atomic_add64(&fCopyTime, time);
 	atomic_add(&fCopies, 1);
@@ -1492,16 +1525,18 @@ ViewSwapChain::_Report(bigtime_t now)
 	const int64 copyTime = atomic_get_and_set64(&fCopyTime, 0);
 	const int64 waitTime = atomic_get_and_set64(&fWaitTime, 0);
 	const int64 readTime = atomic_get_and_set64(&fReadTime, 0);
+	const int64 gpuTime = atomic_get_and_set64(&fGpuTime, 0);
 	const int32 copies = atomic_get_and_set(&fCopies, 0);
 	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
-		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us\n",
+		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us, gpu %lld us\n",
 		fView != NULL ? fView->Name() : "?",
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
 		fWorstGap / 1000.0,
 		(long long)(copies > 0 ? waitTime / copies : 0),
 		(long long)(copies > 0 ? readTime / copies : 0),
-		(long long)(copies > 0 ? copyTime / copies : 0));
+		(long long)(copies > 0 ? copyTime / copies : 0),
+		(long long)(copies > 0 ? gpuTime / copies : 0));
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;
 	fWorstGap = 0;

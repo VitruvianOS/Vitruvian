@@ -20,6 +20,7 @@
 class DrawingEngine;
 class HWInterface;
 class PlaneConsumer;
+class SwapChainGpuCopy;
 class ServerApp;
 class ServerBitmap;
 class ServerWindow;
@@ -191,9 +192,10 @@ private:
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();
 			void				_CountCopy(bigtime_t wait, bigtime_t read,
-									bigtime_t time);
+									bigtime_t time, bigtime_t gpu);
 			BReference<ServerBitmap> _FillShadow(ServerBitmap* bitmap,
-									const BRegion& damage);
+									const BRegion& damage,
+									SwapChainGpuCopy* gpu);
 			void				_Report(bigtime_t now);
 
 			ServerApp*			fApp;
@@ -225,6 +227,7 @@ private:
 			int64				fCopyTime;
 			int64				fWaitTime;
 			int64				fReadTime;
+			int64				fGpuTime;
 			bigtime_t			fDeferSince;
 			int32				fCopies;
 
@@ -245,6 +248,8 @@ private:
 			BReference<ServerBitmap> fSpare;
 			bool				fShadowValid;
 			bool				fGbmRead;
+			// GPU copy into cached memory; the window thread only.
+			SwapChainGpuCopy*	fGpu;
 };
 
 

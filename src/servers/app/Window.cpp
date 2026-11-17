@@ -363,7 +363,8 @@ Window::TryOverlayBitmap(View* view, ServerBitmap* bitmap,
 
 	::HWInterface* hw = fScreen->HWInterface();
 	OverlayPlane* plane = NULL;
-	if (hw == NULL || hw->AcquireOverlayPlaneForBitmap(bitmap, &plane) != B_OK)
+	if (hw == NULL || hw->AcquireOverlayPlaneForBitmap(bitmap, &plane, screenRect)
+			!= B_OK)
 		return false;
 	if (plane->Configure(source, screenRect) != B_OK) {
 		hw->ReleaseOverlayPlane(plane);

@@ -833,11 +833,58 @@ DrmHWInterface::_SingleOutput() const
 }
 
 
+// Desktop to output-local and back; the origin is the output's place in the
+// desktop and never negative.
+static inline BRect
+desktop_to_local(const BRect& rect, const BPoint& origin)
+{
+	return rect.OffsetByCopy(-origin.x, -origin.y);
+}
+
+
+static inline BRect
+local_to_desktop(const BRect& rect, const BPoint& origin)
+{
+	return rect.OffsetByCopy(origin.x, origin.y);
+}
+
+
+// Round trip of a rect through outputs side by side, stacked, with a gap
+// and of differing sizes.
+static bool
+check_output_layouts()
+{
+	const BPoint origins[] = { BPoint(0, 0), BPoint(1920, 0), BPoint(1920, 1080),
+		BPoint(3840, 200), BPoint(0, 1080) };
+	const BRect sizes[] = { BRect(0, 0, 1919, 1079), BRect(0, 0, 1279, 719),
+		BRect(0, 0, 2559, 1439) };
+	for (size_t i = 0; i < sizeof(origins) / sizeof(origins[0]); i++) {
+		for (size_t j = 0; j < sizeof(sizes) / sizeof(sizes[0]); j++) {
+			const BRect frame = local_to_desktop(sizes[j], origins[i]);
+			const BRect probe(10, 20, 99, 59);
+			const BRect desktop = local_to_desktop(probe, origins[i]);
+			if (!frame.Contains(desktop)
+					|| desktop_to_local(desktop & frame, origins[i]) != probe
+					|| desktop_to_local(frame, origins[i]) != sizes[j])
+				return false;
+		}
+	}
+	return true;
+}
+
+
 // Exclusive lock held. width and height are the first output's logical
 // size, which fDisplayMode may not hold yet.
 void
 DrmHWInterface::_RebuildRenderBuffer(uint32 width, uint32 height)
 {
+	static bool sChecked = false;
+	if (!sChecked) {
+		sChecked = true;
+		if (!check_output_layouts())
+			fprintf(stderr, "[drm] output origin round trip failed\n");
+	}
+
 	BRect bounds(fOrigin.x, fOrigin.y, fOrigin.x + width - 1,
 		fOrigin.y + height - 1);
 	for (size_t i = 0; i < fOutputs.size(); i++)
@@ -908,8 +955,7 @@ DrmHWInterface::_SplitDamage(const BRect& frame, bool outputsOnly)
 	if (!outputsOnly && fStandIn == 0) {
 		BRect part = frame & _Frame();
 		if (part.IsValid()) {
-			part.OffsetBy(-fOrigin.x, -fOrigin.y);
-			fAccumulatedDirty.Include(part);
+			fAccumulatedDirty.Include(desktop_to_local(part, fOrigin));
 		}
 	}
 
@@ -917,8 +963,7 @@ DrmHWInterface::_SplitDamage(const BRect& frame, bool outputsOnly)
 		Output* output = fOutputs[i];
 		BRect part = frame & output->Frame();
 		if (part.IsValid()) {
-			part.OffsetBy(-output->origin.x, -output->origin.y);
-			output->dirty.Include(part);
+			output->dirty.Include(desktop_to_local(part, output->origin));
 		}
 	}
 }

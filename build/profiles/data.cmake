@@ -165,6 +165,10 @@ endif()
 # Read-only Linux befs driver; harmless if the kernel lacks the module.
 install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/ COMPONENT data)
 
+# DDC/CI monitor brightness needs /dev/i2c-* for the video group.
+install(FILES data/etc/modules-load.d/i2c-dev.conf DESTINATION /etc/modules-load.d/ COMPONENT data)
+install(FILES data/etc/udev/rules.d/60-vitruvian-i2c.rules DESTINATION /etc/udev/rules.d/ COMPONENT data)
+
 
 # Boot scripts
 ImageIncludeFile("data/system/boot/SetupEnvironment" "/system/boot")

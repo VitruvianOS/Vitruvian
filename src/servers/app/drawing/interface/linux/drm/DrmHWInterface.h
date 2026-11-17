@@ -349,6 +349,7 @@ public:
 									OverlayPlane** _plane,
 									const BRect& destination);
 	virtual	BRect				OverlayOutputFrame(const BRect& where);
+	virtual	bool				HasOverlayPlane(const BRect& where);
 	virtual	status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
 	virtual	bool				CheckOverlayRestrictions(int32 width,

@@ -70,6 +70,8 @@ struct SwapChainFrame {
 	uint64				serial;
 	// Set by a consumer that reports completion later.
 	bool				async;
+	// Set by the CPU consumer: microseconds spent copying.
+	bigtime_t			copyTime;
 
 	SwapChainFrame()
 		:
@@ -85,7 +87,8 @@ struct SwapChainFrame {
 		count(0),
 		fullyVisible(false),
 		serial(0),
-		async(false)
+		async(false),
+		copyTime(0)
 	{
 		for (int32 i = 0; i < BPrivate::kSwapChainMaxBuffers; i++)
 			buffers[i] = NULL;
@@ -171,6 +174,7 @@ private:
 			void				_UpdatePeriod(::HWInterface* hardware);
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();
+			void				_CountCopy(bigtime_t time);
 			void				_Report(bigtime_t now);
 
 			ServerApp*			fApp;
@@ -199,6 +203,8 @@ private:
 			uint32				fPresented;
 			uint32				fShown;
 			uint32				fReplaced;
+			int64				fCopyTime;
+			int32				fCopies;
 
 			// CPU path: the newest frame, shown by the pump.
 			thread_id			fPump;

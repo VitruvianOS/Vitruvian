@@ -32,7 +32,8 @@ public:
 									int32 bytesPerRow = -1,
 									int32 screen = B_MAIN_SCREEN_ID.id,
 									uint8* _allocationFlags = NULL,
-									const BRect* desktopFrame = NULL);
+									const BRect* desktopFrame = NULL,
+									bool scanout = true);
 
 			ServerBitmap*		CloneFromClient(area_id clientArea,
 									size_t areaOffset, BRect bounds,

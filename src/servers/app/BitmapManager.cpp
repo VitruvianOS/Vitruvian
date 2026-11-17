@@ -62,7 +62,7 @@ BitmapManager *gBitmapManager = NULL;
 */
 static uint8*
 _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
-	GbmMemory** _memory, uint32* _stride)
+	GbmMemory** _memory, uint32* _stride, bool scanout)
 {
 	if (device == NULL)
 		return NULL;
@@ -88,9 +88,13 @@ _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 
 	// LINEAR keeps the server blitters and the client CPU access valid
 	// through the map. No WRITE: Mesa takes it as a dumb cursor buffer
-	// request and refuses anything else. SCANOUT lets planes take it.
-	struct gbm_bo* bo = gbm_bo_create(device, width, height, format,
-		GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+	// request and refuses anything else. SCANOUT lets planes take it, but
+	// pins it to VRAM on discrete cards, slow for the CPU to read.
+	struct gbm_bo* bo = NULL;
+	if (scanout) {
+		bo = gbm_bo_create(device, width, height, format,
+			GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
+	}
 	if (bo == NULL) {
 		bo = gbm_bo_create(device, width, height, format,
 			GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
@@ -202,7 +206,7 @@ ServerBitmap*
 BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 	HWInterface& hwInterface, BRect bounds, color_space space, uint32 flags,
 	int32 bytesPerRow, int32 screen, uint8* _allocationFlags,
-	const BRect* desktopFrame)
+	const BRect* desktopFrame, bool scanout)
 {
 	BAutolock locker(fLock);
 	if (!locker.IsLocked())
@@ -247,10 +251,11 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 		struct gbm_device* first = hwInterface.GbmDevice();
 		struct gbm_device* device = desktopFrame != NULL
 			? hwInterface.GbmDeviceFor(*desktopFrame) : first;
-		buffer = _AllocateGbmBuffer(device, bitmap, &gbmMemory, &gbmStride);
+		buffer = _AllocateGbmBuffer(device, bitmap, &gbmMemory, &gbmStride,
+			scanout);
 		if (buffer == NULL && device != first) {
 			buffer = _AllocateGbmBuffer(first, bitmap, &gbmMemory,
-				&gbmStride);
+				&gbmStride, scanout);
 		}
 		if (buffer != NULL) {
 			bitmap->fMemory = gbmMemory;

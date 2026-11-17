@@ -7577,6 +7577,28 @@ DrmHWInterface::OverlayOutputFrame(const BRect& where)
 }
 
 
+bool
+DrmHWInterface::HasOverlayPlane(const BRect& where)
+{
+	uint32 output;
+	BRect frame;
+	if (!_OutputFor(where, &output, &frame))
+		return false;
+
+	pthread_mutex_lock(&fOverlayMutex);
+	bool found = false;
+	for (size_t i = 0; i < fOverlayPlanes.size() && !found; i++) {
+		const OverlayPlaneInfo& info = fOverlayPlanes[i];
+		found = info.output == output
+			&& std::find(info.formats.begin(), info.formats.end(),
+				(uint32)DRM_FORMAT_XRGB8888) != info.formats.end()
+			&& _PlaneAccepts(info, DRM_FORMAT_XRGB8888, DRM_FORMAT_MOD_LINEAR);
+	}
+	pthread_mutex_unlock(&fOverlayMutex);
+	return found;
+}
+
+
 // An empty rectangle is the first output. Outputs that rotate, sleep or
 // are not set up cannot take a plane.
 bool

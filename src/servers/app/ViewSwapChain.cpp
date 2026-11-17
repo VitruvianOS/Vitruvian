@@ -162,6 +162,7 @@ public:
 		const int32 height = frame.bitmap->Height();
 		const BRect bounds(0, 0, width - 1, height - 1);
 
+		const bigtime_t start = system_time();
 		SwapChainCpuRead reading(frame.bitmap);
 		if (!frame.engineLocked)
 			frame.engine->LockParallelAccess();
@@ -189,6 +190,7 @@ public:
 		frame.engine->SetDrawingMode(oldMode);
 		if (!frame.engineLocked)
 			frame.engine->UnlockParallelAccess();
+		frame.copyTime = system_time() - start;
 		return true;
 	}
 
@@ -430,6 +432,8 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fPresented(0),
 	fShown(0),
 	fReplaced(0),
+	fCopyTime(0),
+	fCopies(0),
 	fPump(-1),
 	fPumpWake(false),
 	fPumpQuit(false),
@@ -514,6 +518,10 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	// Where the view lies picks the card that allocates.
 	BRect where = _DestinationFor(width, height);
 
+	// Only a chain a plane can take needs scanout memory; the CPU copy
+	// reads the rest, best kept in system memory.
+	const bool planeCapable = hardware->HasOverlayPlane(where);
+
 	const size_t bytes = (size_t)((width * 4 + 255) & ~255) * height * count;
 	if (!fApp->ReserveSwapChain(bytes, !resize))
 		return B_NO_MEMORY;
@@ -533,7 +541,7 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 		ServerBitmap* bitmap = gBitmapManager->CreateBitmap(NULL, *hardware,
 			BRect(0, 0, width - 1, height - 1), B_RGB32,
 			B_BITMAP_SUPPORTS_GBM, -1, B_MAIN_SCREEN_ID.id, NULL,
-			where.IsValid() ? &where : NULL);
+			where.IsValid() ? &where : NULL, planeCapable);
 		if (bitmap == NULL) {
 			status = B_NO_MEMORY;
 			break;
@@ -714,6 +722,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			if (clipping == NULL && steady && fOwnerWindow != NULL)
 				fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
 			shown = fCpu->Show(frame);
+			_CountCopy(frame.copyTime);
 		}
 	}
 
@@ -921,6 +930,7 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 	frame.engine = engine;
 	frame.clipping = &clipping;
 	fCpu->Show(frame);
+	_CountCopy(frame.copyTime);
 }
 
 
@@ -1196,6 +1206,17 @@ ViewSwapChain::_CountShown(bigtime_t when)
 }
 
 
+void
+ViewSwapChain::_CountCopy(bigtime_t time)
+{
+	if (!fStats || time <= 0)
+		return;
+
+	atomic_add64(&fCopyTime, time);
+	atomic_add(&fCopies, 1);
+}
+
+
 // fLock held.
 void
 ViewSwapChain::_CountReplaced()
@@ -1218,12 +1239,15 @@ ViewSwapChain::_Report(bigtime_t now)
 	if (span < 2000000)
 		return;
 
+	const int64 copyTime = atomic_get_and_set64(&fCopyTime, 0);
+	const int32 copies = atomic_get_and_set(&fCopies, 0);
 	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
-		"replaced %u, worst gap %.1f ms\n",
+		"replaced %u, worst gap %.1f ms, copy %lld us\n",
 		fView != NULL ? fView->Name() : "?",
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
-		fWorstGap / 1000.0);
+		fWorstGap / 1000.0,
+		(long long)(copies > 0 ? copyTime / copies : 0));
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;
 	fWorstGap = 0;

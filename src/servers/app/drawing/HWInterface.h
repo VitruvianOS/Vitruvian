@@ -198,6 +198,9 @@ public:
 	virtual	BRect				OverlayOutputFrame(
 									const BRect& where = BRect())
 									{ return BRect(); }
+	// Whether the output holding where has a plane for linear XRGB.
+	virtual	bool				HasOverlayPlane(const BRect& where = BRect())
+									{ return false; }
 
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);

@@ -2046,8 +2046,8 @@ Window::DrawExposedBorder(BRegion& dirty)
 		engine->CopyToFront(border);
 		fWindow->ResyncDrawState();
 		engine->UnlockParallelAccess();
+		dirty.Exclude(&border);
 	}
-	dirty.Exclude(&border);
 }
 
 

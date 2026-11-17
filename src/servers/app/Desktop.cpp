@@ -2481,7 +2481,8 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 			engine->CopyToFront(copyRegion);
 		engine->EndPublishBatch(batch);
 		engine->UnlockParallelAccess();
-	}
+	} else if (batch)
+		HWInterface()->FinishPublishBatch();
 
 	// resume direct frame buffer access
 	if (direct) {

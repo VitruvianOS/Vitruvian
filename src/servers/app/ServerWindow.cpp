@@ -4920,8 +4920,7 @@ ServerWindow::_BeginDrawBatch()
 	HWInterface* hw = fDesktop->HWInterface();
 	if (hw == NULL || fWindow->Screen() == NULL)
 		return false;
-	hw->BeginPublishBatch();
-	return true;
+	return hw->BeginPublishBatch();
 }
 
 
@@ -4931,10 +4930,7 @@ ServerWindow::_EndDrawBatch()
 	HWInterface* hw = fDesktop->HWInterface();
 	if (hw == NULL)
 		return;
-	if (hw->LockParallelAccess()) {
-		hw->EndPublishBatch();
-		hw->UnlockParallelAccess();
-	}
+	hw->FinishPublishBatch();
 }
 
 

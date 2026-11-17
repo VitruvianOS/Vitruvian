@@ -257,6 +257,9 @@ public:
 	// True when this call opened the batch.
 	virtual	bool				BeginPublishBatch();
 	virtual	void				EndPublishBatch();
+	// Takes the parallel access itself; drops the batch when that fails,
+	// so the thread never stays batched.
+			void				FinishPublishBatch();
 	// Publishes region at FlushPublish(owner), or after maxAge.
 	// Screen coordinates; a repeated call replaces the owner's region.
 	virtual	void				DeferPublish(const void* owner,

@@ -292,12 +292,8 @@ HWInterface::SetDragBitmap(const ServerBitmap* bitmap,
 		_AdoptDragBitmap();
 		fFloatingOverlaysLock.Unlock();
 	}
-	if (batch) {
-		if (LockParallelAccess()) {
-			EndPublishBatch();
-			UnlockParallelAccess();
-		}
-	}
+	if (batch)
+		FinishPublishBatch();
 }
 
 
@@ -401,6 +397,20 @@ HWInterface::EndPublishBatch()
 	if (region->CountRects() > 0)
 		Publish(*region);
 	delete region;
+}
+
+
+void
+HWInterface::FinishPublishBatch()
+{
+	if (LockParallelAccess()) {
+		EndPublishBatch();
+		UnlockParallelAccess();
+	} else if (sBatchOwner == this && sBatch != NULL) {
+		delete sBatch;
+		sBatch = NULL;
+		sBatchOwner = NULL;
+	}
 }
 
 

@@ -42,6 +42,9 @@ public:
 };
 
 
+extern __thread bool sCopyToFrontOff;
+
+
 class DrawingEngine : public HWInterfaceListener {
 public:
 							DrawingEngine(HWInterface* interface = NULL);
@@ -58,9 +61,11 @@ public:
 								{ return fGraphicsCard->BeginPublishBatch(); }
 			void			EndPublishBatch(bool opened)
 								{ if (opened) fGraphicsCard->EndPublishBatch(); }
+	// Per thread: a window thread holds its own drawing back while the
+	// others keep publishing on the shared engine.
 	virtual	void			SetCopyToFrontEnabled(bool enable);
 			bool			CopyToFrontEnabled() const
-								{ return fCopyToFront; }
+								{ return !sCopyToFrontOff; }
 	virtual	void			CopyToFront(/*const*/ BRegion& region);
 
 	// locking
@@ -227,7 +232,6 @@ private:
 			ObjectDeleter<Painter>
 							fPainter;
 			HWInterface*	fGraphicsCard;
-			bool			fCopyToFront;
 			ReadOverlay*	fReadOverlay;
 };
 

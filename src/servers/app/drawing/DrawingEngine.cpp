@@ -139,7 +139,7 @@ public:
 
 	~DrawTransaction()
 	{
-		if (fEngine->fCopyToFront)
+		if (fEngine->CopyToFrontEnabled())
 			fEngine->fGraphicsCard->InvalidateRegion(fDirty);
 		if (fOverlaysHidden)
 			fEngine->fGraphicsCard->ShowFloatingOverlays();
@@ -180,7 +180,6 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	:
 	fPainter(new Painter()),
 	fGraphicsCard(NULL),
-	fCopyToFront(true),
 	fReadOverlay(NULL)
 {
 	SetHWInterface(interface);
@@ -278,10 +277,13 @@ DrawingEngine::SetHWInterface(HWInterface* interface)
 }
 
 
+__thread bool sCopyToFrontOff = false;
+
+
 void
 DrawingEngine::SetCopyToFrontEnabled(bool enable)
 {
-	fCopyToFront = enable;
+	sCopyToFrontOff = !enable;
 }
 
 
@@ -604,7 +606,7 @@ DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 		inDegreeZeroNodes.pop();
 
 		BRect touched = CopyRect(n->rect, xOffset, yOffset);
-		if (fCopyToFront)
+		if (CopyToFrontEnabled())
 			fGraphicsCard->Invalidate(touched);
 
 		for (int32 k = 0; k < n->next_pointer; k++) {

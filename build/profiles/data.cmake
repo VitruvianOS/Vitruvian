@@ -9,7 +9,6 @@ set(SYSTEMD_SERVICES
   data/systemd/notification_server.service
   data/systemd/deskbar.service
   data/systemd/tracker.service
-  data/systemd/userbootscript@.service
   data/systemd/vos-login.target
   data/systemd/vos-pdf-printer.service
   data/systemd/vos-fsck-failed.service

@@ -1583,6 +1583,52 @@ run_first_login_for_user()
 }
 
 
+// ~/config/settings/boot/UserBootscript, on every login, inside the session
+// so the apps it starts stay up.
+static void
+run_user_bootscript()
+{
+	if (sUserUid == (uid_t)-1 || sUserHome[0] == '\0')
+		return;
+
+	char path[PATH_MAX + 64];
+	snprintf(path, sizeof(path), "%s/config/settings/boot/UserBootscript",
+		sUserHome);
+	if (access(path, R_OK) != 0)
+		return;
+
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (!resolve_user_groups(&groups, &ngroups)) {
+		fprintf(stderr, "janus_session: UserBootscript: cannot resolve groups "
+			"for %s\n", sUserName);
+		return;
+	}
+
+	pid_t child = fork();
+	if (child == 0) {
+		setenv("HOME",    sUserHome, 1);
+		setenv("USER",    sUserName, 1);
+		setenv("LOGNAME", sUserName, 1);
+		if (!drop_to_user(groups, ngroups))
+			_exit(1);
+		if (chdir(sUserHome) != 0)
+			_exit(1);
+		char* const argv[] = { (char*)"/bin/sh", path, NULL };
+		execv("/bin/sh", argv);
+		_exit(127);
+	}
+	free(groups);
+	if (child < 0)
+		return;
+
+	int status;
+	waitpid(child, &status, 0);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		fprintf(stderr, "janus_session: UserBootscript exited %d\n", status);
+}
+
+
 static void*
 _first_login_thread(void*)
 {
@@ -1591,6 +1637,7 @@ _first_login_thread(void*)
 			"running anyway (replicants may not install)\n");
 	}
 	run_first_login_for_user();
+	run_user_bootscript();
 	return NULL;
 }
 

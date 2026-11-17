@@ -749,6 +749,14 @@ passwd -l root 2>/dev/null || true
 systemctl disable ssh.service 2>/dev/null || true
 systemctl disable ssh.socket 2>/dev/null || true
 
+# Debian presets enable these on install. xfsprogs is there for mkfs/repair,
+# not for a healer and weekly scrub on an ext4 root; nm-l2tp starts its own
+# IPsec per connection; ModemManager is D-Bus activated when asked for,
+# through the alias a plain disable would remove.
+systemctl disable xfs_healer_start.service xfs_scrub_all.timer \
+    strongswan-starter.service 2>/dev/null || true
+rm -f /etc/systemd/system/multi-user.target.wants/ModemManager.service
+
 # Live/raw marker — Installer strips this on --commit-setup.
 mkdir -p /etc/vos
 : > /etc/vos/live

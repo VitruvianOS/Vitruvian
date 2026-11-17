@@ -273,6 +273,12 @@ public:
 									const BRegion& region, bigtime_t maxAge);
 	virtual	void				FlushPublish(const void* owner);
 			void				CancelPublish(const void* owner);
+	// A window between BeginUpdate and EndUpdate: others do not publish
+	// its region. Its own EndUpdate (publish) or ExpirePublishes() does.
+			void				BeginUpdateRegion(const void* owner,
+									const BRegion& region);
+			void				EndUpdateRegion(const void* owner,
+									bool publish);
 			// Output thread; parallel access must be held.
 			void				ExpirePublishes();
 			bool				HasDeferredPublish();
@@ -382,7 +388,17 @@ protected:
 				bigtime_t		at;
 				bigtime_t		maxAge;
 			};
+			struct UpdateHold {
+				BRegion			region;
+				thread_id		thread;
+				bigtime_t		at;
+			};
+			bool				_HoldUpdating(const BRect& frame,
+									BRegion& rest);
+			status_t			_InvalidateNow(const BRect& frame);
 			BLocker				fPublishLock;
+			std::map<const void*, UpdateHold> fUpdating;
+			BRegion				fHeld;
 			std::map<const void*, DeferredPublish> fDeferred;
 			bool				fDefersPublish;
 			bool				fTracePublish;

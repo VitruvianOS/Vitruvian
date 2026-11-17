@@ -2217,6 +2217,9 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 	link.Attach<int32>(B_NULL_TOKEN);
 	link.Flush();
 
+	if (fScreen != NULL && fScreen->HWInterface() != NULL)
+		fScreen->HWInterface()->BeginUpdateRegion(this, *dirty);
+
 	// suppress back to front buffer copies in the drawing engine
 	fDrawingEngine->SetCopyToFrontEnabled(false);
 
@@ -2244,8 +2247,10 @@ void
 Window::_ReleaseExposeHold()
 {
 	fExposeHold.MakeEmpty();
-	if (fScreen != NULL && fScreen->HWInterface() != NULL)
+	if (fScreen != NULL && fScreen->HWInterface() != NULL) {
 		fScreen->HWInterface()->CancelPublish(&fExposeHold);
+		fScreen->HWInterface()->EndUpdateRegion(this, false);
+	}
 }
 
 
@@ -2272,8 +2277,11 @@ Window::EndUpdate()
 			HWInterface::SetPublishKind(NULL);
 			if (fScreen != NULL && fScreen->HWInterface() != NULL)
 				fScreen->HWInterface()->FlushPublish(&fExposeHold);
+			if (fScreen != NULL && fScreen->HWInterface() != NULL)
+				fScreen->HWInterface()->EndUpdateRegion(this, true);
 			fDrawingEngine->UnlockParallelAccess();
-		}
+		} else if (fScreen != NULL && fScreen->HWInterface() != NULL)
+			fScreen->HWInterface()->EndUpdateRegion(this, false);
 		fExposeHold.MakeEmpty();
 		if (dirty)
 			fRegionPool.Recycle(dirty);

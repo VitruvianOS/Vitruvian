@@ -407,6 +407,20 @@ HWInterface::Invalidate(const BRect& frame)
 		return B_OK;
 	}
 
+	BRegion rest(frame);
+	if (_HoldUpdating(frame, rest)) {
+		for (int32 i = 0; i < rest.CountRects(); i++)
+			_InvalidateNow(rest.RectAt(i));
+		return B_OK;
+	}
+
+	return _InvalidateNow(frame);
+}
+
+
+status_t
+HWInterface::_InvalidateNow(const BRect& frame)
+{
 	_NotifyFrameCommitted(frame);
 	_TracePublish(frame, sPublishKind);
 
@@ -414,6 +428,75 @@ HWInterface::Invalidate(const BRect& frame)
 		return CopyBackToFront(frame);
 
 	return B_OK;
+}
+
+
+static const bigtime_t kUpdateHoldMax = 200000;
+
+
+// What other threads' updates are drawing is kept out of rest and held.
+bool
+HWInterface::_HoldUpdating(const BRect& frame, BRegion& rest)
+{
+	BAutolock locker(fPublishLock);
+	if (fUpdating.empty())
+		return false;
+	const bigtime_t now = system_time();
+	const thread_id thread = find_thread(NULL);
+	BRegion others;
+	for (std::map<const void*, UpdateHold>::iterator it = fUpdating.begin();
+			it != fUpdating.end(); ++it) {
+		if (it->second.thread != thread && now - it->second.at < kUpdateHoldMax)
+			others.Include(&it->second.region);
+	}
+	BRegion hit(frame);
+	hit.IntersectWith(&others);
+	if (hit.CountRects() == 0)
+		return false;
+	fHeld.Include(&hit);
+	rest.Exclude(&others);
+	return true;
+}
+
+
+void
+HWInterface::BeginUpdateRegion(const void* owner, const BRegion& region)
+{
+	if (!fDefersPublish)
+		return;
+	BAutolock locker(fPublishLock);
+	UpdateHold& hold = fUpdating[owner];
+	hold.region = region;
+	hold.thread = find_thread(NULL);
+	hold.at = system_time();
+}
+
+
+// Parallel access held by the caller when publishing.
+void
+HWInterface::EndUpdateRegion(const void* owner, bool publish)
+{
+	BRegion ready;
+	{
+		BAutolock locker(fPublishLock);
+		std::map<const void*, UpdateHold>::iterator it = fUpdating.find(owner);
+		if (it == fUpdating.end())
+			return;
+		ready = fHeld;
+		ready.IntersectWith(&it->second.region);
+		fUpdating.erase(it);
+		for (it = fUpdating.begin(); it != fUpdating.end(); ++it)
+			ready.Exclude(&it->second.region);
+		fHeld.Exclude(&ready);
+	}
+	if (publish && ready.CountRects() > 0) {
+		sPublishKind = "update-held";
+		Publish(ready);
+		sPublishKind = NULL;
+	} else if (ready.CountRects() > 0) {
+		BAutolock locker(fPublishLock);
+		fHeld.Include(&ready);
+	}
 }
 
 
@@ -552,6 +635,21 @@ HWInterface::ExpirePublishes()
 			} else
 				++it;
 		}
+		// Updates that never ended, and what they kept back.
+		BRegion live;
+		for (std::map<const void*, UpdateHold>::iterator it
+				= fUpdating.begin(); it != fUpdating.end();) {
+			if (now - it->second.at >= kUpdateHoldMax)
+				fUpdating.erase(it++);
+			else {
+				live.Include(&it->second.region);
+				++it;
+			}
+		}
+		BRegion free(fHeld);
+		free.Exclude(&live);
+		fHeld.Exclude(&free);
+		due.Include(&free);
 	}
 	if (due.CountRects() > 0) {
 		sPublishKind = "expire-timeout";
@@ -565,7 +663,8 @@ bool
 HWInterface::HasDeferredPublish()
 {
 	BAutolock locker(fPublishLock);
-	return !fDeferred.empty();
+	return !fDeferred.empty() || !fUpdating.empty()
+		|| fHeld.CountRects() > 0;
 }
 
 

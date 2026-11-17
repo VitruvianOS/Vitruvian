@@ -422,13 +422,170 @@ read_driver_name(const char* devicePath, char* out, size_t size)
 }
 
 
+static unsigned int
+read_hex_id(const char* path)
+{
+	char text[32];
+	if (read_trimmed(path, text, sizeof(text)) <= 0)
+		return 0;
+	return (unsigned int)strtoul(text, NULL, 16);
+}
+
+
+/* "Advanced Micro Devices, Inc. [AMD/ATI]" -> "AMD", "Intel Corporation" -> "Intel" */
+static void
+short_vendor(const char* full, char* out, size_t size)
+{
+	const char* open = strchr(full, '[');
+	const char* close = open != NULL ? strchr(open, ']') : NULL;
+	if (close != NULL) {
+		snprintf(out, size, "%.*s", (int)(close - open - 1), open + 1);
+		char* slash = strchr(out, '/');
+		if (slash != NULL)
+			*slash = '\0';
+		return;
+	}
+
+	snprintf(out, size, "%s", full);
+	static const char* const suffixes[] = {
+		" Corporation", " Corp.", " Corp", ", Inc.", " Inc.", " Ltd.", NULL
+	};
+	for (int i = 0; suffixes[i] != NULL; i++) {
+		size_t length = strlen(out), suffix = strlen(suffixes[i]);
+		if (length > suffix && strcmp(out + length - suffix, suffixes[i]) == 0)
+			out[length - suffix] = '\0';
+	}
+}
+
+
+/* "Ellesmere [Radeon RX 580]" -> "Radeon RX 580" */
+static void
+short_device(const char* full, char* out, size_t size)
+{
+	const char* open = strrchr(full, '[');
+	const char* close = open != NULL ? strchr(open, ']') : NULL;
+	if (close != NULL && close > open + 1)
+		snprintf(out, size, "%.*s", (int)(close - open - 1), open + 1);
+	else
+		snprintf(out, size, "%s", full);
+}
+
+
+static int
+lookup_pci_name(const char* root, unsigned int vendor, unsigned int device,
+	char* out, size_t size)
+{
+	static const char* const files[] = {
+		"/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids"
+	};
+	FILE* file = NULL;
+	for (int i = 0; i < 2 && file == NULL; i++) {
+		char path[256];
+		join_path(path, sizeof(path), root, files[i]);
+		file = fopen(path, "rb");
+	}
+	if (file == NULL)
+		return -1;
+
+	char vendorName[96] = "";
+	char deviceName[96] = "";
+	bool inVendor = false;
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		if (line[0] == '#' || line[0] == '\n' || line[0] == '\\')
+			continue;
+		if (line[0] == '\t') {
+			if (!inVendor || line[1] == '\t')
+				continue;
+			if (strtoul(line + 1, NULL, 16) == device
+					&& line[5] == ' ') {
+				const char* name = line + 5;
+				while (*name == ' ')
+					name++;
+				snprintf(deviceName, sizeof(deviceName), "%s", name);
+				break;
+			}
+			continue;
+		}
+		if (inVendor)
+			break;
+		if (strtoul(line, NULL, 16) == vendor && line[4] == ' ') {
+			const char* name = line + 4;
+			while (*name == ' ')
+				name++;
+			snprintf(vendorName, sizeof(vendorName), "%s", name);
+			inVendor = true;
+		}
+	}
+	fclose(file);
+
+	for (char* c = vendorName + strlen(vendorName); c > vendorName
+			&& (c[-1] == '\n' || c[-1] == '\r'); )
+		*--c = '\0';
+	for (char* c = deviceName + strlen(deviceName); c > deviceName
+			&& (c[-1] == '\n' || c[-1] == '\r'); )
+		*--c = '\0';
+	if (vendorName[0] == '\0' || deviceName[0] == '\0')
+		return -1;
+
+	char vendorShort[48], deviceShort[96];
+	short_vendor(vendorName, vendorShort, sizeof(vendorShort));
+	short_device(deviceName, deviceShort, sizeof(deviceShort));
+	if (strncasecmp(deviceShort, vendorShort, strlen(vendorShort)) == 0)
+		snprintf(out, size, "%s", deviceShort);
+	else
+		snprintf(out, size, "%s %s", vendorShort, deviceShort);
+	return 0;
+}
+
+
+/* 0 = drives a display, 1 = boot VGA, 2 = other */
+static int
+card_rank(const char* root, int card, const char* devicePath)
+{
+	char path[600];
+	char text[32];
+
+	snprintf(path, sizeof(path), "%s/sys/class/drm", root == NULL ? "" : root);
+	DIR* directory = opendir(path);
+	if (directory != NULL) {
+		char prefix[24];
+		int prefixLength = snprintf(prefix, sizeof(prefix), "card%d-", card);
+		struct dirent* entry;
+		while ((entry = readdir(directory)) != NULL) {
+			if (strncmp(entry->d_name, prefix, prefixLength) != 0)
+				continue;
+			char status[600];
+			snprintf(status, sizeof(status), "%.400s/%.100s/status", path,
+				entry->d_name);
+			if (read_trimmed(status, text, sizeof(text)) > 0
+					&& strcmp(text, "connected") == 0) {
+				closedir(directory);
+				return 0;
+			}
+		}
+		closedir(directory);
+	}
+
+	snprintf(path, sizeof(path), "%.520s/boot_vga", devicePath);
+	if (read_trimmed(path, text, sizeof(text)) > 0 && text[0] == '1')
+		return 1;
+	return 2;
+}
+
+
 static void
 parse_gpu(const char* root, struct vos_hw_info* out)
 {
 	char devicePath[560];
 	char name[VOS_HW_NAME_LENGTH];
 
-	for (int card = 0; card < 16; card++) {
+	const int kMaxGpus = 8;
+	char names[kMaxGpus][VOS_HW_NAME_LENGTH];
+	int ranks[kMaxGpus];
+	int count = 0;
+
+	for (int card = 0; card < 16 && count < kMaxGpus; card++) {
 		snprintf(devicePath, sizeof(devicePath),
 			"%s/sys/class/drm/card%d/device", root == NULL ? "" : root, card);
 
@@ -463,8 +620,48 @@ parse_gpu(const char* root, struct vos_hw_info* out)
 			if (*c == '_')
 				*c = '-';
 		}
-		snprintf(out->gpu_name, sizeof(out->gpu_name), "%.120s", name);
-		return;
+
+		/* prefer the product name from pci.ids over the driver */
+		char path[600], productName[VOS_HW_NAME_LENGTH];
+		snprintf(path, sizeof(path), "%.520s/vendor", devicePath);
+		unsigned int vendor = read_hex_id(path);
+		snprintf(path, sizeof(path), "%.520s/device", devicePath);
+		unsigned int device = read_hex_id(path);
+		if (vendor != 0 && lookup_pci_name(root, vendor, device, productName,
+				sizeof(productName)) == 0)
+			snprintf(name, sizeof(name), "%s", productName);
+
+		bool duplicate = false;
+		for (int i = 0; i < count; i++) {
+			if (strcmp(names[i], name) == 0)
+				duplicate = true;
+		}
+		if (duplicate)
+			continue;
+
+		snprintf(names[count], sizeof(names[count]), "%s", name);
+		ranks[count++] = card_rank(root, card, devicePath);
+	}
+
+	size_t used = 0;
+	out->gpu_name[0] = '\0';
+	for (int rank = 0; rank < 3; rank++) {
+		for (int i = 0; i < count; i++) {
+			if (ranks[i] != rank)
+				continue;
+			size_t length = strlen(names[i]);
+			size_t separator = used > 0 ? 2 : 0;
+			if (used + separator + length >= sizeof(out->gpu_name)) {
+				if (used == 0) {
+					snprintf(out->gpu_name, sizeof(out->gpu_name), "%s",
+						names[i]);
+				}
+				return;
+			}
+			snprintf(out->gpu_name + used, sizeof(out->gpu_name) - used,
+				"%s%s", used > 0 ? ", " : "", names[i]);
+			used += separator + length;
+		}
 	}
 }
 

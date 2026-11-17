@@ -473,7 +473,7 @@ short_device(const char* full, char* out, size_t size)
 
 static int
 lookup_pci_name(const char* root, unsigned int vendor, unsigned int device,
-	char* out, size_t size)
+	unsigned int subVendor, unsigned int subDevice, char* out, size_t size)
 {
 	static const char* const files[] = {
 		"/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids"
@@ -489,21 +489,39 @@ lookup_pci_name(const char* root, unsigned int vendor, unsigned int device,
 
 	char vendorName[96] = "";
 	char deviceName[96] = "";
+	char subName[96] = "";
 	bool inVendor = false;
+	bool inDevice = false;
 	char line[256];
 	while (fgets(line, sizeof(line), file) != NULL) {
 		if (line[0] == '#' || line[0] == '\n' || line[0] == '\\')
 			continue;
 		if (line[0] == '\t') {
-			if (!inVendor || line[1] == '\t')
+			if (!inVendor)
 				continue;
+			if (line[1] == '\t') {
+				/* subsystem: "\t\tsvendor sdevice  name" */
+				char* end;
+				unsigned long sv = strtoul(line + 2, &end, 16);
+				unsigned long sd = strtoul(end, &end, 16);
+				if (inDevice && sv == subVendor && sd == subDevice
+						&& subVendor != 0) {
+					while (*end == ' ')
+						end++;
+					snprintf(subName, sizeof(subName), "%s", end);
+					break;
+				}
+				continue;
+			}
+			if (inDevice)
+				break;
 			if (strtoul(line + 1, NULL, 16) == device
 					&& line[5] == ' ') {
 				const char* name = line + 5;
 				while (*name == ' ')
 					name++;
 				snprintf(deviceName, sizeof(deviceName), "%s", name);
-				break;
+				inDevice = true;
 			}
 			continue;
 		}
@@ -531,6 +549,21 @@ lookup_pci_name(const char* root, unsigned int vendor, unsigned int device,
 	char vendorShort[48], deviceShort[96];
 	short_vendor(vendorName, vendorShort, sizeof(vendorShort));
 	short_device(deviceName, deviceShort, sizeof(deviceShort));
+
+	/* "Radeon RX 470/480/580": the subsystem entry names the exact model */
+	if (strchr(deviceShort, '/') != NULL && subName[0] != '\0') {
+		for (char* c = subName + strlen(subName); c > subName
+				&& (c[-1] == '\n' || c[-1] == '\r'); )
+			*--c = '\0';
+		char prefix[96];
+		snprintf(prefix, sizeof(prefix), "%s", deviceShort);
+		char* slash = strchr(prefix, '/');
+		while (slash > prefix && slash[-1] != ' ')
+			slash--;
+		*slash = '\0';
+		if (strncmp(subName, prefix, strlen(prefix)) == 0)
+			snprintf(deviceShort, sizeof(deviceShort), "%s", subName);
+	}
 	if (strncasecmp(deviceShort, vendorShort, strlen(vendorShort)) == 0)
 		snprintf(out, size, "%s", deviceShort);
 	else
@@ -627,8 +660,15 @@ parse_gpu(const char* root, struct vos_hw_info* out)
 		unsigned int vendor = read_hex_id(path);
 		snprintf(path, sizeof(path), "%.520s/device", devicePath);
 		unsigned int device = read_hex_id(path);
-		if (vendor != 0 && lookup_pci_name(root, vendor, device, productName,
-				sizeof(productName)) == 0)
+		snprintf(path, sizeof(path), "%.520s/subsystem_vendor", devicePath);
+		unsigned int subVendor = read_hex_id(path);
+		snprintf(path, sizeof(path), "%.520s/subsystem_device", devicePath);
+		unsigned int subDevice = read_hex_id(path);
+		snprintf(path, sizeof(path), "%.520s/product_name", devicePath);
+		if (read_trimmed(path, productName, sizeof(productName)) > 0)
+			snprintf(name, sizeof(name), "%s", productName);
+		else if (vendor != 0 && lookup_pci_name(root, vendor, device,
+				subVendor, subDevice, productName, sizeof(productName)) == 0)
 			snprintf(name, sizeof(name), "%s", productName);
 
 		bool duplicate = false;

@@ -9,6 +9,8 @@ Application(testwatch SOURCES testwatch.cpp)
 
 Application(testsuspend SOURCES testsuspend.cpp)
 
+Application(testlatency SOURCES testlatency.cpp)
+
 Application(testswapchain SOURCES testswapchain.cpp)
 UsePrivateHeaders(testswapchain interface)
 

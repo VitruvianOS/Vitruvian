@@ -356,6 +356,8 @@ public:
 									bool isMoving);
 protected:
 			void				_ReleaseComposeHold();
+			void				_SetExposeHold();
+			void				_ReleaseExposeHold();
 			void				_ShiftPartOfRegion(BRegion* region,
 									BRegion* regionToShift, int32 xOffset,
 									int32 yOffset);
@@ -395,6 +397,7 @@ protected:
 
 			BRegion				fVisibleRegion;
 			BRegion				fVisibleContentRegion;
+			BRegion				fExposeHold;
 
 			// Our part of the "global" dirty region (what needs to be redrawn).
 			// It is calculated from the desktop thread, but we can write to it when we read locked

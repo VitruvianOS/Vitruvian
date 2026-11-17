@@ -146,6 +146,8 @@ private:
 			void				_UpdateDrawState(View* view);
 			void				_UpdateCurrentDrawingRegion();
 
+			bool				_BeginDrawBatch();
+			void				_EndDrawBatch();
 			bool				_MessageNeedsAllWindowsLocked(
 									uint32 code) const;
 

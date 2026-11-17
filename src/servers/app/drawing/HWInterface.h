@@ -248,8 +248,11 @@ public:
 	virtual	status_t			Invalidate(const BRect& frame);
 	// Keeps a half-drawn update session out of the presented frame;
 	// a NULL region releases the owner's hold. Screen coordinates.
+	// maxAge 0 is the default expiry.
 	virtual	void				SetComposeHold(const void* owner,
-									const BRegion* region) {}
+									const BRegion* region,
+									bigtime_t maxAge = 0) {}
+	virtual	void				NoteDrawBatch() {}
 	// while CopyBackToFront() actually performs the operation
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 	virtual	status_t			CopyBackToFront(const BRegion& region);

@@ -4569,6 +4569,7 @@ ServerWindow::_MessageLooper()
 		int32 messagesProcessed = 0;
 		bigtime_t processingStart = system_time();
 		bool lockedDesktopSingleWindow = false;
+		bool batchHeld = false;
 
 		while (true) {
 			if (code == AS_DELETE_WINDOW || code == kMsgQuitLooper) {
@@ -4631,6 +4632,9 @@ ServerWindow::_MessageLooper()
 #ifdef PROFILE_MESSAGE_LOOP
 			bigtime_t dispatchStart = system_time();
 #endif
+			// a multi-message batch shows up as one change
+			if (!batchHeld && receiver.HasMessages() && !fWindow->InUpdate())
+				batchHeld = _BeginDrawBatch();
 			_DispatchMessage(code, receiver);
 
 #ifdef PROFILE_MESSAGE_LOOP
@@ -4674,6 +4678,9 @@ ServerWindow::_MessageLooper()
 				break;
 			}
 		}
+
+		if (batchHeld)
+			_EndDrawBatch();
 
 		Unlock();
 	}
@@ -4825,6 +4832,31 @@ ServerWindow::_UpdateCurrentDrawingRegion()
 		fWindow->GetEffectiveDrawingRegion(fCurrentView, fCurrentDrawingRegion);
 		fCurrentDrawingRegionValid = true;
 	}
+}
+
+
+// a batch is shown at the latest one refresh after it began
+static const bigtime_t kBatchHoldMax = 20000;
+
+
+bool
+ServerWindow::_BeginDrawBatch()
+{
+	HWInterface* hw = fDesktop->HWInterface();
+	if (hw == NULL || fWindow->Screen() == NULL)
+		return false;
+	hw->SetComposeHold(this, &fWindow->VisibleContentRegion(), kBatchHoldMax);
+	hw->NoteDrawBatch();
+	return true;
+}
+
+
+void
+ServerWindow::_EndDrawBatch()
+{
+	HWInterface* hw = fDesktop->HWInterface();
+	if (hw != NULL)
+		hw->SetComposeHold(this, NULL);
 }
 
 

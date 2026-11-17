@@ -295,6 +295,7 @@ DrmHWInterface::DrmHWInterface()
 		&& atoi(getenv("VOS_COMPOSE_HOLD_STATS")) != 0),
 	fHoldDeferred(0),
 	fHoldExpired(0),
+	fHoldBatches(0),
 	fHoldStatsAt(0),
 	fNeedsFlip(false),
 	fDamageFlush(false),
@@ -988,7 +989,20 @@ copy_scanout_rects(RenderingBuffer* from, RenderingBuffer* to,
 
 
 void
-DrmHWInterface::SetComposeHold(const void* owner, const BRegion* region)
+DrmHWInterface::NoteDrawBatch()
+{
+	if (fHoldStats)
+		atomic_add((int32*)&fHoldBatches, 1);
+}
+
+
+// A hold older than this is a hung client; its area is shown anyway.
+static const bigtime_t kComposeHoldMax = 100000;
+
+
+void
+DrmHWInterface::SetComposeHold(const void* owner, const BRegion* region,
+	bigtime_t maxAge)
 {
 	fDirtyMutex.Lock();
 	if (region == NULL || region->CountRects() == 0)
@@ -997,13 +1011,10 @@ DrmHWInterface::SetComposeHold(const void* owner, const BRegion* region)
 		ComposeHold& hold = fComposeHolds[owner];
 		hold.region = *region;
 		hold.at = system_time();
+		hold.maxAge = maxAge > 0 ? maxAge : kComposeHoldMax;
 	}
 	fDirtyMutex.Unlock();
 }
-
-
-// A hold older than this is a hung client; its area is shown anyway.
-static const bigtime_t kComposeHoldMax = 100000;
 
 
 void
@@ -1015,7 +1026,7 @@ DrmHWInterface::_HeldRegion(BRegion& held)
 	const bigtime_t now = system_time();
 	for (std::map<const void*, ComposeHold>::iterator it
 			= fComposeHolds.begin(); it != fComposeHolds.end();) {
-		if (now - it->second.at > kComposeHoldMax) {
+		if (now - it->second.at > it->second.maxAge) {
 			fHoldExpired++;
 			fComposeHolds.erase(it++);
 			continue;
@@ -1039,12 +1050,14 @@ DrmHWInterface::_ReportHoldStats()
 	fDirtyMutex.Lock();
 	const uint32 deferred = fHoldDeferred;
 	const uint32 expired = fHoldExpired;
+	const uint32 batches = atomic_get((int32*)&fHoldBatches);
+	atomic_set((int32*)&fHoldBatches, 0);
 	fHoldDeferred = 0;
 	fHoldExpired = 0;
 	fDirtyMutex.Unlock();
 	fHoldStatsAt = now;
-	fprintf(stderr, "compose hold: deferred %u rects/s, expired %u\n",
-		deferred, expired);
+	fprintf(stderr, "compose hold: deferred %u rects/s, expired %u, "
+		"batched %u batches/s\n", deferred, expired, batches);
 }
 
 

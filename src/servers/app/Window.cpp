@@ -176,6 +176,7 @@ Window::Window(const BRect& frame, const char *name,
 
 Window::~Window()
 {
+	_ReleaseExposeHold();
 	_ReleaseComposeHold();
 	ReleaseOverlay();
 	fSwapChainLock.Lock();
@@ -489,6 +490,10 @@ Window::MoveBy(int32 x, int32 y, bool moveStack)
 		return;
 
 	_ReleaseComposeHold();
+	if (fExposeHold.CountRects() > 0) {
+		fExposeHold.OffsetBy(x, y);
+		_SetExposeHold();
+	}
 	fFrame.OffsetBy(x, y);
 	_PropagatePosition();
 
@@ -1322,8 +1327,10 @@ Window::SetHidden(bool hidden)
 	// the desktop takes care of dirty regions
 	if (fHidden != hidden) {
 		fHidden = hidden;
-		if (hidden)
+		if (hidden) {
 			_ReleaseComposeHold();
+			_ReleaseExposeHold();
+		}
 
 		// The planes go with the frame, not with the teardown.
 		if (hidden)
@@ -1353,8 +1360,10 @@ Window::SetMinimized(bool minimized)
 		return;
 
 	fMinimized = minimized;
-	if (minimized)
+	if (minimized) {
 		_ReleaseComposeHold();
+		_ReleaseExposeHold();
+	}
 }
 
 
@@ -2003,6 +2012,9 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		if (fDrawingEngine->LockParallelAccess()) {
 			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
 			fDrawingEngine->SetCopyToFrontEnabled(true);
+			// the server background waits for the client's redraw
+			fExposeHold.Include(&expose);
+			_SetExposeHold();
 			fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
 			fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
 			fDrawingEngine->UnlockParallelAccess();
@@ -2200,6 +2212,26 @@ Window::_ReleaseComposeHold()
 }
 
 
+// Exposed area: held up to one refresh for the client to paint it.
+void
+Window::_SetExposeHold()
+{
+	if (fScreen != NULL && fScreen->HWInterface() != NULL) {
+		fScreen->HWInterface()->SetComposeHold(&fExposeHold, &fExposeHold,
+			20000);
+	}
+}
+
+
+void
+Window::_ReleaseExposeHold()
+{
+	fExposeHold.MakeEmpty();
+	if (fScreen != NULL && fScreen->HWInterface() != NULL)
+		fScreen->HWInterface()->SetComposeHold(&fExposeHold, NULL);
+}
+
+
 void
 Window::EndUpdate()
 {
@@ -2209,6 +2241,7 @@ Window::EndUpdate()
 		// re-enable copy to front
 		fDrawingEngine->SetCopyToFrontEnabled(true);
 		_ReleaseComposeHold();
+		_ReleaseExposeHold();
 
 		BRegion* dirty = fRegionPool.GetRegion(
 			fCurrentUpdateSession->DirtyRegion());

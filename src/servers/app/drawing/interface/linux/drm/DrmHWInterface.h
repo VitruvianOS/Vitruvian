@@ -365,8 +365,10 @@ public:
 
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
+	virtual	void				NoteDrawBatch();
 	virtual	void				SetComposeHold(const void* owner,
-									const BRegion* region);
+									const BRegion* region,
+									bigtime_t maxAge = 0);
 	virtual	void				MoveCursorTo(float x, float y);
 	virtual	void				_DrawCursor(IntRect area) const;
 
@@ -788,11 +790,13 @@ private:
 			struct ComposeHold {
 				BRegion			region;
 				bigtime_t		at;
+				bigtime_t		maxAge;
 			};
 			std::map<const void*, ComposeHold> fComposeHolds;
 			bool				fHoldStats;
 			uint32				fHoldDeferred;
 			uint32				fHoldExpired;
+			uint32				fHoldBatches;
 			bigtime_t			fHoldStatsAt;
 			bool				fNeedsFlip;
 			BFutexLocker		fDirtyMutex;

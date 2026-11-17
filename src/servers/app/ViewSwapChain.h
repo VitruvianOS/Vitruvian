@@ -188,6 +188,7 @@ private:
 			void				_ResetMailbox();
 	static	int32				_PumpEntry(void* self);
 			void				_Pump();
+			bigtime_t			_NextFlush(bigtime_t now);
 			void				_UpdatePeriod(::HWInterface* hardware);
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();

@@ -274,6 +274,8 @@ public:
 #ifdef HAVE_GBM
 	virtual	struct gbm_device*	GbmDevice();
 	virtual	struct gbm_device*	GbmDeviceFor(const BRect& where);
+	virtual	bigtime_t			LastFlipTime() const
+									{ return fLastFlipDone.load(); }
 #endif
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);

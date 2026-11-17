@@ -1004,10 +1004,29 @@ ViewSwapChain::_Pump()
 				break;
 
 			fWindow->PostMessage(AS_INTERNAL_FLUSH_SWAP_CHAINS, 0);
-			next = system_time() + (fPeriod > 0 ? fPeriod : 16667);
+			next = _NextFlush(system_time());
 		}
 		guard.lock();
 	}
+}
+
+
+// Phase-locked to the last flip, early enough for the read and draw to land
+// before the next compose; a timer when no flips arrive.
+bigtime_t
+ViewSwapChain::_NextFlush(bigtime_t now)
+{
+	const bigtime_t period = fPeriod > 0 ? fPeriod : 16667;
+	::HWInterface* hardware = fWindow->Desktop()->HWInterface();
+	const bigtime_t flip = hardware != NULL ? hardware->LastFlipTime() : 0;
+	if (flip == 0 || now - flip > 8 * period)
+		return now + period;
+
+	const bigtime_t lead = 6000;
+	bigtime_t next = flip - lead;
+	if (next < now)
+		next += ((now - next) / period + 1) * period;
+	return next;
 }
 
 
@@ -1401,7 +1420,9 @@ ViewSwapChain::_CountShown(bigtime_t when)
 		return;
 
 	fShown++;
-	if (fLastShown != 0 && when - fLastShown > fWorstGap)
+	// Idle stretches are not gaps between shown frames.
+	if (fLastShown != 0 && when - fLastShown < 250000
+			&& when - fLastShown > fWorstGap)
 		fWorstGap = when - fLastShown;
 	fLastShown = when;
 	_Report(system_time());

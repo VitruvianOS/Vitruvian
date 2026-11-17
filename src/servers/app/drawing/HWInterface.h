@@ -223,6 +223,9 @@ public:
 	virtual	struct gbm_device*	GbmDeviceFor(const BRect& /*where*/)
 									{ return GbmDevice(); }
 
+	// system_time() of the last completed flip; 0 when not known.
+	virtual	bigtime_t			LastFlipTime() const { return 0; }
+
 	// frame buffer access (you need to ReadLock!)
 			RenderingBuffer*	DrawingBuffer() const;
 	virtual	RenderingBuffer*	FrontBuffer() const = 0;

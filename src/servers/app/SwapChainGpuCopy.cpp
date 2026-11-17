@@ -24,14 +24,16 @@
 #include "ServerBitmap.h"
 
 
-bool
-SwapChainGpuCopy::Enabled()
+int
+SwapChainGpuCopy::Mode()
 {
 #ifdef HAVE_GBM
 	const char* value = getenv("VOS_SWAP_CHAIN_GPU_COPY");
-	return value != NULL && atoi(value) != 0;
+	if (value == NULL || value[0] == '\0')
+		return 2;
+	return atoi(value) != 0 ? 1 : 0;
 #else
-	return false;
+	return 0;
 #endif
 }
 

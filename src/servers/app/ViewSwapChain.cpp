@@ -185,6 +185,15 @@ note_plane(bool scanout, const char* what)
 }
 
 
+// Reads the pump may take; the trials settle on one of the others.
+enum {
+	kTrialGpu = 0,
+	kTrialCpu = 1,
+	kPathGpu = 2,
+	kPathCpu = 3
+};
+
+
 struct ViewSwapChain::Pending {
 	uint64			serial;
 	Generation*		generation;
@@ -641,8 +650,12 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fShadowValid(false),
 	fGbmRead(getenv("VOS_SWAP_CHAIN_GBM_READ") != NULL
 		&& atoi(getenv("VOS_SWAP_CHAIN_GBM_READ")) != 0),
-	fGpu(NULL)
+	fGpu(NULL),
+	fPath(SwapChainGpuCopy::Mode() == 0 ? kPathCpu
+		: SwapChainGpuCopy::Mode() == 1 ? kPathGpu : kTrialGpu),
+	fTrialFrames(0)
 {
+	fTrialTime[0] = fTrialTime[1] = 0;
 	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
 	fStats = stats != NULL && atoi(stats) != 0;
 }
@@ -1192,13 +1205,20 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 		SwapChainGpuCopy* gpu = NULL;
 #ifdef HAVE_GBM
 		::HWInterface* hardware = fWindow->Desktop()->HWInterface();
-		if (hardware != NULL && fGpu == NULL && SwapChainGpuCopy::Enabled())
+		const bool wantGpu = fPath == kTrialGpu || fPath == kPathGpu;
+		if (wantGpu && hardware != NULL && fGpu == NULL)
 			fGpu = new(std::nothrow) SwapChainGpuCopy();
-		if (fGpu != NULL && !fGpu->Failed()
+		if (wantGpu && fGpu != NULL && !fGpu->Failed()
 				&& fGpu->Copy(hardware->GbmDeviceFor(destination),
 					bitmap.Get())) {
 			gpu = fGpu;
 			gpuTime = fGpu->Time();
+		}
+		if (wantGpu && gpu == NULL && fPath == kTrialGpu) {
+			// Nothing to measure against.
+			fPath = kPathCpu;
+			fprintf(stderr, "swap chain %s: path cpu (gpu copy unavailable)\n",
+				fView != NULL ? fView->Name() : "?");
 		}
 #endif
 		if (gpu != NULL) {
@@ -1209,6 +1229,8 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 			shadow = _FillShadow(bitmap.Get(), damage, NULL);
 		}
 		frame.readTime = system_time() - readStart;
+		if (shadow.Get() != NULL)
+			_Measure(gpu != NULL, frame.readTime);
 	}
 	frame.source = shadow.Get();
 	fCpu->Show(frame);
@@ -1618,9 +1640,9 @@ ViewSwapChain::_Report(bigtime_t now)
 	const int64 readTime = atomic_get_and_set64(&fReadTime, 0);
 	const int64 gpuTime = atomic_get_and_set64(&fGpuTime, 0);
 	const int32 copies = atomic_get_and_set(&fCopies, 0);
-	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
+	fprintf(stderr, "swap chain %s: path %s, shown %llu/s, presented %llu/s, "
 		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us, gpu %lld us\n",
-		fView != NULL ? fView->Name() : "?",
+		fView != NULL ? fView->Name() : "?", _PathName(),
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
 		fWorstGap / 1000.0,
@@ -1631,6 +1653,49 @@ ViewSwapChain::_Report(bigtime_t now)
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;
 	fWorstGap = 0;
+}
+
+
+// The pump thread. The first frames of each read are warm-up.
+void
+ViewSwapChain::_Measure(bool gpu, bigtime_t time)
+{
+	const int32 kWarmup = 3;
+	const int32 kFrames = 30;
+	if (fPath != kTrialGpu && fPath != kTrialCpu)
+		return;
+	if ((fPath == kTrialGpu) != gpu)
+		return;
+
+	fTrialFrames++;
+	if (fTrialFrames > kWarmup)
+		fTrialTime[gpu ? 0 : 1] += time;
+	if (fTrialFrames < kWarmup + kFrames)
+		return;
+
+	fTrialFrames = 0;
+	if (fPath == kTrialGpu) {
+		fPath = kTrialCpu;
+		return;
+	}
+
+	const int64 gpuTime = fTrialTime[0] / kFrames;
+	const int64 cpuTime = fTrialTime[1] / kFrames;
+	fPath = gpuTime < cpuTime ? kPathGpu : kPathCpu;
+	fprintf(stderr, "swap chain %s: path %s (gpu %lld us, cpu %lld us, "
+		"%d frames each)\n", fView != NULL ? fView->Name() : "?",
+		fPath == kPathGpu ? "gpu" : "cpu", (long long)gpuTime,
+		(long long)cpuTime, (int)kFrames);
+}
+
+
+const char*
+ViewSwapChain::_PathName() const
+{
+	PlaneConsumer* plane = fPlane;
+	if (plane != NULL && plane->Active())
+		return plane->Scanout() ? "scanout" : "plane";
+	return fPath == kPathGpu || fPath == kTrialGpu ? "gpu" : "cpu";
 }
 
 

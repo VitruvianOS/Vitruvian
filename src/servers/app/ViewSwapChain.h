@@ -194,6 +194,9 @@ private:
 			void				_CountReplaced();
 			void				_CountCopy(bigtime_t wait, bigtime_t read,
 									bigtime_t time, bigtime_t gpu);
+			// Times GPU and CPU reads in turn and keeps the faster.
+			void				_Measure(bool gpu, bigtime_t time);
+			const char*			_PathName() const;
 			BReference<ServerBitmap> _FillShadow(ServerBitmap* bitmap,
 									const BRegion& damage,
 									SwapChainGpuCopy* gpu);
@@ -251,6 +254,10 @@ private:
 			bool				fGbmRead;
 			// GPU copy into cached memory; the window thread only.
 			SwapChainGpuCopy*	fGpu;
+			// Which read the pump uses: measured, then fixed.
+			int32				fPath;
+			int32				fTrialFrames;
+			int64				fTrialTime[2];
 };
 
 

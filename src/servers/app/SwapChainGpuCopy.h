@@ -20,7 +20,8 @@ public:
 								SwapChainGpuCopy();
 								~SwapChainGpuCopy();
 
-	static	bool				Enabled();
+	// 0 off, 1 forced, 2 chosen by measuring (VOS_SWAP_CHAIN_GPU_COPY).
+	static	int					Mode();
 
 	// Copies the whole buffer and waits for the GPU. False on any
 	// failure, after which the object stays unusable.

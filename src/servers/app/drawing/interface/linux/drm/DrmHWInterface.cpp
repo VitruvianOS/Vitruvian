@@ -427,8 +427,14 @@ DrmHWInterface::DrmHWInterface()
 	fRunning = true;
 	fEventThread = spawn_thread(_EventThreadEntry, "drm event thread",
 		B_NORMAL_PRIORITY, this);
-	if (fEventThread >= 0)
+	if (fEventThread >= 0) {
+		// Realtime when allowed, urgent display otherwise.
+		if (set_thread_priority(fEventThread, B_REAL_TIME_DISPLAY_PRIORITY)
+				< 0) {
+			set_thread_priority(fEventThread, B_URGENT_DISPLAY_PRIORITY);
+		}
 		resume_thread(fEventThread);
+	}
 }
 
 

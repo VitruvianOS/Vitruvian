@@ -185,6 +185,99 @@ ViewState::ViewState()
 	valid_flags = ~B_VIEW_CLIP_REGION_BIT;
 
 	archiving_flags = B_VIEW_FRAME_BIT | B_VIEW_RESIZE_BIT;
+	fSaved = NULL;
+}
+
+
+// Fields app_server copies into a pushed state and restores on pop.
+// View color, clipping and parent composite are not part of it.
+struct ViewState::SavedState {
+	SavedState*			next;
+	BPoint				pen_location;
+	float				pen_size;
+	rgb_color			high_color;
+	rgb_color			low_color;
+	color_which			which_low_color;
+	float				which_low_color_tint;
+	color_which			which_high_color;
+	float				which_high_color_tint;
+	::pattern			pattern;
+	::drawing_mode		drawing_mode;
+	BPoint				origin;
+	float				scale;
+	BAffineTransform	transform;
+	join_mode			line_join;
+	cap_mode			line_cap;
+	float				miter_limit;
+	int32				fill_rule;
+	source_alpha		alpha_source_mode;
+	alpha_function		alpha_function_mode;
+	BFont				font;
+	uint16				font_flags;
+	bool				font_aliasing;
+	uint32				valid_flags;
+};
+
+static const uint32 kNotSavedBits = B_VIEW_VIEW_COLOR_BIT
+	| B_VIEW_WHICH_VIEW_COLOR_BIT | B_VIEW_CLIP_REGION_BIT
+	| B_VIEW_PARENT_COMPOSITE_BIT;
+
+
+ViewState::~ViewState()
+{
+	while (fSaved != NULL) {
+		SavedState* next = fSaved->next;
+		delete fSaved;
+		fSaved = next;
+	}
+}
+
+
+void
+ViewState::Push()
+{
+	SavedState* saved = new(std::nothrow) SavedState;
+	if (saved == NULL)
+		return;
+
+#define SAVE(field) saved->field = field;
+	SAVE(pen_location) SAVE(pen_size) SAVE(high_color) SAVE(low_color)
+	SAVE(which_low_color) SAVE(which_low_color_tint) SAVE(which_high_color)
+	SAVE(which_high_color_tint) SAVE(pattern) SAVE(drawing_mode) SAVE(origin)
+	SAVE(scale) SAVE(transform) SAVE(line_join) SAVE(line_cap)
+	SAVE(miter_limit) SAVE(fill_rule) SAVE(alpha_source_mode)
+	SAVE(alpha_function_mode) SAVE(font) SAVE(font_flags) SAVE(font_aliasing)
+	SAVE(valid_flags)
+#undef SAVE
+	saved->next = fSaved;
+	fSaved = saved;
+}
+
+
+void
+ViewState::Pop()
+{
+	SavedState* saved = fSaved;
+	if (saved == NULL) {
+		// unbalanced pop, ask the server again
+		valid_flags &= B_VIEW_VIEW_COLOR_BIT | B_VIEW_WHICH_VIEW_COLOR_BIT;
+		return;
+	}
+	fSaved = saved->next;
+
+#define LOAD(field) field = saved->field;
+	LOAD(pen_location) LOAD(pen_size) LOAD(high_color) LOAD(low_color)
+	LOAD(which_low_color) LOAD(which_low_color_tint) LOAD(which_high_color)
+	LOAD(which_high_color_tint) LOAD(pattern) LOAD(drawing_mode) LOAD(origin)
+	LOAD(scale) LOAD(transform) LOAD(line_join) LOAD(line_cap)
+	LOAD(miter_limit) LOAD(fill_rule) LOAD(alpha_source_mode)
+	LOAD(alpha_function_mode) LOAD(font) LOAD(font_flags) LOAD(font_aliasing)
+#undef LOAD
+
+	valid_flags = (valid_flags & kNotSavedBits & ~(B_VIEW_CLIP_REGION_BIT
+			| B_VIEW_PARENT_COMPOSITE_BIT))
+		| (saved->valid_flags & ~kNotSavedBits);
+	delete saved;
 }
 
 
@@ -1843,6 +1936,7 @@ BView::PushState()
 
 	fOwner->fLink->StartMessage(AS_VIEW_PUSH_STATE);
 
+	fState->Push();
 	fState->valid_flags &= ~B_VIEW_PARENT_COMPOSITE_BIT;
 
 	// initialize origin, scale and transform, new states start "clean".
@@ -1862,8 +1956,8 @@ BView::PopState()
 	fOwner->fLink->StartMessage(AS_VIEW_POP_STATE);
 	_FlushIfNotInTransaction();
 
-	// invalidate all flags (except those that are not part of pop/push)
-	fState->valid_flags = B_VIEW_VIEW_COLOR_BIT;
+	// restore the pushed values, clipping and composite are asked again
+	fState->Pop();
 }
 
 

@@ -102,6 +102,11 @@ class PortLink;
 class ViewState {
 	public:
 		ViewState();
+		~ViewState();
+
+		// mirror app_server's push/pop so getters stay local after a pop
+		void Push();
+		void Pop();
 
 		inline bool IsValid(uint32 bit) const;
 		inline bool IsAllValid() const;
@@ -171,6 +176,10 @@ class ViewState {
 
 		// maintain our own rect as seen from the app while printing
 		BRect				print_rect;
+
+	private:
+		struct SavedState;
+		SavedState*			fSaved;
 };
 
 

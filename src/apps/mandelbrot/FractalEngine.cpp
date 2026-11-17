@@ -35,15 +35,20 @@ FractalEngine::FractalEngine(BHandler* parent, BLooper* looper)
 	fWidth(0), fHeight(0),
 	fRenderBuffer(NULL),
 	fRenderBufferLen(0),
-	fGroupState(NULL),
-	fGroupCount(0),
-	fGroupSlots(0),
-	fNextSlot(0),
+	fReadyBuffer(NULL),
+	fReadyLock("MandelbrotReady"),
+	fReadyPending(0),
+	fRenderStart(0),
+	fRemapAt(0),
+	fHaveImage(false),
+	fTileCount(0),
+	fPublished(0),
 	fSubsampling(2),
 	fMessenger(parent, looper),
 	fRenderStopping(false),
 	fRenderStopped(true),
 	fResizing(false),
+	fLocationX(0), fLocationY(0), fSize(0.005),
 	fIterations(1024),
 	fColorset(Colorset_Royal)
 {
@@ -72,7 +77,8 @@ FractalEngine::~FractalEngine()
 {
 	delete_sem(fRenderSem);
 	delete_sem(fRenderStoppedSem);
-	delete[] fGroupState;
+	delete[] fRenderBuffer;
+	delete[] fReadyBuffer;
 }
 
 
@@ -119,12 +125,14 @@ void FractalEngine::MessageReceived(BMessage* msg)
 		fResizing = true;
 		StopRender();
 
-		delete[] fRenderBuffer;
-		fRenderBuffer = NULL;
+		uint16 oldWidth = fWidth;
+		uint16 oldHeight = fHeight;
+		uint8* oldReady = fReadyBuffer;
 
 		fWidth = msg->GetUInt16("width", 320);
 		fHeight = msg->GetUInt16("height", 240);
 
+		delete[] fRenderBuffer;
 		fRenderBufferLen = fWidth * fHeight * 4;
 		fRenderBuffer = new uint8[fRenderBufferLen];
 		TRACE("New buffer width %u height %u ptr = %p\n",
@@ -132,14 +140,18 @@ void FractalEngine::MessageReceived(BMessage* msg)
 
 		memset(fRenderBuffer, 0, fRenderBufferLen);
 
-		delete[] fGroupState;
-		fGroupCount = (fHeight + RENDER_GROUP_ROWS - 1) / RENDER_GROUP_ROWS;
-		fGroupSlots = 1;
-		while (fGroupSlots < fGroupCount)
-			fGroupSlots <<= 1;
-		fGroupState = new int32[fGroupCount];
-		for (int32 i = 0; i < fGroupCount; i++)
-			fGroupState[i] = 2;
+		fReadyLock.Lock();
+		fReadyBuffer = new uint8[fRenderBufferLen];
+		if (fHaveImage && oldReady != NULL) {
+			// keep the old image centered until the new render lands
+			Remap(oldReady, oldWidth, oldHeight, fLocationX, fLocationY, fSize,
+				fReadyBuffer, fWidth, fHeight, fLocationX, fLocationY, fSize);
+		} else
+			memset(fReadyBuffer, 0, fRenderBufferLen);
+		memcpy(fRenderBuffer, fReadyBuffer, fRenderBufferLen);
+		atomic_set(&fReadyPending, 0);
+		fReadyLock.Unlock();
+		delete[] oldReady;
 
 		BMessage message(MSG_BUFFER_CREATED);
 		fMessenger.SendMessage(&message);
@@ -189,32 +201,57 @@ void FractalEngine::WriteToBitmap(BBitmap* bitmap, BRegion* dirty)
 		Unlock();
 		return;
 	}
-	if (dirty == NULL) {
-		bitmap->ImportBits(fRenderBuffer,
-			fRenderBufferLen, fWidth * 4, 0,
-			B_RGB32);
-		for (int32 g = 0; g < fGroupCount; g++) {
-			if (fGroupState[g] == 1)
-				atomic_set(&fGroupState[g], 2);
+	if (dirty != NULL) {
+		if (!fRenderStopped && fRemapAt != 0 && system_time() >= fRemapAt) {
+			// show the rescaled previous image once the render is not instant
+			fRemapAt = 0;
+			atomic_set(&fReadyPending, 1);
 		}
-		Unlock();
-		return;
-	}
-	for (int32 g = 0; g < fGroupCount; g++) {
-		if (atomic_get(&fGroupState[g]) != 1)
-			continue;
-		int32 top = g * RENDER_GROUP_ROWS;
-		int32 rows = min_c(RENDER_GROUP_ROWS, fHeight - top);
-		uint8* to = (uint8*)bitmap->Bits();
-		int32 bpr = bitmap->BytesPerRow();
-		for (int32 r = 0; r < rows; r++) {
-			memcpy(to + (top + r) * bpr, fRenderBuffer + (top + r) * fWidth * 4,
-				fWidth * 4);
+		if (atomic_get(&fReadyPending) == 0) {
+			Unlock();
+			return;
 		}
-		atomic_set(&fGroupState[g], 2);
-		dirty->Include(BRect(0, top, fWidth - 1, top + rows - 1));
 	}
+	fReadyLock.Lock();
+	atomic_set(&fReadyPending, 0);
+	fRemapAt = 0;
+	bitmap->ImportBits(fReadyBuffer, fRenderBufferLen, fWidth * 4, 0,
+		B_RGB32);
+	fReadyLock.Unlock();
+	if (dirty != NULL)
+		dirty->Include(BRect(0, 0, fWidth - 1, fHeight - 1));
 	Unlock();
+}
+
+
+void FractalEngine::Remap(const uint8* src, int32 srcW, int32 srcH, double srcX,
+	double srcY, double srcSize, uint8* dst, int32 dstW, int32 dstH,
+	double dstX, double dstY, double dstSize)
+{
+	int32* mapX = new int32[dstW];
+	int32* mapY = new int32[dstH];
+	for (int32 x = 0; x < dstW; x++) {
+		double real = (x - dstW / 2) * dstSize + dstX;
+		double px = floor((real - srcX) / srcSize + srcW / 2 + 0.5);
+		mapX[x] = (px >= 0 && px < srcW) ? (int32)px : -1;
+	}
+	for (int32 y = 0; y < dstH; y++) {
+		double imag = dstY - (y - dstH / 2) * dstSize;
+		double py = floor(srcH / 2 - (imag - srcY) / srcSize + 0.5);
+		mapY[y] = (py >= 0 && py < srcH) ? (int32)py : -1;
+	}
+	for (int32 y = 0; y < dstH; y++) {
+		uint32* to = (uint32*)(dst + (size_t)y * dstW * 4);
+		if (mapY[y] < 0) {
+			memset(to, 0, (size_t)dstW * 4);
+			continue;
+		}
+		const uint32* from = (const uint32*)(src + (size_t)mapY[y] * srcW * 4);
+		for (int32 x = 0; x < dstW; x++)
+			to[x] = mapX[x] < 0 ? 0 : from[mapX[x]];
+	}
+	delete[] mapX;
+	delete[] mapY;
 }
 
 
@@ -252,9 +289,24 @@ void FractalEngine::Render(double locationX, double locationY, double size)
 	if (!fRenderStopped)
 		debugger("Error: Render already running\n");
 
-	for (int32 g = 0; g < fGroupCount; g++)
-		fGroupState[g] = 0;
-	fNextSlot = 0;
+	fTileCount = (fHeight + RENDER_TILE_ROWS - 1) / RENDER_TILE_ROWS;
+	for (int32 p = 0; p < RENDER_PASSES; p++) {
+		fPassNext[p] = 0;
+		fPassDone[p] = 0;
+	}
+	fPublished = 0;
+
+	if (fReadyBuffer != NULL) {
+		// carry the previous image over to the new view
+		fReadyLock.Lock();
+		Remap(fReadyBuffer, fWidth, fHeight, fLocationX, fLocationY, fSize,
+			fRenderBuffer, fWidth, fHeight, locationX, locationY, size);
+		memcpy(fReadyBuffer, fRenderBuffer, fRenderBufferLen);
+		fReadyLock.Unlock();
+		fHaveImage = true;
+	}
+	fRenderStart = system_time();
+	fRemapAt = fRenderStart + RENDER_PUBLISH_DELAY;
 
 	fRenderStopped = false;
 		// This means that future Render calls will need to call stop render
@@ -290,28 +342,35 @@ status_t FractalEngine::RenderThread(void* data)
 		uint16 width = engine->fWidth;
 		uint16 height = engine->fHeight;
 
-		while (!engine->fRenderStopping) {
-			int32 slot = atomic_add(&engine->fNextSlot, 1);
-			if (slot >= engine->fGroupSlots)
+		for (int32 pass = 0; pass < RENDER_PASSES; pass++) {
+			uint32 step = 8 >> pass;
+			while (!engine->fRenderStopping) {
+				int32 tile = atomic_add(&engine->fPassNext[pass], 1);
+				if (tile >= engine->fTileCount)
+					break;
+
+				uint16 top = tile * RENDER_TILE_ROWS;
+				uint16 bottom = min_c(top + RENDER_TILE_ROWS, height);
+				for (uint16 y = top; y < bottom; y += step) {
+					for (uint16 x = 0; x < width; x += step) {
+						if (pass > 0 && (x & (step * 2 - 1)) == 0
+								&& (y & (step * 2 - 1)) == 0)
+							continue;
+						engine->RenderPixel(x, y, step);
+					}
+				}
+				if (atomic_add(&engine->fPassDone[pass], 1) + 1
+						== engine->fTileCount) {
+					engine->PublishPass(pass);
+					atomic_set(&engine->fPublished, pass + 1);
+				}
+			}
+			// all threads move to the next pass together
+			while (!engine->fRenderStopping
+					&& atomic_get(&engine->fPublished) <= pass)
+				snooze(100);
+			if (engine->fRenderStopping)
 				break;
-
-			// bit-reversed order fills the image evenly, coarse to fine
-			int32 group = 0;
-			for (int32 n = engine->fGroupSlots >> 1, k = 1; n > 0;
-					n >>= 1, k <<= 1) {
-				if (slot & n)
-					group |= k;
-			}
-			if (group >= engine->fGroupCount)
-				continue;
-
-			uint16 top = group * RENDER_GROUP_ROWS;
-			uint16 bottom = min_c(top + RENDER_GROUP_ROWS, height);
-			for (uint16 y = top; y < bottom; y++) {
-				for (uint16 x = 0; x < width; x++)
-					engine->RenderPixel(x, y);
-			}
-			atomic_set(&engine->fGroupState[group], 1);
 		}
 
 		if (engine->fRenderStopping)
@@ -330,7 +389,20 @@ status_t FractalEngine::RenderThread(void* data)
 }
 
 
-void FractalEngine::RenderPixel(uint32 x, uint32 y)
+void FractalEngine::PublishPass(int32 pass)
+{
+	// intermediate passes of a quick render are never shown
+	if (pass < RENDER_PASSES - 1
+			&& system_time() - fRenderStart < RENDER_PUBLISH_DELAY)
+		return;
+	fReadyLock.Lock();
+	memcpy(fReadyBuffer, fRenderBuffer, fRenderBufferLen);
+	atomic_set(&fReadyPending, 1);
+	fReadyLock.Unlock();
+}
+
+
+void FractalEngine::RenderPixel(uint32 x, uint32 y, uint32 step)
 {
 	double real = (x * fSize + fLocationX) - (fWidth / 2 * fSize);
 	double imaginary = (y * -(fSize) + fLocationY) - (fHeight / 2 * -(fSize));
@@ -363,11 +435,16 @@ void FractalEngine::RenderPixel(uint32 x, uint32 y)
 	}
 
 
-	uint32 offsetBase = fWidth * y * 4 + x * 4;
-	fRenderBuffer[offsetBase + 2] = totalR / nSamples; // fRenderBuffer is BGR
-	fRenderBuffer[offsetBase + 1] = totalG / nSamples;
-	fRenderBuffer[offsetBase + 0] = totalB / nSamples;
-	fRenderBuffer[offsetBase + 3] = 255;
+	uint32 pixel = 0xff000000 | ((totalR / nSamples) << 16)
+		| ((totalG / nSamples) << 8) | (totalB / nSamples);
+		// fRenderBuffer is BGR
+	uint32 xEnd = min_c(x + step, (uint32)fWidth);
+	uint32 yEnd = min_c(y + step, (uint32)fHeight);
+	for (uint32 by = y; by < yEnd; by++) {
+		uint32* row = (uint32*)(fRenderBuffer + (size_t)fWidth * by * 4);
+		for (uint32 bx = x; bx < xEnd; bx++)
+			row[bx] = pixel;
+	}
 }
 
 

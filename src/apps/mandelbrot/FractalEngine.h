@@ -11,6 +11,7 @@
 
 #include <SupportDefs.h>
 #include <Looper.h>
+#include <Locker.h>
 #include <Messenger.h>
 
 class BBitmap;
@@ -18,7 +19,9 @@ class BRegion;
 
 
 #define MAX_RENDER_THREADS 16
-#define RENDER_GROUP_ROWS 4
+#define RENDER_PASSES 4
+#define RENDER_TILE_ROWS 16
+#define RENDER_PUBLISH_DELAY 16000
 
 
 class FractalEngine : public BLooper {
@@ -40,7 +43,7 @@ public:
 
 	virtual void MessageReceived(BMessage* msg);
 	void WriteToBitmap(BBitmap*, BRegion* dirty = NULL);
-		// imports finished row groups (all if dirty is NULL)
+		// imports the last finished pass (all if dirty is NULL)
 
 private:
 	uint16 fWidth;
@@ -49,11 +52,19 @@ private:
 	uint8* fRenderBuffer;
 	uint32 fRenderBufferLen;
 
-	int32* fGroupState;
-		// 0 pending, 1 rendered, 2 imported
-	int32 fGroupCount;
-	int32 fGroupSlots;
-	int32 fNextSlot;
+	uint8* fReadyBuffer;
+		// last published image, guarded by fReadyLock
+	BLocker fReadyLock;
+	int32 fReadyPending;
+		// 1 when fReadyBuffer has not been imported yet
+	bigtime_t fRenderStart;
+	bigtime_t fRemapAt;
+	bool fHaveImage;
+
+	int32 fTileCount;
+	int32 fPassNext[RENDER_PASSES];
+	int32 fPassDone[RENDER_PASSES];
+	int32 fPublished;
 
 	uint8 fSubsampling;
 		// 1 disables subsampling.
@@ -85,7 +96,11 @@ private:
 	void Render(double locationX, double locationY, double size);
 	void StopRender();
 	static status_t RenderThread(void* data);
-	void RenderPixel(uint32 x, uint32 y);
+	void RenderPixel(uint32 x, uint32 y, uint32 step);
+	void PublishPass(int32 pass);
+	static void Remap(const uint8* src, int32 srcW, int32 srcH,
+		double srcX, double srcY, double srcSize, uint8* dst, int32 dstW,
+		int32 dstH, double dstX, double dstY, double dstSize);
 
 	int32 DoSet_Mandelbrot(double real, double imaginary);
 	int32 DoSet_BurningShip(double real, double imaginary);

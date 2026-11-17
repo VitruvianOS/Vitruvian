@@ -575,8 +575,6 @@ private:
 									int32 x, int32 y,
 									int32 right, int32 bottom) const;
 
-		void				_PushCursorTrackDirty(int32 oldX, int32 oldY,
-								int32 newX, int32 newY);
 
 #if defined(__x86_64__) || defined(__i386__)
 	static	void				_BlitRect_AVX2(const uint8* s, uint8* d,

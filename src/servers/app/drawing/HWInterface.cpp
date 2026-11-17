@@ -355,15 +355,17 @@ HWInterface::Publish(const BRegion& region)
 }
 
 
-void
+bool
 HWInterface::BeginPublishBatch()
 {
 	if (sBatch != NULL)
-		return;
+		return false;
 	sBatch = new(nothrow) BRegion;
 	sBatchOwner = sBatch != NULL ? this : NULL;
-	if (sBatch != NULL)
-		atomic_add(&fStatBatches, 1);
+	if (sBatch == NULL)
+		return false;
+	atomic_add(&fStatBatches, 1);
+	return true;
 }
 
 

@@ -251,7 +251,8 @@ public:
 	// the output shows; drawing threads call it, never the output thread.
 	virtual	status_t			Publish(const BRegion& region);
 	// Invalidations of the calling thread wait for EndPublishBatch().
-	virtual	void				BeginPublishBatch();
+	// True when this call opened the batch.
+	virtual	bool				BeginPublishBatch();
 	virtual	void				EndPublishBatch();
 	// Publishes region at FlushPublish(owner), or after maxAge.
 	// Screen coordinates; a repeated call replaces the owner's region.

@@ -535,6 +535,7 @@ struct DefaultWindowBehaviour::DecoratorButtonState : State {
 
 			DrawingEngine* engine = decorator->GetDrawingEngine();
 			engine->LockParallelAccess();
+			bool batch = engine->BeginPublishBatch();
 			engine->ConstrainClippingRegion(visibleBorder);
 
 			int32 tab;
@@ -561,6 +562,7 @@ struct DefaultWindowBehaviour::DecoratorButtonState : State {
 					break;
 			}
 
+			engine->EndPublishBatch(batch);
 			engine->UnlockParallelAccess();
 
 			fWindow->RegionPool()->Recycle(visibleBorder);
@@ -584,6 +586,7 @@ private:
 
 			DrawingEngine* engine = decorator->GetDrawingEngine();
 			engine->LockParallelAccess();
+			bool batch = engine->BeginPublishBatch();
 			engine->ConstrainClippingRegion(visibleBorder);
 
 			int32 tab;
@@ -607,6 +610,7 @@ private:
 					break;
 			}
 
+			engine->EndPublishBatch(batch);
 			engine->UnlockParallelAccess();
 			fWindow->RegionPool()->Recycle(visibleBorder);
 		}

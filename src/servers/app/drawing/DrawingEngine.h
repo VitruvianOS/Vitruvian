@@ -53,6 +53,11 @@ public:
 	// for "changing" hardware
 			void			SetHWInterface(HWInterface* interface);
 
+	// Parallel access held; End only for a Begin that returned true.
+			bool			BeginPublishBatch()
+								{ return fGraphicsCard->BeginPublishBatch(); }
+			void			EndPublishBatch(bool opened)
+								{ if (opened) fGraphicsCard->EndPublishBatch(); }
 	virtual	void			SetCopyToFrontEnabled(bool enable);
 			bool			CopyToFrontEnabled() const
 								{ return fCopyToFront; }

@@ -515,6 +515,7 @@ private:
 			uint32				_FirstKey() const;
 			void				_SyncStandIn(Output* output);
 			int					_FdForKey(uint32 key) const;
+			bool				_GammaTarget(int& fd, uint32_t& crtc);
 			int					_CardIndexForSlot(int slot) const;
 			void				_OpenCards(
 									const struct drm_extra_card* extras,

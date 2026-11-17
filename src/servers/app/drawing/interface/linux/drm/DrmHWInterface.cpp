@@ -4982,6 +4982,30 @@ _drm_gamma_size(int fd, uint32_t crtc_id)
 }
 
 
+// The CRTC showing the first screen: a stand-in output on another card
+// while the first card has none. fModesetMutex held.
+bool
+DrmHWInterface::_GammaTarget(int& fd, uint32_t& crtc)
+{
+	if (fStandIn != 0) {
+		fDirtyMutex.Lock();
+		Output* output = _FindOutput(fStandIn);
+		const bool found = output != NULL && output->dev != NULL;
+		if (found) {
+			fd = output->fd;
+			crtc = output->dev->crtc;
+		}
+		fDirtyMutex.Unlock();
+		return found;
+	}
+	if (fFd < 0 || fDev == NULL)
+		return false;
+	fd = fFd;
+	crtc = fDev->crtc;
+	return true;
+}
+
+
 status_t
 DrmHWInterface::SetTemperature(float kelvin)
 {
@@ -4990,11 +5014,12 @@ DrmHWInterface::SetTemperature(float kelvin)
 
 	// The node can be freed by a concurrent udev rescan.
 	ModesetGuard modesetGuard(&fModesetMutex);
-	struct modeset_dev* dev = fDev;
-	if (!dev)
+	int fd;
+	uint32_t crtc;
+	if (!_GammaTarget(fd, crtc))
 		return B_ERROR;
 
-	int size = _drm_gamma_size(fFd, dev->crtc);
+	int size = _drm_gamma_size(fd, crtc);
 	if (size <= 0) {
 		fTemperatureSupported = false;
 		return B_NOT_SUPPORTED;
@@ -5016,7 +5041,7 @@ DrmHWInterface::SetTemperature(float kelvin)
 		rampB[i] = (uint16_t)(t * 65535.0f * bScale);
 	}
 
-	int ret = drmModeCrtcSetGamma(fFd, dev->crtc, size,
+	int ret = drmModeCrtcSetGamma(fd, crtc, size,
 		rampR.data(), rampG.data(), rampB.data());
 	if (ret == 0) {
 		fTemperature = kelvin;
@@ -5034,11 +5059,13 @@ DrmHWInterface::GetTemperature(float* kelvin)
 	if (!kelvin)
 		return B_BAD_VALUE;
 
-	struct modeset_dev* dev = fDev;
-	if (dev == NULL || fFd < 0)
+	ModesetGuard modesetGuard(&fModesetMutex);
+	int fd;
+	uint32_t crtc;
+	if (!_GammaTarget(fd, crtc))
 		return B_NOT_SUPPORTED;
 
-	if (!fTemperatureSupported || _drm_gamma_size(fFd, dev->crtc) <= 0)
+	if (!fTemperatureSupported || _drm_gamma_size(fd, crtc) <= 0)
 		return B_NOT_SUPPORTED;
 
 	*kelvin = fTemperature;

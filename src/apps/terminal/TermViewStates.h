@@ -115,6 +115,8 @@ public:
 	virtual	void				ModifiersChanged(int32 oldModifiers,
 									int32 modifiers);
 
+	virtual	void				KeyDown(const char* bytes, int32 numBytes);
+
 	virtual void				MouseDown(BPoint where, int32 buttons,
 									int32 modifiers);
 	virtual void				MouseMoved(BPoint where, uint32 transit,

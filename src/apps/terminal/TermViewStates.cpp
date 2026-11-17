@@ -816,6 +816,15 @@ TermView::HyperLinkState::ModifiersChanged(int32 oldModifiers, int32 modifiers)
 
 
 void
+TermView::HyperLinkState::KeyDown(const char* bytes, int32 numBytes)
+{
+	// Command is Control in ctrl mode; keys typed while it is held still
+	// belong to the shell.
+	fView->fDefaultState->KeyDown(bytes, numBytes);
+}
+
+
+void
 TermView::HyperLinkState::MouseDown(BPoint where, int32 buttons,
 	int32 modifiers)
 {

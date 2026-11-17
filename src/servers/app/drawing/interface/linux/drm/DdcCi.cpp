@@ -80,6 +80,7 @@ DdcCi::DdcCi()
 	fMax(0),
 	fCurrent(-1),
 	fPending(-1),
+	fDeferred(-1.0f),
 	fState("idle")
 {
 }
@@ -147,12 +148,29 @@ DdcCi::Current() const
 
 
 void
+DdcCi::RequestFraction(float fraction)
+{
+	{
+		std::lock_guard<std::mutex> guard(fLock);
+		if (!fSupported) {
+			fDeferred = fraction;
+			return;
+		}
+		fPending = (int)(fraction * fMax + 0.5f);
+		fCurrent = fPending;
+	}
+	fWake.notify_all();
+}
+
+
+void
 DdcCi::Request(int value)
 {
 	{
 		std::lock_guard<std::mutex> guard(fLock);
 		if (!fSupported)
 			return;
+		fDeferred = -1.0f;
 		if (value < 0)
 			value = 0;
 		if (value > fMax)
@@ -226,6 +244,12 @@ DdcCi::_Run(std::string connector, int)
 		fMax = max;
 		fCurrent = current;
 		fState = "ok";
+		// Apply a value requested before the probe finished.
+		if (fDeferred >= 0.0f) {
+			fPending = (int)(fDeferred * max + 0.5f);
+			fCurrent = fPending;
+			fDeferred = -1.0f;
+		}
 	}
 
 	std::unique_lock<std::mutex> lock(fLock);

@@ -4812,14 +4812,13 @@ status_t
 DrmHWInterface::SetBrightness(float brightness)
 {
 	if (!fBacklight) {
-		if (!fDdc.Supported())
-			return B_UNSUPPORTED;
 		if (brightness < 0.0f)
 			brightness = 0.0f;
 		if (brightness > 1.0f)
 			brightness = 1.0f;
-		fDdc.Request((int)(brightness * fDdc.Max() + 0.5f));
-		return B_OK;
+		// Held until the probe finishes when it is still running.
+		fDdc.RequestFraction(brightness);
+		return fDdc.Supported() ? B_OK : B_UNSUPPORTED;
 	}
 	// Prefer the value cached at init; a re-read can fail on write-only nodes.
 	int max = fBacklight->max_brightness;

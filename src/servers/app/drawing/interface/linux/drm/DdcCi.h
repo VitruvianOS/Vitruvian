@@ -30,6 +30,7 @@ public:
 			int					Current() const;
 			// Only the latest requested value is sent.
 			void				Request(int value);
+			void				RequestFraction(float fraction);
 			std::string			Bus() const;
 			// "idle", "probing", "ok", "no-ddc", "no-bus", "no-reply".
 			std::string			State() const;
@@ -45,6 +46,7 @@ private:
 			int					fMax;
 			int					fCurrent;
 			int					fPending;
+			float				fDeferred;
 			std::string			fBus;
 			std::string			fState;
 };

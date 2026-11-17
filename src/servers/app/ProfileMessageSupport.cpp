@@ -10,6 +10,9 @@
 
 #include "ProfileMessageSupport.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <ServerProtocol.h>
 
 
@@ -326,3 +329,71 @@ string_for_message_code(uint32 code)
 }
 
 
+
+
+ReplyStats::ReplyStats()
+	:
+	fEnabled(getenv("VOS_COMPOSE_HOLD_STATS") != NULL
+		&& atoi(getenv("VOS_COMPOSE_HOLD_STATS")) != 0),
+	fSince(0),
+	fTotal(0),
+	fUsed(0)
+{
+}
+
+
+void
+ReplyStats::Count(int32 code)
+{
+	fTotal++;
+	for (int32 i = 0; i < fUsed; i++) {
+		if (fCodes[i] == code) {
+			fCounts[i]++;
+			return;
+		}
+	}
+	if (fUsed < kSlots) {
+		fCodes[fUsed] = code;
+		fCounts[fUsed++] = 1;
+	}
+}
+
+
+void
+ReplyStats::Report(const char* kind, const char* name)
+{
+	// Plain counters above; the clock is read once per call, here.
+	bigtime_t now = system_time();
+	if (fSince == 0)
+		fSince = now;
+	if (now - fSince < 1000000)
+		return;
+
+	if (fTotal >= 20) {
+		char line[512];
+		int32 len = snprintf(line, sizeof(line), "replies %s:%s %" B_PRId32
+			"/s:", kind, name, fTotal);
+		for (int32 n = 0; n < 8; n++) {
+			int32 best = -1;
+			for (int32 i = 0; i < fUsed; i++) {
+				if (fCounts[i] > 0 && (best < 0 || fCounts[i] > fCounts[best]))
+					best = i;
+			}
+			if (best < 0 || len >= (int32)sizeof(line) - 80)
+				break;
+			const char* codeName = string_for_message_code(fCodes[best]);
+			if (codeName != NULL) {
+				len += snprintf(line + len, sizeof(line) - len, " %s %"
+					B_PRId32 "/s,", codeName, fCounts[best]);
+			} else {
+				len += snprintf(line + len, sizeof(line) - len, " %" B_PRId32
+					" %" B_PRId32 "/s,", fCodes[best], fCounts[best]);
+			}
+			fCounts[best] = 0;
+		}
+		fprintf(stderr, "%s\n", line);
+	}
+	fSince = now;
+	fTotal = 0;
+	fUsed = 0;
+}

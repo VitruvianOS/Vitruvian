@@ -4689,7 +4689,11 @@ ServerWindow::_MessageLooper()
 					waiter.SetPort(fMessagePort);
 				}
 			}
+			if (fReplyStats.Enabled() && receiver.NeedsReply())
+				fReplyStats.Count(code);
 			_DispatchMessage(code, receiver);
+			if (fReplyStats.Enabled())
+				fReplyStats.Report("w", Title());
 
 #ifdef PROFILE_MESSAGE_LOOP
 			if (code >= 0 && code < AS_LAST_CODE) {

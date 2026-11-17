@@ -3997,7 +3997,11 @@ ServerApp::_MessageLooper()
 			default:
 				STRACE(("ServerApp %s: Got a Message to dispatch\n",
 					Signature()));
+				if (fReplyStats.Enabled() && receiver.NeedsReply())
+					fReplyStats.Count(code);
 				_DispatchMessage(code, receiver);
+				if (fReplyStats.Enabled())
+					fReplyStats.Report("a", Signature());
 				break;
 		}
 	}

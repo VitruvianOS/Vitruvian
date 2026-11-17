@@ -28,6 +28,7 @@
 
 #include "EventDispatcher.h"
 #include "MessageLooper.h"
+#include "ProfileMessageSupport.h"
 
 
 class BString;
@@ -167,6 +168,7 @@ private:
 			team_id				fPresentedTeam;
 
 			port_id				fMessagePort;
+			ReplyStats			fReplyStats;
 			port_id				fClientReplyPort;
 			port_id				fClientLooperPort;
 			BMessenger			fFocusMessenger;

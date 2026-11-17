@@ -16,6 +16,7 @@
 #include "AppFontManager.h"
 #include "ClientMemoryAllocator.h"
 #include "MessageLooper.h"
+#include "ProfileMessageSupport.h"
 #include "ServerFont.h"
 
 #include <ObjectList.h>
@@ -127,6 +128,7 @@ private:
 	typedef std::map<int32, BReference<ServerPicture> > PictureMap;
 
 			port_id				fMessagePort;
+			ReplyStats			fReplyStats;
 			port_id				fClientReplyPort;
 									// our BApplication's event port
 

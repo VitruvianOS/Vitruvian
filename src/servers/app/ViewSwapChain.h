@@ -81,6 +81,10 @@ struct SwapChainFrame {
 	bigtime_t			copyTime;
 	// Set by the CPU consumer: microseconds waiting for the GPU.
 	bigtime_t			waitTime;
+	// Drawn instead of bitmap when set: a CPU copy of it.
+	ServerBitmap*		source;
+	// Set by the caller that filled source: microseconds reading bitmap.
+	bigtime_t			readTime;
 
 	SwapChainFrame()
 		:
@@ -98,7 +102,9 @@ struct SwapChainFrame {
 		serial(0),
 		async(false),
 		copyTime(0),
-		waitTime(0)
+		waitTime(0),
+		source(NULL),
+		readTime(0)
 	{
 		for (int32 i = 0; i < BPrivate::kSwapChainMaxBuffers; i++)
 			buffers[i] = NULL;
@@ -184,7 +190,10 @@ private:
 			void				_UpdatePeriod(::HWInterface* hardware);
 			void				_CountShown(bigtime_t when);
 			void				_CountReplaced();
-			void				_CountCopy(bigtime_t wait, bigtime_t time);
+			void				_CountCopy(bigtime_t wait, bigtime_t read,
+									bigtime_t time);
+			BReference<ServerBitmap> _FillShadow(ServerBitmap* bitmap,
+									const BRegion& damage);
 			void				_Report(bigtime_t now);
 
 			ServerApp*			fApp;
@@ -215,6 +224,7 @@ private:
 			uint32				fReplaced;
 			int64				fCopyTime;
 			int64				fWaitTime;
+			int64				fReadTime;
 			bigtime_t			fDeferSince;
 			int32				fCopies;
 
@@ -228,6 +238,13 @@ private:
 			Generation*			fMailGeneration;
 			bool				fMailWhole;
 			BRegion				fMailDamage;
+
+			// CPU copy of the shown frame, read off the engine lock.
+			BLocker				fShadowLock;
+			BReference<ServerBitmap> fShadow;
+			BReference<ServerBitmap> fSpare;
+			bool				fShadowValid;
+			bool				fGbmRead;
 };
 
 

@@ -13,7 +13,12 @@
 #include <poll.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#if defined(__x86_64__) || defined(__i386__)
+#	include <immintrin.h>
+#	define SWAP_CHAIN_X86 1
+#endif
 #ifdef HAVE_GBM
+#	include <gbm.h>
 #	include <linux/dma-buf.h>
 #endif
 
@@ -183,6 +188,86 @@ struct ViewSwapChain::Pending {
 };
 
 
+// Rows of a possibly write-combined mapping; non-temporal loads are the
+// fast read there.
+#ifdef SWAP_CHAIN_X86
+__attribute__((target("sse4.1")))
+static void
+stream_row(uint8* dst, const uint8* src, size_t bytes)
+{
+	while (bytes > 0 && ((addr_t)src & 15) != 0) {
+		*dst++ = *src++;
+		bytes--;
+	}
+	while (bytes >= 64) {
+		__m128i a = _mm_stream_load_si128((__m128i*)(src));
+		__m128i b = _mm_stream_load_si128((__m128i*)(src + 16));
+		__m128i c = _mm_stream_load_si128((__m128i*)(src + 32));
+		__m128i d = _mm_stream_load_si128((__m128i*)(src + 48));
+		_mm_storeu_si128((__m128i*)dst, a);
+		_mm_storeu_si128((__m128i*)(dst + 16), b);
+		_mm_storeu_si128((__m128i*)(dst + 32), c);
+		_mm_storeu_si128((__m128i*)(dst + 48), d);
+		src += 64;
+		dst += 64;
+		bytes -= 64;
+	}
+	memcpy(dst, src, bytes);
+}
+#endif
+
+
+static void
+copy_rows(uint8* dst, int32 dstStride, const uint8* src, int32 srcStride,
+	size_t rowBytes, int32 rows)
+{
+#ifdef SWAP_CHAIN_X86
+	static const bool stream = __builtin_cpu_supports("sse4.1");
+	if (stream) {
+		for (int32 y = 0; y < rows; y++)
+			stream_row(dst + (size_t)y * dstStride,
+				src + (size_t)y * srcStride, rowBytes);
+		return;
+	}
+#endif
+	for (int32 y = 0; y < rows; y++)
+		memcpy(dst + (size_t)y * dstStride, src + (size_t)y * srcStride,
+			rowBytes);
+}
+
+
+// Reads a rect of the dma-buf into the shadow.
+static void
+read_rect(ServerBitmap* from, ServerBitmap* to, int32 left, int32 top,
+	int32 right, int32 bottom, bool gbmRead)
+{
+	const size_t bytes = (size_t)(right - left + 1) * 4;
+	const int32 rows = bottom - top + 1;
+	uint8* dst = to->Bits() + (size_t)top * to->BytesPerRow() + left * 4;
+#ifdef HAVE_GBM
+	GbmMemory* memory = from->GbmBuffer();
+	if (gbmRead && memory != NULL && memory->BufferObject() != NULL) {
+		uint32 stride = 0;
+		void* mapData = NULL;
+		void* map = gbm_bo_map(memory->BufferObject(), left, top,
+			right - left + 1, rows, GBM_BO_TRANSFER_READ, &stride, &mapData);
+		if (map != NULL) {
+			for (int32 y = 0; y < rows; y++)
+				memcpy(dst + (size_t)y * to->BytesPerRow(),
+					(uint8*)map + (size_t)y * stride, bytes);
+			gbm_bo_unmap(memory->BufferObject(), mapData);
+			return;
+		}
+	}
+#else
+	(void)gbmRead;
+#endif
+	copy_rows(dst, to->BytesPerRow(),
+		from->Bits() + (size_t)top * from->BytesPerRow() + left * 4,
+		from->BytesPerRow(), bytes, rows);
+}
+
+
 // Draws the buffer through the server painter, like any bitmap.
 class CpuConsumer : public SwapChainConsumer {
 public:
@@ -196,8 +281,11 @@ public:
 		const int32 height = frame.bitmap->Height();
 		const BRect bounds(0, 0, width - 1, height - 1);
 
-		SwapChainCpuRead reading(frame.bitmap);
-		frame.waitTime = reading.WaitTime();
+		ServerBitmap* source = frame.source != NULL
+			? frame.source : frame.bitmap;
+		SwapChainCpuRead reading(frame.source != NULL ? NULL : frame.bitmap);
+		if (frame.source == NULL)
+			frame.waitTime = reading.WaitTime();
 		if (!frame.engineLocked)
 			frame.engine->LockParallelAccess();
 		const bigtime_t copyStart = system_time();
@@ -208,17 +296,17 @@ public:
 		const int32 count = frame.damage != NULL
 			? frame.damage->CountRects() : 0;
 		if (count == 0) {
-			frame.engine->DrawBitmap(frame.bitmap, bounds,
+			frame.engine->DrawBitmap(source, bounds,
 				frame.destination, 0);
 		} else {
 			for (int32 i = 0; i < count; i++) {
-				BRect source = frame.damage->RectAt(i) & bounds;
-				if (!source.IsValid())
+				BRect area = frame.damage->RectAt(i) & bounds;
+				if (!area.IsValid())
 					continue;
-				BRect destination = source;
+				BRect destination = area;
 				destination.OffsetBy(frame.destination.left,
 					frame.destination.top);
-				frame.engine->DrawBitmap(frame.bitmap, source, destination, 0);
+				frame.engine->DrawBitmap(source, area, destination, 0);
 			}
 		}
 
@@ -468,15 +556,20 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fShown(0),
 	fReplaced(0),
 	fCopyTime(0),
-	fCopies(0),
 	fWaitTime(0),
+	fReadTime(0),
 	fDeferSince(0),
+	fCopies(0),
 	fPump(-1),
 	fPumpWake(false),
 	fPumpQuit(false),
 	fMailSerial(0),
 	fMailGeneration(NULL),
-	fMailWhole(false)
+	fMailWhole(false),
+	fShadowLock("swap chain shadow"),
+	fShadowValid(false),
+	fGbmRead(getenv("VOS_SWAP_CHAIN_GBM_READ") != NULL
+		&& atoi(getenv("VOS_SWAP_CHAIN_GBM_READ")) != 0)
 {
 	const char* stats = getenv("VOS_SWAP_CHAIN_STATS");
 	fStats = stats != NULL && atoi(stats) != 0;
@@ -758,8 +851,12 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			// region.
 			if (clipping == NULL && steady && fOwnerWindow != NULL)
 				fOwnerWindow->GetEffectiveDrawingRegion(fView, lazyClipping);
+			{
+				BAutolock shadowLocker(fShadowLock);
+				fShadowValid = false;
+			}
 			shown = fCpu->Show(frame);
-			_CountCopy(frame.waitTime, frame.copyTime);
+			_CountCopy(frame.waitTime, frame.readTime, frame.copyTime);
 		}
 	}
 
@@ -994,8 +1091,18 @@ ViewSwapChain::Flush(DrawingEngine* engine)
 	frame.damage = &damage;
 	frame.engine = engine;
 	frame.clipping = &clipping;
+
+	BReference<ServerBitmap> shadow;
+	{
+		SwapChainCpuRead reading(bitmap.Get());
+		frame.waitTime = reading.WaitTime();
+		const bigtime_t readStart = system_time();
+		shadow = _FillShadow(bitmap.Get(), damage);
+		frame.readTime = system_time() - readStart;
+	}
+	frame.source = shadow.Get();
 	fCpu->Show(frame);
-	_CountCopy(frame.waitTime, frame.copyTime);
+	_CountCopy(frame.waitTime, frame.readTime, frame.copyTime);
 }
 
 
@@ -1039,6 +1146,15 @@ ViewSwapChain::Redraw(DrawingEngine* engine, const BRegion& region)
 	frame.engine = engine;
 	frame.engineLocked = true;
 	frame.clipping = &region;
+	BReference<ServerBitmap> shadow;
+	{
+		BAutolock shadowLocker(fShadowLock);
+		if (fShadowValid && fShadow.Get() != NULL
+				&& fShadow->Width() == bitmap->Width()
+				&& fShadow->Height() == bitmap->Height())
+			shadow = fShadow;
+	}
+	frame.source = shadow.Get();
 	CpuConsumer().Show(frame);
 }
 
@@ -1271,12 +1387,80 @@ ViewSwapChain::_CountShown(bigtime_t when)
 }
 
 
+// Fills the back shadow, then publishes it; the shown one is never written.
+BReference<ServerBitmap>
+ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage)
+{
+	BReference<ServerBitmap> shown;
+	BReference<ServerBitmap> back;
+	bool valid;
+	{
+		BAutolock locker(fShadowLock);
+		valid = fShadowValid;
+		shown = fShadow;
+		back.SetTo(fSpare.Get());
+		fSpare.Unset();
+	}
+
+	if (bitmap == NULL || bitmap->Bits() == NULL
+			|| bitmap->ColorSpace() != B_RGB32) {
+		BAutolock locker(fShadowLock);
+		fShadowValid = false;
+		return BReference<ServerBitmap>();
+	}
+
+	if (shown.Get() != NULL && (shown->Width() != bitmap->Width()
+			|| shown->Height() != bitmap->Height()))
+		valid = false;
+
+	// A reader may still hold it.
+	if (back.Get() == NULL || back->CountReferences() > 1
+			|| back->Width() != bitmap->Width()
+			|| back->Height() != bitmap->Height()) {
+		back.SetTo(new(std::nothrow) UtilityBitmap(bitmap->Bounds(),
+			B_RGB32, 0), true);
+		if (back.Get() == NULL || !back->IsValid()
+				|| back->BytesPerRow() < bitmap->Width() * 4) {
+			BAutolock locker(fShadowLock);
+			fShadowValid = false;
+			return BReference<ServerBitmap>();
+		}
+	}
+
+	const bool whole = !valid || damage.CountRects() == 0;
+	const BRect bounds = bitmap->Bounds();
+	if (whole) {
+		read_rect(bitmap, back.Get(), 0, 0, bitmap->Width() - 1,
+			bitmap->Height() - 1, fGbmRead);
+	} else {
+		// The back one is a frame behind: start from the shown one.
+		memcpy(back->Bits(), shown->Bits(),
+			(size_t)back->BytesPerRow() * back->Height());
+		for (int32 i = 0; i < damage.CountRects(); i++) {
+			const BRect rect = damage.RectAt(i) & bounds;
+			if (!rect.IsValid())
+				continue;
+			read_rect(bitmap, back.Get(), (int32)rect.left,
+				(int32)rect.top, (int32)rect.right, (int32)rect.bottom,
+				fGbmRead);
+		}
+	}
+
+	BAutolock locker(fShadowLock);
+	fSpare = fShadow;
+	fShadow = back;
+	fShadowValid = true;
+	return back;
+}
+
+
 void
-ViewSwapChain::_CountCopy(bigtime_t wait, bigtime_t time)
+ViewSwapChain::_CountCopy(bigtime_t wait, bigtime_t read, bigtime_t time)
 {
 	if (!fStats || time <= 0)
 		return;
 
+	atomic_add64(&fReadTime, read);
 	atomic_add64(&fWaitTime, wait);
 	atomic_add64(&fCopyTime, time);
 	atomic_add(&fCopies, 1);
@@ -1307,14 +1491,16 @@ ViewSwapChain::_Report(bigtime_t now)
 
 	const int64 copyTime = atomic_get_and_set64(&fCopyTime, 0);
 	const int64 waitTime = atomic_get_and_set64(&fWaitTime, 0);
+	const int64 readTime = atomic_get_and_set64(&fReadTime, 0);
 	const int32 copies = atomic_get_and_set(&fCopies, 0);
 	fprintf(stderr, "swap chain %s: shown %llu/s, presented %llu/s, "
-		"replaced %u, worst gap %.1f ms, wait %lld us, copy %lld us\n",
+		"replaced %u, worst gap %.1f ms, wait %lld us, read %lld us, copy %lld us\n",
 		fView != NULL ? fView->Name() : "?",
 		(unsigned long long)fShown * 1000000 / span,
 		(unsigned long long)fPresented * 1000000 / span, (unsigned)fReplaced,
 		fWorstGap / 1000.0,
 		(long long)(copies > 0 ? waitTime / copies : 0),
+		(long long)(copies > 0 ? readTime / copies : 0),
 		(long long)(copies > 0 ? copyTime / copies : 0));
 	fStatsStart = now;
 	fShown = fPresented = fReplaced = 0;

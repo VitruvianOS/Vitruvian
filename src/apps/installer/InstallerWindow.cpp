@@ -992,7 +992,7 @@ InstallerWindow::_FinishSetup()
 	be_app->PostMessage(MSG_SETUP_DONE);
 
 	off_t tail = root_expansion_bytes();
-	if (tail >= (off_t)1024 * 1024 * 1024) {
+	if (tail >= kMinRootExpansion) {
 		BString text;
 		text.SetToFormat(B_TRANSLATE("There is %.1f GiB of unused space "
 			"after the system partition. Expand the system partition to "

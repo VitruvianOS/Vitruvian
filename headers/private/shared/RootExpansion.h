@@ -15,6 +15,9 @@
 #include <RootMedia.h>
 
 
+// Smaller tails (alignment, the GPT backup) are not worth offering.
+static const off_t kMinRootExpansion = (off_t)128 * 1024 * 1024;
+
 // Bytes the root partition can grow into, directly behind it; 0 when the
 // root is not a growable disk partition. *reason says why not.
 static inline off_t

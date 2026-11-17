@@ -37,7 +37,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <RootMedia.h>
+#include <RootExpansion.h>
 
 #include "DiskDeviceJobQueue.h"
 #include "PartitionReference.h"
@@ -276,7 +276,7 @@ _ProbeRootPartition(ProbeResult& result)
 		delete device;
 		return;
 	}
-	if (proposed <= partition->Size()) {
+	if (proposed - partition->Size() < kMinRootExpansion) {
 		result.gapExplanation = B_TRANSLATE("The free space behind the "
 			"system partition is too small to be usable.");
 		delete device;

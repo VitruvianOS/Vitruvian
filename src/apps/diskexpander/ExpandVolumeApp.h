@@ -9,7 +9,7 @@
 #include <String.h>
 
 
-// TryNow popup: grow the system partition into the adjacent free space.
+// Grow the system partition into the adjacent free space.
 // One window, no servers; degrades to an explanatory no-op pane when the
 // volume cannot be read or no space is claimable.
 class ExpandVolumeApp : public BApplication {

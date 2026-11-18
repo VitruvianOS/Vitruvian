@@ -10,8 +10,9 @@
 #include <SupportDefs.h>
 
 
-/* Reader/writer futex lock. Writers nest and may also read. Readers do not
- * nest and cannot upgrade, a reader that waits on a writer deadlocks. */
+/* Reader/writer futex lock. Writers nest and may also read. Readers nest
+ * per thread and unlock on the thread that locked, but cannot upgrade: a
+ * reader that waits on a writer deadlocks. */
 class BRWLocker {
 public:
 							BRWLocker();

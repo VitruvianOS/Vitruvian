@@ -9,10 +9,65 @@
 #include <BRWLocker.h>
 #include <libroot/futex.h>
 
+#include <stdlib.h>
+#include <string.h>
+
 
 #define kWriter			((int32)1 << 31)
 #define kWriterWaiting	((int32)1 << 30)
 #define kReaderMask		(~(kWriter | kWriterWaiting))
+
+
+// Read locks this thread holds. A nested read must not wait behind a
+// writer that is itself waiting for the outer read to end.
+struct HeldRead {
+	const BRWLocker*	lock;
+	int32				nest;
+};
+
+struct HeldReads {
+	HeldRead	inlineItems[8];
+	HeldRead*	items = inlineItems;
+	int32		capacity = 8;
+
+	~HeldReads()
+	{
+		if (items != inlineItems)
+			free(items);
+	}
+
+	HeldRead* Find(const BRWLocker* lock)
+	{
+		for (int32 i = 0; i < capacity; i++) {
+			if (items[i].lock == lock)
+				return &items[i];
+		}
+		return NULL;
+	}
+
+	HeldRead* Add(const BRWLocker* lock)
+	{
+		HeldRead* slot = Find(NULL);
+		if (slot == NULL) {
+			int32 grown = capacity * 2;
+			HeldRead* bigger = (HeldRead*)malloc(grown * sizeof(HeldRead));
+			if (bigger == NULL)
+				return NULL;
+			memcpy(bigger, items, capacity * sizeof(HeldRead));
+			memset(bigger + capacity, 0, capacity * sizeof(HeldRead));
+			if (items != inlineItems)
+				free(items);
+			items = bigger;
+			slot = &items[capacity];
+			capacity = grown;
+		}
+		slot->lock = lock;
+		slot->nest = 1;
+		return slot;
+	}
+};
+
+static thread_local HeldReads sHeldReads;
 
 
 BRWLocker::BRWLocker()
@@ -66,12 +121,21 @@ BRWLocker::ReadLock()
 		return true;
 	}
 
+	HeldRead* held = sHeldReads.Find(this);
+	if (held != NULL) {
+		held->nest++;
+		return true;
+	}
+
 	for (;;) {
 		int32 current = __atomic_load_n(&fState, __ATOMIC_ACQUIRE);
 		// Readers give way to a waiting writer.
 		if ((current & (kWriter | kWriterWaiting)) == 0) {
 			if (__atomic_compare_exchange_n(&fState, &current, current + 1,
 					false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+				// Untracked, a nested read could deadlock again.
+				if (sHeldReads.Add(this) == NULL)
+					debugger("BRWLocker: no memory to track a read lock");
 				return true;
 			}
 			continue;
@@ -92,6 +156,15 @@ BRWLocker::ReadUnlock()
 		return true;
 	}
 
+	HeldRead* held = sHeldReads.Find(this);
+	if (held == NULL) {
+		debugger("BRWLocker: read unlock on a thread that did not lock");
+		return false;
+	}
+	if (--held->nest > 0)
+		return true;
+	held->lock = NULL;
+
 	int32 current = __atomic_load_n(&fState, __ATOMIC_ACQUIRE);
 	do {
 		if ((current & kReaderMask) == 0) {
@@ -111,8 +184,7 @@ BRWLocker::ReadUnlock()
 bool
 BRWLocker::IsReadLocked() const
 {
-	int32 state = __atomic_load_n(&fState, __ATOMIC_ACQUIRE);
-	if ((state & kReaderMask) != 0)
+	if (sHeldReads.Find(this) != NULL)
 		return true;
 	return fWriterThread == find_thread(NULL) && fWriterReadNest > 0;
 }

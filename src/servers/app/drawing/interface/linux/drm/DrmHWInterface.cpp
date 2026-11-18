@@ -1491,7 +1491,10 @@ DrmHWInterface::_SpriteFrame(const BPoint& where) const
 void
 DrmHWInterface::_RefreshOutputSprites()
 {
-	if (fOutputs.empty() || !LockParallelAccess())
+	// MoveCursorTo() and ObscureCursor() hold the read lock and sync after;
+	// a nested read waits behind a pending writer forever.
+	if (fOutputs.empty() || fCursorLockThread == find_thread(NULL)
+		|| !LockParallelAccess())
 		return;
 	_SyncOutputSprites();
 	UnlockParallelAccess();
@@ -5872,6 +5875,21 @@ DrmHWInterface::SetDragBitmap(const ServerBitmap* bitmap,
 }
 
 
+// HW lock before overlays: the base takes overlays first, and the flip
+// holds the HW lock while it draws the cursor under overlays.
+void
+DrmHWInterface::ObscureCursor()
+{
+	if (!LockParallelAccess())
+		return;
+	fCursorLockThread = find_thread(NULL);
+	HWInterface::ObscureCursor();
+	fCursorLockThread = -1;
+	_SyncOutputSprites();
+	UnlockParallelAccess();
+}
+
+
 void
 DrmHWInterface::MoveCursorTo(float x, float y)
 {
@@ -5885,7 +5903,9 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	// under the exclusive lock. HW lock first, then overlays, as SetMode().
 	if (!LockParallelAccess())
 		return;
+	fCursorLockThread = find_thread(NULL);
 	HWInterface::MoveCursorTo(x, y);
+	fCursorLockThread = -1;
 	_SyncOutputSprites();
 
 	// Only an output blending the pointer needs it redrawn; one with a

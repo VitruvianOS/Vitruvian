@@ -369,6 +369,7 @@ public:
 
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
+	virtual	void				ObscureCursor();
 	virtual	RenderingBuffer*	PublishedBuffer() const;
 	virtual	void				MoveCursorTo(float x, float y);
 	virtual	void				_DrawCursor(IntRect area) const;
@@ -511,6 +512,7 @@ private:
 			void				_RefreshOutputSprites();
 			BRect				_SpriteFrame(const BPoint& where) const;
 			bool				fFirstSpriteParked = false;
+			thread_id			fCursorLockThread = -1;
 			bool				_FirstUsable();
 			uint32				_FirstKey() const;
 			void				_SyncStandIn(Output* output);

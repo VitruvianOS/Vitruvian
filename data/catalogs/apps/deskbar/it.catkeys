@@ -15,7 +15,7 @@ Recent documents:	PreferencesWindow		Documenti recenti:
 Auto-raise	PreferencesWindow		Automaticamente in primo piano
 Mount	DeskbarMenu		Monta
 Icon size	PreferencesWindow		Dimensione icone
-About Haiku	DeskbarMenu		Informazioni su Haiku
+About Haiku	DeskbarMenu		Informazioni su Vitruvian OS
 Small	PreferencesWindow		Piccole
 Show calendar…	TimeView		Mostra il calendario…
 Find…	DeskbarMenu		Trova...
@@ -31,7 +31,7 @@ Hide application names	PreferencesWindow		Nascondi il nome delle applicazioni
 Applications	PreferencesWindow		Applicazioni
 Show application expander	PreferencesWindow		Mostra menu applicazione
 Suspend	DeskbarMenu		Sospendi
-Shutdown…	DeskbarMenu		Uscita da Haiku…
+Shutdown…	DeskbarMenu		Uscita da Vitruvian…
 Demos	B_USER_DESKBAR_DIRECTORY/Demos		Applicazioni Dimostrative
 Expand new applications	PreferencesWindow		Espandi le nuove applicazioni
 Recent applications:	PreferencesWindow		Applicazioni recenti:

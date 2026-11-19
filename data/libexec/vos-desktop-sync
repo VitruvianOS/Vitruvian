@@ -39,11 +39,6 @@ find_icon() {
 	case $1 in
 		/*) [ -f "$1" ] && echo "$1"; return ;;
 	esac
-	for root in $ICON_DIRS; do
-		for f in "$root/hicolor/scalable/apps/$1.svg" "$root/$1.svg"; do
-			[ -f "$f" ] && { echo "$f"; return; }
-		done
-	done
 	best=
 	bestsize=0
 	for root in $ICON_DIRS; do
@@ -57,17 +52,15 @@ find_icon() {
 		done
 	done
 	if [ -z "$best" ]; then
-		# Other themes: scalable first, then any size.
-		best=$(find $ICON_DIRS \( -name "$1.svg" -o -name "$1.png" \) 2>/dev/null \
-			| sort -r | head -n1)
+		# Other themes, any size.
+		best=$(find $ICON_DIRS -name "$1.png" 2>/dev/null | sort -r | head -n1)
 	fi
 	[ -n "$best" ] && echo "$best"
 }
 
 set_icon() {	# launcher icon-file
 	for size in 32 16; do
-		ffmpeg -v error -y -i "$2" -vf "scale=$size:$size:force_original_aspect_ratio=decrease,format=rgba,pad=$size:$size:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=bgra" \
-			-frames:v 1 -f rawvideo - 2>/dev/null | seticon "$1" $size || return 1
+		iconraw "$2" $size | seticon "$1" $size || return 1
 	done
 }
 
@@ -95,8 +88,7 @@ set_signature() {
 set_types() {	# signature icon-file name program mime-types
 	[ "$1" = - ] && return
 	for size in 32 16; do
-		ffmpeg -v error -y -i "$2" -vf "scale=$size:$size:force_original_aspect_ratio=decrease,format=rgba,pad=$size:$size:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=bgra" \
-			-frames:v 1 -f rawvideo "$STATE/icon$size.raw" 2>/dev/null
+		iconraw "$2" $size > "$STATE/icon$size.raw"
 	done
 	old=$IFS
 	IFS=,

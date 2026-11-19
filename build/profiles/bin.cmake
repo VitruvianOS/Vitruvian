@@ -65,6 +65,7 @@
 	mimeset
 	mountvolume
 	setmime
+	iconraw
 	seticon
 	setapptype
 	sysinfo

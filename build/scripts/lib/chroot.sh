@@ -35,7 +35,7 @@ qemu_eject() {
 # The V\OS apt source. The public key ships in the tree (and in
 # vos-archive). The suite pairs the Debian base with the channel:
 # VOS_CHANNEL=release gives trixie/testing, nightly (the default)
-# trixie-nightly/testing-nightly. VOS_REPO_SUITE overrides both.
+# stable-nightly/testing-nightly. VOS_REPO_SUITE overrides both.
 vos_repo_source()
 {
     _root="$1"
@@ -43,7 +43,11 @@ vos_repo_source()
     : "${VOS_REPO_KEY:=$LIB_DIR/../../../data/keys/vitruvian-archive-keyring.asc}"
     case "${VOS_CHANNEL:=nightly}" in
         release) : "${VOS_REPO_SUITE:=$VOS_BASE_SUITE}" ;;
-        nightly) : "${VOS_REPO_SUITE:=$VOS_BASE_SUITE-nightly}" ;;
+        nightly)
+            case "$VOS_BASE_SUITE" in
+                trixie) : "${VOS_REPO_SUITE:=stable-nightly}" ;;
+                *) : "${VOS_REPO_SUITE:=$VOS_BASE_SUITE-nightly}" ;;
+            esac ;;
         *) die "VOS_CHANNEL='$VOS_CHANNEL' is not release or nightly" ;;
     esac
     [ -f "$VOS_REPO_KEY" ] || die "V\\OS repo key not found: $VOS_REPO_KEY"

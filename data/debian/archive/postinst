@@ -1,6 +1,7 @@
 #!/bin/sh
 # Adds the V\OS apt source on systems installed without one. An image
 # build writes its own, naming the suite; that one is left alone.
+# A file naming the retired trixie-nightly suite is moved to stable-nightly.
 set -e
 
 SRC=/etc/apt/sources.list.d/vitruvian.sources
@@ -8,7 +9,7 @@ SRC=/etc/apt/sources.list.d/vitruvian.sources
 if [ "$1" = configure ] && [ ! -e "$SRC" ]; then
 	. /etc/os-release
 	case "${VERSION_CODENAME:-}" in
-		trixie) suite=trixie-nightly ;;
+		trixie) suite=stable-nightly ;;
 		*) suite=testing-nightly ;;
 	esac
 	cat > "$SRC" <<EOF
@@ -18,6 +19,8 @@ Suites: $suite
 Components: main
 Signed-By: /usr/share/keyrings/vitruvian-archive-keyring.asc
 EOF
+elif [ "$1" = configure ] && [ -f "$SRC" ]; then
+	sed -i 's/^\(Suites:[[:space:]]*\)trixie-nightly[[:space:]]*$/\1stable-nightly/' "$SRC"
 fi
 
 exit 0

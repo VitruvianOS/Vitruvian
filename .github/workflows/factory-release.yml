@@ -100,7 +100,7 @@ jobs:
       image_types: iso,raw
       extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
       base_suite: trixie
-      repo_suite: trixie-nightly
+      repo_suite: stable-nightly
       lane: nightly-stable-rt
       rev: ${{ needs.allocate.outputs.rev }}
 
@@ -131,7 +131,7 @@ jobs:
       board_types: raspberry
       extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
       base_suite: trixie
-      repo_suite: trixie-nightly
+      repo_suite: stable-nightly
       lane: nightly-stable
       rev: ${{ needs.allocate.outputs.rev }}
 
@@ -177,7 +177,7 @@ jobs:
           gh release create "rev-$REV" \
             --repo "$FACTORY_REPO" \
             --title "rev-$REV" \
-            --notes "Built from ${{ github.repository }}@${{ github.sha }}. amd64 \`nightly-stable-rt\`: Debian trixie, RT kernel, follows trixie-nightly. arm64 \`nightly-stable\`: the same base with the generic kernel. The testing lane is disabled until its kernel carries i915 (issues #304/#298).${MISSING}" \
+            --notes "Built from ${{ github.repository }}@${{ github.sha }}. amd64 \`nightly-stable-rt\`: Debian trixie, RT kernel, follows stable-nightly. arm64 \`nightly-stable\`: the same base with the generic kernel. The testing lane is disabled until its kernel carries i915 (issues #304/#298).${MISSING}" \
             assets/*
 
       # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'

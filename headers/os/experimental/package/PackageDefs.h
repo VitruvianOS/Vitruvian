@@ -39,7 +39,7 @@ enum v_package_channel {
 	V_CHANNEL_UNKNOWN				= 0,
 	V_CHANNEL_STABLE				= 1,	// trixie
 	V_CHANNEL_TESTING				= 2,	// trixie-testing
-	V_CHANNEL_NIGHTLY				= 3,	// trixie-nightly
+	V_CHANNEL_NIGHTLY				= 3,	// stable-nightly
 	V_CHANNEL_DEBIAN				= 4
 };
 

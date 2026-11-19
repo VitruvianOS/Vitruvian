@@ -125,7 +125,7 @@ enum package_channel {
 	kChannelUnknown			= 0,
 	kChannelStable			= 1,	// trixie
 	kChannelTesting			= 2,	// trixie-testing
-	kChannelNightly			= 3,	// trixie-nightly
+	kChannelNightly			= 3,	// stable-nightly
 	kChannelDebian			= 4
 };
 

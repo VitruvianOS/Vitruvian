@@ -223,6 +223,9 @@ message(STATUS "VOS kernel dependency: ${_vos_kernel_dep}")
 
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS
 	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version}), vos-archive, ${_vos_kernel_dep}")
+# X11 programs find their display on :0 only when the on-demand X server is
+# installed, and nothing else depends on it.
+set(CPACK_DEBIAN_RUNTIME_PACKAGE_RECOMMENDS "xvitruvian-launcher")
 
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")

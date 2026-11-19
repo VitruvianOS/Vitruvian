@@ -72,7 +72,7 @@ main(int argc, char** argv)
 	}
 
 	TranslatorBitmap header;
-	memcpy(&header, translated.Buffer(), sizeof(header));
+	memcpy((void*)&header, translated.Buffer(), sizeof(header));
 	header.magic = B_BENDIAN_TO_HOST_INT32(header.magic);
 	header.bounds.left = B_BENDIAN_TO_HOST_FLOAT(header.bounds.left);
 	header.bounds.top = B_BENDIAN_TO_HOST_FLOAT(header.bounds.top);

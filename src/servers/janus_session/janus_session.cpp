@@ -1894,6 +1894,32 @@ x_release_display()
 }
 
 
+// D-Bus-activated services (portals, gvfs) start from the user manager, which
+// knows nothing of the display reserved here; without it GTK portal backends
+// fail with "cannot open display" and apps wait out the activation timeout.
+static void
+x_export_env()
+{
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (!resolve_user_groups(&groups, &ngroups))
+		return;
+
+	pid_t pid = fork();
+	if (pid == 0) {
+		apply_session_env("systemctl");
+		if (!drop_to_user(groups, ngroups))
+			_exit(126);
+		execlp("systemctl", "systemctl", "--user", "import-environment",
+			"DISPLAY", "XAUTHORITY", (char*)NULL);
+		_exit(127);
+	}
+	free(groups);
+	if (pid > 0)
+		waitpid(pid, NULL, 0);
+}
+
+
 static void
 x_session_setup()
 {
@@ -1923,6 +1949,7 @@ x_session_setup()
 		setenv("DISPLAY", name, 1);
 		setenv("XAUTHORITY", sXAuthPath, 1);
 		printf("janus_session: X display %s reserved\n", name);
+		x_export_env();
 		return;
 	}
 	fprintf(stderr, "janus_session: no free X display\n");

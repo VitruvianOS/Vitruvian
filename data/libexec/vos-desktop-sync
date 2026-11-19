@@ -29,6 +29,9 @@ trap 'rm -f "$NEW"' EXIT
 have_nexus=0
 [ -e /dev/nexus ] && have_nexus=1
 
+# Icons are untrusted input: bound the memory of the decoders.
+ulimit -v 1048576 2>/dev/null
+
 # Succeeds when file $1 lists launcher $2 in its first column.
 listed() {
 	awk -F'\t' -v l="$2" '$1 == l { f = 1 } END { exit !f }' "$1"
@@ -60,7 +63,7 @@ find_icon() {
 
 set_icon() {	# launcher icon-file
 	for size in 32 16; do
-		iconraw "$2" $size | seticon "$1" $size || return 1
+		timeout 10 iconraw "$2" $size | seticon "$1" $size || return 1
 	done
 }
 
@@ -88,7 +91,7 @@ set_signature() {
 set_types() {	# signature icon-file name program mime-types
 	[ "$1" = - ] && return
 	for size in 32 16; do
-		iconraw "$2" $size > "$STATE/icon$size.raw"
+		timeout 10 iconraw "$2" $size > "$STATE/icon$size.raw"
 	done
 	old=$IFS
 	IFS=,
@@ -160,6 +163,11 @@ for dir in $DIRS; do
 		[ -n "$bin" ] && [ -x "$bin" ] || continue
 		case $bin in /system/*) continue ;; esac
 		iconfile=$(find_icon "$icon")
+		if [ -z "$iconfile" ]; then
+			# Icon= names nothing installed: try the desktop file name.
+			base=${desktop##*/}
+			iconfile=$(find_icon "${base%.desktop}")
+		fi
 		forget=0
 		if [ -n "$wd" ] && [ -d "$wd" ]; then
 			# Path=: a small wrapper that starts the program there.

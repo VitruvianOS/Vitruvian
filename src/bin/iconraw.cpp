@@ -86,6 +86,10 @@ main(int argc, char** argv)
 	int sourceHeight = header.bounds.IntegerHeight() + 1;
 	const uint8* bits = (const uint8*)translated.Buffer() + sizeof(header);
 	uint8 probe[4];
+	if (sourceWidth > 8192 || sourceHeight > 8192) {
+		fprintf(stderr, "iconraw: image too large %s\n", argv[1]);
+		return 1;
+	}
 	if (header.magic != B_TRANSLATOR_BITMAP || sourceWidth < 1
 		|| sourceHeight < 1
 		|| translated.BufferLength() < sizeof(header) + header.dataSize

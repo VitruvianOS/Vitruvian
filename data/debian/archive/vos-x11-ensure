@@ -1,18 +1,29 @@
 #!/bin/sh
-# Runs after every dpkg run. If an installed program can only run through X
-# (GTK, Xt/Xaw, Tk), pull the on-demand X server. Qt and SDL apps use the
-# native backend and do not need it.
+# Runs after every dpkg run. An installed Qt program gets the native platform
+# plugin; without it Qt falls back to xcb and needs an X server. If an
+# installed program can only run through X (GTK, Xt/Xaw, Tk), pull the
+# on-demand X server.
 [ -d /run/systemd/system ] || exit 0
-dpkg-query -W -f='${Status}' xvitruvian-launcher 2>/dev/null | grep -q 'install ok installed' && exit 0
-# a GUI program: a package with a launcher entry that links an X-only toolkit
-found=
-for p in $(apt-cache rdepends --installed libgtk-3-0t64 libgtk-2.0-0t64 libxt6t64 libtk8.6 2>/dev/null \
-		| sed -n 's/^  //p' | grep -v '^lib' | sort -u); do
-	if dpkg -L "$p" 2>/dev/null | grep -q '^/usr/share/applications/.*\.desktop$'; then found=1; break; fi
-done
-[ -n "$found" ] || exit 0
+installed() {
+	dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+want=
+installed libqt6gui6 && ! installed qt6-vos-plugin && want="$want qt6-vos-plugin"
+{ installed libqt5gui5t64 || installed libqt5gui5; } && ! installed qt5-vos-plugin \
+	&& want="$want qt5-vos-plugin"
+if ! installed xvitruvian-launcher; then
+	# a GUI program: a package with a launcher entry that links an X-only toolkit
+	for p in $(apt-cache rdepends --installed libgtk-3-0t64 libgtk-2.0-0t64 libxt6t64 libtk8.6 2>/dev/null \
+			| sed -n 's/^  //p' | grep -v '^lib' | sort -u); do
+		if dpkg -L "$p" 2>/dev/null | grep -q '^/usr/share/applications/.*\.desktop$'; then
+			want="$want xvitruvian-launcher"
+			break
+		fi
+	done
+fi
+[ -n "$want" ] || exit 0
 systemctl is-active --quiet vos-x11-ensure.service 2>/dev/null && exit 0
 # the hook runs under apt's dpkg lock: install from a detached unit that waits for it
 systemd-run --no-block --collect --quiet --unit=vos-x11-ensure \
-	apt-get -o DPkg::Lock::Timeout=600 install -y --no-install-recommends xvitruvian-launcher
+	apt-get -o DPkg::Lock::Timeout=600 install -y --no-install-recommends $want
 exit 0

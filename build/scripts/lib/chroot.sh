@@ -277,7 +277,7 @@ EOF
     # Download with the network, install isolated: cups-pdf's postinst ran lpadmin against the host's cupsd.
     sudo chroot "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
-apt update && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
+apt-get update -o Acquire::Retries=5 --error-on=any && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
     if [ "${VOS_NATIVE_UNPACK:-0}" = 1 ]; then
         # Unpack with the host dpkg (no emulation); configure stays in-chroot.
         # Any refusal falls back to the emulated apt transaction.

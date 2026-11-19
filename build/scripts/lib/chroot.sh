@@ -196,13 +196,13 @@ chroot_create() {
 
     if is_cross_build "$_arch"; then
         log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) [foreign]..."
-        sudo debootstrap --arch="$_deb_arch" --variant=minbase --foreign \
+        sudo debootstrap --arch="$_deb_arch" --variant=minbase --include=ca-certificates --foreign \
             --cache-dir="$_debootstrap_cache" \
             "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
         qemu_inject "$_chroot_dir" "$_arch"
     else
         log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch)..."
-        sudo debootstrap --arch="$_deb_arch" --variant=minbase \
+        sudo debootstrap --arch="$_deb_arch" --variant=minbase --include=ca-certificates \
             --cache-dir="$_debootstrap_cache" \
             "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
     fi

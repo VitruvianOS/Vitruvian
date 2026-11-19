@@ -1,0 +1,1 @@
+DPkg::Post-Invoke { "[ -x /usr/libexec/vos-x11-ensure ] && /usr/libexec/vos-x11-ensure || true"; };

@@ -286,6 +286,14 @@ install(FILES data/keys/vitruvian-archive-keyring.asc
 install(FILES data/debian/archive/vitruvian.pref
 	DESTINATION /etc/apt/preferences.d
 	COMPONENT archive)
+# GTK and Xt programs have no native backend: pull the on-demand X server when
+# one is installed. The image does not carry it.
+install(PROGRAMS data/debian/archive/vos-x11-ensure
+	DESTINATION /usr/libexec
+	COMPONENT archive)
+install(FILES data/debian/archive/90vos-x11
+	DESTINATION /etc/apt/apt.conf.d
+	COMPONENT archive)
 
 # These files used to ship in vos itself.
 set(CPACK_DEBIAN_DATA_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")

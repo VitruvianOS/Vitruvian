@@ -60,8 +60,17 @@ find_icon() {
 		done
 	done
 	if [ -z "$best" ]; then
+		# Scalable only: iconraw renders SVG.
+		for root in $ICON_DIRS; do
+			for f in "$root"/hicolor/scalable/apps/"$1".svg "$root/$1.svg"; do
+				[ -f "$f" ] && { best=$f; break 2; }
+			done
+		done
+	fi
+	if [ -z "$best" ]; then
 		# Other themes, any size.
-		best=$(find $ICON_DIRS -name "$1.png" 2>/dev/null | sort -r | head -n1)
+		best=$(find $ICON_DIRS \( -name "$1.png" -o -name "$1.svg" \) 2>/dev/null \
+			| sort -r | head -n1)
 	fi
 	[ -n "$best" ] && echo "$best"
 }

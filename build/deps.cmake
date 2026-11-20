@@ -340,6 +340,12 @@ DeclareDependency(
 	RUNTIMES	"libcairo2"
 )
 
+# iconraw renders SVG icons with it, loaded on demand
+DeclareDependency(
+	RSVG
+	RUNTIMES	"librsvg2-2"
+)
+
 DeclareDependency(
 	SANE
 	LIBRARIES	"sane"

@@ -4,10 +4,11 @@
  */
 
 // iconraw file size > raw.bgra
-// Decodes an image with the installed translators and writes it as size x size
-// raw BGRA pixels (aspect kept, centered, transparent padding): the input of
-// seticon and setapptype.
+// Decodes an image with the installed translators, or an SVG with librsvg,
+// and writes it as size x size raw BGRA pixels (aspect kept, centered,
+// transparent padding): the input of seticon and setapptype.
 
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,6 +50,77 @@ read_pixel(const TranslatorBitmap& header, const uint8* data, int x, int y,
 }
 
 
+// No translator reads SVG, the icon format of most desktop entries. librsvg
+// is loaded on demand: only an SVG needs it.
+static bool
+render_svg(const char* path, int size)
+{
+	void* rsvg = dlopen("librsvg-2.so.2", RTLD_NOW);
+	if (rsvg == NULL)
+		return false;
+
+	struct Rect { double x, y, width, height; };
+	typedef void* (*new_fn)(const char*, void**);
+	typedef int (*render_fn)(void*, void*, const Rect*, void**);
+	typedef void* (*surface_fn)(int, int, int);
+	typedef void* (*create_fn)(void*);
+	typedef void (*unref_fn)(void*);
+	typedef uint8* (*data_fn)(void*);
+	typedef int (*stride_fn)(void*);
+	new_fn handleNew = (new_fn)dlsym(rsvg, "rsvg_handle_new_from_file");
+	render_fn render = (render_fn)dlsym(rsvg, "rsvg_handle_render_document");
+	surface_fn surfaceCreate
+		= (surface_fn)dlsym(rsvg, "cairo_image_surface_create");
+	create_fn cairoCreate = (create_fn)dlsym(rsvg, "cairo_create");
+	unref_fn cairoDestroy = (unref_fn)dlsym(rsvg, "cairo_destroy");
+	unref_fn surfaceFlush = (unref_fn)dlsym(rsvg, "cairo_surface_flush");
+	unref_fn surfaceDestroy = (unref_fn)dlsym(rsvg, "cairo_surface_destroy");
+	data_fn surfaceData = (data_fn)dlsym(rsvg, "cairo_image_surface_get_data");
+	stride_fn surfaceStride
+		= (stride_fn)dlsym(rsvg, "cairo_image_surface_get_stride");
+	unref_fn objectUnref = (unref_fn)dlsym(rsvg, "g_object_unref");
+	if (handleNew == NULL || render == NULL || surfaceCreate == NULL
+		|| cairoCreate == NULL || cairoDestroy == NULL || surfaceFlush == NULL
+		|| surfaceDestroy == NULL || surfaceData == NULL
+		|| surfaceStride == NULL || objectUnref == NULL)
+		return false;
+
+	void* handle = handleNew(path, NULL);
+	if (handle == NULL)
+		return false;
+	// CAIRO_FORMAT_ARGB32: premultiplied, B G R A in memory here.
+	void* surface = surfaceCreate(0, size, size);
+	void* cairo = cairoCreate(surface);
+	Rect viewport = { 0, 0, (double)size, (double)size };
+	bool rendered = render(handle, cairo, &viewport, NULL) != 0;
+	cairoDestroy(cairo);
+	objectUnref(handle);
+	surfaceFlush(surface);
+
+	size_t length = (size_t)size * size * 4;
+	uint8* out = (uint8*)malloc(length);
+	if (rendered && out != NULL) {
+		const uint8* bits = surfaceData(surface);
+		int stride = surfaceStride(surface);
+		for (int y = 0; y < size; y++) {
+			for (int x = 0; x < size; x++) {
+				const uint8* p = bits + (size_t)y * stride + x * 4;
+				uint8* d = out + ((size_t)y * size + x) * 4;
+				uint8 a = p[3];
+				for (int i = 0; i < 3; i++)
+					d[i] = a == 0 ? 0 : (p[i] * 255 + a / 2) / a;
+				d[3] = a;
+			}
+		}
+		rendered = fwrite(out, 1, length, stdout) == length;
+	} else
+		rendered = false;
+	free(out);
+	surfaceDestroy(surface);
+	return rendered;
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -60,6 +132,15 @@ main(int argc, char** argv)
 
 	// The translators write the bitmap as a header and raw pixels into any
 	// stream: no application or app_server is needed.
+	const char* extension = strrchr(argv[1], '.');
+	if (extension != NULL && (strcmp(extension, ".svg") == 0
+			|| strcmp(extension, ".svgz") == 0)) {
+		if (render_svg(argv[1], size))
+			return 0;
+		fprintf(stderr, "iconraw: cannot render %s\n", argv[1]);
+		return 1;
+	}
+
 	BFile file(argv[1], B_READ_ONLY);
 	BTranslatorRoster* roster = BTranslatorRoster::Default();
 	BMallocIO translated;

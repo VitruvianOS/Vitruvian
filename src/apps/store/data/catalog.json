@@ -1,0 +1,163 @@
+{
+ "generated": "2026-10-21",
+ "entries": [
+  {
+   "id": "aros-subsystem",
+   "kind": "component",
+   "name": "AROS Subsystem",
+   "summary": "Run AROS applications",
+   "category": "System",
+   "icon": "",
+   "packages": [
+    "aros-subsystem"
+   ],
+   "requires": []
+  },
+  {
+   "id": "aros-wanderer.desktop",
+   "kind": "app",
+   "name": "Wanderer",
+   "summary": "AROS Workbench file manager",
+   "category": "Utility",
+   "icon": "",
+   "packages": [
+    "aros-wanderer"
+   ],
+   "requires": [
+    "aros-subsystem"
+   ]
+  },
+  {
+   "id": "audacity.desktop",
+   "kind": "app",
+   "name": "Audacity",
+   "summary": "Record and edit audio",
+   "category": "AudioVideo",
+   "icon": "/media/icons/64x64/audacity_audacity.png",
+   "packages": [
+    "audacity"
+   ],
+   "requires": []
+  },
+  {
+   "id": "colors.desktop",
+   "kind": "app",
+   "name": "Colors!",
+   "summary": "Pick and inspect colors on screen",
+   "category": "Graphics",
+   "icon": "/media/icons/64x64/colors_64.png",
+   "packages": [
+    "colors"
+   ],
+   "requires": []
+  },
+  {
+   "id": "firefox-esr.desktop",
+   "kind": "app",
+   "name": "Firefox ESR",
+   "summary": "Web browser",
+   "category": "Network",
+   "icon": "/media/icons/64x64/firefox-esr_firefox-esr.png",
+   "packages": [
+    "firefox-esr"
+   ],
+   "requires": []
+  },
+  {
+   "id": "geany.desktop",
+   "kind": "app",
+   "name": "Geany",
+   "summary": "Small and fast text editor with IDE features",
+   "category": "Development",
+   "icon": "/media/icons/64x64/geany_geany.png",
+   "packages": [
+    "geany"
+   ],
+   "requires": []
+  },
+  {
+   "id": "gimp.desktop",
+   "kind": "app",
+   "name": "GIMP",
+   "summary": "Create and edit raster images",
+   "category": "Graphics",
+   "icon": "/media/icons/64x64/gimp_gimp.png",
+   "packages": [
+    "gimp"
+   ],
+   "requires": []
+  },
+  {
+   "id": "inkscape.desktop",
+   "kind": "app",
+   "name": "Inkscape",
+   "summary": "Vector graphics editor",
+   "category": "Graphics",
+   "icon": "/media/icons/64x64/inkscape_org.inkscape.Inkscape.png",
+   "packages": [
+    "inkscape"
+   ],
+   "requires": []
+  },
+  {
+   "id": "libreoffice-writer.desktop",
+   "kind": "app",
+   "name": "LibreOffice Writer",
+   "summary": "Word processor",
+   "category": "Office",
+   "icon": "/media/icons/64x64/libreoffice-writer_libreoffice-writer.png",
+   "packages": [
+    "libreoffice-writer"
+   ],
+   "requires": []
+  },
+  {
+   "id": "supertuxkart.desktop",
+   "kind": "app",
+   "name": "SuperTuxKart",
+   "summary": "3D kart racing game",
+   "category": "Game",
+   "icon": "/media/icons/64x64/supertuxkart_supertuxkart.png",
+   "packages": [
+    "supertuxkart"
+   ],
+   "requires": []
+  },
+  {
+   "id": "synaptic.desktop",
+   "kind": "app",
+   "name": "Synaptic",
+   "summary": "Graphical package manager",
+   "category": "System",
+   "icon": "/media/icons/64x64/synaptic_synaptic.png",
+   "packages": [
+    "synaptic"
+   ],
+   "requires": []
+  },
+  {
+   "id": "vlc.desktop",
+   "kind": "app",
+   "name": "VLC",
+   "summary": "Play audio and video files and streams",
+   "category": "AudioVideo",
+   "icon": "/media/icons/64x64/vlc_vlc.png",
+   "packages": [
+    "vlc"
+   ],
+   "requires": []
+  },
+  {
+   "id": "xcalc.desktop",
+   "kind": "app",
+   "name": "xcalc",
+   "summary": "Scientific calculator",
+   "category": "Utility",
+   "icon": "",
+   "packages": [
+    "xcalc"
+   ],
+   "requires": []
+  }
+ ]
+}

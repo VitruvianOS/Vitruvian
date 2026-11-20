@@ -1,0 +1,28 @@
+resource app_signature "application/x-vnd.Vitruvian-Store";
+
+resource app_name_catalog_entry
+	"x-vnd.Vitruvian-Store:System name:Store";
+
+resource app_version {
+	major  = 0,
+	middle = 1,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 0,
+
+	internal = 0,
+
+	short_info = "Store",
+	long_info  = "Store ©2026 Vitruvian OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;
+
+// Shopping bag placeholder art until real Store icon exists.
+// Hand-authored HVIF: one style, two paths (body + handle).
+resource vector_icon {
+	$"6e63696601013a6ea5ff020a042c34543454542c5408043834382c482c"
+	$"4834020a000100000a000101100117842204"
+};

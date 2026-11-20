@@ -38,6 +38,7 @@ set(SYSTEM_APPS
 	#Screenshot
 	ShowImage
 	SoundRecorder
+	Store
 	StyledEdit
 	Terminal
 	#TextSearch

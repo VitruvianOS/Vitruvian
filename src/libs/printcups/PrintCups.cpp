@@ -416,21 +416,28 @@ printcups_submit_spool(const char* spoolPath, BMessage* settings,
 		printer[0] = '\0';
 	if (printer[0] == '\0') {
 		if (bridge.DefaultQueue(printer, sizeof(printer)) != B_OK
-			|| printer[0] == '\0')
+			|| printer[0] == '\0') {
+			fprintf(stderr, "printcups: no default queue\n");
 			return B_ERROR;
+		}
 	}
 
 	printcups_queue_info info;
-	if (bridge.QueueInfo(printer, &info) != B_OK)
+	if (bridge.QueueInfo(printer, &info) != B_OK) {
+		fprintf(stderr, "printcups: queue '%s' not available\n", printer);
 		return B_ERROR;
+	}
 
 	BList pages;
 	BMessage spoolSettings;
 	int32 pageCount = 0;
 	status_t status = ReadSpoolFile(spoolPath, &pages, &spoolSettings,
 		&pageCount);
-	if (status != B_OK)
+	if (status != B_OK) {
+		fprintf(stderr, "printcups: cannot read spool file %s: %s\n",
+			spoolPath, strerror(status));
 		return status;
+	}
 
 	// Merge caller settings over spool settings (caller wins on conflicts).
 	BMessage merged(spoolSettings);
@@ -478,18 +485,44 @@ printcups_submit_spool(const char* spoolPath, BMessage* settings,
 	BString pdfPath(spoolPath);
 	pdfPath << ".pdf";
 
+	// The printable area starts at the page margins; apps position their
+	// pictures relative to it.
+	float offsetX = info.margin_left;
+	float offsetY = info.margin_top;
+	BRect printable;
+	if (merged.FindRect(PSRV_FIELD_PRINTABLE_RECT, &printable) == B_OK
+		&& (printable.left > 0 || printable.top > 0)) {
+		offsetX = printable.left;
+		offsetY = printable.top;
+	}
+
+	// The page setup's paper wins over the queue's default: choosing
+	// landscape or another size changes how applications lay their pages out,
+	// and the PDF has to be the same shape or the content is squeezed.
+	float paperWidth = info.paper_width;
+	float paperHeight = info.paper_height;
+	BRect paperRect;
+	if (merged.FindRect(PSRV_FIELD_PAPER_RECT, &paperRect) == B_OK
+		&& paperRect.IsValid()) {
+		paperWidth = paperRect.Width() + 1;
+		paperHeight = paperRect.Height() + 1;
+	}
+
 	// Scale 72dpi == 1.0 (points).
 	float scale = 1.0f;
 	status = printcups_render_pages_pdf(pdfPath.String(), &pages,
-		info.paper_width, info.paper_height, scale, jobName);
+		paperWidth, paperHeight, scale, jobName, offsetX, offsetY);
 
 	// Free page pictures regardless of render result.
 	for (int32 i = 0; i < pages.CountItems(); i++)
 		printcups_free_page(static_cast<SpooledPage*>(pages.ItemAt(i)));
 	pages.MakeEmpty();
 
-	if (status != B_OK)
+	if (status != B_OK) {
+		fprintf(stderr, "printcups: PDF rendering failed: %s\n",
+			strerror(status));
 		return B_ERROR;
+	}
 
 	// The print dialog asked for a destination for the virtual PDF printer:
 	// hand the rendered file over as it is, cups-pdf would only drop it in

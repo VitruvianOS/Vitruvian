@@ -24,6 +24,16 @@ const uint32 kMsgJobSetupChoose		= 'JSCh';
 // BMessage string: where a job for the PDF printer is written.
 #define PRINTCUPS_FIELD_SAVE_PATH "save_path"
 
+// Optional hints an application can put in the settings it hands to
+// ConfigPage(), so the page setup reflects the document being printed:
+//  - PRINTCUPS_FIELD_CONTENT_RECT: a BRect with the size of the document's
+//    page. Used to pick portrait or landscape the first time, when the
+//    settings carry no orientation yet.
+//  - PRINTCUPS_FIELD_PREVIEW: an archived BBitmap of the page, drawn inside
+//    the preview's printable area.
+#define PRINTCUPS_FIELD_CONTENT_RECT "printcups:content"
+#define PRINTCUPS_FIELD_PREVIEW "printcups:preview"
+
 
 class PageSetupWindow : public BWindow {
 public:

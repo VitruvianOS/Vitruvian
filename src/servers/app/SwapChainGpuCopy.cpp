@@ -4,11 +4,14 @@
  */
 #include "SwapChainGpuCopy.h"
 
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <BufferAllocator.h>
 #include <OS.h>
 
 #ifdef HAVE_GBM
@@ -18,7 +21,10 @@
 #	define GL_GLEXT_PROTOTYPES 1
 #	include <GLES2/gl2.h>
 #	include <GLES2/gl2ext.h>
+#	include <linux/dma-buf.h>
 #endif
+
+using namespace BPrivate;
 
 #include "ClientMemoryAllocator.h"
 #include "ServerBitmap.h"
@@ -46,6 +52,7 @@ static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC sImageTarget;
 static PFNEGLCREATESYNCKHRPROC sCreateSync;
 static PFNEGLCLIENTWAITSYNCKHRPROC sClientWait;
 static PFNEGLDESTROYSYNCKHRPROC sDestroySync;
+static PFNEGLDUPNATIVEFENCEFDANDROIDPROC sDupFence;
 
 
 static EGLImageKHR
@@ -110,7 +117,8 @@ SwapChainGpuCopy::SwapChainGpuCopy()
 	fMapData(NULL),
 	fStride(0),
 	fTime(0),
-	fFailed(false)
+	fFailed(false),
+	fNativeFence(false)
 {
 }
 
@@ -189,6 +197,8 @@ SwapChainGpuCopy::_Setup(struct gbm_device* device)
 		"eglClientWaitSyncKHR");
 	sDestroySync = (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress(
 		"eglDestroySyncKHR");
+	sDupFence = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress(
+		"eglDupNativeFenceFDANDROID");
 	if (sCreateImage == NULL || sDestroyImage == NULL || sImageTarget == NULL)
 		return _Fail("no EGL image support");
 
@@ -208,6 +218,9 @@ SwapChainGpuCopy::_Setup(struct gbm_device* device)
 			|| strstr(extensions, "EGL_KHR_surfaceless_context") == NULL
 			|| strstr(extensions, "EGL_EXT_image_dma_buf_import") == NULL)
 		return _Fail("missing EGL extensions");
+	// Explicit release fences where the driver exports them.
+	fNativeFence = sDupFence != NULL && sCreateSync != NULL
+		&& strstr(extensions, "EGL_ANDROID_native_fence_sync") != NULL;
 
 	if (!eglBindAPI(EGL_OPENGL_ES_API))
 		return _Fail("no GLES");
@@ -259,7 +272,7 @@ void
 SwapChainGpuCopy::_FreeTarget()
 {
 	if (fBits != NULL && fBo != NULL)
-		gbm_bo_unmap(fBo, fMapData);
+		BufferAllocator::Unmap(fBo, fMapData);
 	fBits = NULL;
 	fMapData = NULL;
 	if (fFrameBuffer != 0)
@@ -270,9 +283,49 @@ SwapChainGpuCopy::_FreeTarget()
 	if (fTargetImage != NULL)
 		sDestroyImage(fDisplay, fTargetImage);
 	fTargetImage = NULL;
-	if (fBo != NULL)
-		gbm_bo_destroy(fBo);
+	BufferAllocator::Destroy(fBo);
 	fBo = NULL;
+}
+
+
+bool
+SwapChainGpuCopy::_TryTarget(int32 width, int32 height,
+	const uint64* modifiers, int32 count)
+{
+	BufferAllocator* allocator = BufferAllocator::For(fDevice);
+	if (allocator == NULL)
+		return false;
+
+	// Read back through the detiling map, so any layout will do.
+	fBo = allocator->Allocate(width, height, GBM_FORMAT_XRGB8888, modifiers,
+		count, kBufferUsageRender);
+	if (fBo == NULL)
+		return false;
+
+	const int fd = BufferAllocator::Export(fBo);
+	if (fd < 0)
+		return false;
+	buffer_info info;
+	BufferAllocator::Describe(fBo, &info);
+	fTargetImage = import_image(fDisplay, fd, width, height, info.stride,
+		info.modifier, has_modifier(info.modifier));
+	close(fd);
+	if (fTargetImage == EGL_NO_IMAGE_KHR) {
+		fTargetImage = NULL;
+		return false;
+	}
+
+	glGenTextures(1, &fTexture);
+	glBindTexture(GL_TEXTURE_2D, fTexture);
+	sImageTarget(GL_TEXTURE_2D, fTargetImage);
+	glGenFramebuffers(1, &fFrameBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, fFrameBuffer);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		GL_TEXTURE_2D, fTexture, 0);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE
+			|| glGetError() != GL_NO_ERROR)
+		return false;
+	return true;
 }
 
 
@@ -283,32 +336,31 @@ SwapChainGpuCopy::_Target(int32 width, int32 height)
 		return true;
 
 	_FreeTarget();
-	fBo = gbm_bo_create(fDevice, width, height, GBM_FORMAT_XRGB8888,
-		GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
-	if (fBo == NULL)
-		return _Fail("target bo failed");
 
-	const int fd = gbm_bo_get_fd(fBo);
-	if (fd < 0)
-		return _Fail("target export failed");
-	const uint64 modifier = gbm_bo_get_modifier(fBo);
-	fTargetImage = import_image(fDisplay, fd, width, height,
-		gbm_bo_get_stride(fBo), modifier, has_modifier(modifier));
-	close(fd);
-	if (fTargetImage == EGL_NO_IMAGE_KHR) {
-		fTargetImage = NULL;
-		return _Fail("target import failed");
+	// The renderer's own list first when it has no linear (it cannot
+	// render to one then), linear otherwise; the other as the fallback.
+	uint64 render[kBufferMaxModifiers];
+	const int32 count = BufferAllocator::For(fDevice) != NULL
+		? BufferAllocator::For(fDevice)->RenderModifiers(GBM_FORMAT_XRGB8888,
+			render, kBufferMaxModifiers) : 0;
+	bool hasLinear = count == 0;
+	for (int32 i = 0; i < count; i++)
+		hasLinear |= render[i] == kBufferModifierLinear;
+
+	bool done = false;
+	if (!hasLinear)
+		done = _TryTarget(width, height, render, count);
+	if (!done) {
+		_FreeTarget();
+		done = _TryTarget(width, height, NULL, 0);
 	}
+	if (!done && hasLinear && count > 0) {
+		_FreeTarget();
+		done = _TryTarget(width, height, render, count);
+	}
+	if (!done)
+		return _Fail("target buffer failed");
 
-	glGenTextures(1, &fTexture);
-	glBindTexture(GL_TEXTURE_2D, fTexture);
-	sImageTarget(GL_TEXTURE_2D, fTargetImage);
-	glGenFramebuffers(1, &fFrameBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, fFrameBuffer);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-		GL_TEXTURE_2D, fTexture, 0);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		return _Fail("target framebuffer incomplete");
 	fWidth = width;
 	fHeight = height;
 	return true;
@@ -319,7 +371,7 @@ bool
 SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 {
 	if (fBits != NULL && fBo != NULL)
-		gbm_bo_unmap(fBo, fMapData);
+		BufferAllocator::Unmap(fBo, fMapData);
 	fBits = NULL;
 	fMapData = NULL;
 	if (fFailed)
@@ -347,12 +399,14 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 	const int fd = bitmap->GbmBuffer()->ExportFd();
 	if (fd < 0)
 		return _Fail("source export failed");
-	const uint64 modifier = gbm_bo_get_modifier(bo);
+	buffer_info source;
+	BufferAllocator::Describe(bo, &source);
 	EGLImageKHR image = import_image(fDisplay, fd, width, height,
-		gbm_bo_get_stride(bo), modifier, has_modifier(modifier));
-	close(fd);
-	if (image == EGL_NO_IMAGE_KHR)
+		source.stride, source.modifier, has_modifier(source.modifier));
+	if (image == EGL_NO_IMAGE_KHR) {
+		close(fd);
 		return _Fail("source import failed");
+	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, fFrameBuffer);
 	glViewport(0, 0, width, height);
@@ -371,7 +425,31 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
 	bool done = false;
-	if (sCreateSync != NULL && sClientWait != NULL && sDestroySync != NULL) {
+	if (fNativeFence) {
+		// The fence says when the GPU is done reading the source: wait on
+		// it here and hand it to the dma-buf for whoever writes it next.
+		EGLSyncKHR sync = sCreateSync(fDisplay, EGL_SYNC_NATIVE_FENCE_ANDROID,
+			NULL);
+		if (sync != EGL_NO_SYNC_KHR) {
+			glFlush();
+			const int fence = sDupFence(fDisplay, sync);
+			sDestroySync(fDisplay, sync);
+			if (fence >= 0) {
+				struct pollfd wait = { fence, POLLIN, 0 };
+				done = poll(&wait, 1, 100) > 0;
+#ifdef DMA_BUF_IOCTL_IMPORT_SYNC_FILE
+				struct dma_buf_import_sync_file release;
+				release.flags = DMA_BUF_SYNC_READ;
+				release.fd = fence;
+				ioctl(fd, DMA_BUF_IOCTL_IMPORT_SYNC_FILE, &release);
+#endif
+				close(fence);
+			}
+		}
+	}
+	close(fd);
+	if (!done && sCreateSync != NULL && sClientWait != NULL
+			&& sDestroySync != NULL) {
 		EGLSyncKHR sync = sCreateSync(fDisplay, EGL_SYNC_FENCE_KHR, NULL);
 		if (sync != EGL_NO_SYNC_KHR) {
 			glFlush();
@@ -390,8 +468,8 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 		return _Fail("GL error");
 
 	uint32 stride = 0;
-	void* map = gbm_bo_map(fBo, 0, 0, width, height, GBM_BO_TRANSFER_READ,
-		&stride, &fMapData);
+	void* map = BufferAllocator::Map(fBo, 0, 0, width, height, false, &stride,
+		&fMapData);
 	if (map == NULL)
 		return _Fail("target map failed");
 	fBits = (const uint8*)map;

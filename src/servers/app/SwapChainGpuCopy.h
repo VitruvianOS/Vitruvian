@@ -36,6 +36,8 @@ public:
 private:
 			bool				_Setup(struct gbm_device* device);
 			bool				_Target(int32 width, int32 height);
+			bool				_TryTarget(int32 width, int32 height,
+									const uint64* modifiers, int32 count);
 			void				_FreeTarget();
 			bool				_Fail(const char* why);
 
@@ -56,6 +58,7 @@ private:
 			uint32				fStride;
 			bigtime_t			fTime;
 			bool				fFailed;
+			bool				fNativeFence;
 };
 
 

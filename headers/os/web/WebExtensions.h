@@ -37,7 +37,10 @@ struct WebExtensionInfo {
 struct WebExtensionScript {
 	std::string	id;
 	std::string	source;
-	bool		atDocumentStart;
+	bool		atDocumentStart = false;
+	bool		isolated = false;
+		// runs in the userscript world, not the page's: the GM.* bridge
+		// is only reachable from there
 };
 
 
@@ -108,6 +111,9 @@ public:
 									std::string* into) const;
 			status_t			SetValue(const char* id, const char* key,
 									const char* value);
+			// Whether id names an installed, enabled userscript that
+			// uses GM.*: the GM bridge serves no one else.
+			bool				AllowsGM(const char* id) const;
 
 			// Payloads for the given page URL: enabled extensions
 			// whose match patterns cover the URL and that are not

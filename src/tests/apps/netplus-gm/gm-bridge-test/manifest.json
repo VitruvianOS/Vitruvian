@@ -1,0 +1,10 @@
+{
+	"id": "gm-bridge-test",
+	"name": "GM bridge test",
+	"version": "1.0",
+	"kind": "userscript",
+	"licence": "MIT",
+	"description": "Checks the NetPlus GM bridge from the userscript world",
+	"default-enabled": true,
+	"script": "gm-bridge-test.user.js"
+}

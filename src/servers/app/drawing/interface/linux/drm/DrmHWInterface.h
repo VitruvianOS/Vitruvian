@@ -123,7 +123,8 @@ public:
 			// this device fd and must not be closed here.
 			status_t		Adopt(int dmabufFd, uint32 width, uint32 height,
 								uint32 fourcc, uint32 stride,
-								color_space space, uint32 sharedHandle = 0);
+								color_space space, uint32 sharedHandle = 0,
+								uint64 modifier = 0);
 			void			Free();
 			status_t		Reapply();
 			// The plane was deleted behind its user's back.
@@ -131,7 +132,8 @@ public:
 
 	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
 								uint32 height, uint32 fourcc, uint32 stride,
-								uint32 sharedHandle, int32* _index);
+								uint32 sharedHandle, int32* _index,
+								uint64 modifier = 0);
 	virtual	status_t		Show(int32 index, uint64 serial,
 								const BRect& source,
 								const BRect& destination);
@@ -198,7 +200,8 @@ public:
 
 			status_t		Adopt(int dmabufFd, uint32 width, uint32 height,
 								uint32 fourcc, uint32 stride,
-								uint32 sharedHandle, int32* _index);
+								uint32 sharedHandle, int32* _index,
+								uint64 modifier = 0);
 
 	virtual	void*			Bits() const { return NULL; }
 	virtual	uint32			BytesPerRow() const { return 0; }
@@ -210,7 +213,8 @@ public:
 	virtual	void			Disable() {}
 	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
 								uint32 height, uint32 fourcc, uint32 stride,
-								uint32 sharedHandle, int32* _index);
+								uint32 sharedHandle, int32* _index,
+								uint64 modifier = 0);
 	virtual	status_t		Show(int32 index, uint64 serial,
 								const BRect& source,
 								const BRect& destination);
@@ -402,6 +406,9 @@ public:
 									ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
+	virtual	int32				ScanoutModifiers(const BRect& where,
+									uint32 fourcc, bool primary,
+									uint64* modifiers, int32 max);
 	virtual	status_t			AcquireScanoutForBitmap(ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
@@ -900,7 +907,7 @@ private:
 									color_space space, int dmabufFd,
 									uint32 stride, uint32 sharedHandle,
 									OverlayPlane** _plane, uint32 output = 0,
-									int sharedFd = -1);
+									int sharedFd = -1, uint64 modifier = 0);
 			void				_BackOffCursor();
 			void				_NoteCursorBusy(int err);
 			bool				_CommitInFlight();

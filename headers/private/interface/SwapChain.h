@@ -46,7 +46,10 @@ enum {
 
 // Create usage flags.
 enum {
-	kSwapUsageRender		= 0x1
+	kSwapUsageRender		= 0x1,
+	// Only the GPU touches the buffers, through the dma-buf: the server may
+	// pick a tiled layout from the modifiers the client lists.
+	kSwapUsageGpu			= 0x2
 };
 
 // Buffer states shared through the state area.

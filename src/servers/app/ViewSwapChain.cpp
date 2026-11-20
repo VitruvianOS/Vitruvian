@@ -30,6 +30,8 @@
 #include <Message.h>
 #include <Bitmap.h>
 
+#include <BufferAllocator.h>
+
 #include "BitmapManager.h"
 #include "Desktop.h"
 #include "DrawingEngine.h"
@@ -263,16 +265,18 @@ read_rect(ServerBitmap* from, ServerBitmap* to, int32 left, int32 top,
 	uint8* dst = to->Bits() + (size_t)top * to->BytesPerRow() + left * 4;
 #ifdef HAVE_GBM
 	GbmMemory* memory = from->GbmBuffer();
-	if (gbmRead && memory != NULL && memory->BufferObject() != NULL) {
+	// The pages of a tiled buffer are not rows: only the map detiles.
+	if (memory != NULL && memory->BufferObject() != NULL
+			&& (gbmRead || !memory->IsLinear())) {
 		uint32 stride = 0;
 		void* mapData = NULL;
-		void* map = gbm_bo_map(memory->BufferObject(), left, top,
-			right - left + 1, rows, GBM_BO_TRANSFER_READ, &stride, &mapData);
+		void* map = BufferAllocator::Map(memory->BufferObject(), left, top,
+			right - left + 1, rows, false, &stride, &mapData);
 		if (map != NULL) {
 			for (int32 y = 0; y < rows; y++)
 				memcpy(dst + (size_t)y * to->BytesPerRow(),
 					(uint8*)map + (size_t)y * stride, bytes);
-			gbm_bo_unmap(memory->BufferObject(), mapData);
+			BufferAllocator::Unmap(memory->BufferObject(), mapData);
 			return;
 		}
 	}
@@ -539,7 +543,7 @@ private:
 			status_t status = fd >= 0
 				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
 					memory->Format(), memory->Stride(), memory->Handle(),
-					&index)
+					&index, memory->Modifier())
 				: B_ERROR;
 			if (fd >= 0)
 				close(fd);
@@ -580,7 +584,7 @@ private:
 			status_t status = fd >= 0
 				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
 					memory->Format(), memory->Stride(), memory->Handle(),
-					&index)
+					&index, memory->Modifier())
 				: B_ERROR;
 			if (fd >= 0)
 				close(fd);
@@ -641,6 +645,8 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fDeadline(0),
 	fFlushShown(false),
 	fCounted(false),
+	fUsage(0),
+	fRequestedCount(0),
 	fStats(false),
 	fStatsStart(0),
 	fLastShown(0),
@@ -727,6 +733,77 @@ ViewSwapChain::~ViewSwapChain()
 }
 
 
+void
+ViewSwapChain::SetRequest(uint32 usage, const uint64* modifiers, int32 count)
+{
+	BAutolock locker(fLock);
+	fUsage = usage;
+	fRequestedCount = 0;
+	for (int32 i = 0; i < count && i < 4; i++)
+		fRequested[fRequestedCount++] = modifiers[i];
+}
+
+
+// The layouts a chain's buffers may take: what the renderer can write and
+// the planes can show, within what the client takes. Empty means linear.
+static int32
+negotiate_modifiers(::HWInterface* hardware, const BRect& where,
+	bool planeCapable, bool screenCapable, uint32 usage,
+	const uint64* requested, int32 requestedCount, uint64* result)
+{
+	using namespace BPrivate;
+#ifdef HAVE_GBM
+	if ((usage & kSwapUsageGpu) == 0)
+		return 0;
+	// No modifier but linear asked for: nothing to negotiate.
+	bool tiledAllowed = requestedCount == 0;
+	for (int32 i = 0; i < requestedCount; i++)
+		tiledAllowed |= requested[i] != kSwapModifierLinear;
+	if (!tiledAllowed)
+		return 0;
+
+	BufferAllocator* allocator
+		= BufferAllocator::For(hardware->GbmDeviceFor(where));
+	if (allocator == NULL)
+		return 0;
+
+	uint64 render[kBufferMaxModifiers];
+	const int32 renderCount = allocator->RenderModifiers(kSwapFormatXRGB8888,
+		render, kBufferMaxModifiers);
+	if (renderCount <= 0)
+		return 0;
+
+	uint64 scanout[kBufferMaxModifiers];
+	uint64 both[kBufferMaxModifiers];
+	const uint64* from = render;
+	int32 fromCount = renderCount;
+	if (planeCapable) {
+		const int32 scanoutCount = hardware->ScanoutModifiers(where,
+			kSwapFormatXRGB8888, screenCapable, scanout,
+			kBufferMaxModifiers);
+		if (scanoutCount <= 0)
+			return 0;
+		fromCount = BufferAllocator::Intersect(render, renderCount, scanout,
+			scanoutCount, both, kBufferMaxModifiers);
+		from = both;
+	}
+
+	const int32 n = BufferAllocator::Intersect(from, fromCount, requested,
+		requestedCount, result, kBufferMaxModifiers);
+	// Only linear left is no negotiation.
+	for (int32 i = 0; i < n; i++) {
+		if (result[i] != kSwapModifierLinear)
+			return n;
+	}
+	return 0;
+#else
+	(void)hardware; (void)where; (void)planeCapable; (void)screenCapable;
+	(void)usage; (void)requested; (void)requestedCount; (void)result;
+	return 0;
+#endif
+}
+
+
 status_t
 ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 {
@@ -764,6 +841,13 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	const bool planeCapable = hardware->HasOverlayPlane(where)
 		|| hardware->ScanoutCapable(width, height);
 
+	// Tiled buffers when the client only renders to them with the GPU.
+	uint64 modifiers[BPrivate::kBufferMaxModifiers];
+	const int32 modifierCount = negotiate_modifiers(hardware, where,
+		hardware->HasOverlayPlane(where),
+		hardware->ScanoutCapable(width, height), fUsage, fRequested,
+		fRequestedCount, modifiers);
+
 	const size_t bytes = (size_t)((width * 4 + 255) & ~255) * height * count;
 	if (!fApp->ReserveSwapChain(bytes, !resize))
 		return B_NO_MEMORY;
@@ -783,7 +867,8 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 		ServerBitmap* bitmap = gBitmapManager->CreateBitmap(NULL, *hardware,
 			BRect(0, 0, width - 1, height - 1), B_RGB32,
 			B_BITMAP_SUPPORTS_GBM, -1, B_MAIN_SCREEN_ID.id, NULL,
-			where.IsValid() ? &where : NULL, planeCapable);
+			where.IsValid() ? &where : NULL, planeCapable, modifiers,
+			modifierCount);
 		if (bitmap == NULL) {
 			status = B_NO_MEMORY;
 			break;
@@ -853,9 +938,11 @@ ViewSwapChain::Describe(BPrivate::PortLink& sender) const
 		const ServerBitmap* bitmap = generation->buffers[i].Get();
 		sender.Attach<area_id>(bitmap->Area());
 		sender.Attach<uint32>(Format());
-		sender.Attach<uint64>(kSwapModifierLinear);
+		const GbmMemory* memory = bitmap->GbmBuffer();
+		sender.Attach<uint64>(memory != NULL ? memory->Modifier()
+			: kSwapModifierLinear);
 		sender.Attach<uint32>((uint32)bitmap->BytesPerRow());
-		sender.Attach<uint32>(0);
+		sender.Attach<uint32>(memory != NULL ? memory->Offset() : 0);
 	}
 }
 
@@ -1385,6 +1472,29 @@ ViewSwapChain::Compose(ServerBitmap* target, const BRect& bounds)
 	visible.IntersectWith(&area);
 
 	SwapChainCpuRead reading(bitmap.Get());
+#ifdef HAVE_GBM
+	// A tiled buffer is read through the detiling map.
+	GbmMemory* tiled = bitmap->GbmBuffer();
+	if (tiled != NULL && !tiled->IsLinear() && tiled->BufferObject() != NULL) {
+		uint32 mapStride = 0;
+		void* mapData = NULL;
+		void* map = BufferAllocator::Map(tiled->BufferObject(), 0, 0,
+			bitmap->Width(), bitmap->Height(), false, &mapStride, &mapData);
+		if (map == NULL)
+			return;
+		for (int32 i = 0; i < visible.CountRects(); i++) {
+			const BRect rect = visible.RectAt(i);
+			target->ImportBits(map, (size_t)mapStride * bitmap->Height(),
+				mapStride, bitmap->ColorSpace(),
+				BPoint(rect.left - destination.left,
+					rect.top - destination.top),
+				BPoint(rect.left - bounds.left, rect.top - bounds.top),
+				rect.IntegerWidth() + 1, rect.IntegerHeight() + 1);
+		}
+		BufferAllocator::Unmap(tiled->BufferObject(), mapData);
+		return;
+	}
+#endif
 	for (int32 i = 0; i < visible.CountRects(); i++) {
 		const BRect rect = visible.RectAt(i);
 		target->ImportBits(bitmap->Bits(), bitmap->BitsLength(),

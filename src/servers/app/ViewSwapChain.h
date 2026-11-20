@@ -133,6 +133,9 @@ public:
 									ServerWindow* window, View* view);
 								~ViewSwapChain();
 
+			// What the client asked for; before the first Allocate().
+			void				SetRequest(uint32 usage,
+									const uint64* modifiers, int32 count);
 			status_t			Allocate(int32 width, int32 height,
 									int32 count, bool resize);
 			void				Describe(BPrivate::PortLink& sender) const;
@@ -231,6 +234,9 @@ private:
 			bigtime_t			fPeriodAt;
 			BRect				fPeriodFrame;
 			bool				fCounted;
+			uint32				fUsage;
+			uint64				fRequested[4];
+			int32				fRequestedCount;
 
 			// Frame timing, reported with VOS_SWAP_CHAIN_STATS=1.
 			bool				fStats;

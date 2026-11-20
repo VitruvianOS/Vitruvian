@@ -7776,9 +7776,29 @@ DrmOverlayPlane::Allocate(uint32 width, uint32 height, uint32 fourcc,
 }
 
 
+// A framebuffer over a dma-buf; the modifier needs the driver's say-so.
+static int
+_AddDmabufFb(int fd, uint32 width, uint32 height, uint32 fourcc,
+	uint32 handle, uint32 stride, uint64 modifier, uint32* _fbId)
+{
+	uint32 handles[4] = { handle, 0, 0, 0 };
+	uint32 pitches[4] = { stride, 0, 0, 0 };
+	uint32 offsets[4] = { 0, 0, 0, 0 };
+	if (modifier != DRM_FORMAT_MOD_LINEAR
+			&& modifier != DRM_FORMAT_MOD_INVALID) {
+		uint64 modifiers[4] = { modifier, 0, 0, 0 };
+		return drmModeAddFB2WithModifiers(fd, width, height, fourcc, handles,
+			pitches, offsets, modifiers, _fbId, DRM_MODE_FB_MODIFIERS);
+	}
+	return drmModeAddFB2(fd, width, height, fourcc, handles, pitches,
+		offsets, _fbId, 0);
+}
+
+
 status_t
 DrmOverlayPlane::Adopt(int dmabufFd, uint32 width, uint32 height,
-	uint32 fourcc, uint32 stride, color_space space, uint32 sharedHandle)
+	uint32 fourcc, uint32 stride, color_space space, uint32 sharedHandle,
+	uint64 modifier)
 {
 	if (dmabufFd < 0 || width == 0 || height == 0 || stride == 0
 			|| fFbId != 0)
@@ -7790,12 +7810,9 @@ DrmOverlayPlane::Adopt(int dmabufFd, uint32 width, uint32 height,
 
 	bool closeHandle = handle != sharedHandle;
 
-	uint32 handles[4] = { handle, 0, 0, 0 };
-	uint32 pitches[4] = { stride, 0, 0, 0 };
-	uint32 offsets[4] = { 0, 0, 0, 0 };
 	uint32 fbId = 0;
-	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
-			offsets, &fbId, 0) < 0) {
+	if (_AddDmabufFb(fFd, width, height, fourcc, handle, stride, modifier,
+			&fbId) < 0) {
 		if (closeHandle)
 			_CloseGem(fFd, handle);
 		return B_ERROR;
@@ -7964,7 +7981,8 @@ DrmOverlayPlane::Configure(const BRect& source, const BRect& destination)
 
 status_t
 DrmOverlayPlane::AddBuffer(int dmabufFd, uint32 width, uint32 height,
-	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index)
+	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index,
+	uint64 modifier)
 {
 	if (fFbId == 0 || !fAdopted || dmabufFd < 0 || stride == 0
 			|| width != fWidth || height != fHeight || _index == NULL
@@ -7976,12 +7994,9 @@ DrmOverlayPlane::AddBuffer(int dmabufFd, uint32 width, uint32 height,
 		return B_ERROR;
 
 	const bool closeHandle = !fSharedDevice || handle != sharedHandle;
-	uint32 handles[4] = { handle, 0, 0, 0 };
-	uint32 pitches[4] = { stride, 0, 0, 0 };
-	uint32 offsets[4] = { 0, 0, 0, 0 };
 	uint32 fbId = 0;
-	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
-			offsets, &fbId, 0) < 0) {
+	if (_AddDmabufFb(fFd, width, height, fourcc, handle, stride, modifier,
+			&fbId) < 0) {
 		if (closeHandle)
 			_CloseGem(fFd, handle);
 		return B_ERROR;
@@ -8446,7 +8461,8 @@ DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
 
 	status_t status = _ClaimOverlayPlane(memory->Width(), memory->Height(),
 		memory->Format(), 0, bitmap->ColorSpace(), fd, memory->Stride(),
-		memory->Handle(), _plane, output, memory->DeviceFd());
+		memory->Handle(), _plane, output, memory->DeviceFd(),
+		memory->Modifier());
 	close(fd);
 	return status;
 #else
@@ -8455,10 +8471,60 @@ DrmHWInterface::AcquireOverlayPlaneForBitmap(ServerBitmap* bitmap,
 }
 
 
+int32
+DrmHWInterface::ScanoutModifiers(const BRect& where, uint32 fourcc,
+	bool primary, uint64* modifiers, int32 max)
+{
+	uint32 output;
+	BRect frame;
+	if (!_OutputFor(where, &output, &frame))
+		return 0;
+
+	int32 n = 0;
+	auto add = [&](uint64 modifier) {
+		if (modifier == DRM_FORMAT_MOD_INVALID)
+			return;
+		for (int32 i = 0; i < n; i++) {
+			if (modifiers[i] == modifier)
+				return;
+		}
+		if (n < max)
+			modifiers[n++] = modifier;
+	};
+
+	pthread_mutex_lock(&fOverlayMutex);
+	for (size_t i = 0; i < fOverlayPlanes.size(); i++) {
+		const OverlayPlaneInfo& info = fOverlayPlanes[i];
+		if (info.output != output)
+			continue;
+		if (info.modifiers.empty()) {
+			add(DRM_FORMAT_MOD_LINEAR);
+			continue;
+		}
+		for (size_t m = 0; m < info.modifiers.size(); m++) {
+			if (info.modifiers[m].format == fourcc)
+				add(info.modifiers[m].modifier);
+		}
+	}
+	pthread_mutex_unlock(&fOverlayMutex);
+
+	if (primary && output == 0) {
+		if (fPrimaryFormats.empty())
+			add(DRM_FORMAT_MOD_LINEAR);
+		for (size_t i = 0; i < fPrimaryFormats.size(); i++) {
+			if (fPrimaryFormats[i].format == fourcc)
+				add(fPrimaryFormats[i].modifier);
+		}
+	}
+	return n;
+}
+
+
 status_t
 DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 	uint32 bpp, color_space space, int dmabufFd, uint32 stride,
-	uint32 sharedHandle, OverlayPlane** _plane, uint32 output, int sharedFd)
+	uint32 sharedHandle, OverlayPlane** _plane, uint32 output, int sharedFd,
+	uint64 modifier)
 {
 	if (fFd < 0 || !fInitialized)
 		return B_NO_INIT;
@@ -8477,8 +8543,7 @@ DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 		if (std::find(info.formats.begin(), info.formats.end(), fourcc)
 				== info.formats.end())
 			continue;
-		// Chains and dumb buffers are linear.
-		if (!_PlaneAccepts(info, fourcc, DRM_FORMAT_MOD_LINEAR))
+		if (!_PlaneAccepts(info, fourcc, modifier))
 			continue;
 		if ((info.minWidth != 0 && width < info.minWidth)
 				|| (info.maxWidth != 0 && width > info.maxWidth)
@@ -8495,7 +8560,7 @@ DrmHWInterface::_ClaimOverlayPlane(uint32 width, uint32 height, uint32 fourcc,
 		plane->SetSharedDevice(sharedFd < 0 || sharedFd == info.fd);
 		status_t status = dmabufFd >= 0
 			? plane->Adopt(dmabufFd, width, height, fourcc, stride, space,
-				plane->SharedDevice() ? sharedHandle : 0)
+				plane->SharedDevice() ? sharedHandle : 0, modifier)
 			: plane->Allocate(width, height, fourcc, bpp, space);
 		if (status != B_OK) {
 			delete plane;
@@ -8729,16 +8794,17 @@ DrmScanout::~DrmScanout()
 
 status_t
 DrmScanout::Adopt(int dmabufFd, uint32 width, uint32 height, uint32 fourcc,
-	uint32 stride, uint32 sharedHandle, int32* _index)
+	uint32 stride, uint32 sharedHandle, int32* _index, uint64 modifier)
 {
 	return AddBuffer(dmabufFd, width, height, fourcc, stride, sharedHandle,
-		_index);
+		_index, modifier);
 }
 
 
 status_t
 DrmScanout::AddBuffer(int dmabufFd, uint32 width, uint32 height,
-	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index)
+	uint32 fourcc, uint32 stride, uint32 sharedHandle, int32* _index,
+	uint64 modifier)
 {
 	if (dmabufFd < 0 || stride == 0 || _index == NULL || fBuffers.size() >= 8
 			|| (!fBuffers.empty() && (width != fWidth || height != fHeight)))
@@ -8749,12 +8815,9 @@ DrmScanout::AddBuffer(int dmabufFd, uint32 width, uint32 height,
 		return B_ERROR;
 
 	const bool closeHandle = handle != sharedHandle;
-	uint32 handles[4] = { handle, 0, 0, 0 };
-	uint32 pitches[4] = { stride, 0, 0, 0 };
-	uint32 offsets[4] = { 0, 0, 0, 0 };
 	uint32 fbId = 0;
-	if (drmModeAddFB2(fFd, width, height, fourcc, handles, pitches,
-			offsets, &fbId, 0) < 0) {
+	if (_AddDmabufFb(fFd, width, height, fourcc, handle, stride, modifier,
+			&fbId) < 0) {
 		if (closeHandle)
 			_CloseGem(fFd, handle);
 		return B_ERROR;
@@ -8834,7 +8897,8 @@ DrmHWInterface::AcquireScanoutForBitmap(ServerBitmap* bitmap,
 	if (!fInitialized || fDpmsState != B_DPMS_ON || !ScanoutCapable(width,
 			height) || memory->DeviceFd() != fFd
 			|| memory->Format() != DRM_FORMAT_XRGB8888
-			|| fVblankPacedFlip)
+			|| fVblankPacedFlip
+			|| !_PrimaryAccepts(memory->Format(), memory->Modifier()))
 		return B_UNSUPPORTED;
 
 	// Whole first output only.
@@ -8857,7 +8921,8 @@ DrmHWInterface::AcquireScanoutForBitmap(ServerBitmap* bitmap,
 	}
 	int32 index = -1;
 	status_t status = scanout->Adopt(fd, memory->Width(), memory->Height(),
-		memory->Format(), memory->Stride(), memory->Handle(), &index);
+		memory->Format(), memory->Stride(), memory->Handle(), &index,
+		memory->Modifier());
 	close(fd);
 
 	// Ask the driver before the desktop is given up.

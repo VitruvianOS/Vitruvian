@@ -2648,17 +2648,19 @@ ServerWindow::_DispatchSwapChainMessage(int32 code,
 				link.Read<uint32>(&usage);
 				if (link.Read<int32>(&formatCount) == B_OK
 						&& formatCount >= 0 && formatCount <= 4) {
-					// Only linear XRGB is accepted.
+					// XRGB only; the modifiers say what the client takes.
 					bool acceptable = formatCount == 0;
+					uint64 modifiers[4];
+					int32 modifierCount = 0;
 					for (int32 i = 0; i < formatCount; i++) {
 						uint32 fourcc = 0;
 						uint64 modifier = 0;
 						link.Read<uint32>(&fourcc);
 						link.Read<uint64>(&modifier);
-						if (fourcc == kSwapFormatXRGB8888
-								&& (modifier == kSwapModifierLinear
-									|| modifier == kSwapModifierInvalid))
+						if (fourcc == kSwapFormatXRGB8888) {
 							acceptable = true;
+							modifiers[modifierCount++] = modifier;
+						}
 					}
 
 					if (!acceptable)
@@ -2669,6 +2671,8 @@ ServerWindow::_DispatchSwapChainMessage(int32 code,
 						chain = new(std::nothrow) ViewSwapChain(fServerApp,
 							this, fCurrentView);
 						created = chain != NULL;
+						if (created)
+							chain->SetRequest(usage, modifiers, modifierCount);
 						status = created
 							? chain->Allocate(width, height, count, false)
 							: B_NO_MEMORY;

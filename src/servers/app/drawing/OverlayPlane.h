@@ -46,7 +46,7 @@ public:
 	virtual	status_t			AddBuffer(int dmabufFd, uint32 width,
 									uint32 height, uint32 fourcc,
 									uint32 stride, uint32 sharedHandle,
-									int32* _index)
+									int32* _index, uint64 modifier = 0)
 									{ return B_UNSUPPORTED; }
 			// Shows a buffer; a nonzero serial is reported to the listener.
 	virtual	status_t			Show(int32 index, uint64 serial,

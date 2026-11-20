@@ -220,6 +220,14 @@ public:
 	virtual	bool				HasOverlayPlane(const BRect& where = BRect())
 									{ return false; }
 
+	// The modifiers the planes of the output holding where scan out for the
+	// format, the primary plane's too when the chain could fill the output;
+	// 0 when there is nothing to say.
+	virtual	int32				ScanoutModifiers(const BRect& /*where*/,
+									uint32 /*fourcc*/, bool /*primary*/,
+									uint64* /*modifiers*/, int32 /*max*/)
+									{ return 0; }
+
 	virtual status_t			GetOverlayRestrictions(const Overlay* overlay,
 									overlay_restrictions* restrictions);
 	virtual bool				CheckOverlayRestrictions(int32 width,

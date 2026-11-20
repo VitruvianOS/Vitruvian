@@ -523,15 +523,19 @@ GbmMemory::Format() const
 uint64
 GbmMemory::Modifier() const
 {
-	return fBo != NULL ? gbm_bo_get_modifier(fBo) : 0;
+	if (fBo == NULL)
+		return 0;
+
+	// A buffer made without a list is linear, whatever the driver reports.
+	const uint64 modifier = gbm_bo_get_modifier(fBo);
+	return modifier == 0x00ffffffffffffffULL ? 0 : modifier;
 }
 
 
 bool
 GbmMemory::IsLinear() const
 {
-	const uint64 modifier = Modifier();
-	return modifier == 0 || modifier == 0x00ffffffffffffffULL;
+	return Modifier() == 0;
 }
 
 

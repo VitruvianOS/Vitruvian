@@ -542,6 +542,8 @@ apply_session_env(const char* name)
 	setenv("XDG_SESSION_DESKTOP", "vos",       1);
 	// Native plugin first; Qt falls back to X when it is missing.
 	setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
+	// Firefox uses the native tab; other GTK clients keep their default.
+	setenv("MOZ_GTK_TITLEBAR_DECORATION", "system", 0);
 	// Debian's user PATH: games live outside the system default.
 	setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 		":/usr/local/games:/usr/games", 1);

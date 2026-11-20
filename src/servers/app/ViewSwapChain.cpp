@@ -94,6 +94,32 @@ struct ViewSwapChain::Generation {
 };
 
 
+// Waits for the fence the buffer's last writer left on its dma-buf.
+static void
+wait_for_writer(ServerBitmap* bitmap)
+{
+#ifdef HAVE_GBM
+	GbmMemory* memory = bitmap != NULL ? bitmap->GbmBuffer() : NULL;
+	const int fd = memory != NULL ? memory->ExportFd() : -1;
+	if (fd < 0)
+		return;
+
+	struct dma_buf_export_sync_file exported;
+	exported.flags = DMA_BUF_SYNC_READ;
+	exported.fd = -1;
+	if (ioctl(fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &exported) == 0
+			&& exported.fd >= 0) {
+		struct pollfd wait = { exported.fd, POLLIN, 0 };
+		poll(&wait, 1, 100);
+		close(exported.fd);
+	}
+	close(fd);
+#else
+	(void)bitmap;
+#endif
+}
+
+
 SwapChainCpuRead::SwapChainCpuRead(ServerBitmap* bitmap)
 	:
 	fFd(-1),
@@ -1014,6 +1040,11 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 		if (fPlane == NULL && hardware != NULL)
 			fPlane = new(std::nothrow) PlaneConsumer(this);
 	}
+
+	// An explicit fence rode in on the dma-buf: nothing is shown or copied
+	// before the client's GPU work is done. Outside fLock, bounded.
+	if ((flags & kPresentHasFence) != 0)
+		wait_for_writer(frame.bitmap);
 
 	// Same buffer geometry on the same plane and nothing changed under
 	// the view: what the plane was given still holds.

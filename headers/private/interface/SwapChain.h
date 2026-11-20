@@ -125,6 +125,16 @@ public:
 			status_t			Present(int32 index, const BRect* damage = NULL,
 									int32 damageCount = 0, uint32 flags = 0);
 
+			// Present after the GPU work that wrote the buffer, signalled by
+			// the sync_file fd (EGL_ANDROID_native_fence_sync); the fence is
+			// put on the dma-buf, which the server waits on before it
+			// shows or copies. The fd stays with the caller. Falls back to
+			// a plain present, relying on implicit sync, when the
+			// kernel cannot take it.
+			status_t			PresentWithFence(int32 index, int fenceFd,
+									const BRect* damage = NULL,
+									int32 damageCount = 0, uint32 flags = 0);
+
 			// Time and period of the latest release.
 			bigtime_t			LastReleaseTime() const;
 			int32				RefreshPeriod() const;

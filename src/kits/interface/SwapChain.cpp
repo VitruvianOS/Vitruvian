@@ -8,7 +8,10 @@
 
 #include <new>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
+
+#include <linux/dma-buf.h>
 
 #include <AppMisc.h>
 #include <GbmArea.h>
@@ -297,6 +300,30 @@ SwapChain::Present(int32 index, const BRect* damage, int32 damageCount,
 		__atomic_store_n(&fState->buffer[index], (int32)kSwapBufferFree,
 			__ATOMIC_RELEASE);
 	return status;
+}
+
+
+status_t
+SwapChain::PresentWithFence(int32 index, int fenceFd, const BRect* damage,
+	int32 damageCount, uint32 flags)
+{
+	if (!IsValid() || index < 0 || index >= fCount)
+		return B_BAD_VALUE;
+
+#ifdef DMA_BUF_IOCTL_IMPORT_SYNC_FILE
+	if (fenceFd >= 0) {
+		const int fd = BufferFd(index);
+		if (fd >= 0) {
+			struct dma_buf_import_sync_file import;
+			import.flags = DMA_BUF_SYNC_WRITE;
+			import.fd = fenceFd;
+			if (ioctl(fd, DMA_BUF_IOCTL_IMPORT_SYNC_FILE, &import) == 0)
+				flags |= kPresentHasFence;
+			close(fd);
+		}
+	}
+#endif
+	return Present(index, damage, damageCount, flags);
 }
 
 

@@ -9,6 +9,15 @@
 	var state = { sections: ["app", "component", "data"], section: "app",
 		categories: [], selected: "All", entries: [], busy: null };
 	var selectedEntryId = null;
+	var query = "";
+
+	function matches(entry) {
+		if (!query)
+			return true;
+		var hay = [entry.name, entry.summary, entry.category]
+			.concat(entry.packages || []).join("\n").toLowerCase();
+		return hay.indexOf(query) >= 0;
+	}
 
 	function post(action, argument) {
 		if (window.webkit && window.webkit.messageHandlers
@@ -66,7 +75,7 @@
 	function renderEntries() {
 		var list = document.getElementById("entries");
 		list.textContent = "";
-		state.entries.forEach(function (entry) {
+		state.entries.filter(matches).forEach(function (entry) {
 			var item = el("li", entry.id === selectedEntryId
 				? "selected" : "");
 
@@ -90,8 +99,10 @@
 
 			item.addEventListener("click", function () {
 				selectedEntryId = entry.id;
+				post("info", entry.id);
 				renderEntries();
 				renderDetail();
+				document.getElementById("content").scrollTop = 0;
 			});
 			list.appendChild(item);
 		});
@@ -108,11 +119,14 @@
 	function renderDetail() {
 		var detail = document.getElementById("detail");
 		var entry = currentEntry();
+		var list = document.getElementById("entries");
 		if (!entry) {
 			detail.className = "hidden";
+			list.className = "";
 			return;
 		}
 		detail.className = "";
+		list.className = "hidden";
 
 		// Artwork entries lead with their preview strip.
 		var previews = document.getElementById("detail-previews");
@@ -142,6 +156,12 @@
 
 		document.getElementById("detail-name").textContent = entry.name;
 		document.getElementById("detail-summary").textContent = entry.summary;
+
+		document.getElementById("detail-meta").textContent
+			= (entry.category ? "Category: " + entry.category : "")
+			+ (entry.packages && entry.packages.length
+				? " | Packages: " + entry.packages.join(", ") : "")
+			+ " | " + (entry.installed ? "Installed" : "Not installed");
 
 		var requires = document.getElementById("detail-requires");
 		if (entry.requires) {
@@ -191,6 +211,8 @@
 	window.Store = {
 		updateState: function (newState) {
 			state = newState;
+			if (state.info)
+				selectedEntryId = state.info;
 			renderAll();
 		},
 		setStatus: function (text) {
@@ -206,6 +228,19 @@
 	};
 
 	document.addEventListener("DOMContentLoaded", function () {
+		document.getElementById("search").addEventListener("input",
+			function () {
+				query = this.value.trim().toLowerCase();
+				selectedEntryId = null;
+				renderEntries();
+				renderDetail();
+			});
+		document.getElementById("detail-back").addEventListener("click",
+			function () {
+				selectedEntryId = null;
+				post("info", "");
+				renderDetail();
+			});
 		renderAll();
 		post("ready");
 	});

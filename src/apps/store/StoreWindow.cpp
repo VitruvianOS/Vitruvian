@@ -6,6 +6,7 @@
 #include "StoreWindow.h"
 #include "StoreDefs.h"
 
+#include <Alert.h>
 #include <Application.h>
 #include <Catalog.h>
 #include <Entry.h>
@@ -36,6 +37,7 @@ using namespace BPrivate::Network;
 
 #include "PackageWorker.h"
 #include "PackageManagerDefs.h"
+#include "ChangeSummaryWindow.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -259,32 +261,47 @@ StoreWindow::MessageReceived(BMessage* message)
 				break;
 			}
 
-			// Apply exactly what the framework resolved (pulls in
-			// dependencies and required components).
-			BMessage apply(kMsgApplyChanges);
+			// Same review dialog and apply request as PackageManager.
+			fPendingApply = BMessage(kMsgApplyChanges);
 			const char* name = NULL;
 			for (int32 i = 0; message->FindString("install", i, &name) == B_OK;
 					i++)
-				apply.AddString("install", name);
+				fPendingApply.AddString("install", name);
 			for (int32 i = 0; message->FindString("remove", i, &name) == B_OK;
 					i++)
-				apply.AddString("remove", name);
+				fPendingApply.AddString("remove", name);
 			for (int32 i = 0; message->FindString("purge", i, &name) == B_OK;
 					i++)
-				apply.AddString("purge", name);
+				fPendingApply.AddString("purge", name);
 
-			if (apply.FindString("install", 0, &name) != B_OK
-				&& apply.FindString("remove", 0, &name) != B_OK
-				&& apply.FindString("purge", 0, &name) != B_OK) {
+			if (fPendingApply.FindString("install", 0, &name) != B_OK
+				&& fPendingApply.FindString("remove", 0, &name) != B_OK
+				&& fPendingApply.FindString("purge", 0, &name) != B_OK) {
 				// Nothing to do (already installed/absent).
 				_SetStatus(B_TRANSLATE("No changes needed"));
 				_FinishBusy();
 				break;
 			}
 
-			fWorker->PostMessage(&apply);
+			const char* summary = "";
+			message->FindString("summary", &summary);
+			BMessage details;
+			message->FindMessage("details", &details);
+			ChangeSummaryWindow* window = new ChangeSummaryWindow(this,
+				BMessenger(this), &details, summary);
+			window->Show();
 			break;
 		}
+
+		case kMsgSummaryApply:
+			fWorker->PostMessage(&fPendingApply);
+			break;
+
+		case kMsgSummaryCancel:
+			fPendingApply.MakeEmpty();
+			_SetStatus(B_TRANSLATE("Cancelled"));
+			_FinishBusy();
+			break;
 
 		case kMsgProgress:
 		{
@@ -292,8 +309,12 @@ StoreWindow::MessageReceived(BMessage* message)
 			const char* status = "";
 			message->FindInt32("percent", &percent);
 			message->FindString("status", &status);
+			const char* package = "";
+			message->FindString("package", &package);
 			fBusyPercent = percent;
 			fBusyStatus = status;
+			if (package[0] != '\0')
+				fBusyStatus << " " << package;
 
 			BString script("Store.onProgress(");
 			script << percent << ", \"" << _jsonEscape(fBusyStatus) << "\")";
@@ -308,12 +329,56 @@ StoreWindow::MessageReceived(BMessage* message)
 
 		case kMsgError:
 		{
+			int32 error = kAptErrorUnknown;
 			const char* detail = "";
+			message->FindInt32("error", &error);
 			message->FindString("detail", &detail);
-			BString status(B_TRANSLATE("Error: "));
-			status << detail;
-			_SetStatus(status);
+
+			BString text;
+			switch (error) {
+				case kAptErrorLockHeld:
+					text = B_TRANSLATE("Another program is using the package "
+						"system. Close it and try again.");
+					break;
+				case kAptErrorNoPrivilege:
+					text = B_TRANSLATE("Authentication failed or was "
+						"cancelled. Nothing was changed.");
+					break;
+				case kAptErrorBrokenDeps:
+					text = B_TRANSLATE("These changes cannot be applied "
+						"without breaking other packages.");
+					break;
+				case kAptErrorNetwork:
+					text = B_TRANSLATE("Could not reach the software "
+						"repositories.");
+					break;
+				case kAptErrorSignature:
+					text = B_TRANSLATE("A repository failed its signature "
+						"check. Nothing was installed.");
+					break;
+				case kAptErrorDiskFull:
+					text = B_TRANSLATE("There is not enough free disk space.");
+					break;
+				case kAptErrorInterrupted:
+					text = B_TRANSLATE("The operation was interrupted.");
+					break;
+				case kAptErrorBatchTooLarge:
+					text = B_TRANSLATE("Too many packages for a single "
+						"action.");
+					break;
+				default:
+					text = B_TRANSLATE("The operation failed.");
+					break;
+			}
+			if (detail[0] != '\0')
+				text << "\n\n" << detail;
+
+			_SetStatus(text);
 			_FinishBusy();
+			BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
+				text.String(), B_TRANSLATE("OK"), NULL, NULL,
+				B_WIDTH_AS_USUAL, B_STOP_ALERT);
+			alert->Go(NULL);
 			break;
 		}
 
@@ -493,8 +558,12 @@ StoreWindow::_DispatchPageAction(const char* payload)
 			|| argument == "data") {
 			fSection = argument;
 			fSelectedCategory = "All";
+			fInfoEntryId = "";
 			_PushState();
 		}
+	} else if (action == "info") {
+		fInfoEntryId = argument;
+		_PushState();
 	} else if (action == "select") {
 		fSelectedCategory = argument;
 		_PushState();
@@ -672,7 +741,8 @@ StoreWindow::_BuildStateJSON()
 	json << "\"sections\":[\"app\",\"component\",\"data\"]";
 	json << ",\"section\":\"" << _jsonEscape(fSection) << "\"";
 	json << ",\"categories\":" << _BuildCategoriesJSON();
-	json << ",\"selected\":\"" << _jsonEscape(fSelectedCategory) << "\",";
+	json << ",\"selected\":\"" << _jsonEscape(fSelectedCategory) << "\"";
+	json << ",\"info\":\"" << _jsonEscape(fInfoEntryId) << "\",";
 
 	if (!fBusyEntryId.IsEmpty()) {
 		json << "\"busy\":{\"id\":\"" << _jsonEscape(fBusyEntryId)
@@ -719,6 +789,13 @@ StoreWindow::_BuildStateJSON()
 				? component->fName : *entry->fRequires.ItemAt(r));
 		}
 		json << ",\"requires\":\"" << _jsonEscape(needs) << "\"";
+		json << ",\"packages\":[";
+		for (int32 k = 0; k < entry->fPackages.CountItems(); k++) {
+			if (k > 0)
+				json << ",";
+			json << "\"" << _jsonEscape(*entry->fPackages.ItemAt(k)) << "\"";
+		}
+		json << "]";
 		if (!icon.IsEmpty())
 			json << ",\"icon\":\"" << icon << "\"";
 		json << "}";

@@ -10,6 +10,7 @@ Application(Store
 	../packagemanager/PackageWorker.cpp
 	../packagemanager/AptBackend.cpp
 	../packagemanager/PackageInfo.cpp
+	../packagemanager/ChangeSummaryWindow.cpp
 
 	LIBS web vpackage apt-pkg tracker localestub
 

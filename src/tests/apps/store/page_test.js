@@ -41,7 +41,7 @@ function makeElement(tag) {
 const ids = {};
 ["categories", "sections", "entries", "detail", "detail-previews",
  "detail-icon", "detail-letter", "detail-name", "detail-summary",
- "detail-requires", "detail-action", "progress", "progress-bar",
+ "detail-requires", "detail-meta", "detail-back", "content", "search", "detail-action", "progress", "progress-bar",
  "progress-text", "status", "app", "sidebar", "content"]
 	.forEach(id => { ids[id] = makeElement("div"); });
 
@@ -107,6 +107,33 @@ if (ids["detail-name"].textContent !== "NetPlus")
 	throw new Error("detail name wrong: " + ids["detail-name"].textContent);
 if (ids["detail-action"].textContent !== "Install")
 	throw new Error("expected Install button");
+if (posted.indexOf("info|netplus") < 0)
+	throw new Error("click should post info|netplus: " + JSON.stringify(posted));
+
+// Detail meta shows category, packages and installed state.
+window.Store.updateState(Object.assign({}, state, {info: "netplus",
+	entries: [Object.assign({}, state.entries[0],
+		{packages: ["netplus", "wpe"]}), state.entries[1]]}));
+{
+	const meta = ids["detail-meta"].textContent;
+	if (meta.indexOf("Category: Internet") < 0 || meta.indexOf("netplus, wpe") < 0
+			|| meta.indexOf("Not installed") < 0)
+		throw new Error("detail meta wrong: " + meta);
+}
+
+// Search filters live (name/summary/category/package), case-insensitive.
+{
+	const s = ids.search;
+	const type = v => { s.value = v; s.listeners.input.forEach(f => f.call(s)); };
+	type("GIM");
+	if (ids.entries.children.length !== 1) throw new Error("search name");
+	type("wpe");
+	if (ids.entries.children.length !== 1) throw new Error("search package");
+	type("zzz");
+	if (ids.entries.children.length !== 0) throw new Error("search none");
+	type("");
+	if (ids.entries.children.length !== 2) throw new Error("empty query shows all");
+}
 
 // Press Install -> message posted.
 ids["detail-action"].click();

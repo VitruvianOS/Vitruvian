@@ -52,6 +52,8 @@ private:
 			// Selected section kind: "app", "component" or "data".
 			BString				fSection;
 			BString				fSelectedCategory;
+			BString				fInfoEntryId;
+			BMessage			fPendingApply;
 			// Debian package names reported installed by the roster.
 			BObjectList<BString, true>	fInstalledPackages;
 			int32				fPendingStateQueries;

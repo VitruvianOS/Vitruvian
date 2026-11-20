@@ -109,7 +109,6 @@ body {
 }
 
 #detail {
-	margin-top: 16px;
 	padding: 16px;
 	background: #fff;
 	border: 1px solid #ddd;
@@ -117,6 +116,14 @@ body {
 }
 
 #detail .letter, #detail .icon { width: 64px; height: 64px; margin-bottom: 8px; }
+#detail-back {
+	background: none;
+	border: none;
+	color: #3484e2;
+	cursor: pointer;
+	margin-bottom: 12px;
+}
+
 #detail h2 { margin-bottom: 4px; }
 #detail p { color: #555; margin-bottom: 8px; }
 #detail .requires { font-size: 13px; color: #8a6d00; }
@@ -174,3 +181,7 @@ body {
 }
 
 .hidden { display: none !important; }
+
+#header { padding: 8px 12px; }
+#search { width: 100%; box-sizing: border-box; padding: 6px 10px;
+	font: inherit; border: 1px solid #aaa; border-radius: 6px; }

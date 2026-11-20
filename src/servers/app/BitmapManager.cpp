@@ -209,8 +209,6 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 	const BRect* desktopFrame, bool scanout)
 {
 	BAutolock locker(fLock);
-	if (!locker.IsLocked())
-		return NULL;
 
 	overlay_token overlayToken = NULL;
 
@@ -350,8 +348,6 @@ BitmapManager::CloneFromClient(area_id clientArea, size_t areaOffset,
 	BRect bounds, color_space space, uint32 flags, int32 bytesPerRow)
 {
 	BAutolock locker(fLock);
-	if (!locker.IsLocked())
-		return NULL;
 	BReference<ServerBitmap> bitmap(new(std::nothrow) ServerBitmap(bounds, space, flags,
 		bytesPerRow), true);
 	if (bitmap == NULL)
@@ -380,8 +376,6 @@ void
 BitmapManager::BitmapRemoved(ServerBitmap* bitmap)
 {
 	BAutolock locker(fLock);
-	if (!locker.IsLocked())
-		return;
 
 	gTokenSpace.RemoveToken(bitmap->Token());
 
@@ -396,8 +390,6 @@ void
 BitmapManager::SuspendOverlays()
 {
 	BAutolock locker(fLock);
-	if (!locker.IsLocked())
-		return;
 
 	// first, tell all applications owning an overlay to release their locks
 
@@ -424,8 +416,6 @@ void
 BitmapManager::ResumeOverlays()
 {
 	BAutolock locker(fLock);
-	if (!locker.IsLocked())
-		return;
 
 	// first, tell all applications owning an overlay that
 	// they can reacquire their locks

@@ -3,6 +3,7 @@
  * Distributed under the terms of the GPL License.
  */
 
+#include <Autolock.h>
 #include "DrmHWInterface.h"
 #include "DisplayProfile.h"
 #include "SwapChainGpuCopy.h"
@@ -1337,19 +1338,20 @@ DrmHWInterface::_PresentOutputs()
 				output->orientation, output->reflection);
 		}
 
-		bool overlaysLocked = fFloatingOverlaysLock.Lock();
-		IntRect cursorFrame = _SoftCursorFrame();
-		if (cursorFrame.IsValid()) {
-			cursorFrame.OffsetBy(-(int32)output->origin.x,
-				-(int32)output->origin.y);
-			if (!output->spriteShown
-					&& present.Intersects((BRect)cursorFrame)) {
-				_BlendCursor(&output->pubSource, output->target, cursorFrame,
-					output->origin, output->orientation, output->reflection);
+		{
+			BAutolock overlays(fFloatingOverlaysLock);
+			IntRect cursorFrame = _SoftCursorFrame();
+			if (cursorFrame.IsValid()) {
+				cursorFrame.OffsetBy(-(int32)output->origin.x,
+					-(int32)output->origin.y);
+				if (!output->spriteShown
+						&& present.Intersects((BRect)cursorFrame)) {
+					_BlendCursor(&output->pubSource, output->target,
+						cursorFrame, output->origin, output->orientation,
+						output->reflection);
+				}
 			}
 		}
-		if (overlaysLocked)
-			fFloatingOverlaysLock.Unlock();
 
 		int r;
 		if (output->back == NULL) {
@@ -3044,7 +3046,7 @@ DrmHWInterface::_ComposeFrame(const BRegion& region)
 	if (fHardwareCursorEnabled)
 		return;
 
-	bool overlaysLocked = fFloatingOverlaysLock.Lock();
+	BAutolock overlays(fFloatingOverlaysLock);
 	IntRect cursorFrame = _CursorFrame();
 	if (cursorFrame.IsValid()) {
 		cursorFrame.OffsetBy(-(int32)fOrigin.x, -(int32)fOrigin.y);
@@ -3053,8 +3055,6 @@ DrmHWInterface::_ComposeFrame(const BRegion& region)
 				fPanelOrientation, fPanelReflection);
 		}
 	}
-	if (overlaysLocked)
-		fFloatingOverlaysLock.Unlock();
 }
 
 
@@ -5601,11 +5601,9 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 	_BlitRect(&fSource, fWriteTarget, local);
 
 	if (!fHardwareCursorEnabled) {
-		bool overlaysLocked = fFloatingOverlaysLock.Lock();
+		BAutolock overlays(fFloatingOverlaysLock);
 		_BlendCursor(&fSource, fWriteTarget, IntRect(local), fOrigin,
 			fPanelOrientation, fPanelReflection);
-		if (overlaysLocked)
-			fFloatingOverlaysLock.Unlock();
 	}
 
 	return B_OK;

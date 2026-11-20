@@ -8,6 +8,7 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Looper.h>
 #include <Catalog.h>
 #include <Entry.h>
 #include <File.h>
@@ -24,7 +25,6 @@
 #include <UrlProtocolRoster.h>
 
 #include <package/PackageInfo.h>
-#include <package/PackageRoster.h>
 
 #include <web/WebView.h>
 #include <web/WebDefs.h>
@@ -32,6 +32,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
+#include <string>
 
 using namespace BPrivate::Network;
 
@@ -64,6 +66,9 @@ static const struct {
 	{ NULL, NULL }
 };
 
+
+static const int32 kPageSize = 60;
+static const int32 kIconsNotifyEvery = 8;
 
 static const char* kCatalogURL = "https://store.v-os.dev/catalog.json";
 static const char* kSiteURL = "https://store.v-os.dev";
@@ -120,6 +125,200 @@ _dataDir()
 }
 
 
+//	#pragma mark - Icons and installed state
+
+
+static status_t
+_iconCacheDir(BPath& path)
+{
+	status_t status = find_directory(B_USER_CACHE_DIRECTORY, &path, true);
+	if (status != B_OK)
+		return status;
+	return path.Append("store/icons");
+}
+
+
+static BString
+_iconURL(const BString& icon)
+{
+	if (!icon.IsEmpty() && icon[0] == '/')
+		return BString(kSiteURL) << icon;
+	return icon;
+}
+
+
+// Cache file name for an icon URL: every non-alphanumeric byte (but the
+// extension dot) becomes an underscore.
+static BString
+_iconFileName(const BString& url)
+{
+	BString name;
+	for (int32 i = 0; i < url.Length(); i++) {
+		char c = url[i];
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+			|| (c >= '0' && c <= '9') || c == '.';
+		name << (ok ? c : '_');
+	}
+	return name;
+}
+
+
+// The single icon download worker: requests are served in order, one
+// download at a time, at low priority. A newer request supersedes the
+// one in flight (the page moved on); failed URLs are not retried.
+class IconFetcher : public BLooper {
+public:
+	IconFetcher(const BMessenger& target)
+		:
+		BLooper("store icons", B_LOW_PRIORITY),
+		fTarget(target),
+		fGeneration(0)
+	{
+	}
+
+	void Fetch(BMessage* urls)
+	{
+		urls->what = kStoreMsgFetchIcons;
+		urls->AddInt32("gen", atomic_add(&fGeneration, 1) + 1);
+		PostMessage(urls);
+	}
+
+	void Cancel()
+	{
+		atomic_add(&fGeneration, 1);
+	}
+
+	virtual void MessageReceived(BMessage* message)
+	{
+		if (message->what != kStoreMsgFetchIcons) {
+			BLooper::MessageReceived(message);
+			return;
+		}
+
+		int32 generation = 0;
+		message->FindInt32("gen", &generation);
+
+		BPath dir;
+		if (_iconCacheDir(dir) != B_OK)
+			return;
+		create_directory(dir.Path(), 0755);
+
+		int32 pending = 0;
+		const char* urlString;
+		for (int32 i = 0; message->FindString("url", i, &urlString) == B_OK;
+				i++) {
+			if (atomic_get(&fGeneration) != generation)
+				return;
+
+			BString url(urlString);
+			if (fFailed.count(url.String()) > 0)
+				continue;
+			BPath file(dir.Path(), _iconFileName(url).String());
+			BEntry existing(file.Path());
+			if (existing.Exists())
+				continue;
+
+			if (_Download(url, file))
+				pending++;
+			else
+				fFailed.insert(url.String());
+
+			if (pending >= kIconsNotifyEvery) {
+				fTarget.SendMessage(kStoreMsgIconsFetched);
+				pending = 0;
+			}
+		}
+		if (pending > 0)
+			fTarget.SendMessage(kStoreMsgIconsFetched);
+	}
+
+private:
+	bool _Download(const BString& url, const BPath& file)
+	{
+		BMallocIO output;
+		BUrl remote(url.String(), true);
+		BHttpRequest* request = dynamic_cast<BHttpRequest*>(
+			BUrlProtocolRoster::MakeRequest(remote, &output));
+		if (request == NULL)
+			return false;
+
+		bool done = false;
+		thread_id requestThread = request->Run();
+		if (requestThread >= 0) {
+			status_t exitValue;
+			wait_for_thread(requestThread, &exitValue);
+			const BHttpResult& result
+				= static_cast<const BHttpResult&>(request->Result());
+			if (result.StatusCode() == 200 && output.BufferLength() > 0) {
+				BString temp(file.Path());
+				temp << ".part";
+				BFile out(temp.String(),
+					B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+				if (out.InitCheck() == B_OK
+					&& out.Write(output.Buffer(), output.BufferLength())
+						== (ssize_t)output.BufferLength()) {
+					BEntry part(temp.String());
+					done = part.Rename(file.Path(), true) == B_OK;
+				}
+			}
+		}
+		delete request;
+		return done;
+	}
+
+	BMessenger			fTarget;
+	int32				fGeneration;
+	std::set<std::string> fFailed;
+};
+
+
+// Reads the installed package names from the dpkg status file in one
+// pass and hands them to the window.
+static status_t
+_InstalledThread(void* data)
+{
+	BMessage* request = (BMessage*)data;
+	BMessenger target;
+	request->FindMessenger("target", &target);
+	int32 seq = 0;
+	request->FindInt32("seq", &seq);
+	delete request;
+
+	std::set<std::string>* installed = new std::set<std::string>();
+	FILE* file = fopen("/var/lib/dpkg/status", "r");
+	if (file != NULL) {
+		char* line = NULL;
+		size_t capacity = 0;
+		std::string name;
+		ssize_t length;
+		while ((length = getline(&line, &capacity, file)) >= 0) {
+			while (length > 0 && (line[length - 1] == '\n'
+					|| line[length - 1] == '\r')) {
+				line[--length] = '\0';
+			}
+			if (length == 0)
+				name.clear();
+			else if (strncmp(line, "Package: ", 9) == 0)
+				name = line + 9;
+			else if (strncmp(line, "Status: ", 8) == 0 && !name.empty()
+					&& length > 10
+					&& strcmp(line + length - 10, " installed") == 0) {
+				installed->insert(name);
+			}
+		}
+		free(line);
+		fclose(file);
+	}
+
+	BMessage reply(kStoreMsgInstalledLoaded);
+	reply.AddPointer("set", installed);
+	reply.AddInt32("seq", seq);
+	if (target.SendMessage(&reply) != B_OK)
+		delete installed;
+	return B_OK;
+}
+
+
 //	#pragma mark - StoreWindow
 
 
@@ -129,16 +328,15 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 		B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 	fWebView(NULL),
 	fWorker(NULL),
-	fRoster(NULL),
+	fFetcher(NULL),
 	fCatalog(),
 	fSection("app"),
 	fSelectedCategory("All"),
-	fInstalledPackages(32),
-	fPendingStateQueries(0),
+	fLimit(kPageSize),
+	fStateSeq(0),
 	fBusyPercent(-1),
 	fDryRun(dryRun)
 {
-	fRoster = new VPackageRoster();
 	fWorker = new PackageWorker(BMessenger(this));
 	fWorker->Run();
 
@@ -149,9 +347,11 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(fWebView);
 
+	fFetcher = new IconFetcher(BMessenger(this));
+	fFetcher->Run();
+
 	_LoadCatalog();
 	_FetchCatalog();
-	_FetchIcons();
 
 	// Defer the page load until the window (and the web view's
 	// bridge) is attached.
@@ -166,7 +366,15 @@ StoreWindow::~StoreWindow()
 			fWorker->Quit();
 	}
 	delete fWorker;
-	delete fRoster;
+
+	if (fFetcher != NULL) {
+		thread_id thread = fFetcher->Thread();
+		fFetcher->Cancel();
+		if (fFetcher->Lock())
+			fFetcher->Quit();
+		status_t exitValue;
+		wait_for_thread(thread, &exitValue);
+	}
 }
 
 
@@ -197,8 +405,8 @@ StoreWindow::MessageReceived(BMessage* message)
 			if (message->FindString("json", &json) == B_OK
 				&& fBusyEntryId.IsEmpty()
 				&& fCatalog.LoadFromData(json) == B_OK) {
+				fLastState = "";
 				_ReloadStates();
-				_FetchIcons();
 			}
 			break;
 		}
@@ -206,6 +414,24 @@ StoreWindow::MessageReceived(BMessage* message)
 		case kStoreMsgIconsFetched:
 			_PushState();
 			break;
+
+		case kStoreMsgInstalledLoaded:
+		{
+			void* pointer = NULL;
+			if (message->FindPointer("set", &pointer) != B_OK
+				|| pointer == NULL) {
+				break;
+			}
+			std::set<std::string>* set = (std::set<std::string>*)pointer;
+			int32 seq = 0;
+			message->FindInt32("seq", &seq);
+			if (seq == fStateSeq) {
+				fInstalled.swap(*set);
+				_PushState();
+			}
+			delete set;
+			break;
+		}
 
 		case B_WEB_PAGE_LOAD_FINISHED:
 			_ReloadStates();
@@ -223,37 +449,6 @@ StoreWindow::MessageReceived(BMessage* message)
 				_DispatchPageAction(payload);
 			break;
 		}
-
-		case kVMsgPackageDetailsReply:
-		{
-			void* pointer = NULL;
-			if (message->FindPointer("package", &pointer) != B_OK
-				|| pointer == NULL) {
-				break;
-			}
-			// The reply transfers one reference to us.
-			VPackageInfoRef ref((VPackageInfo*)pointer, true);
-
-			if (ref->State() == V_PACKAGE_STATE_INSTALLED
-				|| ref->State() == V_PACKAGE_STATE_UPGRADABLE) {
-				fInstalledPackages.AddItem(
-					new BString(ref->Name().String()));
-			}
-
-			if (fPendingStateQueries > 0)
-				fPendingStateQueries--;
-			if (fPendingStateQueries == 0)
-				_PushState();
-			break;
-		}
-
-		case kVMsgQueryError:
-			// Unknown package: simply not installed.
-			if (fPendingStateQueries > 0)
-				fPendingStateQueries--;
-			if (fPendingStateQueries == 0)
-				_PushState();
-			break;
 
 		case kMsgSimulateReady:
 		{
@@ -376,10 +571,11 @@ StoreWindow::MessageReceived(BMessage* message)
 					text = B_TRANSLATE("The operation failed.");
 					break;
 			}
+			// The page gets the headline; the details go in the alert.
+			_SetStatus(text);
 			if (detail[0] != '\0')
 				text << "\n\n" << detail;
 
-			_SetStatus(text);
 			_FinishBusy();
 			BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
 				text.String(), B_TRANSLATE("OK"), NULL, NULL,
@@ -475,10 +671,17 @@ StoreWindow::_FetchThread(void* data)
 					BPath parent;
 					cache.GetParent(&parent);
 					create_directory(parent.Path(), 0755);
-					BFile file(cache.Path(),
+					BString temp(cache.Path());
+					temp << ".part";
+					BFile file(temp.String(),
 						B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
-					if (file.InitCheck() == B_OK)
-						file.Write(json.String(), json.Length());
+					if (file.InitCheck() == B_OK
+						&& file.Write(json.String(), json.Length())
+							== (ssize_t)json.Length()) {
+						file.Sync();
+						BEntry part(temp.String());
+						part.Rename(cache.Path(), true);
+					}
 				}
 				BMessage reply(kStoreMsgCatalogFetched);
 				reply.AddString("json", json.String());
@@ -493,132 +696,6 @@ StoreWindow::_FetchThread(void* data)
 	return B_OK;
 }
 
-
-
-//	#pragma mark - Icons
-
-
-static status_t
-_iconCacheDir(BPath& path)
-{
-	status_t status = find_directory(B_USER_CACHE_DIRECTORY, &path, true);
-	if (status != B_OK)
-		return status;
-	return path.Append("store/icons");
-}
-
-
-static BString
-_iconURL(const BString& icon)
-{
-	if (!icon.IsEmpty() && icon[0] == '/')
-		return BString(kSiteURL) << icon;
-	return icon;
-}
-
-
-// Cache file name for an icon URL: every non-alphanumeric byte (but the
-// extension dot) becomes an underscore.
-static BString
-_iconFileName(const BString& url)
-{
-	BString name;
-	for (int32 i = 0; i < url.Length(); i++) {
-		char c = url[i];
-		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-			|| (c >= '0' && c <= '9') || c == '.';
-		name << (ok ? c : '_');
-	}
-	return name;
-}
-
-
-void
-StoreWindow::_FetchIcons()
-{
-	BMessage* urls = new BMessage();
-	for (int32 i = 0; i < fCatalog.CountEntries(); i++) {
-		BString url = _iconURL(fCatalog.EntryAt(i)->fIcon);
-		if (!url.IsEmpty())
-			urls->AddString("url", url.String());
-	}
-
-	thread_id thread = -1;
-	if (urls->HasString("url")) {
-		urls->AddMessenger("target", BMessenger(this));
-		thread = spawn_thread(&_IconThread, "store icons", B_LOW_PRIORITY,
-			urls);
-	}
-	if (thread >= 0)
-		resume_thread(thread);
-	else
-		delete urls;
-}
-
-
-// Downloads the icons not yet in the cache, one at a time; the page only
-// ever sees local files. Failures are silent (the letter is shown).
-status_t
-StoreWindow::_IconThread(void* data)
-{
-	BMessage* urls = (BMessage*)data;
-	BMessenger target;
-	urls->FindMessenger("target", &target);
-
-	BPath dir;
-	if (_iconCacheDir(dir) != B_OK) {
-		delete urls;
-		return B_ERROR;
-	}
-	create_directory(dir.Path(), 0755);
-
-	bool fetched = false;
-	const char* urlString;
-	for (int32 i = 0; urls->FindString("url", i, &urlString) == B_OK; i++) {
-		BString url(urlString);
-		BPath file(dir.Path(), _iconFileName(url).String());
-		BEntry existing(file.Path());
-		if (existing.Exists())
-			continue;
-
-		BMallocIO* output = new BMallocIO();
-		BUrl remote(urlString, true);
-		BHttpRequest* request = dynamic_cast<BHttpRequest*>(
-			BUrlProtocolRoster::MakeRequest(remote, output));
-		if (request == NULL) {
-			delete output;
-			continue;
-		}
-
-		thread_id requestThread = request->Run();
-		if (requestThread >= 0) {
-			status_t exitValue;
-			wait_for_thread(requestThread, &exitValue);
-			const BHttpResult& result
-				= static_cast<const BHttpResult&>(request->Result());
-			if (result.StatusCode() == 200 && output->BufferLength() > 0) {
-				BString temp(file.Path());
-				temp << ".part";
-				BFile out(temp.String(),
-					B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
-				if (out.InitCheck() == B_OK
-					&& out.Write(output->Buffer(), output->BufferLength())
-						== (ssize_t)output->BufferLength()) {
-					BEntry part(temp.String());
-					if (part.Rename(file.Path(), true) == B_OK)
-						fetched = true;
-				}
-			}
-		}
-		delete request;
-		delete output;
-	}
-
-	if (fetched)
-		target.SendMessage(kStoreMsgIconsFetched);
-	delete urls;
-	return B_OK;
-}
 
 
 //	#pragma mark - Page load and actions
@@ -693,6 +770,7 @@ StoreWindow::_DispatchPageAction(const char* payload)
 			fSection = argument;
 			fSelectedCategory = "All";
 			fInfoEntryId = "";
+			fLimit = kPageSize;
 			_PushState();
 		}
 	} else if (action == "info") {
@@ -700,6 +778,20 @@ StoreWindow::_DispatchPageAction(const char* payload)
 		_PushState();
 	} else if (action == "select") {
 		fSelectedCategory = argument;
+		fInfoEntryId = "";
+		fLimit = kPageSize;
+		_PushState();
+	} else if (action == "search") {
+		argument.Trim();
+		argument.ToLower();
+		if (argument != fQuery) {
+			fQuery = argument;
+			fInfoEntryId = "";
+			fLimit = kPageSize;
+			_PushState();
+		}
+	} else if (action == "more") {
+		fLimit += kPageSize;
 		_PushState();
 	} else if (action == "install" || action == "remove") {
 		StoreEntry* entry = fCatalog.FindById(argument.String());
@@ -713,24 +805,18 @@ StoreWindow::_DispatchPageAction(const char* payload)
 void
 StoreWindow::_ReloadStates()
 {
-	fInstalledPackages.MakeEmpty();
-	fPendingStateQueries = 0;
+	BMessage* request = new BMessage();
+	request->AddMessenger("target", BMessenger(this));
+	request->AddInt32("seq", ++fStateSeq);
 
-	// One roster query per unique catalog package; replies rebuild
-	// the installed set and then push fresh state to the page.
-	for (int32 i = 0; i < fCatalog.CountEntries(); i++) {
-		StoreEntry* entry = fCatalog.EntryAt(i);
-		for (int32 p = 0; p < entry->fPackages.CountItems(); p++) {
-			BString* packageName = entry->fPackages.ItemAt(p);
-			if (fRoster->GetPackageInfo(packageName->String(),
-					BMessenger(this)) == B_OK) {
-				fPendingStateQueries++;
-			}
-		}
-	}
-
-	if (fPendingStateQueries == 0)
+	thread_id thread = spawn_thread(&_InstalledThread, "store installed",
+		B_LOW_PRIORITY, request);
+	if (thread >= 0)
+		resume_thread(thread);
+	else {
+		delete request;
 		_PushState();
+	}
 }
 
 
@@ -813,26 +899,46 @@ StoreWindow::_IsInstalled(StoreEntry* entry) const
 		return false;
 
 	for (int32 i = 0; i < entry->fPackages.CountItems(); i++) {
-		BString* packageName = entry->fPackages.ItemAt(i);
-		bool found = false;
-		for (int32 j = 0; j < fInstalledPackages.CountItems(); j++) {
-			if (*fInstalledPackages.ItemAt(j) == *packageName) {
-				found = true;
-				break;
-			}
-		}
-		if (!found)
+		if (fInstalled.count(entry->fPackages.ItemAt(i)->String()) == 0)
 			return false;
 	}
 	return true;
 }
 
 
-BString
-StoreWindow::_EntryIconDataURI(StoreEntry* entry)
+bool
+StoreWindow::_Matches(StoreEntry* entry) const
 {
-	// Only icons already in the local cache; the page loads no remote
-	// resources.
+	// One section per kind; within the apps section the category
+	// filter applies.
+	if (entry->fKind != fSection)
+		return false;
+	if (fSection == "app" && fSelectedCategory != "All"
+		&& fSelectedCategory != _categoryLabel(entry->fCategory)) {
+		return false;
+	}
+	if (fQuery.IsEmpty())
+		return true;
+
+	const char* query = fQuery.String();
+	if (strcasestr(entry->fName.String(), query) != NULL
+		|| strcasestr(entry->fSummary.String(), query) != NULL
+		|| strcasestr(_categoryLabel(entry->fCategory), query) != NULL) {
+		return true;
+	}
+	for (int32 i = 0; i < entry->fPackages.CountItems(); i++) {
+		if (strcasestr(entry->fPackages.ItemAt(i)->String(), query) != NULL)
+			return true;
+	}
+	return false;
+}
+
+
+// Local cache path of an entry's icon as a file URL; if it is not
+// cached yet, the URL to download is added to missing.
+BString
+StoreWindow::_EntryIconURL(StoreEntry* entry, BMessage& missing)
+{
 	BString url = _iconURL(entry->fIcon);
 	if (url.IsEmpty())
 		return BString();
@@ -842,10 +948,38 @@ StoreWindow::_EntryIconDataURI(StoreEntry* entry)
 		return BString();
 	BPath file(dir.Path(), _iconFileName(url).String());
 	BEntry check(file.Path());
-	if (!check.Exists())
+	if (!check.Exists()) {
+		missing.AddString("url", url.String());
+		return BString();
+	}
+
+	// Inline: the page has no origin that may read local files.
+	BFile icon(file.Path(), B_READ_ONLY);
+	off_t size;
+	if (icon.GetSize(&size) != B_OK || size <= 0 || size > 256 * 1024)
+		return BString();
+	BString raw;
+	char* buffer = raw.LockBuffer(size);
+	ssize_t read = icon.Read(buffer, size);
+	raw.UnlockBuffer(read > 0 ? read : 0);
+	if (read != size)
 		return BString();
 
-	return BString("file://") << _jsonEscape(BString(file.Path()));
+	static const char kAlphabet[]
+		= "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	const uint8* in = (const uint8*)raw.String();
+	BString uri("data:image/png;base64,");
+	for (off_t i = 0; i < size; i += 3) {
+		uint32 n = in[i] << 16;
+		if (i + 1 < size)
+			n |= in[i + 1] << 8;
+		if (i + 2 < size)
+			n |= in[i + 2];
+		uri << kAlphabet[(n >> 18) & 63] << kAlphabet[(n >> 12) & 63];
+		uri << (i + 1 < size ? kAlphabet[(n >> 6) & 63] : '=');
+		uri << (i + 2 < size ? kAlphabet[n & 63] : '=');
+	}
+	return uri;
 }
 
 
@@ -875,8 +1009,46 @@ StoreWindow::_BuildCategoriesJSON()
 }
 
 
+void
+StoreWindow::_AppendEntryJSON(BString& json, StoreEntry* entry,
+	BMessage& missing)
+{
+	BString icon = _EntryIconURL(entry, missing);
+
+	json << "{\"id\":\"" << _jsonEscape(entry->fId) << "\"";
+	json << ",\"kind\":\"" << _jsonEscape(entry->fKind) << "\"";
+	json << ",\"name\":\"" << _jsonEscape(entry->fName) << "\"";
+	json << ",\"summary\":\"" << _jsonEscape(entry->fSummary) << "\"";
+	json << ",\"category\":\""
+		<< _jsonEscape(_categoryLabel(entry->fCategory)) << "\"";
+	json << ",\"installed\":" << (_IsInstalled(entry) ? "true" : "false");
+	BString needs;
+	for (int32 r = 0; r < entry->fRequires.CountItems(); r++) {
+		StoreEntry* component
+			= fCatalog.FindById(entry->fRequires.ItemAt(r)->String());
+		if (r > 0)
+			needs << ", ";
+		needs << (component != NULL
+			? component->fName : *entry->fRequires.ItemAt(r));
+	}
+	json << ",\"requires\":\"" << _jsonEscape(needs) << "\"";
+	json << ",\"packages\":[";
+	for (int32 k = 0; k < entry->fPackages.CountItems(); k++) {
+		if (k > 0)
+			json << ",";
+		json << "\"" << _jsonEscape(*entry->fPackages.ItemAt(k)) << "\"";
+	}
+	json << "]";
+	if (!icon.IsEmpty())
+		json << ",\"icon\":\"" << icon << "\"";
+	json << "}";
+}
+
+
+// Only the current page of the filtered list goes to the page, plus
+// the detail entry; icons missing for those are queued for download.
 BString
-StoreWindow::_BuildStateJSON()
+StoreWindow::_BuildStateJSON(BMessage& missing)
 {
 	BString json("{");
 	json << "\"sections\":[\"app\",\"component\",\"data\"]";
@@ -892,56 +1064,31 @@ StoreWindow::_BuildStateJSON()
 	} else
 		json << "\"busy\":null,";
 
-	json << "\"entries\":[";
-	bool first = true;
+	BString list;
+	int32 total = 0;
+	int32 sent = 0;
 	for (int32 i = 0; i < fCatalog.CountEntries(); i++) {
 		StoreEntry* entry = fCatalog.EntryAt(i);
-
-		// One section per kind; within the apps section the category
-		// filter applies.
-		if (entry->fKind != fSection)
+		if (!_Matches(entry))
 			continue;
-		if (fSection == "app" && fSelectedCategory != "All"
-			&& fSelectedCategory != _categoryLabel(entry->fCategory)) {
+		total++;
+		if (sent >= fLimit)
 			continue;
-		}
-
-		if (!first)
-			json << ",";
-		first = false;
-
-		bool installed = _IsInstalled(entry);
-		BString icon = _EntryIconDataURI(entry);
-
-		json << "{\"id\":\"" << _jsonEscape(entry->fId) << "\"";
-		json << ",\"kind\":\"" << _jsonEscape(entry->fKind) << "\"";
-		json << ",\"name\":\"" << _jsonEscape(entry->fName) << "\"";
-		json << ",\"summary\":\"" << _jsonEscape(entry->fSummary) << "\"";
-		json << ",\"category\":\""
-			<< _jsonEscape(_categoryLabel(entry->fCategory)) << "\"";
-		json << ",\"installed\":" << (installed ? "true" : "false");
-		BString needs;
-		for (int32 r = 0; r < entry->fRequires.CountItems(); r++) {
-			StoreEntry* component
-				= fCatalog.FindById(entry->fRequires.ItemAt(r)->String());
-			if (r > 0)
-				needs << ", ";
-			needs << (component != NULL
-				? component->fName : *entry->fRequires.ItemAt(r));
-		}
-		json << ",\"requires\":\"" << _jsonEscape(needs) << "\"";
-		json << ",\"packages\":[";
-		for (int32 k = 0; k < entry->fPackages.CountItems(); k++) {
-			if (k > 0)
-				json << ",";
-			json << "\"" << _jsonEscape(*entry->fPackages.ItemAt(k)) << "\"";
-		}
-		json << "]";
-		if (!icon.IsEmpty())
-			json << ",\"icon\":\"" << icon << "\"";
-		json << "}";
+		if (sent > 0)
+			list << ",";
+		sent++;
+		_AppendEntryJSON(list, entry, missing);
 	}
-	json << "]}";
+	json << "\"total\":" << total << ",\"entries\":[" << list << "]";
+
+	json << ",\"detail\":";
+	StoreEntry* detail = fInfoEntryId.IsEmpty()
+		? NULL : fCatalog.FindById(fInfoEntryId.String());
+	if (detail != NULL)
+		_AppendEntryJSON(json, detail, missing);
+	else
+		json << "null";
+	json << "}";
 	return json;
 }
 
@@ -949,7 +1096,22 @@ StoreWindow::_BuildStateJSON()
 void
 StoreWindow::_PushState()
 {
-	BString state = _BuildStateJSON();
+	BMessage missing;
+	BString state = _BuildStateJSON(missing);
+
+	// Ask for icons only when the set still to fetch changed.
+	BString wanted;
+	const char* url;
+	for (int32 i = 0; missing.FindString("url", i, &url) == B_OK; i++)
+		wanted << url << "\n";
+	if (wanted != fLastIconRequest) {
+		fLastIconRequest = wanted;
+		if (!wanted.IsEmpty())
+			fFetcher->Fetch(new BMessage(missing));
+		else
+			fFetcher->Cancel();
+	}
+
 	if (state == fLastState)
 		return;
 	fLastState = state;

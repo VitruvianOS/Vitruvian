@@ -7,22 +7,23 @@
 	var sectionNames = { app: "Apps", component: "Components",
 		data: "Data" };
 	var state = { sections: ["app", "component", "data"], section: "app",
-		categories: [], selected: "All", entries: [], busy: null };
+		categories: [], selected: "All", entries: [], total: 0,
+		detail: null, busy: null };
 	var selectedEntryId = null;
-	var query = "";
+	var searchTimer = null;
 	// Cheap keys of what each region last rendered.
 	var keys = { sections: null, categories: null, entries: null,
 		detail: null };
-
-	function matches(entry) {
-		if (!query)
-			return true;
-		var hay = [entry.name, entry.summary, entry.category]
-			.concat(entry.packages || []).join("\n").toLowerCase();
-		return hay.indexOf(query) >= 0;
-	}
+	// Per rendered entry: id and a key of what its node shows.
+	var rendered = [];
+	var moreRequested = -1;
 
 	function post(action, argument) {
+		// Any navigation drops the last result line.
+		if (action !== "install" && action !== "remove"
+				&& action !== "ready") {
+			document.getElementById("status").textContent = "";
+		}
 		if (window.webkit && window.webkit.messageHandlers
 				&& window.webkit.messageHandlers.store) {
 			window.webkit.messageHandlers.store.postMessage(
@@ -84,46 +85,96 @@
 		});
 	}
 
+	function entryKey(entry) {
+		return JSON.stringify(entry);
+	}
+
+	function buildEntry(entry) {
+		var item = el("li", "");
+
+		if (entry.icon) {
+			var img = el("img", "icon");
+			img.src = entry.icon;
+			img.alt = "";
+			item.appendChild(img);
+		} else {
+			item.appendChild(el("div", "letter",
+				entry.name.charAt(0).toUpperCase()));
+		}
+
+		var text = el("div", "text");
+		text.appendChild(el("div", "name", entry.name));
+		text.appendChild(el("div", "summary", entry.summary));
+		item.appendChild(text);
+
+		if (entry.installed)
+			item.appendChild(el("span", "badge", "Installed"));
+
+		item.addEventListener("click", function () {
+			selectedEntryId = entry.id;
+			post("info", entry.id);
+			renderDetail();
+			document.getElementById("content").scrollTop = 0;
+		});
+		return item;
+	}
+
+	function requestMore() {
+		var count = state.entries.length;
+		if (count >= state.total || moreRequested === count)
+			return;
+		moreRequested = count;
+		post("more");
+	}
+
+	function renderMore() {
+		var more = document.getElementById("more");
+		if (!more)
+			return;
+		more.className = state.entries.length < state.total ? "" : "hidden";
+		more.textContent = "Show more (" + state.entries.length + " of "
+			+ state.total + ")";
+	}
+
+	// Only changed entries are rebuilt; a longer list with the same head
+	// just appends.
 	function renderEntries() {
 		var list = document.getElementById("entries");
-		var shown = state.entries.filter(matches);
-		var key = JSON.stringify(shown);
+		var shown = state.entries;
+		var key = state.section + "|" + state.total + "|"
+			+ JSON.stringify(shown);
 		if (key === keys.entries)
 			return;
 		keys.entries = key;
-		list.textContent = "";
-		shown.forEach(function (entry) {
-			var item = el("li", "");
 
-			if (entry.icon) {
-				var img = el("img", "icon");
-				img.src = entry.icon;
-				img.alt = "";
-				item.appendChild(img);
+		var reuse = shown.length >= rendered.length;
+		for (var i = 0; reuse && i < rendered.length; i++) {
+			if (rendered[i].id !== shown[i].id)
+				reuse = false;
+		}
+		if (!reuse) {
+			list.textContent = "";
+			rendered = [];
+		}
+		for (var n = 0; n < shown.length; n++) {
+			var entryKeyValue = entryKey(shown[n]);
+			if (n < rendered.length) {
+				if (rendered[n].key !== entryKeyValue) {
+					list.replaceChild(buildEntry(shown[n]),
+						list.children[n]);
+					rendered[n].key = entryKeyValue;
+				}
 			} else {
-				item.appendChild(el("div", "letter",
-					entry.name.charAt(0).toUpperCase()));
+				list.appendChild(buildEntry(shown[n]));
+				rendered.push({ id: shown[n].id, key: entryKeyValue });
 			}
-
-			var text = el("div", "text");
-			text.appendChild(el("div", "name", entry.name));
-			text.appendChild(el("div", "summary", entry.summary));
-			item.appendChild(text);
-
-			if (entry.installed)
-				item.appendChild(el("span", "badge", "Installed"));
-
-			item.addEventListener("click", function () {
-				selectedEntryId = entry.id;
-				post("info", entry.id);
-				renderDetail();
-				document.getElementById("content").scrollTop = 0;
-			});
-			list.appendChild(item);
-		});
+		}
+		renderMore();
 	}
 
 	function currentEntry() {
+		if (state.detail && state.detail.id === selectedEntryId)
+			return state.detail;
 		for (var i = 0; i < state.entries.length; i++) {
 			if (state.entries[i].id === selectedEntryId)
 				return state.entries[i];
@@ -233,6 +284,8 @@
 	window.Store = {
 		updateState: function (newState) {
 			state = newState;
+			if (state.entries.length > moreRequested)
+				moreRequested = -1;
 			if (state.info)
 				selectedEntryId = state.info;
 			renderAll();
@@ -250,13 +303,27 @@
 	};
 
 	document.addEventListener("DOMContentLoaded", function () {
-		document.getElementById("search").addEventListener("input",
-			function () {
-				query = this.value.trim().toLowerCase();
+		var search = document.getElementById("search");
+		search.addEventListener("input", function () {
+			var value = this.value.trim().toLowerCase();
+			if (searchTimer !== null)
+				clearTimeout(searchTimer);
+			searchTimer = setTimeout(function () {
+				searchTimer = null;
 				selectedEntryId = null;
-				renderEntries();
 				renderDetail();
-			});
+				post("search", value);
+			}, 200);
+		});
+		var more = document.getElementById("more");
+		if (more)
+			more.addEventListener("click", requestMore);
+		var content = document.getElementById("content");
+		content.addEventListener("scroll", function () {
+			if (this.scrollTop + this.clientHeight
+					>= this.scrollHeight - 200)
+				requestMore();
+		});
 		document.getElementById("detail-back").addEventListener("click",
 			function () {
 				selectedEntryId = null;

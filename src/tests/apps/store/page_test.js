@@ -25,6 +25,10 @@ function makeElement(tag) {
 		listeners: {},
 		appendChild(child) { this.children.push(child); child.parentNode = this; return child; },
 		addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
+		replaceChild(n, old) {
+			const i = this.children.indexOf(old);
+			this.children[i] = n; n.parentNode = this;
+		},
 		click() {
 			(this.listeners.click || []).forEach(fn => fn());
 			if (typeof this.onclick === "function") this.onclick();
@@ -42,7 +46,7 @@ const ids = {};
 ["categories", "sections", "entries", "detail", "detail-previews",
  "detail-icon", "detail-letter", "detail-name", "detail-summary",
  "detail-requires", "detail-meta", "detail-back", "content", "search", "detail-action", "progress", "progress-bar",
- "progress-text", "status", "app", "sidebar", "content"]
+ "progress-text", "status", "more", "app", "sidebar", "content"]
 	.forEach(id => { ids[id] = makeElement("div"); });
 
 const posted = [];
@@ -56,6 +60,12 @@ global.document = {
 	addEventListener(ev, fn) { if (ev === "DOMContentLoaded") this._ready = fn; },
 	_ready: null
 };
+
+// Fake timers so the search debounce can be driven.
+const timers = [];
+global.setTimeout = (fn, ms) => { timers.push({fn, ms}); return timers.length; };
+global.clearTimeout = (id) => { if (timers[id - 1]) timers[id - 1].fn = null; };
+const fire = () => { timers.splice(0).forEach(t => t.fn && t.fn()); };
 
 // Execute the page script.
 eval(js);
@@ -121,19 +131,61 @@ window.Store.updateState(Object.assign({}, state, {info: "netplus",
 		throw new Error("detail meta wrong: " + meta);
 }
 
-// Search filters live (name/summary/category/package), case-insensitive.
+// Search is native: debounced post("search|q"), no local filtering.
 {
 	const s = ids.search;
 	const type = v => { s.value = v; s.listeners.input.forEach(f => f.call(s)); };
-	type("GIM");
-	if (ids.entries.children.length !== 1) throw new Error("search name");
-	type("wpe");
-	if (ids.entries.children.length !== 1) throw new Error("search package");
-	type("zzz");
-	if (ids.entries.children.length !== 0) throw new Error("search none");
+	type("G"); type("GIM");
+	if (posted.indexOf("search|gim") >= 0) throw new Error("search must be debounced");
+	fire();
+	if (posted.filter(p => p.indexOf("search|") === 0).join() !== "search|gim")
+		throw new Error("expected a single search|gim: " + JSON.stringify(posted));
+	if (ids.entries.children.length !== 2) throw new Error("page does not filter locally");
 	type("");
-	if (ids.entries.children.length !== 2) throw new Error("empty query shows all");
+	fire();
+	if (posted.indexOf("search|") < 0 && posted.indexOf("search") < 0)
+		throw new Error("empty search must be posted");
 }
+
+// Paging: total > entries shows Show more, scroll/click posts once.
+{
+	window.Store.updateState(Object.assign({}, state, {total: 100}));
+	if (ids.more.className === "hidden") throw new Error("Show more should be visible");
+	ids.more.click();
+	ids.more.click();
+	if (posted.filter(p => p === "more").length !== 1)
+		throw new Error("more must be requested once per page");
+	// A longer list appends without rebuilding the head.
+	const head = ids.entries.children[0];
+	window.Store.updateState(Object.assign({}, state, {total: 100,
+		entries: state.entries.concat([{id: "x", kind: "app", name: "X",
+			summary: "", category: "Internet", installed: false,
+			requires: "", icon: ""}])}));
+	if (ids.entries.children.length !== 3 || ids.entries.children[0] !== head)
+		throw new Error("append must keep existing nodes");
+	// A changed flag replaces just that node.
+	const second = ids.entries.children[1];
+	window.Store.updateState(Object.assign({}, state, {total: 3,
+		entries: [state.entries[0], Object.assign({}, state.entries[1],
+			{installed: false}), ids.entries.children.length ? {id: "x", kind: "app",
+			name: "X", summary: "", category: "Internet", installed: false,
+			requires: "", icon: ""} : null]}));
+	if (ids.entries.children[0] !== head || ids.entries.children[1] === second)
+		throw new Error("only the changed entry is rebuilt");
+	if (ids.more.className !== "hidden") throw new Error("Show more hides at the end");
+	window.Store.updateState(state);
+}
+
+// Detail comes from the separate detail field when off the page.
+window.Store.updateState(Object.assign({}, state, {info: "far",
+	detail: {id: "far", kind: "app", name: "Far", summary: "s",
+		category: "Internet", installed: true, requires: "", icon: ""}}));
+if (ids["detail-name"].textContent !== "Far")
+	throw new Error("detail entry not used");
+window.Store.updateState(state);
+ids["detail-back"].click();
+
+window.Store.updateState(Object.assign({}, state, {info: "netplus"}));
 
 // Press Install -> message posted.
 ids["detail-action"].click();

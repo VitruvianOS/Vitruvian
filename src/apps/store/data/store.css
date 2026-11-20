@@ -55,6 +55,9 @@ body {
 
 #status {
 	min-height: 20px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	margin-bottom: 8px;
 	color: #555;
 	font-size: 13px;
@@ -185,3 +188,10 @@ body {
 #header { padding: 8px 12px; }
 #search { width: 100%; box-sizing: border-box; padding: 6px 10px;
 	font: inherit; border: 1px solid #aaa; border-radius: 6px; }
+
+#more {
+	display: block;
+	margin: 12px auto;
+	padding: 6px 16px;
+	cursor: pointer;
+}

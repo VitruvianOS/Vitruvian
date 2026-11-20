@@ -17,6 +17,9 @@
 //   select|<category>  category button pressed (apps section)
 //   install|<id>       Install pressed for a catalog entry
 //   remove|<id>        Remove pressed for a catalog entry
+//   search|<text>      search box (debounced by the page)
+//   more               next page of the current list
+//   info|<id>          detail view of an entry ("" to leave it)
 enum {
 	kStoreMsgReady		= 'stRd',
 	kStoreMsgSelect		= 'stSe',
@@ -34,7 +37,9 @@ enum {
 	kStoreMsgRefreshState	= 'stRf',
 	kStoreMsgScriptDone		= 'stJs',
 	kStoreMsgCatalogFetched	= 'stCf',
-	kStoreMsgIconsFetched	= 'stIf'
+	kStoreMsgIconsFetched	= 'stIf',
+	kStoreMsgFetchIcons		= 'stFi',
+	kStoreMsgInstalledLoaded	= 'stIl'
 };
 
 

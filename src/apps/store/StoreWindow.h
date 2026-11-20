@@ -9,13 +9,16 @@
 #include <String.h>
 #include <Window.h>
 
+#include <set>
+#include <string>
+
 #include <package/PackageDefs.h>
 
 #include "StoreCatalog.h"
 
 class BWebView;
 class PackageWorker;
-class VPackageRoster;
+class IconFetcher;
 
 
 class StoreWindow : public BWindow {
@@ -31,8 +34,6 @@ private:
 			void				_LoadCatalog();
 			void				_FetchCatalog();
 	static	status_t			_FetchThread(void* data);
-			void				_FetchIcons();
-	static	status_t			_IconThread(void* data);
 			void				_DispatchPageAction(const char* payload);
 			void				_ReloadStates();
 			void				_PushState();
@@ -42,23 +43,33 @@ private:
 			void				_FinishBusy();
 			void				_RunScript(const char* script);
 
-			BString				_BuildStateJSON();
+			BString				_BuildStateJSON(BMessage& missingIcons);
 			BString				_BuildCategoriesJSON();
-			BString				_EntryIconDataURI(StoreEntry* entry);
+			void				_AppendEntryJSON(BString& json,
+									StoreEntry* entry,
+									BMessage& missingIcons);
+			BString				_EntryIconURL(StoreEntry* entry,
+									BMessage& missingIcons);
+			bool				_Matches(StoreEntry* entry) const;
 			bool				_IsInstalled(StoreEntry* entry) const;
 
 			BWebView*			fWebView;
 			PackageWorker*		fWorker;
-			VPackageRoster*		fRoster;
+			IconFetcher*		fFetcher;
 			StoreCatalog		fCatalog;
 			// Selected section kind: "app", "component" or "data".
 			BString				fSection;
 			BString				fSelectedCategory;
 			BString				fInfoEntryId;
 			BMessage			fPendingApply;
-			// Debian package names reported installed by the roster.
-			BObjectList<BString, true>	fInstalledPackages;
-			int32				fPendingStateQueries;
+			// Lower-case search text and how many entries of the
+			// filtered list the page has asked for.
+			BString				fQuery;
+			int32				fLimit;
+			// Debian package names installed, from the dpkg status file.
+			std::set<std::string> fInstalled;
+			int32				fStateSeq;
+			BString				fLastIconRequest;
 			// In-flight install/remove, if any.
 			BString				fBusyEntryId;
 			int32				fBusyPercent;

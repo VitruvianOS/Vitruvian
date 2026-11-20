@@ -99,6 +99,7 @@ Server(
 		ServerWindow.cpp
 		SystemPalette.cpp
 		View.cpp
+		BufferAllocator.cpp
 		SwapChainGpuCopy.cpp
 		ViewSwapChain.cpp
 		VirtualOutput.cpp

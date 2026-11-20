@@ -135,6 +135,10 @@ public:
 			uint32				Height() const;
 			uint32				Stride() const;
 			uint32				Format() const;
+			uint64				Modifier() const;
+			// Whether the pages hold rows the CPU can read as they are.
+			bool				IsLinear() const;
+			uint32				Offset() const;
 			// GEM handle of the buffer object on the gbm device fd.
 			uint32				Handle() const;
 			// The fd of the gbm device the buffer object lives on.

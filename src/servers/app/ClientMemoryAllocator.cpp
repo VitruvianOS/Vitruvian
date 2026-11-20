@@ -520,6 +520,28 @@ GbmMemory::Format() const
 }
 
 
+uint64
+GbmMemory::Modifier() const
+{
+	return fBo != NULL ? gbm_bo_get_modifier(fBo) : 0;
+}
+
+
+bool
+GbmMemory::IsLinear() const
+{
+	const uint64 modifier = Modifier();
+	return modifier == 0 || modifier == 0x00ffffffffffffffULL;
+}
+
+
+uint32
+GbmMemory::Offset() const
+{
+	return fBo != NULL ? gbm_bo_get_offset(fBo, 0) : 0;
+}
+
+
 uint32
 GbmMemory::Handle() const
 {

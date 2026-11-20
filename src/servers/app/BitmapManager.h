@@ -13,6 +13,7 @@
 #include <List.h>
 #include <Locker.h>
 #include <OS.h>
+#include <SupportDefs.h>
 #include <Rect.h>
 
 
@@ -33,7 +34,11 @@ public:
 									int32 screen = B_MAIN_SCREEN_ID.id,
 									uint8* _allocationFlags = NULL,
 									const BRect* desktopFrame = NULL,
-									bool scanout = true);
+									bool scanout = true,
+									// A GPU-only buffer: it may be tiled
+									// with one of these. NULL is linear.
+									const uint64* modifiers = NULL,
+									int32 modifierCount = 0);
 
 			ServerBitmap*		CloneFromClient(area_id clientArea,
 									size_t areaOffset, BRect bounds,

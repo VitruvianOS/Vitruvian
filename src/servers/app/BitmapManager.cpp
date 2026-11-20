@@ -25,6 +25,7 @@
 #include "ServerTokenSpace.h"
 
 #include <BitmapPrivate.h>
+#include <BufferAllocator.h>
 #include <GbmArea.h>
 #include <ObjectList.h>
 #include <video_overlay.h>
@@ -44,6 +45,8 @@
 #include <string.h>
 #include <unistd.h>
 
+using BPrivate::BufferAllocator;
+using namespace BPrivate;
 using std::nothrow;
 
 
@@ -62,9 +65,14 @@ BitmapManager *gBitmapManager = NULL;
 */
 static uint8*
 _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
-	GbmMemory** _memory, uint32* _stride, bool scanout)
+	GbmMemory** _memory, uint32* _stride, bool scanout,
+	const uint64* modifiers, int32 modifierCount)
 {
 	if (device == NULL)
+		return NULL;
+
+	BufferAllocator* allocator = BufferAllocator::For(device);
+	if (allocator == NULL)
 		return NULL;
 
 	uint32 format;
@@ -86,23 +94,21 @@ _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 	if (width <= 0 || height <= 0)
 		return NULL;
 
-	// LINEAR keeps the server blitters and the client CPU access valid
-	// through the map. No WRITE: Mesa takes it as a dumb cursor buffer
-	// request and refuses anything else. SCANOUT lets planes take it, but
-	// pins it to VRAM on discrete cards, slow for the CPU to read.
-	struct gbm_bo* bo = NULL;
-	if (scanout) {
-		bo = gbm_bo_create(device, width, height, format,
-			GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT | GBM_BO_USE_LINEAR);
-	}
-	if (bo == NULL) {
-		bo = gbm_bo_create(device, width, height, format,
-			GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR);
-	}
+	// Bitmaps the client maps stay linear: the server blitters and the
+	// client CPU access go through the pages. Only a GPU-only buffer is
+	// given a modifier list. SCANOUT lets planes take it, but pins a
+	// linear one to VRAM on discrete cards, slow for the CPU to read.
+	const bool gpuOnly = modifiers != NULL && modifierCount > 0;
+	uint32 usage = gpuOnly ? kBufferUsageRender : kBufferUsageCpu;
+	if (scanout)
+		usage |= kBufferUsageScanout;
+	struct gbm_bo* bo = allocator->Allocate(width, height, format,
+		gpuOnly ? modifiers : NULL, gpuOnly ? modifierCount : 0, usage);
 	if (bo == NULL)
 		return NULL;
 
-	if (gbm_bo_get_modifier(bo) != 0) {
+	const bool linear = BufferAllocator::IsLinear(bo);
+	if (!linear && !gpuOnly) {
 		static bool reported = false;
 		if (!reported) {
 			reported = true;
@@ -111,25 +117,35 @@ _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 		}
 	}
 
+	// A tiled buffer is never mapped here: the readers detile through
+	// the allocator.
 	uint32 stride = 0;
 	void* mapData = NULL;
-	void* map = gbm_bo_map(bo, 0, 0, (uint32)width, (uint32)height,
-		GBM_BO_TRANSFER_READ | GBM_BO_TRANSFER_WRITE, &stride, &mapData);
-	if (map == NULL) {
-		gbm_bo_destroy(bo);
-		return NULL;
+	if (linear) {
+		void* map = BufferAllocator::Map(bo, 0, 0, (uint32)width,
+			(uint32)height, true, &stride, &mapData);
+		if (map == NULL) {
+			BufferAllocator::Destroy(bo);
+			return NULL;
+		}
 	}
 
-	int fd = gbm_bo_get_fd(bo);
+	int fd = BufferAllocator::Export(bo);
 	if (fd < 0) {
-		gbm_bo_unmap(bo, mapData);
-		gbm_bo_destroy(bo);
+		if (mapData != NULL)
+			BufferAllocator::Unmap(bo, mapData);
+		BufferAllocator::Destroy(bo);
 		return NULL;
 	}
 
 	// The map's stride belongs to its copy; the pages use the bo's own.
 	stride = gbm_bo_get_stride(bo);
 	size_t size = (size_t)stride * (size_t)height;
+	if (!linear) {
+		off_t total = lseek(fd, 0, SEEK_END);
+		if (total > 0 && (size_t)total > size)
+			size = (size_t)total;
+	}
 	void* areaBase = NULL;
 	area_id area = _kern_create_gbm_area("bitmap gbm buffer", &areaBase,
 		B_ANY_ADDRESS, size, B_NO_LOCK,
@@ -139,8 +155,9 @@ _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 	close(fd);
 
 	if (area < B_OK) {
-		gbm_bo_unmap(bo, mapData);
-		gbm_bo_destroy(bo);
+		if (mapData != NULL)
+			BufferAllocator::Unmap(bo, mapData);
+		BufferAllocator::Destroy(bo);
 		return NULL;
 	}
 
@@ -151,8 +168,9 @@ _AllocateGbmBuffer(struct gbm_device* device, ServerBitmap* bitmap,
 	if (memory == NULL || memory->Adopt(bo, area, base, mapData) != B_OK) {
 		delete memory;
 		delete_area(area);
-		gbm_bo_unmap(bo, mapData);
-		gbm_bo_destroy(bo);
+		if (mapData != NULL)
+			BufferAllocator::Unmap(bo, mapData);
+		BufferAllocator::Destroy(bo);
 		return NULL;
 	}
 
@@ -206,7 +224,8 @@ ServerBitmap*
 BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 	HWInterface& hwInterface, BRect bounds, color_space space, uint32 flags,
 	int32 bytesPerRow, int32 screen, uint8* _allocationFlags,
-	const BRect* desktopFrame, bool scanout)
+	const BRect* desktopFrame, bool scanout, const uint64* modifiers,
+	int32 modifierCount)
 {
 	BAutolock locker(fLock);
 
@@ -250,10 +269,10 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 		struct gbm_device* device = desktopFrame != NULL
 			? hwInterface.GbmDeviceFor(*desktopFrame) : first;
 		buffer = _AllocateGbmBuffer(device, bitmap, &gbmMemory, &gbmStride,
-			scanout);
+			scanout, modifiers, modifierCount);
 		if (buffer == NULL && device != first) {
 			buffer = _AllocateGbmBuffer(first, bitmap, &gbmMemory,
-				&gbmStride, scanout);
+				&gbmStride, scanout, NULL, 0);
 		}
 		if (buffer != NULL) {
 			bitmap->fMemory = gbmMemory;

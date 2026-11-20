@@ -15,6 +15,11 @@
 # (image builds, chroots) the symlinks are made and the rest is left
 # for the next run, which happens at boot through vos-attrs-sync.service.
 
+# Exec= is resolved as the session resolves it: dpkg and systemd run this
+# without the games directories.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
+export PATH
+
 MENU=/system/data/deskbar/menu/Applications
 STATE=/var/lib/vos/desktop
 MANIFEST=$STATE/manifest

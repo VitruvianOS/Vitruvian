@@ -7,20 +7,31 @@
 installed() {
 	dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
 }
+available() {
+	apt-cache policy "$1" 2>/dev/null | grep -q 'Candidate: [^(]'
+}
 want=
-installed libqt6gui6 && ! installed qt6-vos-plugin && want="$want qt6-vos-plugin"
-{ installed libqt5gui5t64 || installed libqt5gui5; } && ! installed qt5-vos-plugin \
-	&& want="$want qt5-vos-plugin"
-if ! installed xvitruvian-launcher; then
+needx=
+# a Qt with no native plugin to install falls back to xcb
+qt() {
+	! installed "$1" || installed "$2" && return
+	if available "$2"; then want="$want $2"; else needx=1; fi
+}
+qt libqt6gui6 qt6-vos-plugin
+qt libqt5gui5t64 qt5-vos-plugin
+qt libqt5gui5 qt5-vos-plugin
+if ! installed xvitruvian-launcher && [ -z "$needx" ]; then
 	# a GUI program: a package with a launcher entry that links an X-only toolkit
 	for p in $(apt-cache rdepends --installed libgtk-3-0t64 libgtk-2.0-0t64 libxt6t64 libtk8.6 2>/dev/null \
 			| sed -n 's/^  //p' | grep -v '^lib' | sort -u); do
 		if dpkg -L "$p" 2>/dev/null | grep -q '^/usr/share/applications/.*\.desktop$'; then
-			want="$want xvitruvian-launcher"
+			needx=1
 			break
 		fi
 	done
 fi
+# fonts: the X server's recommends are not installed, and Xt programs need them
+[ -n "$needx" ] && ! installed xvitruvian-launcher && want="$want xvitruvian-launcher xfonts-base"
 [ -n "$want" ] || exit 0
 systemctl is-active --quiet vos-x11-ensure.service 2>/dev/null && exit 0
 # the hook runs under apt's dpkg lock: install from a detached unit that waits for it

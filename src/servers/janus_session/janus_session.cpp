@@ -542,9 +542,9 @@ apply_session_env(const char* name)
 	setenv("XDG_SESSION_DESKTOP", "vos",       1);
 	// Native plugin first; Qt falls back to X when it is missing.
 	setenv("QT_QPA_PLATFORM", "haiku;xcb", 0);
-	// Socket-activated X server (xvitruvian-launcher); nothing runs until
-	// a client connects.
-	setenv("DISPLAY", ":0", 0);
+	// Debian's user PATH: games live outside the system default.
+	setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+		":/usr/local/games:/usr/games", 1);
 	// No portal backend runs here, and GTK blocks ~20s on its D-Bus
 	// activation otherwise.
 	setenv("GTK_USE_PORTAL", "0", 0);
@@ -1714,6 +1714,7 @@ run_signature_migration_for_user()
 //
 // The session owns the display socket and starts Xvitr on the first
 // connection. The socket outlives the server, so a later client restarts it.
+// The socket exists even without Xvitr installed; clients are then refused.
 
 static const char* const kXServer = "/usr/bin/Xvitr";
 static int    sXDisplay  = -1;
@@ -1923,7 +1924,7 @@ x_export_env()
 static void
 x_session_setup()
 {
-	if (sGreeterMode || access(kXServer, X_OK) != 0)
+	if (sGreeterMode)
 		return;
 
 	mkdir("/tmp/.X11-unix", 01777);
@@ -1999,6 +2000,23 @@ x_start_server()
 	sXPid = pid;
 	sXStarted = system_time();
 	printf("janus_session: Xvitr started pid=%d on %s\n", (int)pid, number);
+}
+
+
+// A client connected: start the server, or refuse the client without one.
+static void
+x_client_pending()
+{
+	if (access(kXServer, X_OK) == 0) {
+		x_start_server();
+		return;
+	}
+	int flags = fcntl(sXSocket, F_GETFL);
+	fcntl(sXSocket, F_SETFL, flags | O_NONBLOCK);
+	int fd;
+	while ((fd = accept4(sXSocket, NULL, NULL, SOCK_CLOEXEC)) >= 0)
+		close(fd);
+	fcntl(sXSocket, F_SETFL, flags);
 }
 
 
@@ -2390,7 +2408,7 @@ daemon_loop()
 				if ((pfds[i].revents & POLLIN) == 0)
 					continue;
 				if (i == xIndex) {
-					x_start_server();
+					x_client_pending();
 				} else if (pfds[i].fd == seat_fd) {
 					if (sSeat)
 						libseat_dispatch(sSeat, 0);

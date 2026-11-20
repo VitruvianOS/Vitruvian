@@ -31,6 +31,8 @@ private:
 			void				_LoadCatalog();
 			void				_FetchCatalog();
 	static	status_t			_FetchThread(void* data);
+			void				_FetchIcons();
+	static	status_t			_IconThread(void* data);
 			void				_DispatchPageAction(const char* payload);
 			void				_ReloadStates();
 			void				_PushState();
@@ -61,6 +63,7 @@ private:
 			BString				fBusyEntryId;
 			int32				fBusyPercent;
 			BString				fBusyStatus;
+			BString				fLastState;
 			bool				fDryRun;
 };
 

@@ -151,6 +151,7 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 
 	_LoadCatalog();
 	_FetchCatalog();
+	_FetchIcons();
 
 	// Defer the page load until the window (and the web view's
 	// bridge) is attached.
@@ -197,9 +198,14 @@ StoreWindow::MessageReceived(BMessage* message)
 				&& fBusyEntryId.IsEmpty()
 				&& fCatalog.LoadFromData(json) == B_OK) {
 				_ReloadStates();
+				_FetchIcons();
 			}
 			break;
 		}
+
+		case kStoreMsgIconsFetched:
+			_PushState();
+			break;
 
 		case B_WEB_PAGE_LOAD_FINISHED:
 			_ReloadStates();
@@ -488,6 +494,133 @@ StoreWindow::_FetchThread(void* data)
 }
 
 
+
+//	#pragma mark - Icons
+
+
+static status_t
+_iconCacheDir(BPath& path)
+{
+	status_t status = find_directory(B_USER_CACHE_DIRECTORY, &path, true);
+	if (status != B_OK)
+		return status;
+	return path.Append("store/icons");
+}
+
+
+static BString
+_iconURL(const BString& icon)
+{
+	if (!icon.IsEmpty() && icon[0] == '/')
+		return BString(kSiteURL) << icon;
+	return icon;
+}
+
+
+// Cache file name for an icon URL: every non-alphanumeric byte (but the
+// extension dot) becomes an underscore.
+static BString
+_iconFileName(const BString& url)
+{
+	BString name;
+	for (int32 i = 0; i < url.Length(); i++) {
+		char c = url[i];
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+			|| (c >= '0' && c <= '9') || c == '.';
+		name << (ok ? c : '_');
+	}
+	return name;
+}
+
+
+void
+StoreWindow::_FetchIcons()
+{
+	BMessage* urls = new BMessage();
+	for (int32 i = 0; i < fCatalog.CountEntries(); i++) {
+		BString url = _iconURL(fCatalog.EntryAt(i)->fIcon);
+		if (!url.IsEmpty())
+			urls->AddString("url", url.String());
+	}
+
+	thread_id thread = -1;
+	if (urls->HasString("url")) {
+		urls->AddMessenger("target", BMessenger(this));
+		thread = spawn_thread(&_IconThread, "store icons", B_LOW_PRIORITY,
+			urls);
+	}
+	if (thread >= 0)
+		resume_thread(thread);
+	else
+		delete urls;
+}
+
+
+// Downloads the icons not yet in the cache, one at a time; the page only
+// ever sees local files. Failures are silent (the letter is shown).
+status_t
+StoreWindow::_IconThread(void* data)
+{
+	BMessage* urls = (BMessage*)data;
+	BMessenger target;
+	urls->FindMessenger("target", &target);
+
+	BPath dir;
+	if (_iconCacheDir(dir) != B_OK) {
+		delete urls;
+		return B_ERROR;
+	}
+	create_directory(dir.Path(), 0755);
+
+	bool fetched = false;
+	const char* urlString;
+	for (int32 i = 0; urls->FindString("url", i, &urlString) == B_OK; i++) {
+		BString url(urlString);
+		BPath file(dir.Path(), _iconFileName(url).String());
+		BEntry existing(file.Path());
+		if (existing.Exists())
+			continue;
+
+		BMallocIO* output = new BMallocIO();
+		BUrl remote(urlString, true);
+		BHttpRequest* request = dynamic_cast<BHttpRequest*>(
+			BUrlProtocolRoster::MakeRequest(remote, output));
+		if (request == NULL) {
+			delete output;
+			continue;
+		}
+
+		thread_id requestThread = request->Run();
+		if (requestThread >= 0) {
+			status_t exitValue;
+			wait_for_thread(requestThread, &exitValue);
+			const BHttpResult& result
+				= static_cast<const BHttpResult&>(request->Result());
+			if (result.StatusCode() == 200 && output->BufferLength() > 0) {
+				BString temp(file.Path());
+				temp << ".part";
+				BFile out(temp.String(),
+					B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+				if (out.InitCheck() == B_OK
+					&& out.Write(output->Buffer(), output->BufferLength())
+						== (ssize_t)output->BufferLength()) {
+					BEntry part(temp.String());
+					if (part.Rename(file.Path(), true) == B_OK)
+						fetched = true;
+				}
+			}
+		}
+		delete request;
+		delete output;
+	}
+
+	if (fetched)
+		target.SendMessage(kStoreMsgIconsFetched);
+	delete urls;
+	return B_OK;
+}
+
+
 //	#pragma mark - Page load and actions
 
 
@@ -552,6 +685,7 @@ StoreWindow::_DispatchPageAction(const char* payload)
 	}
 
 	if (action == "ready") {
+		fLastState = "";
 		_PushState();
 	} else if (action == "section") {
 		if (argument == "app" || argument == "component"
@@ -697,14 +831,21 @@ StoreWindow::_IsInstalled(StoreEntry* entry) const
 BString
 StoreWindow::_EntryIconDataURI(StoreEntry* entry)
 {
-	// An icon from the site, by path or absolute URL.
-	if (!entry->fIcon.IsEmpty()) {
-		if (entry->fIcon[0] == '/')
-			return BString(kSiteURL) << entry->fIcon;
-		return entry->fIcon;
-	}
+	// Only icons already in the local cache; the page loads no remote
+	// resources.
+	BString url = _iconURL(entry->fIcon);
+	if (url.IsEmpty())
+		return BString();
 
-	return BString();
+	BPath dir;
+	if (_iconCacheDir(dir) != B_OK)
+		return BString();
+	BPath file(dir.Path(), _iconFileName(url).String());
+	BEntry check(file.Path());
+	if (!check.Exists())
+		return BString();
+
+	return BString("file://") << _jsonEscape(BString(file.Path()));
 }
 
 
@@ -808,7 +949,12 @@ StoreWindow::_BuildStateJSON()
 void
 StoreWindow::_PushState()
 {
+	BString state = _BuildStateJSON();
+	if (state == fLastState)
+		return;
+	fLastState = state;
+
 	BString script("Store.updateState(");
-	script << _BuildStateJSON() << ")";
+	script << state << ")";
 	_RunScript(script.String());
 }

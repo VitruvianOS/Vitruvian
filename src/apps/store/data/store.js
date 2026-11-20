@@ -10,6 +10,9 @@
 		categories: [], selected: "All", entries: [], busy: null };
 	var selectedEntryId = null;
 	var query = "";
+	// Cheap keys of what each region last rendered.
+	var keys = { sections: null, categories: null, entries: null,
+		detail: null };
 
 	function matches(entry) {
 		if (!query)
@@ -37,6 +40,10 @@
 	}
 
 	function renderSections() {
+		var key = state.sections.join(",") + "|" + state.section;
+		if (key === keys.sections)
+			return;
+		keys.sections = key;
 		var list = document.getElementById("sections");
 		list.textContent = "";
 		state.sections.forEach(function (kind) {
@@ -54,6 +61,11 @@
 
 	function renderCategories() {
 		var list = document.getElementById("categories");
+		var key = state.section + "|" + state.selected + "|"
+			+ state.categories.join(",");
+		if (key === keys.categories)
+			return;
+		keys.categories = key;
 		list.textContent = "";
 		// Only the apps section filters by category.
 		if (state.section !== "app" || state.categories.length < 2) {
@@ -74,10 +86,14 @@
 
 	function renderEntries() {
 		var list = document.getElementById("entries");
+		var shown = state.entries.filter(matches);
+		var key = JSON.stringify(shown);
+		if (key === keys.entries)
+			return;
+		keys.entries = key;
 		list.textContent = "";
-		state.entries.filter(matches).forEach(function (entry) {
-			var item = el("li", entry.id === selectedEntryId
-				? "selected" : "");
+		shown.forEach(function (entry) {
+			var item = el("li", "");
 
 			if (entry.icon) {
 				var img = el("img", "icon");
@@ -100,7 +116,6 @@
 			item.addEventListener("click", function () {
 				selectedEntryId = entry.id;
 				post("info", entry.id);
-				renderEntries();
 				renderDetail();
 				document.getElementById("content").scrollTop = 0;
 			});
@@ -119,6 +134,13 @@
 	function renderDetail() {
 		var detail = document.getElementById("detail");
 		var entry = currentEntry();
+		var key = entry ? JSON.stringify(entry) + "|" + (state.busy !== null)
+			: null;
+		if (key !== null && key === keys.detail) {
+			renderProgress();
+			return;
+		}
+		keys.detail = key;
 		var list = document.getElementById("entries");
 		if (!entry) {
 			detail.className = "hidden";

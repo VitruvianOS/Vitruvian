@@ -237,3 +237,15 @@ if (/https?:\/\//.test(html) || /https?:\/\//.test(js) || /https?:\/\//.test(css
 	throw new Error("template references a remote URL");
 
 console.log("page_test: all assertions passed");
+
+// An identical push does not rebuild the entry nodes.
+{
+	window.Store.updateState(JSON.parse(JSON.stringify(state)));
+	const first = ids.entries.children[0];
+	window.Store.updateState(JSON.parse(JSON.stringify(state)));
+	if (ids.entries.children[0] !== first)
+		throw new Error("unchanged state must not rebuild entries");
+	window.Store.updateState(Object.assign({}, state, {entries: [state.entries[1]]}));
+	if (ids.entries.children.length !== 1)
+		throw new Error("changed entries must rebuild");
+}

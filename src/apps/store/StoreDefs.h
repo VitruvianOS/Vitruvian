@@ -33,7 +33,8 @@ enum {
 	kStoreMsgLoadPage		= 'stLp',
 	kStoreMsgRefreshState	= 'stRf',
 	kStoreMsgScriptDone		= 'stJs',
-	kStoreMsgCatalogFetched	= 'stCf'
+	kStoreMsgCatalogFetched	= 'stCf',
+	kStoreMsgIconsFetched	= 'stIf'
 };
 
 

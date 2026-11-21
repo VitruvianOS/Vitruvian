@@ -9345,6 +9345,7 @@ DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
 				fLayers.push_back(scanout);
 				scanout->fComposeDest = destination;
 				const BRegion area(destination);
+				scanout->fWanted = visible;
 				scanout->fVisible = visible;
 				scanout->fVisible.IntersectWith(&area);
 				fLayersStale = true;
@@ -9573,8 +9574,12 @@ DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
 		// Never reached the screen.
 		const uint64_t replaced = scanout->fSerial;
 		scanout->fSource = scanout->fSources[fbId - 1];
-		if (destination != NULL)
+		if (destination != NULL && scanout->fComposeDest != *destination) {
+			const BRect oldDest = scanout->fComposeDest;
+			const BRegion oldVisible(scanout->fVisible);
 			scanout->fComposeDest = *destination;
+			_LayerChanged(scanout, oldDest, oldVisible);
+		}
 		scanout->fSerial = serial;
 		std::vector<int32> retired;
 		retired.swap(scanout->fRetired);
@@ -9610,6 +9615,30 @@ DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
 }
 
 
+// The clip follows the destination it was asked for, whichever came first;
+// what the layer covered or now covers is desktop damage.
+void
+DrmHWInterface::_LayerChanged(DrmScanout* scanout, const BRect& oldDest,
+	const BRegion& oldVisible)
+{
+	BRegion clipped(scanout->fWanted);
+	const BRegion area(scanout->fComposeDest);
+	clipped.IntersectWith(&area);
+	scanout->fVisible = clipped;
+
+	BRegion damage(oldVisible);
+	damage.Include(&clipped);
+	if (oldDest.IsValid())
+		damage.Include(oldDest);
+	if (scanout->fComposeDest.IsValid())
+		damage.Include(scanout->fComposeDest);
+	damage.OffsetBy(-fOrigin.x, -fOrigin.y);
+	fAccumulatedDirty.Include(&damage);
+	fLayersStale = true;
+	fNeedsFlip = true;
+}
+
+
 // A layer moved or shows another part: the next frame draws it so.
 status_t
 DrmHWInterface::_ScanoutMove(DrmScanout* scanout, const BRect* destination,
@@ -9622,23 +9651,18 @@ DrmHWInterface::_ScanoutMove(DrmScanout* scanout, const BRect* destination,
 	}
 
 	bool changed = false;
+	const BRect oldDest = scanout->fComposeDest;
+	const BRegion oldVisible(scanout->fVisible);
 	if (destination != NULL && scanout->fComposeDest != *destination) {
 		scanout->fComposeDest = *destination;
 		changed = true;
 	}
-	if (visible != NULL) {
-		BRegion clipped(*visible);
-		const BRegion area(scanout->fComposeDest);
-		clipped.IntersectWith(&area);
-		if (!(clipped == scanout->fVisible)) {
-			scanout->fVisible = clipped;
-			changed = true;
-		}
+	if (visible != NULL && !(*visible == scanout->fWanted)) {
+		scanout->fWanted = *visible;
+		changed = true;
 	}
-	if (changed) {
-		fLayersStale = true;
-		fNeedsFlip = true;
-	}
+	if (changed)
+		_LayerChanged(scanout, oldDest, oldVisible);
 	fDirtyMutex.Unlock();
 
 	if (changed)

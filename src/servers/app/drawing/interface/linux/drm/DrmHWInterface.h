@@ -254,6 +254,8 @@ private:
 			int32			fSource;
 			BRect			fComposeDest;
 			BRegion			fVisible;
+			// What the owner asked to show, before the destination cuts it.
+			BRegion			fWanted;
 			uint64_t		fSerial;
 };
 
@@ -990,6 +992,9 @@ private:
 									const BRect* destination = NULL);
 			// A layer moved or shows another part; fDirtyMutex held by
 			// neither.
+			void				_LayerChanged(DrmScanout* scanout,
+									const BRect& oldDest,
+									const BRegion& oldVisible);
 			status_t			_ScanoutMove(DrmScanout* scanout,
 									const BRect* destination,
 									const BRegion* visible);

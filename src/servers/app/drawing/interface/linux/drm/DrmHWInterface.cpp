@@ -357,6 +357,10 @@ DrmHWInterface::DrmHWInterface()
 	fDefersPublish = true;
 	memset(fAgeFbIds, 0, sizeof(fAgeFbIds));
 	pthread_mutex_init(&fFlipMutex, NULL);
+	pthread_mutex_init(&fNotifyMutex, NULL);
+	pthread_cond_init(&fNotifyCond, NULL);
+	fNotifying = 0;
+	pthread_mutex_init(&fGbmMutex, NULL);
 	pthread_mutex_init(&fCursorBlendMutex, NULL);
 	// Recursive: SetMode() holds it and calls SetCursor(), which re-takes
 	// it to copy the cursor plane ids out of the modeset node.
@@ -3908,15 +3912,18 @@ DrmHWInterface::_EventThreadMain()
 }
 
 
+static thread_local int32 sNotifyDepth = 0;
+
+
 #ifdef HAVE_GBM
 struct gbm_device*
 DrmHWInterface::GbmDevice()
 {
-	fDirtyMutex.Lock();
+	pthread_mutex_lock(&fGbmMutex);
 	if (fGbmDevice == NULL && fFd >= 0)
 		fGbmDevice = gbm_create_device(fFd);
 	struct gbm_device* device = fGbmDevice;
-	fDirtyMutex.Unlock();
+	pthread_mutex_unlock(&fGbmMutex);
 	return device;
 }
 #endif
@@ -4029,6 +4036,9 @@ DrmHWInterface::~DrmHWInterface()
 	modeset_cleanup(fFd);
 
 	pthread_mutex_destroy(&fFlipMutex);
+	pthread_mutex_destroy(&fNotifyMutex);
+	pthread_cond_destroy(&fNotifyCond);
+	pthread_mutex_destroy(&fGbmMutex);
 	pthread_mutex_destroy(&fCursorBlendMutex);
 	pthread_mutex_destroy(&fModesetMutex);
 	pthread_cond_destroy(&fFlipCond);
@@ -8263,6 +8273,7 @@ void
 DrmHWInterface::_NotifyPlanes(const std::vector<PlaneNote>& notes, bool shown,
 	bigtime_t when)
 {
+	std::vector<std::pair<OverlayPlaneListener*, uint64_t> > calls;
 	pthread_mutex_lock(&fOverlayMutex);
 	for (size_t i = 0; i < notes.size(); i++) {
 		OverlayPlaneInfo* info = _FindOverlayPlaneInfo(notes[i].output,
@@ -8271,12 +8282,19 @@ DrmHWInterface::_NotifyPlanes(const std::vector<PlaneNote>& notes, bool shown,
 				|| info->claimed->Listener() == NULL)
 			continue;
 
-		if (shown)
-			info->claimed->Listener()->PlaneShown(notes[i].serial, when);
-		else
-			info->claimed->Listener()->PlaneDropped(notes[i].serial);
+		calls.push_back(std::make_pair(info->claimed->Listener(),
+			notes[i].serial));
 	}
+	_NotifyBegin((int32)calls.size());
 	pthread_mutex_unlock(&fOverlayMutex);
+
+	for (size_t i = 0; i < calls.size(); i++) {
+		if (shown)
+			calls[i].first->PlaneShown(calls[i].second, when);
+		else
+			calls[i].first->PlaneDropped(calls[i].second);
+	}
+	_NotifyEnd((int32)calls.size());
 }
 
 
@@ -9474,26 +9492,26 @@ DrmHWInterface::_ScanoutDetach(DrmScanout* only, bool notify)
 			fNeedsFlip = true;
 		}
 		if (only != NULL) {
+			if (notify)
+				_NotifyBegin((int32)listeners.size());
 			fDirtyMutex.Unlock();
 			if (removed)
 				_Wake();
-			if (notify) {
-				for (size_t i = 0; i < listeners.size(); i++)
-					listeners[i]->PlaneLost();
-			}
+			if (notify)
+				_NotifyLost(listeners);
 			return;
 		}
 	}
 
 	DrmScanout* scanout = fScanout;
 	if (scanout == NULL || (only != NULL && only != scanout)) {
+		if (notify)
+			_NotifyBegin((int32)listeners.size());
 		fDirtyMutex.Unlock();
 		if (!listeners.empty()) {
 			_Wake();
-			if (notify) {
-				for (size_t i = 0; i < listeners.size(); i++)
-					listeners[i]->PlaneLost();
-			}
+			if (notify)
+				_NotifyLost(listeners);
 		}
 		return;
 	}
@@ -9509,13 +9527,13 @@ DrmHWInterface::_ScanoutDetach(DrmScanout* only, bool notify)
 	fAccumulatedDirty.Include(full);
 	fBackStale.Include(full);
 	fNeedsFlip = true;
+	if (notify)
+		_NotifyBegin((int32)listeners.size());
 	fDirtyMutex.Unlock();
 
 	_Wake();
-	if (notify) {
-		for (size_t i = 0; i < listeners.size(); i++)
-			listeners[i]->PlaneLost();
-	}
+	if (notify)
+		_NotifyLost(listeners);
 }
 
 
@@ -9585,9 +9603,16 @@ DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
 		retired.swap(scanout->fRetired);
 		fLayersStale = true;
 		fNeedsFlip = true;
-		if (replaced != 0 && scanout->Listener() != NULL)
-			scanout->Listener()->PlaneDropped(replaced);
+		OverlayPlaneListener* dropped = replaced != 0
+			? scanout->Listener() : NULL;
+		if (dropped != NULL)
+			_NotifyBegin(1);
 		fDirtyMutex.Unlock();
+
+		if (dropped != NULL) {
+			dropped->PlaneDropped(replaced);
+			_NotifyEnd(1);
+		}
 
 		// An earlier set of buffers is not drawn any more.
 		for (size_t i = 0; i < retired.size(); i++)
@@ -9678,13 +9703,69 @@ DrmHWInterface::_NotifyScanout(uint64_t serial, bool shown, bigtime_t when)
 		return;
 
 	fDirtyMutex.Lock();
-	if (fScanout != NULL && fScanout->Listener() != NULL) {
-		if (shown)
-			fScanout->Listener()->PlaneShown(serial, when);
-		else
-			fScanout->Listener()->PlaneDropped(serial);
-	}
+	OverlayPlaneListener* listener = fScanout != NULL
+		? fScanout->Listener() : NULL;
+	if (listener != NULL)
+		_NotifyBegin(1);
 	fDirtyMutex.Unlock();
+
+	if (listener == NULL)
+		return;
+
+	if (shown)
+		listener->PlaneShown(serial, when);
+	else
+		listener->PlaneDropped(serial);
+	_NotifyEnd(1);
+}
+
+
+// Counted by _NotifyBegin() already.
+void
+DrmHWInterface::_NotifyLost(const std::vector<OverlayPlaneListener*>& listeners)
+{
+	for (size_t i = 0; i < listeners.size(); i++)
+		listeners[i]->PlaneLost();
+	_NotifyEnd((int32)listeners.size());
+}
+
+
+void
+DrmHWInterface::_NotifyBegin(int32 count)
+{
+	if (count <= 0)
+		return;
+
+	pthread_mutex_lock(&fNotifyMutex);
+	fNotifying += count;
+	pthread_mutex_unlock(&fNotifyMutex);
+	sNotifyDepth += count;
+}
+
+
+void
+DrmHWInterface::_NotifyEnd(int32 count)
+{
+	if (count <= 0)
+		return;
+
+	sNotifyDepth -= count;
+	pthread_mutex_lock(&fNotifyMutex);
+	fNotifying -= count;
+	if (fNotifying <= 0)
+		pthread_cond_broadcast(&fNotifyCond);
+	pthread_mutex_unlock(&fNotifyMutex);
+}
+
+
+// Callbacks this thread is itself inside are not waited for.
+void
+DrmHWInterface::WaitOverlayNotifications()
+{
+	pthread_mutex_lock(&fNotifyMutex);
+	while (fNotifying > sNotifyDepth)
+		pthread_cond_wait(&fNotifyCond, &fNotifyMutex);
+	pthread_mutex_unlock(&fNotifyMutex);
 }
 
 
@@ -9695,18 +9776,26 @@ DrmHWInterface::_NotifyLayers(const std::vector<LayerNote>& notes, bool shown,
 	if (notes.empty())
 		return;
 
+	std::vector<std::pair<OverlayPlaneListener*, uint64_t> > calls;
 	fDirtyMutex.Lock();
 	for (size_t i = 0; i < notes.size(); i++) {
 		if (notes[i].serial == 0 || !_IsLayer(notes[i].layer)
 				|| notes[i].layer->Listener() == NULL)
 			continue;
 
-		if (shown)
-			notes[i].layer->Listener()->PlaneShown(notes[i].serial, when);
-		else
-			notes[i].layer->Listener()->PlaneDropped(notes[i].serial);
+		calls.push_back(std::make_pair(notes[i].layer->Listener(),
+			notes[i].serial));
 	}
+	_NotifyBegin((int32)calls.size());
 	fDirtyMutex.Unlock();
+
+	for (size_t i = 0; i < calls.size(); i++) {
+		if (shown)
+			calls[i].first->PlaneShown(calls[i].second, when);
+		else
+			calls[i].first->PlaneDropped(calls[i].second);
+	}
+	_NotifyEnd((int32)calls.size());
 }
 
 
@@ -9822,6 +9911,7 @@ DrmHWInterface::_ReleaseOverlayPlanes(uint32 output, bool dropInfo)
 			i--;
 		}
 	}
+	_NotifyBegin((int32)claimed.size());
 	pthread_mutex_unlock(&fOverlayMutex);
 
 	for (size_t i = 0; i < buffers.size(); i++)
@@ -9830,6 +9920,7 @@ DrmHWInterface::_ReleaseOverlayPlanes(uint32 output, bool dropInfo)
 	// The users hear of it, and go back to the painter.
 	for (size_t i = 0; i < claimed.size(); i++) {
 		claimed[i]->Abandon();
+		_NotifyEnd(1);
 		claimed[i]->Disable();
 		claimed[i]->Free();
 		delete claimed[i];

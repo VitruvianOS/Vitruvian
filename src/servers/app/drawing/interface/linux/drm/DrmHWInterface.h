@@ -450,6 +450,7 @@ public:
 									const BRect& destination,
 									const BRegion& visible);
 	virtual	void				ReleaseScanout(OverlayPlane* plane);
+	virtual	void				WaitOverlayNotifications();
 	virtual	bool				ScanoutCapable(int32 width, int32 height);
 	virtual	BRect				OverlayOutputFrame(const BRect& where);
 	virtual	bool				HasOverlayPlane(const BRect& where);
@@ -933,6 +934,12 @@ private:
 			// legacy channel/buffer shims Overlay goes through.
 			std::vector<OverlayPlaneInfo>	fOverlayPlanes;
 			pthread_mutex_t		fOverlayMutex;
+			// Listener callbacks run with no lock held; the count lets
+			// WaitOverlayNotifications() wait for the ones in flight.
+			pthread_mutex_t		fNotifyMutex;
+			pthread_cond_t		fNotifyCond;
+			int32				fNotifying;
+			pthread_mutex_t		fGbmMutex;
 			int32				fOverlayChannelCounter;
 			std::vector<overlay_token>	fOverlayChannels;
 			struct DrmOverlayBuffer {
@@ -1027,6 +1034,10 @@ private:
 			void				_ScanoutDetach(DrmScanout* only, bool notify);
 			void				_CheckScanout();
 			void				_FlushScanoutZombies();
+			void				_NotifyLost(const std::vector<
+									OverlayPlaneListener*>& listeners);
+			void				_NotifyBegin(int32 count);
+			void				_NotifyEnd(int32 count);
 			void				_NotifyScanout(uint64_t serial, bool shown,
 									bigtime_t when);
 			void				_NotifyLayers(

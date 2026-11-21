@@ -571,6 +571,12 @@ public:
 		fChain->NotifyReleased(keepFrom);
 	}
 
+	void WaitNotifications()
+	{
+		if (fHardware != NULL)
+			fHardware->WaitOverlayNotifications();
+	}
+
 	virtual void PlaneShown(uint64 serial, bigtime_t when)
 	{
 		fChain->NotifyShown(serial, when);
@@ -817,6 +823,9 @@ ViewSwapChain::~ViewSwapChain()
 
 	// The plane first: nothing may be reported once the buffers go.
 	Hide(false, "chain deleted");
+	// A callback may still be on its way to the consumer.
+	if (fPlane != NULL)
+		fPlane->WaitNotifications();
 
 	::Window* owner = fOwnerWindow;
 	if (owner != NULL)

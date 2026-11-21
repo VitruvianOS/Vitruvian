@@ -213,6 +213,9 @@ public:
 									const BRect& destination,
 									const BRegion& visible);
 	virtual void				ReleaseScanout(OverlayPlane* plane);
+	// Returns once no listener callback is running; a listener may be
+	// freed after it. Callers hold no lock a callback takes.
+	virtual void				WaitOverlayNotifications() {}
 	// Whether a chain of this size could fill an output.
 	virtual	bool				ScanoutCapable(int32 /*width*/,
 									int32 /*height*/)

@@ -457,6 +457,83 @@ BSurface::Present(const BRegion& region)
 }
 
 
+bool
+BSurface::ExternalReady()
+{
+	if (fInitStatus != B_OK || fChainFailed || !swap_chain_enabled())
+		return false;
+	if (fChain == NULL && _ChainBuffer() == NULL)
+		return false;
+	return fChain != NULL && fChain->IsValid() && !fChain->ExternalRefused();
+}
+
+
+bool
+BSurface::ExternalImport(int fd, const swap_chain_external& buffer,
+	int32* slot)
+{
+	return fChain != NULL && fChain->ExternalImport(fd, buffer, slot) == B_OK;
+}
+
+
+void
+BSurface::ExternalReset()
+{
+	if (fChain != NULL)
+		fChain->ExternalReset();
+}
+
+
+bool
+BSurface::PresentExternal(int32 slot, const BRegion& region)
+{
+	if (fChain == NULL)
+		return false;
+
+	BRect rects[kSwapChainMaxDamage];
+	int32 count = 0;
+	const BRect bounds(0, 0, fChain->Width() - 1, fChain->Height() - 1);
+	for (int32 i = 0; i < region.CountRects(); i++) {
+		const BRect rect = region.RectAt(i) & bounds;
+		if (!rect.IsValid())
+			continue;
+		if (count == kSwapChainMaxDamage) {
+			count = 0;
+			break;
+		}
+		rects[count++] = rect;
+	}
+	if (fChain->PresentExternal(slot, rects, count) != B_OK)
+		return false;
+
+	// The screen now holds what the chain buffers do not.
+	for (int32 i = 0; i < 4; i++)
+		fChainStale[i].Set(bounds);
+	return true;
+}
+
+
+bool
+BSurface::ExternalReleased(int32 slot) const
+{
+	return fChain != NULL && fChain->ExternalReleased(slot);
+}
+
+
+bool
+BSurface::ExternalRefused() const
+{
+	return fChain != NULL && fChain->ExternalRefused();
+}
+
+
+int32
+BSurface::RefreshPeriod() const
+{
+	return fChain != NULL ? fChain->RefreshPeriod() : 0;
+}
+
+
 // The chain buffer to render into, or NULL for the bitmap path.
 BBitmap*
 BSurface::_ChainBuffer()

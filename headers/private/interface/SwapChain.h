@@ -41,8 +41,13 @@ const uint64 kSwapModifierInvalid = 0x00ffffffffffffffULL;
 // Present flags.
 enum {
 	kPresentVsync			= 0x1,
-	kPresentHasFence		= 0x2
+	kPresentHasFence		= 0x2,
+	// The buffer is one imported with ExternalImport(); index is its slot.
+	kPresentExternal		= 0x4
 };
+
+// Imported buffers per chain.
+const int32 kSwapChainMaxExternal = 4;
 
 // Create usage flags.
 enum {
@@ -67,9 +72,24 @@ struct swap_chain_format {
 // Lives in a small area the server creates and the client clones.
 struct swap_chain_state {
 	int32		buffer[kSwapChainMaxBuffers];
+	// Imported buffers: free once the server shows something else.
+	int32		external[kSwapChainMaxExternal];
+	// Set by the server when it cannot take imported buffers.
+	int32		externalRefused;
 	int64		releaseTime;
 	int32		refreshPeriod;
 	int32		_reserved;
+};
+
+// A dma-buf the client renders into, shown without a copy.
+struct swap_chain_external {
+	uint32		width;
+	uint32		height;
+	uint32		fourcc;
+	uint32		stride;
+	uint32		offset;
+	// DRM modifier; kSwapModifierInvalid is the device's own layout.
+	uint64		modifier;
 };
 
 struct swap_chain_buffer {
@@ -135,6 +155,21 @@ public:
 									const BRect* damage = NULL,
 									int32 damageCount = 0, uint32 flags = 0);
 
+			// Hands a dma-buf to the server, which keeps its own reference.
+			// Slots are numbered in import order; B_NO_MEMORY when full.
+			status_t			ExternalImport(int fd,
+									const swap_chain_external& buffer,
+									int32* slot);
+			// Forgets every imported buffer.
+			void				ExternalReset();
+			// Shows an imported buffer. Takes no window lock.
+			status_t			PresentExternal(int32 slot,
+									const BRect* damage = NULL,
+									int32 damageCount = 0);
+			// The server shows something else now.
+			bool				ExternalReleased(int32 slot) const;
+			bool				ExternalRefused() const;
+
 			// Time and period of the latest release.
 			bigtime_t			LastReleaseTime() const;
 			int32				RefreshPeriod() const;
@@ -163,6 +198,9 @@ private:
 			uint32				fFormat;
 			uint32				fUsage;
 			int32				fNext;
+			// Where dma-bufs reach the server.
+			port_id				fImportPort;
+			int32				fExternalCount;
 			area_id				fStateArea;
 			swap_chain_state*	fState;
 			swap_chain_buffer	fBuffers[kSwapChainMaxBuffers];

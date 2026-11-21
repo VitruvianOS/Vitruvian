@@ -14,6 +14,7 @@
 #include <linux/dma-buf.h>
 
 #include <AppMisc.h>
+#include <PortFds.h>
 #include <GbmArea.h>
 #include <PortLink.h>
 #include <ServerProtocol.h>
@@ -38,6 +39,8 @@ SwapChain::SwapChain()
 	fFormat(0),
 	fUsage(0),
 	fNext(0),
+	fImportPort(-1),
+	fExternalCount(0),
 	fStateArea(-1),
 	fState(NULL),
 	fFormatCount(0)
@@ -327,6 +330,111 @@ SwapChain::PresentWithFence(int32 index, int fenceFd, const BRect* damage,
 }
 
 
+namespace {
+
+const int32 kImportCode = 'xImp';
+
+struct import_message {
+	// -1 forgets every buffer.
+	int32					slot;
+	swap_chain_external		buffer;
+};
+
+}
+
+
+status_t
+SwapChain::ExternalImport(int fd, const swap_chain_external& buffer,
+	int32* slot)
+{
+	if (!IsValid() || fImportPort < 0 || fd < 0 || slot == NULL)
+		return B_NO_INIT;
+	if (fExternalCount >= kSwapChainMaxExternal)
+		return B_NO_MEMORY;
+
+	import_message message;
+	message.slot = fExternalCount;
+	message.buffer = buffer;
+	status_t status = write_port_fds(fImportPort, kImportCode, &message,
+		sizeof(message), &fd, 1, B_RELATIVE_TIMEOUT, 100000);
+	if (status != B_OK)
+		return status;
+
+	__atomic_store_n(&fState->external[fExternalCount],
+		(int32)kSwapBufferFree, __ATOMIC_RELEASE);
+	*slot = fExternalCount++;
+	return B_OK;
+}
+
+
+void
+SwapChain::ExternalReset()
+{
+	if (!IsValid() || fImportPort < 0 || fExternalCount == 0)
+		return;
+
+	import_message message;
+	memset(&message, 0, sizeof(message));
+	message.slot = -1;
+	write_port_fds(fImportPort, kImportCode, &message, sizeof(message), NULL,
+		0, B_RELATIVE_TIMEOUT, 100000);
+	fExternalCount = 0;
+}
+
+
+status_t
+SwapChain::PresentExternal(int32 slot, const BRect* damage, int32 damageCount)
+{
+	if (!IsValid() || slot < 0 || slot >= fExternalCount || damageCount < 0
+			|| (damageCount > 0 && damage == NULL))
+		return B_BAD_VALUE;
+	if (fPresentLink == NULL)
+		return B_NO_INIT;
+
+	int32 expected = kSwapBufferFree;
+	if (!__atomic_compare_exchange_n(&fState->external[slot], &expected,
+			(int32)kSwapBufferShown, false, __ATOMIC_RELEASE,
+			__ATOMIC_RELAXED))
+		return B_BUSY;
+
+	if (damageCount > kSwapChainMaxDamage)
+		damageCount = 0;
+
+	PortLink* link = fPresentLink;
+	link->StartMessage(AS_VIEW_PRESENT);
+	link->Attach<int32>(fViewToken);
+	link->Attach<int32>(-fToken);
+	link->Attach<int32>(slot);
+	link->Attach<uint32>(kPresentExternal);
+	link->Attach<int32>(damageCount);
+	for (int32 i = 0; i < damageCount; i++)
+		link->Attach<BRect>(damage[i]);
+
+	status_t status = link->Flush(100000);
+	if (status != B_OK)
+		__atomic_store_n(&fState->external[slot], (int32)kSwapBufferFree,
+			__ATOMIC_RELEASE);
+	return status;
+}
+
+
+bool
+SwapChain::ExternalReleased(int32 slot) const
+{
+	return fState != NULL && slot >= 0 && slot < kSwapChainMaxExternal
+		&& __atomic_load_n(&fState->external[slot], __ATOMIC_ACQUIRE)
+			== kSwapBufferFree;
+}
+
+
+bool
+SwapChain::ExternalRefused() const
+{
+	return fState != NULL
+		&& __atomic_load_n(&fState->externalRefused, __ATOMIC_ACQUIRE) != 0;
+}
+
+
 bigtime_t
 SwapChain::LastReleaseTime() const
 {
@@ -356,6 +464,7 @@ SwapChain::_ReadReply(PortLink& link)
 	uint32 format = 0;
 	area_id stateArea = -1;
 	port_id windowPort = -1;
+	port_id importPort = -1;
 
 	link.Read<int32>(&token);
 	link.Read<int32>(&count);
@@ -372,11 +481,14 @@ SwapChain::_ReadReply(PortLink& link)
 		if (link.Read<uint32>(&buffers[i].offset) != B_OK)
 			return B_ERROR;
 	}
+	link.Read<port_id>(&importPort);
 	if (link.Read<port_id>(&windowPort) != B_OK || windowPort < 0)
 		return B_ERROR;
 
 	_Unmap();
 	fToken = token;
+	fImportPort = importPort;
+	fExternalCount = 0;
 	if (fPresentLink == NULL)
 		fPresentLink = new(std::nothrow) PortLink(windowPort);
 	if (fPresentLink == NULL)
@@ -431,6 +543,8 @@ SwapChain::_Unmap()
 	fStateArea = -1;
 	fState = NULL;
 	fCount = 0;
+	fImportPort = -1;
+	fExternalCount = 0;
 	delete fPresentLink;
 	fPresentLink = NULL;
 }

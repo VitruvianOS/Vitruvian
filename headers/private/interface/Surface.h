@@ -8,6 +8,7 @@
 
 #include <Rect.h>
 #include <Region.h>
+#include <SwapChain.h>
 #include <Window.h>
 
 
@@ -73,6 +74,20 @@ public:
 			BBitmap*			Buffer();
 			void				Present(BRect rect);
 			void				Present(const BRegion& region);
+
+			// Imported dma-bufs shown without a copy; all of these are
+			// false when the surface has no swap chain.
+			bool				ExternalReady();
+			bool				ExternalImport(int fd,
+									const swap_chain_external& buffer,
+									int32* slot);
+			void				ExternalReset();
+			bool				PresentExternal(int32 slot,
+									const BRegion& damage);
+			bool				ExternalReleased(int32 slot) const;
+			bool				ExternalRefused() const;
+			// Microseconds between server flips, 0 when unknown.
+			int32				RefreshPeriod() const;
 
 private:
 			void				_HandleUpdate();

@@ -6,6 +6,7 @@
 #define SWAP_CHAIN_GPU_COPY_H
 
 
+#include <Rect.h>
 #include <SupportDefs.h>
 
 class ServerBitmap;
@@ -23,11 +24,14 @@ public:
 	// 0 off, 1 forced, 2 chosen by measuring (VOS_SWAP_CHAIN_GPU_COPY).
 	static	int					Mode();
 
-	// Copies the whole buffer and waits for the GPU. False on any
-	// failure, after which the object stays unusable.
+	// Copies the buffer and waits for the GPU; only the area is mapped
+	// for reading when given. False on any failure, after which the
+	// object stays unusable.
 			bool				Copy(struct gbm_device* device,
-									ServerBitmap* bitmap);
-	// The copy, valid until the next Copy.
+									ServerBitmap* bitmap,
+									const BRect* area = NULL);
+	// The copy, valid until the next Copy; addressed from the buffer
+	// origin, but only the area is readable.
 			const uint8*		Bits() const { return fBits; }
 			uint32				Stride() const { return fStride; }
 			bigtime_t			Time() const { return fTime; }

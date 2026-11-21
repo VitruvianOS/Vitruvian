@@ -1436,9 +1436,23 @@ ViewSwapChain::_FlushFrame(DrawingEngine* engine)
 			|| fPath == kTrialGpu || fPath == kPathGpu;
 		if (wantGpu && hardware != NULL && fGpu == NULL)
 			fGpu = new(std::nothrow) SwapChainGpuCopy();
+		// Map only the damage when the shadow can take it.
+		BRect area;
+		bool partial = false;
+		{
+			BAutolock locker(fShadowLock);
+			partial = fShadowValid && fShadow.Get() != NULL
+				&& fShadow->Width() == bitmap->Width()
+				&& fShadow->Height() == bitmap->Height()
+				&& damage.CountRects() > 0;
+		}
+		if (partial) {
+			area = damage.Frame() & bitmap->Bounds();
+			partial = area.IsValid();
+		}
 		if (wantGpu && fGpu != NULL && !fGpu->Failed()
 				&& fGpu->Copy(hardware->GbmDeviceFor(destination),
-					bitmap.Get())) {
+					bitmap.Get(), partial ? &area : NULL)) {
 			gpu = fGpu;
 			gpuTime = fGpu->Time();
 		}

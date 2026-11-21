@@ -368,7 +368,8 @@ SwapChainGpuCopy::_Target(int32 width, int32 height)
 
 
 bool
-SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
+SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
+	const BRect* area)
 {
 	if (fBits != NULL && fBo != NULL)
 		BufferAllocator::Unmap(fBo, fMapData);
@@ -468,11 +469,23 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 		return _Fail("GL error");
 
 	uint32 stride = 0;
-	void* map = BufferAllocator::Map(fBo, 0, 0, width, height, false, &stride,
-		&fMapData);
+	uint32 left = 0;
+	uint32 top = 0;
+	uint32 mapWidth = width;
+	uint32 mapHeight = height;
+	if (area != NULL && area->IsValid() && area->left >= 0 && area->top >= 0
+			&& area->right < width && area->bottom < height) {
+		left = (uint32)area->left;
+		top = (uint32)area->top;
+		mapWidth = (uint32)area->right - left + 1;
+		mapHeight = (uint32)area->bottom - top + 1;
+	}
+	void* map = BufferAllocator::Map(fBo, left, top, mapWidth, mapHeight,
+		false, &stride, &fMapData);
 	if (map == NULL)
 		return _Fail("target map failed");
-	fBits = (const uint8*)map;
+	fBits = (const uint8*)((uintptr_t)map - (size_t)top * stride
+		- (size_t)left * 4);
 	fStride = stride;
 	fTime = system_time() - start;
 	eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
@@ -485,6 +498,9 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap)
 bool SwapChainGpuCopy::_Setup(struct gbm_device*) { return false; }
 bool SwapChainGpuCopy::_Target(int32, int32) { return false; }
 void SwapChainGpuCopy::_FreeTarget() {}
-bool SwapChainGpuCopy::Copy(struct gbm_device*, ServerBitmap*) { return false; }
+bool SwapChainGpuCopy::Copy(struct gbm_device*, ServerBitmap*, const BRect*)
+{
+	return false;
+}
 
 #endif

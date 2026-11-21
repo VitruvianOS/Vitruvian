@@ -112,5 +112,3 @@ set_target_properties(web PROPERTIES
 	VERSION 1.0.0
 	SOVERSION 1
 )
-
-install(TARGETS web DESTINATION /system/lib/)

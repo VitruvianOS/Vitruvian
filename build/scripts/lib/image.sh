@@ -186,7 +186,8 @@ apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
-apt-get remove -y vos nexus-dkms 2>/dev/null || true
+# Not vos: libxcb1 depends on it, removing it cascades through X, GL and PipeWire.
+apt-get remove -y nexus-dkms 2>/dev/null || true
 
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
@@ -204,7 +205,7 @@ apt-get install -y --no-install-recommends $_raw_pkgs
 _kver=\$(ls -1 /lib/modules | sort -V | tail -1)
 apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
 
-apt-get install -y --no-install-recommends --reinstall /localdeb/*.deb
+apt-get install -y --no-install-recommends --reinstall --allow-downgrades /localdeb/*.deb
 
 # The root is a copy of the build chroot; drop its -dev packages, autoremove keeps what dkms needs.
 for _p in $_raw_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
@@ -483,12 +484,13 @@ create_iso() {
 apt-get install -y --download-only --no-install-recommends dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
         || die "iso package download failed"
     chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
-apt-get remove -y vos nexus-dkms || true
+# Not vos: libxcb1 depends on it, removing it cascades through X, GL and PipeWire.
+apt-get remove -y nexus-dkms || true
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 apt-get install -y --no-install-recommends dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
-apt-get install -y --no-install-recommends --reinstall $_iso_debs
+apt-get install -y --no-install-recommends --reinstall --allow-downgrades $_iso_debs
 # Purge the build-only -dev packages, and what earlier vos versions pulled in
 # (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
 for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done

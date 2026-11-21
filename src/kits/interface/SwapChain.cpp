@@ -280,6 +280,17 @@ SwapChain::Present(int32 index, const BRect* damage, int32 damageCount,
 			__ATOMIC_RELAXED))
 		return B_BAD_VALUE;
 
+	// Flush the CPU writes before the server's GPU or cached reads.
+	if ((flags & kPresentHasFence) == 0) {
+		const int fd = BufferFd(index);
+		if (fd >= 0) {
+			struct dma_buf_sync sync = { DMA_BUF_SYNC_END
+				| DMA_BUF_SYNC_WRITE };
+			ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
+			close(fd);
+		}
+	}
+
 	if (fPresentLink == NULL)
 		return B_NO_INIT;
 

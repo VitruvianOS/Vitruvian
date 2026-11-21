@@ -60,25 +60,27 @@ static pthread_mutex_t sHolderLock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t sHolderCondition = PTHREAD_COND_INITIALIZER;
 static holder_request* sRequests = NULL;
 static bool sHolderStarted = false;
-static pid_t sHolderPid = 0;
+static pthread_once_t sForkHandlerOnce = PTHREAD_ONCE_INIT;
 
 
 // A forked child does not have the holder thread and may have inherited a
 // locked mutex, so it starts from scratch.
 static void
-reset_after_fork()
+reset_in_child()
 {
-	pid_t pid = getpid();
-	if (sHolderPid == pid)
-		return;
-
 	pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 	sHolderLock = lock;
 	sHolderCondition = condition;
 	sRequests = NULL;
 	sHolderStarted = false;
-	sHolderPid = pid;
+}
+
+
+static void
+install_fork_handler()
+{
+	pthread_atfork(NULL, NULL, reset_in_child);
 }
 
 
@@ -122,8 +124,8 @@ holder_thread(void*)
 static status_t
 submit_request(shared_liveness_state* state, int kind)
 {
+	pthread_once(&sForkHandlerOnce, install_fork_handler);
 	pthread_mutex_lock(&sHolderLock);
-	reset_after_fork();
 
 	if (!sHolderStarted) {
 		pthread_attr_t attr;

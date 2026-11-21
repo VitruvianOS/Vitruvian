@@ -2436,9 +2436,17 @@ daemon_loop()
 			}
 			// A zero exit is the registrar's logout quit dance; only
 			// deaths earn a supervised restart.
-			if (invalidate_app_by_pid(reaped, name, sizeof(name))
-					&& exit_warrants_restart(status))
-				schedule_restart(name);
+			if (invalidate_app_by_pid(reaped, name, sizeof(name))) {
+				if (exit_warrants_restart(status))
+					schedule_restart(name);
+				else if (!sShuttingDown && strcmp(name, "app_server") == 0) {
+					// Nobody asked for this exit (SIGTERM, say); the
+					// session has no window server, so end it.
+					fprintf(stderr, "janus_session: app_server exited "
+						"cleanly; ending session\n");
+					teardown_and_exit();
+				}
+			}
 		}
 	}
 

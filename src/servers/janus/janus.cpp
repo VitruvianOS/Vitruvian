@@ -1258,6 +1258,8 @@ struct SessionTransition {
 	bool greeter;
 };
 
+static volatile bool sTransitionActive = false;
+
 static void*
 session_transition_thread(void* arg)
 {
@@ -1287,6 +1289,7 @@ session_transition_thread(void* arg)
 	sSessionLock.Unlock();
 
 	sGreeterMode = t->greeter;
+	sTransitionActive = false;
 
 	delete t;
 	return NULL;
@@ -1300,9 +1303,11 @@ spawn_session_transition(const char* user, bool greeter)
 	strlcpy(t->user, user, sizeof(t->user));
 	t->greeter = greeter;
 
+	sTransitionActive = true;
 	pthread_t th;
 	if (pthread_create(&th, NULL, session_transition_thread, t) != 0) {
 		fprintf(stderr, "janus: session_transition_thread: %s\n", strerror(errno));
+		sTransitionActive = false;
 		delete t;
 		return;
 	}
@@ -1838,8 +1843,22 @@ daemon_loop()
 		usleep(200 * 1000);
 
 		pid_t reaped;
-		while (!sShuttingDown && (reaped = waitpid(-1, NULL, WNOHANG)) > 0)
+		while (!sShuttingDown && (reaped = waitpid(-1, NULL, WNOHANG)) > 0) {
 			invalidate_app_by_pid(reaped);
+
+			// A user session that ended on its own (its window server
+			// went away) returns to the greeter.
+			if (sTransitionActive)
+				continue;
+			sSessionLock.Lock();
+			bool ended = reaped == sSession.pid && !sSession.greeter;
+			sSessionLock.Unlock();
+			if (ended) {
+				fprintf(stderr, "janus: session pid=%d ended; "
+					"returning to greeter\n", (int)reaped);
+				spawn_session_transition("vos_login", true);
+			}
+		}
 	}
 }
 

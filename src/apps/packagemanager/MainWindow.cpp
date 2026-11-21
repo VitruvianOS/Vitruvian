@@ -30,6 +30,7 @@
 #include "ChangeSummaryWindow.h"
 #include "FilterView.h"
 #include "PackageInfo.h"
+#include "PackageErrors.h"
 #include "PackageInfoView.h"
 #include "PackageListView.h"
 #include "PackageWorker.h"
@@ -755,41 +756,7 @@ MainWindow::_HandleError(BMessage* message)
 	// would keep spinning over a window whose buttons are live again.
 	fStatusView->StopProgress();
 
-	BString text;
-	switch (error) {
-		case kAptErrorLockHeld:
-			text = B_TRANSLATE("Another program is using the package "
-				"system. Close it and try again.");
-			break;
-		case kAptErrorNoPrivilege:
-			text = B_TRANSLATE("Authentication failed or was cancelled. "
-				"Nothing was changed.");
-			break;
-		case kAptErrorBrokenDeps:
-			text = B_TRANSLATE("These changes cannot be applied without "
-				"breaking other packages.");
-			break;
-		case kAptErrorNetwork:
-			text = B_TRANSLATE("Could not reach the software repositories.");
-			break;
-		case kAptErrorSignature:
-			text = B_TRANSLATE("A repository failed its signature check. "
-				"Nothing was installed.");
-			break;
-		case kAptErrorDiskFull:
-			text = B_TRANSLATE("There is not enough free disk space.");
-			break;
-		case kAptErrorInterrupted:
-			text = B_TRANSLATE("The operation was interrupted.");
-			break;
-		case kAptErrorBatchTooLarge:
-			text = B_TRANSLATE("Too many packages are marked for a single "
-				"action. Apply changes in smaller batches.");
-			break;
-		default:
-			text = B_TRANSLATE("The operation failed.");
-			break;
-	}
+	BString text = PackageErrorText(error);
 
 	if (detail != NULL && detail[0] != '\0')
 		text << "\n\n" << detail;

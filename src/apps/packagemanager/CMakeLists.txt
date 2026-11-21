@@ -5,6 +5,7 @@ Application(PackageManager
 	ChangeSummaryWindow.cpp
 	FilterView.cpp
 	MainWindow.cpp
+	PackageErrors.cpp
 	PackageInfo.cpp
 	PackageInfoView.cpp
 	PackageListView.cpp

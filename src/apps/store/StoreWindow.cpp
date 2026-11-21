@@ -37,6 +37,7 @@
 
 using namespace BPrivate::Network;
 
+#include "PackageErrors.h"
 #include "PackageWorker.h"
 #include "PackageManagerDefs.h"
 #include "ChangeSummaryWindow.h"
@@ -535,42 +536,7 @@ StoreWindow::MessageReceived(BMessage* message)
 			message->FindInt32("error", &error);
 			message->FindString("detail", &detail);
 
-			BString text;
-			switch (error) {
-				case kAptErrorLockHeld:
-					text = B_TRANSLATE("Another program is using the package "
-						"system. Close it and try again.");
-					break;
-				case kAptErrorNoPrivilege:
-					text = B_TRANSLATE("Authentication failed or was "
-						"cancelled. Nothing was changed.");
-					break;
-				case kAptErrorBrokenDeps:
-					text = B_TRANSLATE("These changes cannot be applied "
-						"without breaking other packages.");
-					break;
-				case kAptErrorNetwork:
-					text = B_TRANSLATE("Could not reach the software "
-						"repositories.");
-					break;
-				case kAptErrorSignature:
-					text = B_TRANSLATE("A repository failed its signature "
-						"check. Nothing was installed.");
-					break;
-				case kAptErrorDiskFull:
-					text = B_TRANSLATE("There is not enough free disk space.");
-					break;
-				case kAptErrorInterrupted:
-					text = B_TRANSLATE("The operation was interrupted.");
-					break;
-				case kAptErrorBatchTooLarge:
-					text = B_TRANSLATE("Too many packages for a single "
-						"action.");
-					break;
-				default:
-					text = B_TRANSLATE("The operation failed.");
-					break;
-			}
+			BString text = PackageErrorText(error);
 			// The page gets the headline; the details go in the alert.
 			_SetStatus(text);
 			if (detail[0] != '\0')

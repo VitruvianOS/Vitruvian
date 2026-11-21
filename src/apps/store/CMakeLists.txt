@@ -9,6 +9,7 @@ Application(Store
 	StoreCatalog.cpp
 	../packagemanager/PackageWorker.cpp
 	../packagemanager/AptBackend.cpp
+	../packagemanager/PackageErrors.cpp
 	../packagemanager/PackageInfo.cpp
 	../packagemanager/ChangeSummaryWindow.cpp
 

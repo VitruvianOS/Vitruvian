@@ -43,7 +43,9 @@ enum {
 	kPresentVsync			= 0x1,
 	kPresentHasFence		= 0x2,
 	// The buffer is one imported with ExternalImport(); index is its slot.
-	kPresentExternal		= 0x4
+	kPresentExternal		= 0x4,
+	// The CPU wrote the buffer; flush it before the server reads.
+	kPresentCpuWrite		= 0x8
 };
 
 // Imported buffers per chain.

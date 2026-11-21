@@ -668,7 +668,8 @@ BSurface::_ChainPresent(const BRegion& region)
 	else if (count == 0)
 		return true;
 
-	if (fChain->Present(fChainIndex, rects, count) != B_OK)
+	if (fChain->Present(fChainIndex, rects, count, BPrivate::kPresentCpuWrite)
+			!= B_OK)
 		return true;
 
 	// Every other buffer misses what this one changed.

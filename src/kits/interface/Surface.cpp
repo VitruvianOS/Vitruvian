@@ -415,9 +415,8 @@ BBitmap*
 BSurface::Buffer()
 {
 	if (fInitStatus == B_OK && !fChainFailed && swap_chain_enabled()) {
-		BBitmap* chained = _ChainBuffer();
-		if (chained != NULL)
-			return chained;
+		// Chain buffers may live in VRAM: they are only written, from fBuffer.
+		_ChainBuffer();
 	}
 
 	BRect bounds(0, 0, fFrame.IntegerWidth(), fFrame.IntegerHeight());
@@ -568,7 +567,6 @@ BSurface::_ChainBuffer()
 		return NULL;
 	}
 
-	bool acquired = false;
 	if (fChainIndex < 0) {
 		const int32 index = fChain->Acquire(1000000);
 		if (index < 0) {
@@ -577,7 +575,6 @@ BSurface::_ChainBuffer()
 			return NULL;
 		}
 		fChainIndex = index;
-		acquired = true;
 	}
 
 	for (int32 i = 0; i < fChain->CountBuffers(); i++) {
@@ -605,33 +602,6 @@ BSurface::_ChainBuffer()
 		return NULL;
 	}
 
-	// The contents persist: bring the new buffer up to date, only where
-	// the presents since it was last shown changed something.
-	BBitmap* last = fLastIndex >= 0 ? fChainBitmaps[fLastIndex] : NULL;
-	if (acquired && last != NULL && fLastIndex != fChainIndex) {
-		const int32 bytesPerRow = min_c(bitmap->BytesPerRow(),
-			last->BytesPerRow());
-		const BRegion& stale = fChainStale[fChainIndex];
-		for (int32 i = 0; i < stale.CountRects(); i++) {
-			const BRect rect = stale.RectAt(i) & bitmap->Bounds();
-			if (!rect.IsValid())
-				continue;
-
-			const int32 offset = (int32)rect.left * 4;
-			const int32 length = min_c(((int32)rect.IntegerWidth() + 1) * 4,
-				bytesPerRow - offset);
-			if (length <= 0)
-				continue;
-
-			for (int32 y = (int32)rect.top; y <= (int32)rect.bottom; y++) {
-				memcpy((uint8*)bitmap->Bits() + y * bitmap->BytesPerRow()
-						+ offset,
-					(uint8*)last->Bits() + y * last->BytesPerRow() + offset,
-					length);
-			}
-		}
-		fChainStale[fChainIndex].MakeEmpty();
-	}
 	return bitmap;
 }
 
@@ -643,9 +613,7 @@ BSurface::_ChainPresent(const BRegion& region)
 		return false;
 
 	// Presenting again without drawing shows the same contents.
-	if (fChainIndex < 0 && _ChainBuffer() == NULL)
-		return false;
-	if (fChain == NULL || fChainIndex < 0)
+	if (Buffer() == NULL || fChain == NULL || fChainIndex < 0)
 		return false;
 
 	BRect rects[kSwapChainMaxDamage];
@@ -667,6 +635,37 @@ BSurface::_ChainPresent(const BRegion& region)
 		count = 0;
 	else if (count == 0)
 		return true;
+
+	// Write what changed, plus what this buffer missed, from system memory.
+	BRegion copy(fChainStale[fChainIndex]);
+	if (count == 0)
+		copy.Set(bounds);
+	else {
+		for (int32 i = 0; i < count; i++)
+			copy.Include(rects[i]);
+	}
+	BBitmap* src = fBuffer;
+	BBitmap* dst = fChainBitmaps[fChainIndex];
+	if (src == NULL || dst == NULL || src->Bounds() != bounds)
+		return false;
+	const int32 srcStride = src->BytesPerRow();
+	const int32 dstStride = dst->BytesPerRow();
+	for (int32 i = 0; i < copy.CountRects(); i++) {
+		const BRect rect = copy.RectAt(i) & bounds;
+		if (!rect.IsValid())
+			continue;
+
+		const int32 offset = (int32)rect.left * 4;
+		const int32 length = min_c(((int32)rect.IntegerWidth() + 1) * 4,
+			min_c(srcStride, dstStride) - offset);
+		if (length <= 0)
+			continue;
+
+		for (int32 y = (int32)rect.top; y <= (int32)rect.bottom; y++) {
+			memcpy((uint8*)dst->Bits() + y * dstStride + offset,
+				(uint8*)src->Bits() + y * srcStride + offset, length);
+		}
+	}
 
 	if (fChain->Present(fChainIndex, rects, count, BPrivate::kPresentCpuWrite)
 			!= B_OK)

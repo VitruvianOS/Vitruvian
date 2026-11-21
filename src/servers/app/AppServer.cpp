@@ -13,6 +13,8 @@
 
 #include "AppServer.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <syslog.h>
 #include <unistd.h>
@@ -46,7 +48,6 @@
 // Posted by the SIGUSR1 handler: print the display profile.
 static const int32 kMsgDumpDisplayProfile = 'dDsp';
 
-port_id gAppServerPort;
 BTokenSpace gTokenSpace;
 uint32 gAppServerSIMDFlags = 0;
 
@@ -316,6 +317,17 @@ AppServer::QuitRequested()
 		thread_id thread = desktop->Thread();
 		desktop->PostMessage(B_QUIT_REQUESTED);
 
+		// The desktop waits for its apps to quit; one that does not would
+		// hold us forever. Exiting closes the DRM fd, which drops master.
+		thread_info info;
+		for (int i = 0; i < 30
+				&& get_thread_info(thread, &info) == B_OK; i++)
+			snooze(100000);
+		if (get_thread_info(thread, &info) == B_OK) {
+			syslog(LOG_WARNING, "desktop did not quit, exiting\n");
+			_exit(EXIT_SUCCESS);
+		}
+
 		status_t status;
 		wait_for_thread(thread, &status);
 	}
@@ -386,23 +398,37 @@ AppServer::_FindDesktop(uid_t userID, const char* targetScreen)
 //	#pragma mark -
 
 
-// Async-signal-safe: post B_QUIT_REQUESTED so the looper unwinds the
-// C++ teardown (Desktop -> HWInterface dtor -> drmDropMaster).
+// The handler only writes the signal number to a pipe; a thread posts
+// the BMessage. The quit unwinds Desktop -> HWInterface -> drmDropMaster.
+static int sSignalPipe[2] = { -1, -1 };
+
+
 static void
-signal_quit(int /*signo*/)
+signal_handler(int signo)
 {
-	if (gAppServerPort >= 0)
-		write_port_etc(gAppServerPort, B_QUIT_REQUESTED, NULL, 0,
-			B_RELATIVE_TIMEOUT, 0);
+	unsigned char byte = signo;
+	int saved = errno;
+	write(sSignalPipe[1], &byte, 1);
+	errno = saved;
 }
 
 
-static void
-signal_dump(int /*signo*/)
+static status_t
+signal_thread(void*)
 {
-	if (gAppServerPort >= 0)
-		write_port_etc(gAppServerPort, kMsgDumpDisplayProfile, NULL, 0,
-			B_RELATIVE_TIMEOUT, 0);
+	for (;;) {
+		unsigned char signo;
+		ssize_t n = read(sSignalPipe[0], &signo, 1);
+		if (n < 0 && errno == EINTR)
+			continue;
+		if (n != 1)
+			break;
+		if (signo == SIGUSR1)
+			be_app_messenger.SendMessage(kMsgDumpDisplayProfile);
+		else
+			be_app_messenger.SendMessage(B_QUIT_REQUESTED);
+	}
+	return B_OK;
 }
 
 
@@ -411,20 +437,24 @@ main(int argc, char** argv)
 {
 	srand(real_time_clock_usecs());
 
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = signal_quit;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	sigaction(SIGTERM, &sa, NULL);
-	sigaction(SIGINT,  &sa, NULL);
-	sa.sa_handler = signal_dump;
-	sigaction(SIGUSR1, &sa, NULL);
-
 	status_t status;
 	AppServer* server = new AppServer(&status);
-	if (status == B_OK)
+	if (status == B_OK) {
+		if (pipe2(sSignalPipe, O_CLOEXEC) == 0) {
+			resume_thread(spawn_thread(signal_thread, "signals",
+				B_LOW_PRIORITY, NULL));
+
+			struct sigaction sa;
+			memset(&sa, 0, sizeof(sa));
+			sa.sa_handler = signal_handler;
+			sigemptyset(&sa.sa_mask);
+			sa.sa_flags = SA_RESTART;
+			sigaction(SIGTERM, &sa, NULL);
+			sigaction(SIGINT, &sa, NULL);
+			sigaction(SIGUSR1, &sa, NULL);
+		}
 		server->Run();
+	}
 
 	return status == B_OK ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -68,7 +68,6 @@ private:
 
 
 extern BitmapManager *gBitmapManager;
-extern port_id gAppServerPort;
 
 
 #endif	/* APP_SERVER_H */

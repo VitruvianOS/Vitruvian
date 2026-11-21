@@ -926,6 +926,46 @@ negotiate_modifiers(::HWInterface* hardware, const BRect& where,
 }
 
 
+// A new buffer holds the view color until the client draws, never
+// whatever the allocator left in it.
+static void
+fill_new_buffer(ServerBitmap* bitmap, rgb_color color)
+{
+	if (color == B_TRANSPARENT_COLOR)
+		color = make_color(216, 216, 216);
+	const uint32 pixel = ((uint32)color.red << 16)
+		| ((uint32)color.green << 8) | color.blue | 0xff000000;
+	const int32 width = bitmap->Width();
+	const int32 height = bitmap->Height();
+
+	uint8* bits = bitmap->Bits();
+	size_t stride = bitmap->BytesPerRow();
+	void* mapData = NULL;
+	void* map = NULL;
+#ifdef HAVE_GBM
+	GbmMemory* memory = bitmap->GbmBuffer();
+	if (memory != NULL && !memory->IsLinear() && memory->BufferObject() != NULL) {
+		uint32 mapStride = 0;
+		map = BufferAllocator::Map(memory->BufferObject(), 0, 0, width, height,
+			true, &mapStride, &mapData);
+		bits = (uint8*)map;
+		stride = mapStride;
+	}
+#endif
+	if (bits != NULL) {
+		for (int32 y = 0; y < height; y++) {
+			uint32* row = (uint32*)(bits + y * stride);
+			for (int32 x = 0; x < width; x++)
+				row[x] = pixel;
+		}
+	}
+#ifdef HAVE_GBM
+	if (map != NULL)
+		BufferAllocator::Unmap(memory->BufferObject(), mapData);
+#endif
+}
+
+
 status_t
 ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 {
@@ -999,6 +1039,8 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 #ifdef HAVE_GBM
 		if (bitmap->GbmBuffer() == NULL)
 			status = B_NOT_SUPPORTED;
+		else if (fView != NULL)
+			fill_new_buffer(bitmap, fView->ViewColor());
 #else
 		status = B_NOT_SUPPORTED;
 #endif

@@ -546,6 +546,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (stream != NULL
 				&& (!stream->IsValid() || !gInputManager->AddStream(stream))) {
 				delete stream;
+				syslog(LOG_ERR, "app_server: input_server stream rejected\n");
 				break;
 			}
 

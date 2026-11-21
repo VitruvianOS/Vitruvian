@@ -751,8 +751,11 @@ Desktop::Init()
 
 	fEventDispatcher.SetDesktop(this);
 	fEventDispatcher.SetTo(stream);
-	if (fEventDispatcher.InitCheck() != B_OK)
+	if (fEventDispatcher.InitCheck() != B_OK) {
+		syslog(LOG_WARNING, "app_server: no event stream yet, waiting for "
+			"input_server\n");
 		_LaunchInputServer();
+	}
 
 	fEventDispatcher.SetHWInterface(fVirtualScreen.HWInterface());
 

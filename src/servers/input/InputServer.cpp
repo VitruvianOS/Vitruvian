@@ -735,14 +735,15 @@ InputServer::MessageReceived(BMessage* message)
 		{
 			BApplication::MessageReceived(message);
 
-			// Only register if neither a registration is already in flight
-			// (fRegistrationPending) nor a port is already established
-			// (fAppServerPort >= 0). The race: ReadyToRun sends
-			// AS_REGISTER_INPUT_SERVER and sets fRegistrationPending, but
-			// _ASt can arrive before IS_ACQUIRE_INPUT comes back — if we
-			// re-send here, we get two IS_ACQUIRE_INPUT -> two ports -> the
-			// EventDispatcher blocks on the first port while input_server
-			// writes to the second.
+			// A registration in flight must not be repeated, two acquires
+			// give two ports and the dispatcher reads the wrong one. A
+			// restarted app_server has to be registered again.
+			team_info info;
+			if (fAppServerPort >= 0 && fAppServerTeam >= 0
+				&& get_team_info(fAppServerTeam, &info) != B_OK) {
+				_ReleaseInput(NULL);
+				fAppServerPort = -1;
+			}
 			if (!fRegistrationPending && fAppServerPort < 0) {
 				fRegistrationPending = true;
 				BPrivate::AppServerLink link;

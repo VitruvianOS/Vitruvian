@@ -1222,6 +1222,11 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	bool shown = false;
 	if (fPlane != NULL)
 		shown = fPlane->Show(frame);
+	if (shown) {
+		// The plane or layer shows it: the shadow no longer matches.
+		BAutolock shadowLocker(fShadowLock);
+		fShadowValid = false;
+	}
 	if (!shown && fCpu != NULL) {
 		// Newest frame wins; the copy waits for the next refresh.
 		if (_Post(frame, generation)) {
@@ -1745,6 +1750,11 @@ ViewSwapChain::Redraw(DrawingEngine* engine, const BRegion& region)
 				&& fShadow->Width() == bitmap->Width()
 				&& fShadow->Height() == bitmap->Height())
 			shadow = fShadow;
+	}
+	if (shadow.Get() == NULL && bitmap->ColorSpace() == B_RGB32) {
+		// The layer is gone: read the shown buffer back once.
+		SwapChainCpuRead reading(bitmap.Get());
+		shadow = _FillShadow(bitmap.Get(), BRegion(), NULL);
 	}
 	frame.source = shadow.Get();
 	CpuConsumer().Show(frame);

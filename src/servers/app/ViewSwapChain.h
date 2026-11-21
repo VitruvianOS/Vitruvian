@@ -193,6 +193,7 @@ private:
 			void				_ImportExternal(int fd, int32 slot,
 									const BPrivate::swap_chain_external& buffer);
 			void				_ResetExternal();
+			void				_Destroy(Generation* generation);
 			void				_Retire(Generation* generation, int32 index,
 									bigtime_t when);
 			void				_DropPending(uint64 below);

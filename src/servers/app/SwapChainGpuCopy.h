@@ -6,8 +6,11 @@
 #define SWAP_CHAIN_GPU_COPY_H
 
 
+#include <Locker.h>
 #include <Rect.h>
 #include <SupportDefs.h>
+
+#include <vector>
 
 class ServerBitmap;
 struct gbm_device;
@@ -30,6 +33,9 @@ public:
 			bool				Copy(struct gbm_device* device,
 									ServerBitmap* bitmap,
 									const BRect* area = NULL);
+	// Drops what is cached for a buffer that is going away; the GL
+	// objects go at the next Copy or with this object. Any thread.
+			void				Forget(const ServerBitmap* bitmap);
 	// The copy, valid until the next Copy; addressed from the buffer
 	// origin, but only the area is readable.
 			const uint8*		Bits() const { return fBits; }
@@ -38,6 +44,18 @@ public:
 			bool				Failed() const { return fFailed; }
 
 private:
+			struct Source {
+				const ServerBitmap*	bitmap;
+				void*				image;
+				uint32				texture;
+				int					fd;
+				bigtime_t			used;
+			};
+
+			Source*				_Source(ServerBitmap* bitmap, int32 width,
+									int32 height);
+			void				_FreeSource(Source& source);
+			void				_Purge();
 			bool				_Setup(struct gbm_device* device);
 			bool				_Target(int32 width, int32 height);
 			bool				_TryTarget(int32 width, int32 height,
@@ -52,7 +70,9 @@ private:
 			uint32				fBuffer;
 			uint32				fFrameBuffer;
 			uint32				fTexture;
-			uint32				fSource;
+			std::vector<Source>	fSources;
+			std::vector<const ServerBitmap*> fForgotten;
+			BLocker				fForgetLock;
 			void*				fTargetImage;
 			struct gbm_bo*		fBo;
 			int32				fWidth;

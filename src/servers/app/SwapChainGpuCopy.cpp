@@ -11,6 +11,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <Autolock.h>
 #include <BufferAllocator.h>
 #include <OS.h>
 
@@ -108,7 +109,6 @@ SwapChainGpuCopy::SwapChainGpuCopy()
 	fBuffer(0),
 	fFrameBuffer(0),
 	fTexture(0),
-	fSource(0),
 	fTargetImage(NULL),
 	fBo(NULL),
 	fWidth(0),
@@ -134,8 +134,9 @@ SwapChainGpuCopy::~SwapChainGpuCopy()
 			glDeleteProgram(fProgram);
 		if (fBuffer != 0)
 			glDeleteBuffers(1, &fBuffer);
-		if (fSource != 0)
-			glDeleteTextures(1, &fSource);
+		for (size_t i = 0; i < fSources.size(); i++)
+			_FreeSource(fSources[i]);
+		fSources.clear();
 		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
 			EGL_NO_CONTEXT);
 	}
@@ -263,8 +264,120 @@ SwapChainGpuCopy::_Setup(struct gbm_device* device)
 	glGenBuffers(1, &fBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, fBuffer);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-	glGenTextures(1, &fSource);
 	return true;
+}
+
+
+void
+SwapChainGpuCopy::Forget(const ServerBitmap* bitmap)
+{
+	BAutolock locker(fForgetLock);
+	try {
+		fForgotten.push_back(bitmap);
+	} catch (...) {
+	}
+}
+
+
+// Context current.
+void
+SwapChainGpuCopy::_FreeSource(Source& source)
+{
+	if (source.texture != 0)
+		glDeleteTextures(1, &source.texture);
+	if (source.image != NULL)
+		sDestroyImage(fDisplay, source.image);
+	if (source.fd >= 0)
+		close(source.fd);
+}
+
+
+// Context current.
+void
+SwapChainGpuCopy::_Purge()
+{
+	std::vector<const ServerBitmap*> forgotten;
+	{
+		BAutolock locker(fForgetLock);
+		forgotten.swap(fForgotten);
+	}
+	for (size_t i = 0; i < forgotten.size(); i++) {
+		for (size_t j = 0; j < fSources.size(); j++) {
+			if (fSources[j].bitmap != forgotten[i])
+				continue;
+			_FreeSource(fSources[j]);
+			fSources.erase(fSources.begin() + j);
+			break;
+		}
+	}
+}
+
+
+// Imports the buffer on first use; context current.
+SwapChainGpuCopy::Source*
+SwapChainGpuCopy::_Source(ServerBitmap* bitmap, int32 width, int32 height)
+{
+	static const size_t kMaxSources = 16;
+
+	for (size_t i = 0; i < fSources.size(); i++) {
+		if (fSources[i].bitmap == bitmap) {
+			fSources[i].used = system_time();
+			return &fSources[i];
+		}
+	}
+
+	// Stale entries only outlive a buffer when a Forget was missed.
+	if (fSources.size() >= kMaxSources) {
+		size_t oldest = 0;
+		for (size_t i = 1; i < fSources.size(); i++) {
+			if (fSources[i].used < fSources[oldest].used)
+				oldest = i;
+		}
+		_FreeSource(fSources[oldest]);
+		fSources.erase(fSources.begin() + oldest);
+	}
+
+	struct gbm_bo* bo = bitmap->GbmBuffer()->BufferObject();
+	Source source;
+	source.bitmap = bitmap;
+	source.image = NULL;
+	source.texture = 0;
+	source.fd = bitmap->GbmBuffer()->ExportFd();
+	source.used = system_time();
+	if (source.fd < 0) {
+		_Fail("source export failed");
+		return NULL;
+	}
+	buffer_info info;
+	BufferAllocator::Describe(bo, &info);
+	source.image = import_image(fDisplay, source.fd, width, height,
+		info.stride, info.modifier, has_modifier(info.modifier));
+	if (source.image == EGL_NO_IMAGE_KHR) {
+		source.image = NULL;
+		_FreeSource(source);
+		_Fail("source import failed");
+		return NULL;
+	}
+	glGenTextures(1, &source.texture);
+	glBindTexture(GL_TEXTURE_2D, source.texture);
+	sImageTarget(GL_TEXTURE_2D, source.image);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	if (glGetError() != GL_NO_ERROR) {
+		_FreeSource(source);
+		_Fail("source texture failed");
+		return NULL;
+	}
+	try {
+		fSources.push_back(source);
+	} catch (...) {
+		_FreeSource(source);
+		_Fail("out of memory");
+		return NULL;
+	}
+	return &fSources.back();
 }
 
 
@@ -396,29 +509,17 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
 	if (!_Target(width, height))
 		return false;
 
-	struct gbm_bo* bo = bitmap->GbmBuffer()->BufferObject();
-	const int fd = bitmap->GbmBuffer()->ExportFd();
-	if (fd < 0)
-		return _Fail("source export failed");
-	buffer_info source;
-	BufferAllocator::Describe(bo, &source);
-	EGLImageKHR image = import_image(fDisplay, fd, width, height,
-		source.stride, source.modifier, has_modifier(source.modifier));
-	if (image == EGL_NO_IMAGE_KHR) {
-		close(fd);
-		return _Fail("source import failed");
-	}
+	_Purge();
+	Source* source = _Source(bitmap, width, height);
+	if (source == NULL)
+		return false;
+	const int fd = source->fd;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, fFrameBuffer);
 	glViewport(0, 0, width, height);
 	glDisable(GL_BLEND);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, fSource);
-	sImageTarget(GL_TEXTURE_2D, image);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, source->texture);
 	glUseProgram(fProgram);
 	glBindBuffer(GL_ARRAY_BUFFER, fBuffer);
 	glEnableVertexAttribArray(0);
@@ -448,7 +549,6 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
 			}
 		}
 	}
-	close(fd);
 	if (!done && sCreateSync != NULL && sClientWait != NULL
 			&& sDestroySync != NULL) {
 		EGLSyncKHR sync = sCreateSync(fDisplay, EGL_SYNC_FENCE_KHR, NULL);
@@ -464,7 +564,6 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
 		glFinish();
 	const GLenum error = glGetError();
 	glBindTexture(GL_TEXTURE_2D, 0);
-	sDestroyImage(fDisplay, image);
 	if (error != GL_NO_ERROR)
 		return _Fail("GL error");
 
@@ -495,6 +594,7 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
 
 #else	// !HAVE_GBM
 
+void SwapChainGpuCopy::Forget(const ServerBitmap*) {}
 bool SwapChainGpuCopy::_Setup(struct gbm_device*) { return false; }
 bool SwapChainGpuCopy::_Target(int32, int32) { return false; }
 void SwapChainGpuCopy::_FreeTarget() {}

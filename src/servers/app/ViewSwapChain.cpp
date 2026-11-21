@@ -1580,7 +1580,7 @@ ViewSwapChain::_ResetExternal()
 	} catch (std::bad_alloc&) {
 		// Still referenced when shown or pending; leak nothing otherwise.
 		if (old != fShownGeneration && fPending.empty())
-			delete old;
+			_Destroy(old);
 	}
 }
 
@@ -2172,8 +2172,20 @@ ViewSwapChain::_Prune()
 
 		fApp->ReleaseSwapChain(generation->bytes, false);
 		fGenerations.erase(fGenerations.begin() + i);
-		delete generation;
+		_Destroy(generation);
 	}
+}
+
+
+// Lets the GPU copy drop what it cached for the buffers. fLock held.
+void
+ViewSwapChain::_Destroy(Generation* generation)
+{
+	if (fGpu != NULL) {
+		for (int32 i = 0; i < kSwapChainMaxBuffers; i++)
+			fGpu->Forget(generation->buffers[i].Get());
+	}
+	delete generation;
 }
 
 

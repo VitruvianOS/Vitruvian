@@ -559,7 +559,7 @@ BSurface::_ChainBuffer()
 		const swap_chain_format format = { kSwapFormatXRGB8888,
 			kSwapModifierLinear };
 		if (fChain == NULL || fChain->Create(fLink, fViewToken, width, height,
-				3, kSwapUsageRender, &format, 1) != B_OK)
+				4, kSwapUsageRender, &format, 1) != B_OK)
 			_ChainDelete();
 	}
 	if (fChain == NULL) {

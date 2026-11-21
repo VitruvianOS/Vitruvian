@@ -9,6 +9,8 @@
 
 #include "../kernel/nexus/nexus/nexus.h"
 
+#include <PortFds.h>
+
 
 port_id
 create_port(int32 queueLength, const char* name)
@@ -485,6 +487,95 @@ read_port_with_caps(port_id id, int32* msgCode,
 {
 	return read_port_with_caps_etc(id, msgCode, msgBuffer, bufferSize,
 		caps, capsCount, flags, timeout, NULL);
+}
+
+
+status_t
+write_port_fds(port_id id, int32 msgCode, const void* msgBuffer,
+	size_t bufferSize, const int* fds, int32 fdCount, uint32 flags,
+	bigtime_t timeout)
+{
+	CALLED();
+
+	if (unlikely(id < 0))
+		return B_BAD_PORT_ID;
+
+	if (unlikely((msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE
+			|| fdCount < 0 || fdCount > PORT_MAX_FDS
+			|| (fds == NULL && fdCount > 0))) {
+		return B_BAD_VALUE;
+	}
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (unlikely(nexus < 0))
+		return B_BAD_PORT_ID;
+
+	struct nexus_port_write_fds exchange;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = &msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = bufferSize;
+		exchange.fds = (const int32_t*)fds;
+		exchange.fd_count = fdCount;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
+
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_WRITE_FDS, &exchange) < 0))
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
+	return exchange.ret;
+}
+
+
+ssize_t
+read_port_fds(port_id id, int32* msgCode, void* msgBuffer, size_t bufferSize,
+	int* fds, int32* fdCount, uint32 flags, bigtime_t timeout)
+{
+	CALLED();
+
+	if (unlikely(id < 0))
+		return B_BAD_PORT_ID;
+
+	if (unlikely(fdCount == NULL || *fdCount < 0 || *fdCount > PORT_MAX_FDS
+			|| (fds == NULL && *fdCount > 0)
+			|| (msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE)) {
+		return B_BAD_VALUE;
+	}
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (unlikely(nexus < 0))
+		return B_BAD_PORT_ID;
+
+	struct nexus_port_read_fds exchange;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = bufferSize;
+		exchange.fds = (int32_t*)fds;
+		exchange.fd_count = *fdCount;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
+
+		if (unlikely(nexus_io(nexus, NEXUS_PORT_READ_FDS, &exchange) < 0))
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
+
+	if (exchange.ret == B_OK || exchange.ret == B_BUFFER_OVERFLOW)
+		*fdCount = (int32)exchange.fd_count;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
+
+	return exchange.size;
 }
 
 

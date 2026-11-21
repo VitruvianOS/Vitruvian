@@ -75,6 +75,8 @@ struct SwapChainFrame {
 	int32				count;
 	BRect				outputFrame;
 	bool				fullyVisible;
+	// The part of the destination that can be seen, when it was worked out.
+	const BRegion*		visible;
 	// Names the update in the plane callbacks.
 	uint64				serial;
 	// Set by a consumer that reports completion later.
@@ -101,6 +103,7 @@ struct SwapChainFrame {
 		hardware(NULL),
 		count(0),
 		fullyVisible(false),
+		visible(NULL),
 		serial(0),
 		async(false),
 		copyTime(0),

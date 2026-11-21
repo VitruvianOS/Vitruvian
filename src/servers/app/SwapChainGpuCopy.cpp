@@ -1140,18 +1140,13 @@ SwapChainCompose::_Draw(uint32 texture, const BRect& area, bool swizzle,
 
 int
 SwapChainCompose::Render(int32 width, int32 height, const uint8* bits,
-	uint32 stride, const BRegion* damage, int32 source,
-	const BRect& destination, uint32* _fb)
+	uint32 stride, const BRegion* damage, const Layer* layers, int32 count,
+	uint32* _fb)
 {
 	std::lock_guard<std::mutex> guard(fLock);
 	if (!_Make())
 		return kFailed;
 
-	const Texture* texture = source >= 0 ? _Find(source) : NULL;
-	if (source >= 0 && texture == NULL) {
-		_Release();
-		return kGone;
-	}
 	if (!_Targets(width, height)) {
 		_Fail("scanout buffers failed");
 		return kFailed;
@@ -1184,10 +1179,28 @@ SwapChainCompose::Render(int32 width, int32 height, const uint8* bits,
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 	_Draw(fDesktop, bounds, true, width, height);
-	if (texture != NULL) {
-		const BRect area = destination & bounds;
-		if (area.IsValid())
+	for (int32 i = 0; i < count; i++) {
+		const Texture* texture = layers[i].source >= 0
+			? _Find(layers[i].source) : NULL;
+		const BRect area = layers[i].destination & bounds;
+		if (texture == NULL || !area.IsValid())
+			continue;
+
+		// The quad is the whole destination; the scissor leaves what the
+		// visible region shows.
+		glEnable(GL_SCISSOR_TEST);
+		const BRegion* clip = layers[i].clip;
+		const int32 rects = clip != NULL ? clip->CountRects() : 0;
+		for (int32 j = 0; j < rects; j++) {
+			const BRect part = clip->RectAt(j) & area;
+			if (!part.IsValid())
+				continue;
+			glScissor((GLint)part.left, (GLint)part.top,
+				(GLsizei)(part.IntegerWidth() + 1),
+				(GLsizei)(part.IntegerHeight() + 1));
 			_Draw(texture->texture, area, false, width, height);
+		}
+		glDisable(GL_SCISSOR_TEST);
 	}
 	// The scanout waits on the buffer's own fence.
 	glFlush();
@@ -1227,7 +1240,7 @@ bool SwapChainCompose::Prepare(int32, int32, const uint64*, int32, uint32*)
 }
 void SwapChainCompose::Invalidate() {}
 int SwapChainCompose::Render(int32, int32, const uint8*, uint32,
-	const BRegion*, int32, const BRect&, uint32*)
+	const BRegion*, const Layer*, int32, uint32*)
 {
 	return kFailed;
 }

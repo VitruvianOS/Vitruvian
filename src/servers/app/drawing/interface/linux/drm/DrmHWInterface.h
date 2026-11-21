@@ -194,7 +194,8 @@ private:
 };
 
 // The primary plane scanning out a client's buffers instead of the desktop,
-// or, composed, a frame the GPU drew from the desktop and one buffer.
+// or, composed, a layer of a frame the GPU drew from the desktop and the
+// buffers of several chains.
 class DrmScanout : public OverlayPlane {
 public:
 							DrmScanout(DrmHWInterface* interface, int fd,
@@ -213,6 +214,8 @@ public:
 	virtual	color_space		ColorSpace() const { return B_RGB32; }
 	virtual	status_t		Configure(const BRect& source,
 								const BRect& destination);
+	virtual	status_t		SetVisible(const BRegion& region);
+	virtual	status_t		Retarget();
 	virtual	void			Disable() {}
 	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
 								uint32 height, uint32 fourcc, uint32 stride,
@@ -241,12 +244,30 @@ private:
 			uint32			fWidth;
 			uint32			fHeight;
 			OverlayPlaneListener* fListener;
-			// Composed: the sources in the compose object, the one shown
-			// and where; fDirtyMutex guards the three.
+			// Composed, a layer of the frame; fDirtyMutex guards these: the
+			// sources in the compose object, the one shown, where and
+			// through which part, the update not drawn yet, and the sources
+			// of an earlier set that go with the next show.
 			bool			fCompose;
 			std::vector<int32> fSources;
-			int32			fComposeIndex;
+			std::vector<int32> fRetired;
+			int32			fSource;
 			BRect			fComposeDest;
+			BRegion			fVisible;
+			uint64_t		fSerial;
+};
+
+// A composed layer and the update it staged, reported when it is on screen.
+struct LayerNote {
+	DrmScanout*	layer;
+	uint64_t	serial;
+};
+
+// A composed layer as the frame draws it.
+struct ComposeDraw {
+	int32		source;
+	BRect		destination;
+	BRegion		clip;
 };
 
 // A format and modifier a plane scans out (IN_FORMATS).
@@ -422,6 +443,10 @@ public:
 	virtual	status_t			AcquireScanoutForBitmap(ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
+	virtual status_t			AcquireComposeForBitmap(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination,
+									const BRegion& visible);
 	virtual	void				ReleaseScanout(OverlayPlane* plane);
 	virtual	bool				ScanoutCapable(int32 width, int32 height);
 	virtual	BRect				OverlayOutputFrame(const BRect& where);
@@ -798,9 +823,11 @@ private:
 				bool			cursorOnly;
 				// Plane updates riding this flip.
 				std::vector<PlaneNote> planes;
-				// Shows a client buffer, named by scanoutSerial.
+				// Shows a client buffer, named by scanoutSerial, or the
+				// composed layers, named by layers.
 				bool			scanout;
 				uint64_t		scanoutSerial;
+				std::vector<LayerNote> layers;
 			};
 			std::vector<FlipToken*> fFlipTokens;
 			pthread_cond_t		fFlipCond;
@@ -961,23 +988,33 @@ private:
 			status_t			_ScanoutShow(DrmScanout* scanout,
 									uint32_t fbId, uint64_t serial,
 									const BRect* destination = NULL);
+			// A layer moved or shows another part; fDirtyMutex held by
+			// neither.
 			status_t			_ScanoutMove(DrmScanout* scanout,
-									const BRect& destination);
+									const BRect* destination,
+									const BRegion* visible);
+			bool				_IsLayer(const DrmScanout* scanout) const;
 			status_t			_TestScanoutFb(uint32_t fbId, int32 width,
 									int32 height);
 			status_t			_AcquireDirect(ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
-			// The GPU draws the desktop and one client buffer into the
-			// frame, on the display GPU of the first output.
+			// The GPU draws the desktop and the client buffers of every
+			// layer into the frame, on the display GPU of the first output.
 			status_t			_AcquireCompose(ServerBitmap* bitmap,
 									OverlayPlane** _plane,
-									const BRect& destination);
+									const BRect& destination,
+									const BRegion& visible);
 			bool				_ComposeAllowed();
 			// Event thread, exclusive lock held; a SwapChainCompose result.
-			int					_ComposeSurface(int32 source,
-									const BRect& destination,
+			int					_ComposeSurface(
+									const std::vector<ComposeDraw>& layers,
 									const BRegion& damage, uint32_t* _fb);
+			// The composed scanouts, bottom to top; fDirtyMutex guards the
+			// list. Never together with fScanout.
+			std::vector<DrmScanout*> fLayers;
+			// A layer changed since the frame that drew it; fDirtyMutex.
+			bool				fLayersStale;
 			SwapChainCompose*	fCompose;
 			// Set when a composed scanout goes; the buffers follow once
 			// the desktop is on screen.
@@ -987,6 +1024,9 @@ private:
 			void				_FlushScanoutZombies();
 			void				_NotifyScanout(uint64_t serial, bool shown,
 									bigtime_t when);
+			void				_NotifyLayers(
+									const std::vector<LayerNote>& notes,
+									bool shown, bigtime_t when);
 			bool				_PrimaryAccepts(uint32 format,
 									uint64 modifier) const;
 

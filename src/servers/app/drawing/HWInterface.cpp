@@ -828,6 +828,17 @@ HWInterface::ReleaseOverlayPlane(OverlayPlane* /*plane*/)
 
 
 status_t
+HWInterface::AcquireComposeForBitmap(ServerBitmap* /*bitmap*/,
+	OverlayPlane** _plane, const BRect& /*destination*/,
+	const BRegion& /*visible*/)
+{
+	if (_plane != NULL)
+		*_plane = NULL;
+	return B_UNSUPPORTED;
+}
+
+
+status_t
 HWInterface::AcquireScanoutForBitmap(ServerBitmap* /*bitmap*/,
 	OverlayPlane** _plane, const BRect& /*destination*/)
 {

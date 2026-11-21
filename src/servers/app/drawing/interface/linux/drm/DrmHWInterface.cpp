@@ -342,6 +342,7 @@ DrmHWInterface::DrmHWInterface()
 	fScanoutFb(0),
 	fScanoutSerial(0),
 	fScanoutOnScreen(false),
+	fLayersStale(false),
 	fCompose(NULL),
 	fComposeTrim(false),
 	fVRRSupported(false),
@@ -2930,6 +2931,8 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	planes.swap(token->planes);
 	const bool scanout = token->scanout;
 	const uint64_t scanoutSerial = token->scanoutSerial;
+	std::vector<LayerNote> layers;
+	layers.swap(token->layers);
 	delete token;
 
 	if (output == 0 && scanout) {
@@ -2939,6 +2942,7 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		pthread_mutex_unlock(&hw->fFlipMutex);
 		hw->_NotifyPlanes(planes, true, when);
 		hw->_NotifyScanout(scanoutSerial, true, when);
+		hw->_NotifyLayers(layers, true, when);
 		hw->_Wake();
 		return;
 	}
@@ -3029,7 +3033,7 @@ DrmHWInterface::_FinishFrameSwap()
 	if (fComposeTrim.exchange(false) && fCompose != NULL) {
 		// Only when no composed scanout came back meanwhile.
 		fDirtyMutex.Lock();
-		const bool idle = fScanout == NULL;
+		const bool idle = fScanout == NULL && fLayers.empty();
 		fDirtyMutex.Unlock();
 		if (idle)
 			fCompose->ReleaseTargets();
@@ -3323,16 +3327,14 @@ DrmHWInterface::_EventThreadMain()
 			fDirtyMutex.Lock();
 			bool dirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty()
-				|| fScanoutFb != 0;
-			// A buffer on screen leaves the desktop alone, unless the GPU
-			// draws the desktop into it.
-			if (fScanout != NULL && !fScanout->fCompose
-					&& (fScanoutOnScreen || fScanoutFb != 0))
+				|| fScanoutFb != 0 || fLayersStale;
+			// A buffer on screen leaves the desktop alone.
+			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
 				dirty = fScanoutFb != 0;
 			// Only a refused cursor staged: sleep until its retry.
 			const bool cursorOnly = fAccumulatedDirty.CountRects() == 0
 				&& !fNeedsFlip && fStagedPlanes.empty()
-				&& fScanoutFb == 0 && fStagedCursor.valid;
+				&& fScanoutFb == 0 && !fLayersStale && fStagedCursor.valid;
 			// Nothing left to do: the next change must write the wake.
 			if (!dirty)
 				fWakeQueued = false;
@@ -3501,9 +3503,8 @@ DrmHWInterface::_EventThreadMain()
 			// Idle frames must not drain the drawing threads every poll.
 			fDirtyMutex.Lock();
 			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip
-				|| !fStagedPlanes.empty() || fScanoutFb != 0;
-			if (fScanout != NULL && !fScanout->fCompose
-					&& (fScanoutOnScreen || fScanoutFb != 0))
+				|| !fStagedPlanes.empty() || fScanoutFb != 0 || fLayersStale;
+			if (fScanout != NULL && (fScanoutOnScreen || fScanoutFb != 0))
 				wantFlip = fScanoutFb != 0;
 			fDirtyMutex.Unlock();
 			if (wantFlip) {
@@ -3551,12 +3552,12 @@ DrmHWInterface::_EventThreadMain()
 			bool scanHold = false;
 			uint32_t scanFb = 0;
 			uint64_t scanSerial = 0;
-			// The GPU draws the desktop with the buffer over it.
+			// The GPU draws the desktop with the layers over it.
 			bool composing = false;
 			bool composeFailed = false;
-			uint32_t composeToken = 0;
-			int32 composeSource = -1;
-			BRect composeDest;
+			bool layersStale = false;
+			std::vector<ComposeDraw> draws;
+			std::vector<LayerNote> notes;
 
 			fDirtyMutex.Lock();
 			if (fScanout != NULL) {
@@ -3564,23 +3565,37 @@ DrmHWInterface::_EventThreadMain()
 				scanSerial = fScanoutSerial;
 				fScanoutFb = 0;
 				fScanoutSerial = 0;
-				if (fScanout->fCompose) {
-					composing = true;
-					composeToken = scanFb;
-					scanFb = 0;
-					const int32 shown = fScanout->fComposeIndex;
-					if (shown >= 0 && (size_t)shown < fScanout->fSources.size())
-						composeSource = fScanout->fSources[shown];
-					composeDest = fScanout->fComposeDest;
-				} else {
-					scanFlip = scanFb != 0 && fAtomicSupported
-						&& fPrimaryPlaneId != 0;
-					scanHold = scanFb != 0 || fScanoutOnScreen;
+				scanFlip = scanFb != 0 && fAtomicSupported
+					&& fPrimaryPlaneId != 0;
+				scanHold = scanFb != 0 || fScanoutOnScreen;
+			} else if (!fLayers.empty()) {
+				composing = true;
+				layersStale = fLayersStale;
+				fLayersStale = false;
+				try {
+					for (size_t i = 0; i < fLayers.size(); i++) {
+						DrmScanout* layer = fLayers[i];
+						ComposeDraw draw;
+						draw.source = layer->fSource;
+						draw.destination = layer->fComposeDest;
+						draw.clip = layer->fVisible;
+						draws.push_back(draw);
+						if (layer->fSerial != 0) {
+							LayerNote note = { layer, layer->fSerial };
+							notes.push_back(note);
+							layer->fSerial = 0;
+						}
+					}
+				} catch (std::bad_alloc&) {
+					draws.clear();
+					notes.clear();
+					layersStale = fLayersStale = true;
 				}
-			}
+			} else
+				fLayersStale = false;
 			bool hasDirty = fAccumulatedDirty.CountRects() > 0
 				|| fNeedsFlip || fStagedCursor.valid || !fStagedPlanes.empty()
-				|| composeToken != 0;
+				|| layersStale;
 			if (scanHold)
 				hasDirty = scanFlip;
 			if (hasDirty) {
@@ -3625,26 +3640,21 @@ DrmHWInterface::_EventThreadMain()
 				const bigtime_t composeStart = miss_enabled()
 					? system_time() : 0;
 				uint32_t composed = 0;
-				const int result = _ComposeSurface(composeSource, composeDest,
-					damage, &composed);
+				const int result = _ComposeSurface(draws, damage, &composed);
 				if (composeStart != 0)
 					missCompose = system_time() - composeStart;
 				if (result == SwapChainCompose::kOk) {
 					scanFlip = true;
 					scanFb = composed;
 				} else {
-					// Not drawn: the damage rides the retry, and a scanout
-					// that cannot be drawn is given up for the CPU path.
+					// Not drawn: layers that cannot be drawn are given up
+					// for the CPU path.
 					composeFailed = true;
-					if (result == SwapChainCompose::kFailed) {
-						fprintf(stderr, "[drm] gpu compose lost, back to the "
-							"CPU path\n");
-						if (scanSerial != 0)
-							_NotifyScanout(scanSerial, false, 0);
-						scanSerial = 0;
-						composeToken = 0;
-						_ScanoutDetach(NULL, true);
-					}
+					fprintf(stderr, "[drm] gpu compose lost, back to the "
+						"CPU path\n");
+					_NotifyLayers(notes, false, 0);
+					notes.clear();
+					_ScanoutDetach(NULL, true);
 				}
 			}
 			if (hasDirty && !fDirectRender && !scanFlip && !composing) {
@@ -3687,6 +3697,12 @@ DrmHWInterface::_EventThreadMain()
 						token->cursorOnly = false;
 						token->scanout = scanFlip;
 						token->scanoutSerial = scanSerial;
+						if (composing) {
+							try {
+								token->layers = notes;
+							} catch (std::bad_alloc&) {
+							}
+						}
 						fFlipTokens.push_back(token);
 
 						if (atomic) {
@@ -3733,7 +3749,9 @@ DrmHWInterface::_EventThreadMain()
 					fNeedsFlip = false;
 					if (fScanout != NULL)
 						fScanoutOnScreen = true;
-					else {
+					else if (composing && !fLayers.empty()) {
+						// The layers are on screen.
+					} else {
 						// Released meanwhile: the desktop follows.
 						const BRect full(0, 0, fDisplayMode.virtual_width - 1,
 							fDisplayMode.virtual_height - 1);
@@ -3750,13 +3768,21 @@ DrmHWInterface::_EventThreadMain()
 				} else {
 					// Not shown: damage and cursor ride the retry.
 					fAccumulatedDirty.Include(&damage);
-					if (composing && composeToken != 0 && fScanout != NULL
-							&& fScanoutFb == 0) {
-						// The buffer was not shown: stage it again.
-						fScanoutFb = composeToken;
-						fScanoutSerial = scanSerial;
-						scanSerial = 0;
-					} else if (scanFlip && !composing && fScanout != NULL
+					if (composing) {
+						// Not shown: the layers are drawn again, and an
+						// update staged since replaces the one not shown.
+						fLayersStale = true;
+						for (size_t i = 0; i < notes.size(); i++) {
+							DrmScanout* layer = notes[i].layer;
+							bool listed = false;
+							for (size_t j = 0; j < fLayers.size(); j++)
+								listed |= fLayers[j] == layer;
+							if (listed && layer->fSerial == 0) {
+								layer->fSerial = notes[i].serial;
+								notes[i].serial = 0;
+							}
+						}
+					} else if (scanFlip && fScanout != NULL
 							&& fScanoutFb == 0) {
 						fScanoutFb = scanFb;
 						fScanoutSerial = scanSerial;
@@ -3782,8 +3808,10 @@ DrmHWInterface::_EventThreadMain()
 				fDirtyMutex.Unlock();
 				if (!lost.empty())
 					_NotifyPlanes(lost, false, 0);
-				if ((scanFlip || composing) && r != 0 && scanSerial != 0)
+				if (scanFlip && !composing && r != 0 && scanSerial != 0)
 					_NotifyScanout(scanSerial, false, 0);
+				if (composing && r != 0)
+					_NotifyLayers(notes, false, 0);
 			}
 
 			if (hasDirty && r == 0 && !usedAtomic) {
@@ -8860,7 +8888,8 @@ DrmScanout::DrmScanout(DrmHWInterface* interface, int fd, bool compose)
 	fHeight(0),
 	fListener(NULL),
 	fCompose(compose),
-	fComposeIndex(-1)
+	fSource(-1),
+	fSerial(0)
 {
 }
 
@@ -8979,7 +9008,41 @@ DrmScanout::Configure(const BRect&, const BRect& destination)
 	if (!fCompose)
 		return B_OK;
 
-	return fInterface->_ScanoutMove(this, destination);
+	return fInterface->_ScanoutMove(this, &destination, NULL);
+}
+
+
+status_t
+DrmScanout::SetVisible(const BRegion& region)
+{
+	if (!fCompose)
+		return B_UNSUPPORTED;
+
+	return fInterface->_ScanoutMove(this, NULL, &region);
+}
+
+
+// The next set of buffers is another size; what is shown stays until one of
+// them is.
+status_t
+DrmScanout::Retarget()
+{
+	if (!fCompose)
+		return B_UNSUPPORTED;
+
+	status_t status = B_OK;
+	fInterface->fDirtyMutex.Lock();
+	try {
+		for (size_t i = 0; i < fSources.size(); i++)
+			fRetired.push_back(fSources[i]);
+		fSources.clear();
+		fWidth = 0;
+		fHeight = 0;
+	} catch (std::bad_alloc&) {
+		status = B_NO_MEMORY;
+	}
+	fInterface->fDirtyMutex.Unlock();
+	return status;
 }
 
 
@@ -9021,7 +9084,16 @@ DrmHWInterface::AcquireScanoutForBitmap(ServerBitmap* bitmap,
 	const status_t status = _AcquireDirect(bitmap, _plane, destination);
 	if (status == B_OK)
 		return status;
-	return _AcquireCompose(bitmap, _plane, destination);
+	return _AcquireCompose(bitmap, _plane, destination,
+		BRegion(destination));
+}
+
+
+status_t
+DrmHWInterface::AcquireComposeForBitmap(ServerBitmap* bitmap,
+	OverlayPlane** _plane, const BRect& destination, const BRegion& visible)
+{
+	return _AcquireCompose(bitmap, _plane, destination, visible);
 }
 
 
@@ -9111,7 +9183,7 @@ DrmHWInterface::_AcquireDirect(ServerBitmap* bitmap, OverlayPlane** _plane,
 
 	if (status == B_OK) {
 		fDirtyMutex.Lock();
-		if (fScanout == NULL)
+		if (fScanout == NULL && fLayers.empty())
 			fScanout = scanout;
 		else
 			status = B_BUSY;
@@ -9164,10 +9236,11 @@ DrmHWInterface::_ComposeAllowed()
 
 
 // The primary plane shows a frame the GPU drew: the desktop, with the
-// buffer over it. Whole pixels, no scaling, on the first output only.
+// buffers of the layers over it, each where its window is visible. Whole
+// pixels, no scaling, on the first output only.
 status_t
 DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
-	const BRect& destination)
+	const BRect& destination, const BRegion& visible)
 {
 	if (_plane == NULL)
 		return B_BAD_VALUE;
@@ -9201,7 +9274,8 @@ DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
 		return B_BUSY;
 
 	fDirtyMutex.Lock();
-	const bool taken = fScanout != NULL;
+	const bool taken = fScanout != NULL || fLayers.size() >= 8;
+	const bool first = fLayers.empty();
 	fDirtyMutex.Unlock();
 	if (taken)
 		return B_BUSY;
@@ -9232,16 +9306,20 @@ DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
 	if (count == 0)
 		return B_UNSUPPORTED;
 
-	uint32 fb = 0;
-	if (!fCompose->Prepare((int32)fDisplayMode.virtual_width,
-			(int32)fDisplayMode.virtual_height, modifiers, count, &fb))
-		return B_UNSUPPORTED;
+	// The frame buffers exist once a layer is up.
+	status_t status = B_OK;
+	if (first) {
+		uint32 fb = 0;
+		if (!fCompose->Prepare((int32)fDisplayMode.virtual_width,
+				(int32)fDisplayMode.virtual_height, modifiers, count, &fb))
+			return B_UNSUPPORTED;
 
-	// Ask the driver before the desktop is given up.
-	status_t status = _TestScanoutFb(fb, (int32)fDisplayMode.virtual_width,
-		(int32)fDisplayMode.virtual_height);
-	if (status != B_OK)
-		return status;
+		// Ask the driver before the desktop is given up.
+		status = _TestScanoutFb(fb, (int32)fDisplayMode.virtual_width,
+			(int32)fDisplayMode.virtual_height);
+		if (status != B_OK)
+			return status;
+	}
 
 	DrmScanout* scanout = new(std::nothrow) DrmScanout(this, fFd, true);
 	if (scanout == NULL)
@@ -9259,11 +9337,22 @@ DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
 	close(fd);
 
 	if (status == B_OK) {
-		fCompose->Invalidate();
+		if (first)
+			fCompose->Invalidate();
 		fDirtyMutex.Lock();
-		if (fScanout == NULL)
-			fScanout = scanout;
-		else
+		if (fScanout == NULL && fLayers.size() < 8) {
+			try {
+				fLayers.push_back(scanout);
+				scanout->fComposeDest = destination;
+				const BRegion area(destination);
+				scanout->fVisible = visible;
+				scanout->fVisible.IntersectWith(&area);
+				fLayersStale = true;
+				fNeedsFlip = true;
+			} catch (std::bad_alloc&) {
+				status = B_NO_MEMORY;
+			}
+		} else
 			status = B_BUSY;
 		fDirtyMutex.Unlock();
 	}
@@ -9286,7 +9375,7 @@ DrmHWInterface::_AcquireCompose(ServerBitmap* bitmap, OverlayPlane** _plane,
 // Event thread, exclusive lock held: one frame into the buffer that is not
 // on screen, a SwapChainCompose result.
 int
-DrmHWInterface::_ComposeSurface(int32 source, const BRect& destination,
+DrmHWInterface::_ComposeSurface(const std::vector<ComposeDraw>& draws,
 	const BRegion& damage, uint32_t* _fb)
 {
 	SwapChainCompose* compose = fCompose;
@@ -9296,11 +9385,25 @@ DrmHWInterface::_ComposeSurface(int32 source, const BRect& destination,
 				!= (int32)fDisplayMode.virtual_height)
 		return SwapChainCompose::kFailed;
 
-	BRect local = destination;
-	local.OffsetBy(-fOrigin.x, -fOrigin.y);
+	// Output coordinates.
+	std::vector<ComposeDraw> local = draws;
+	std::vector<SwapChainCompose::Layer> layers;
+	try {
+		layers.resize(local.size());
+	} catch (std::bad_alloc&) {
+		return SwapChainCompose::kFailed;
+	}
+	for (size_t i = 0; i < local.size(); i++) {
+		local[i].destination.OffsetBy(-fOrigin.x, -fOrigin.y);
+		local[i].clip.OffsetBy(-fOrigin.x, -fOrigin.y);
+		layers[i].source = local[i].source;
+		layers[i].destination = local[i].destination;
+		layers[i].clip = &local[i].clip;
+	}
 	return compose->Render((int32)fPubSource.Width(),
 		(int32)fPubSource.Height(), (const uint8*)fPubSource.Bits(),
-		fPubSource.BytesPerRow(), &damage, source, local, _fb);
+		fPubSource.BytesPerRow(), &damage, layers.empty() ? NULL : &layers[0],
+		(int32)layers.size(), _fb);
 }
 
 
@@ -9316,7 +9419,10 @@ DrmHWInterface::ReleaseScanout(OverlayPlane* plane)
 	if (scanout->fCompose && fCompose != NULL) {
 		for (size_t i = 0; i < scanout->fSources.size(); i++)
 			fCompose->RemoveSource(scanout->fSources[i]);
+		for (size_t i = 0; i < scanout->fRetired.size(); i++)
+			fCompose->RemoveSource(scanout->fRetired[i]);
 		scanout->fSources.clear();
+		scanout->fRetired.clear();
 		fComposeTrim = true;
 	}
 
@@ -9334,18 +9440,65 @@ DrmHWInterface::ReleaseScanout(OverlayPlane* plane)
 
 
 // Drops the claim; the desktop is composed and flipped again. A claim
-// that is not scanout's is left alone.
+// that is not scanout's is left alone. Without a given scanout every claim
+// goes, composed layers included; with a layer, only that one.
 void
 DrmHWInterface::_ScanoutDetach(DrmScanout* only, bool notify)
 {
 	fDirtyMutex.Lock();
+	std::vector<OverlayPlaneListener*> listeners;
+	if (only == NULL || only->fCompose) {
+		bool removed = false;
+		for (size_t i = fLayers.size(); i-- > 0;) {
+			DrmScanout* layer = fLayers[i];
+			if (only != NULL && only != layer)
+				continue;
+
+			BRect area = layer->fComposeDest;
+			area.OffsetBy(-fOrigin.x, -fOrigin.y);
+			fAccumulatedDirty.Include(area);
+			if (layer->Listener() != NULL)
+				listeners.push_back(layer->Listener());
+			fLayers.erase(fLayers.begin() + i);
+			removed = true;
+		}
+		if (removed) {
+			if (fLayers.empty()) {
+				const BRect full(0, 0, fDisplayMode.virtual_width - 1,
+					fDisplayMode.virtual_height - 1);
+				fAccumulatedDirty.Include(full);
+				fBackStale.Include(full);
+			}
+			fLayersStale = !fLayers.empty();
+			fNeedsFlip = true;
+		}
+		if (only != NULL) {
+			fDirtyMutex.Unlock();
+			if (removed)
+				_Wake();
+			if (notify) {
+				for (size_t i = 0; i < listeners.size(); i++)
+					listeners[i]->PlaneLost();
+			}
+			return;
+		}
+	}
+
 	DrmScanout* scanout = fScanout;
 	if (scanout == NULL || (only != NULL && only != scanout)) {
 		fDirtyMutex.Unlock();
+		if (!listeners.empty()) {
+			_Wake();
+			if (notify) {
+				for (size_t i = 0; i < listeners.size(); i++)
+					listeners[i]->PlaneLost();
+			}
+		}
 		return;
 	}
 
-	OverlayPlaneListener* listener = scanout->Listener();
+	if (scanout->Listener() != NULL)
+		listeners.push_back(scanout->Listener());
 	fScanout = NULL;
 	fScanoutFb = 0;
 	fScanoutSerial = 0;
@@ -9358,8 +9511,10 @@ DrmHWInterface::_ScanoutDetach(DrmScanout* only, bool notify)
 	fDirtyMutex.Unlock();
 
 	_Wake();
-	if (notify && listener != NULL)
-		listener->PlaneLost();
+	if (notify) {
+		for (size_t i = 0; i < listeners.size(); i++)
+			listeners[i]->PlaneLost();
+	}
 }
 
 
@@ -9370,7 +9525,7 @@ DrmHWInterface::_CheckScanout()
 {
 	const char* why = NULL;
 	fDirtyMutex.Lock();
-	if (fScanout != NULL) {
+	if (fScanout != NULL || !fLayers.empty()) {
 		if (fVblankPacedFlip)
 			why = "paced flip";
 		else if (!fHardwareCursorEnabled)
@@ -9392,20 +9547,53 @@ DrmHWInterface::_CheckScanout()
 }
 
 
+bool
+DrmHWInterface::_IsLayer(const DrmScanout* scanout) const
+{
+	for (size_t i = 0; i < fLayers.size(); i++) {
+		if (fLayers[i] == scanout)
+			return true;
+	}
+	return false;
+}
+
+
 status_t
 DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
 	uint64_t serial, const BRect* destination)
 {
 	fDirtyMutex.Lock();
+	if (scanout->fCompose) {
+		if (!_IsLayer(scanout) || fbId == 0
+				|| (size_t)fbId > scanout->fSources.size()) {
+			fDirtyMutex.Unlock();
+			return B_NO_INIT;
+		}
+
+		// Never reached the screen.
+		const uint64_t replaced = scanout->fSerial;
+		scanout->fSource = scanout->fSources[fbId - 1];
+		if (destination != NULL)
+			scanout->fComposeDest = *destination;
+		scanout->fSerial = serial;
+		std::vector<int32> retired;
+		retired.swap(scanout->fRetired);
+		fLayersStale = true;
+		fNeedsFlip = true;
+		if (replaced != 0 && scanout->Listener() != NULL)
+			scanout->Listener()->PlaneDropped(replaced);
+		fDirtyMutex.Unlock();
+
+		// An earlier set of buffers is not drawn any more.
+		for (size_t i = 0; i < retired.size(); i++)
+			fCompose->RemoveSource(retired[i]);
+		_Wake();
+		return B_OK;
+	}
+
 	if (fScanout != scanout) {
 		fDirtyMutex.Unlock();
 		return B_NO_INIT;
-	}
-
-	if (scanout->fCompose) {
-		scanout->fComposeIndex = (int32)fbId - 1;
-		if (destination != NULL)
-			scanout->fComposeDest = *destination;
 	}
 
 	// Never reached the screen.
@@ -9422,21 +9610,39 @@ DrmHWInterface::_ScanoutShow(DrmScanout* scanout, uint32_t fbId,
 }
 
 
-// A composed buffer moved: the next frame draws it in its new place.
+// A layer moved or shows another part: the next frame draws it so.
 status_t
-DrmHWInterface::_ScanoutMove(DrmScanout* scanout, const BRect& destination)
+DrmHWInterface::_ScanoutMove(DrmScanout* scanout, const BRect* destination,
+	const BRegion* visible)
 {
 	fDirtyMutex.Lock();
-	if (fScanout != scanout) {
+	if (!_IsLayer(scanout)) {
 		fDirtyMutex.Unlock();
 		return B_NO_INIT;
 	}
 
-	scanout->fComposeDest = destination;
-	fNeedsFlip = true;
+	bool changed = false;
+	if (destination != NULL && scanout->fComposeDest != *destination) {
+		scanout->fComposeDest = *destination;
+		changed = true;
+	}
+	if (visible != NULL) {
+		BRegion clipped(*visible);
+		const BRegion area(scanout->fComposeDest);
+		clipped.IntersectWith(&area);
+		if (!(clipped == scanout->fVisible)) {
+			scanout->fVisible = clipped;
+			changed = true;
+		}
+	}
+	if (changed) {
+		fLayersStale = true;
+		fNeedsFlip = true;
+	}
 	fDirtyMutex.Unlock();
 
-	_Wake();
+	if (changed)
+		_Wake();
 	return B_OK;
 }
 
@@ -9453,6 +9659,28 @@ DrmHWInterface::_NotifyScanout(uint64_t serial, bool shown, bigtime_t when)
 			fScanout->Listener()->PlaneShown(serial, when);
 		else
 			fScanout->Listener()->PlaneDropped(serial);
+	}
+	fDirtyMutex.Unlock();
+}
+
+
+void
+DrmHWInterface::_NotifyLayers(const std::vector<LayerNote>& notes, bool shown,
+	bigtime_t when)
+{
+	if (notes.empty())
+		return;
+
+	fDirtyMutex.Lock();
+	for (size_t i = 0; i < notes.size(); i++) {
+		if (notes[i].serial == 0 || !_IsLayer(notes[i].layer)
+				|| notes[i].layer->Listener() == NULL)
+			continue;
+
+		if (shown)
+			notes[i].layer->Listener()->PlaneShown(notes[i].serial, when);
+		else
+			notes[i].layer->Listener()->PlaneDropped(notes[i].serial);
 	}
 	fDirtyMutex.Unlock();
 }

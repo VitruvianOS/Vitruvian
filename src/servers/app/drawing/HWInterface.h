@@ -206,6 +206,12 @@ public:
 	virtual status_t			AcquireScanoutForBitmap(ServerBitmap* bitmap,
 									OverlayPlane** _plane,
 									const BRect& destination);
+	// The GPU draws the desktop and the buffer, clipped to the visible
+	// region of the destination, into the frame; several chains may share it.
+	virtual status_t			AcquireComposeForBitmap(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination,
+									const BRegion& visible);
 	virtual void				ReleaseScanout(OverlayPlane* plane);
 	// Whether a chain of this size could fill an output.
 	virtual	bool				ScanoutCapable(int32 /*width*/,

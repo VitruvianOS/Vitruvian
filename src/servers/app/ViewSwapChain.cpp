@@ -441,21 +441,35 @@ public:
 		_CheckLost();
 
 		const BRect output = frame.outputFrame;
-		if (frame.hardware == NULL || !frame.fullyVisible || !output.IsValid()
+		// A partly seen buffer is for the GPU to compose.
+		const bool partial = !frame.fullyVisible;
+		const bool seen = !partial
+			|| (frame.visible != NULL && frame.visible->CountRects() > 0);
+		if (frame.hardware == NULL || !seen || !output.IsValid()
 				|| !output.Contains(frame.destination)
 				|| frame.count < 1) {
-			Release(frame.serial, !frame.fullyVisible ? "not visible"
-				: "geometry");
+			Release(frame.serial, !seen ? "not visible" : "geometry");
 			return false;
 		}
+		if (fPlane != NULL && partial && !fCompose)
+			Release(frame.serial, "partly covered");
 
 		// Another output needs a plane of its own.
 		if (fPlane != NULL && fOutputFrame != output)
 			Release(frame.serial, "moved to another output");
 
-		// The primary plane cannot be shared between two chains.
-		if (fPlane != NULL && fScan && fToken != frame.token)
-			Release(frame.serial, "resized");
+		// The primary plane cannot be shared between two chains, but
+		// composed layers can: a new size keeps the claim.
+		if (fPlane != NULL && fScan && fToken != frame.token) {
+			if (!fCompose || !_Retarget(frame))
+				Release(frame.serial, "resized");
+		}
+		if (fPlane != NULL && fCompose
+				&& (frame.destination.IntegerWidth() + 1
+						!= frame.bitmap->Width()
+					|| frame.destination.IntegerHeight() + 1
+						!= frame.bitmap->Height()))
+			Release(frame.serial, "scaled");
 
 		// A resized chain takes a second plane first, so the screen is
 		// never left without the picture between the two.
@@ -493,6 +507,8 @@ public:
 
 		const BRect source(0, 0, frame.bitmap->Width() - 1,
 			frame.bitmap->Height() - 1);
+		if (fCompose && frame.visible != NULL)
+			fPlane->SetVisible(*frame.visible);
 		if (fPlane->Show(frame.index, frame.serial, source, frame.destination)
 				!= B_OK) {
 			fRefused = frame.token;
@@ -524,6 +540,14 @@ public:
 
 		fDestination = destination;
 		return true;
+	}
+
+	// A composed layer shows this part of its destination.
+	void Clip(const BRegion& visible)
+	{
+		_CheckLost();
+		if (fPlane != NULL && fCompose)
+			fPlane->SetVisible(visible);
 	}
 
 	// Gives the plane back. Updates staged before keepFrom are dead.
@@ -607,11 +631,26 @@ private:
 #endif
 	}
 
+	// A composed layer takes the buffers of a new generation.
+	bool _Retarget(const SwapChainFrame& frame)
+	{
+		if (fPlane->Retarget() != B_OK)
+			return false;
+
+		fToken = frame.token;
+		fRegistered = 0;
+		return true;
+	}
+
 	bool _Claim(const SwapChainFrame& frame)
 	{
 #ifndef HAVE_GBM
 		return false;
 #else
+		// A plane shows the whole destination.
+		if (!frame.fullyVisible)
+			return _ClaimScanout(frame);
+
 		OverlayPlane* plane = NULL;
 		if (frame.hardware->AcquireOverlayPlaneForBitmap(frame.buffers[0],
 				&plane, frame.destination) != B_OK)
@@ -641,8 +680,14 @@ private:
 		return false;
 #else
 		OverlayPlane* plane = NULL;
-		if (frame.hardware->AcquireScanoutForBitmap(frame.buffers[0], &plane,
-				frame.destination) != B_OK)
+		const status_t claimed = frame.fullyVisible
+			? frame.hardware->AcquireScanoutForBitmap(frame.buffers[0], &plane,
+				frame.destination)
+			: frame.visible != NULL
+				? frame.hardware->AcquireComposeForBitmap(frame.buffers[0],
+					&plane, frame.destination, *frame.visible)
+				: B_UNSUPPORTED;
+		if (claimed != B_OK)
 			return false;
 
 		if (!_AddBuffers(plane, frame, 1)) {
@@ -1096,6 +1141,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	// Same buffer geometry on the same plane and nothing changed under
 	// the view: what the plane was given still holds.
 	BRegion lazyClipping;
+	BRegion visibleRegion;
 	PlaneConsumer* plane = fPlane;
 	const bool steady = clipping == NULL && plane != NULL && plane->Active()
 		&& plane->Token() == frame.token
@@ -1111,6 +1157,12 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 				= hardware->OverlayOutputFrame(frame.destination);
 			frame.fullyVisible = fOwnerWindow != NULL
 				&& fOwnerWindow->IsRectFullyVisible(fView, frame.destination);
+			if (fOwnerWindow != NULL) {
+				fOwnerWindow->VisibleViewRegion(fView, visibleRegion);
+				const BRegion area(frame.destination);
+				visibleRegion.IntersectWith(&area);
+				frame.visible = &visibleRegion;
+			}
 		}
 	}
 	frame.clipping = clipping != NULL ? clipping : &lazyClipping;
@@ -1748,7 +1800,20 @@ ViewSwapChain::Revalidate()
 	else if (!hardware->OverlayOutputFrame(destination).Contains(destination)
 			|| hardware->OverlayOutputFrame(destination) != plane->OutputFrame())
 		reason = "off output";
-	else if (!fOwnerWindow->IsRectFullyVisible(fView, destination))
+	else if (plane->Composed()) {
+		// A layer keeps what shows through; only a hidden one goes.
+		BRegion visible;
+		fOwnerWindow->VisibleViewRegion(fView, visible);
+		const BRegion area(destination);
+		visible.IntersectWith(&area);
+		if (visible.CountRects() == 0)
+			reason = "covered";
+		else if (destination != plane->Destination()
+				&& !plane->Follow(destination))
+			reason = "moved";
+		else
+			plane->Clip(visible);
+	} else if (!fOwnerWindow->IsRectFullyVisible(fView, destination))
 		reason = "covered";
 	else if (destination != plane->Destination()
 			&& !plane->Follow(destination))

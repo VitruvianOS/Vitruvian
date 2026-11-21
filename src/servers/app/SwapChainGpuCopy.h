@@ -89,18 +89,23 @@ private:
 };
 
 
-// Draws the desktop and one client buffer into scanout buffers on the
-// display GPU, so the buffer is never read back. The desktop stays a texture
+// Draws the desktop and client buffers into scanout buffers on the
+// display GPU, so no buffer is read back. The desktop stays a texture
 // that only takes the damaged rects. One context, used by whoever holds
 // the lock; any thread.
 class SwapChainCompose {
 public:
 	enum {
 		kOk,
-		// The source was removed meanwhile; nothing is wrong.
-		kGone,
 		kFailed
 	};
+
+			// A source drawn over the desktop, only where clip lets it.
+			struct Layer {
+				int32			source;
+				BRect			destination;
+				const BRegion*	clip;
+			};
 
 								SwapChainCompose(struct gbm_device* device);
 								~SwapChainCompose();
@@ -123,12 +128,13 @@ public:
 			void				Invalidate();
 			// Renders a frame into the buffer that is not on screen.
 			// bits is the desktop, damage what changed since the last
-			// call (all when null or after Invalidate), source an id or
-			// -1 for the desktop alone.
+			// call (all when null or after Invalidate); the layers go over
+			// it in order, one whose source was removed meanwhile is skipped.
 			int					Render(int32 width, int32 height,
 									const uint8* bits, uint32 stride,
-									const BRegion* damage, int32 source,
-									const BRect& destination, uint32* _fb);
+									const BRegion* damage,
+									const Layer* layers, int32 count,
+									uint32* _fb);
 			// The frame last rendered is the one going on screen.
 			void				Shown();
 			// The buffers go once the desktop is on screen again.

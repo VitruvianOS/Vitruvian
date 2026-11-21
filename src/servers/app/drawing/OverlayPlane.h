@@ -8,6 +8,8 @@
 #include <Rect.h>
 #include <SupportDefs.h>
 
+class BRegion;
+
 
 // Told how the buffers staged on a plane fared; serials come from Show().
 class OverlayPlaneListener {
@@ -56,6 +58,12 @@ public:
 	virtual	void				SetListener(OverlayPlaneListener* listener) {}
 			// The primary plane shows a frame composed on the GPU.
 	virtual	bool				Composed() const { return false; }
+			// Composed: the part of the destination that shows the buffer.
+	virtual	status_t			SetVisible(const BRegion& region)
+									{ return B_UNSUPPORTED; }
+			// Composed: a new set of buffers follows, of another size; the
+			// picture stays up until one of them is shown.
+	virtual	status_t			Retarget() { return B_UNSUPPORTED; }
 };
 
 #endif // OVERLAY_PLANE_H

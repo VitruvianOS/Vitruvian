@@ -831,11 +831,13 @@ WebKitBridge::LoadURL(const std::string& url)
 void
 WebKitBridge::LoadHTML(const std::string& html, const std::string& baseURL)
 {
-	struct Args { WebKitWebView* v; std::string html; std::string base; };
-	auto* a = new Args{webView, html, baseURL};
+	struct Args { WebKitBridge* b; std::string html; std::string base; };
+	auto* a = new Args{this, html, baseURL};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		auto* a = static_cast<Args*>(d);
-		webkit_web_view_load_html(a->v, a->html.c_str(),
+		a->b->fHTML = a->html;
+		a->b->fHTMLBase = a->base;
+		webkit_web_view_load_html(a->b->webView, a->html.c_str(),
 			a->base.empty() ? nullptr : a->base.c_str());
 		delete a;
 		return G_SOURCE_REMOVE;
@@ -846,14 +848,19 @@ WebKitBridge::LoadHTML(const std::string& html, const std::string& baseURL)
 void
 WebKitBridge::Reload(bool bypassCache)
 {
-	struct Args { WebKitWebView* v; bool bypass; };
-	auto* a = new Args{webView, bypassCache};
+	struct Args { WebKitBridge* b; bool bypass; };
+	auto* a = new Args{this, bypassCache};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		auto* a = static_cast<Args*>(d);
-		if (a->bypass)
-			webkit_web_view_reload_bypass_cache(a->v);
+		WebKitBridge* b = a->b;
+		const char* uri = webkit_web_view_get_uri(b->webView);
+		if (!b->fHTML.empty() && uri != nullptr && b->fHTMLBase == uri) {
+			webkit_web_view_load_html(b->webView, b->fHTML.c_str(),
+				b->fHTMLBase.c_str());
+		} else if (a->bypass)
+			webkit_web_view_reload_bypass_cache(b->webView);
 		else
-			webkit_web_view_reload(a->v);
+			webkit_web_view_reload(b->webView);
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, a);

@@ -235,6 +235,11 @@ private:
 			// by content so a re-add replaces instead of stacking.
 			std::map<std::string, WebKitUserScript*> fUserScripts;
 
+			// GLib thread only: the last LoadHTML page, which a reload
+			// re-loads; WebKit alone would reload the base URL.
+			std::string			fHTML;
+			std::string			fHTMLBase;
+
 			// Extension payloads applied for the current page; the
 			// maps are keyed "ext:<id>" and re-synced per navigation.
 			std::map<std::string, WebKitUserScript*> fPageScripts;

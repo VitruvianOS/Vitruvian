@@ -410,9 +410,10 @@ BitmapManager::ImportDmabuf(HWInterface& hwInterface, int fd, int32 width,
 	if (bo == NULL)
 		return NULL;
 
-	// A buffer the CPU cannot map is kept without pages, shown by the GPU
-	// or read through the allocator.
-	const off_t size = lseek(fd, 0, SEEK_END);
+	// A buffer the CPU cannot map, or whose layout is not linear, is kept
+	// without pages, shown by the GPU or read through the allocator.
+	const off_t size = modifier == kBufferModifierLinear
+		? lseek(fd, 0, SEEK_END) : 0;
 	void* base = NULL;
 	area_id area = size > 0 ? _kern_create_gbm_area("imported dmabuf", &base,
 		B_ANY_ADDRESS, (size_t)size, B_NO_LOCK,

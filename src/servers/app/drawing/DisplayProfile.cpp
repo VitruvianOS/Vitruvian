@@ -57,11 +57,12 @@ DisplayProfile::Format(BString& text, const char* reason, bool verbose) const
 			gpu.pciId.Length() > 0 ? gpu.pciId.String() : "-",
 			gpu.node.String(), gpu.renders ? " [renders]" : "");
 		append(text, "    atomic %s, async flip %s, modifiers %s, cursor "
-			"%ux%u, gbm %s%s%s, gpu copy %s\n", yesno(gpu.atomic),
+			"%ux%u, gbm %s%s%s, gpu copy %s, gpu compose %s\n",
+			yesno(gpu.atomic),
 			yesno(gpu.asyncFlip), yesno(gpu.modifiers), gpu.cursorWidth,
 			gpu.cursorHeight, gpu.gbm ? "yes" : "no",
 			gpu.gbm ? " " : "", gpu.gbm ? gpu.gbmBackend.String() : "",
-			gpu.gpuCopy ? "yes" : "no");
+			gpu.gpuCopy ? "yes" : "no", gpu.compose ? "yes" : "no");
 	}
 
 	for (size_t i = 0; i < outputs.size(); i++) {

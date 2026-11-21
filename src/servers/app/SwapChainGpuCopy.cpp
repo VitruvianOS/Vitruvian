@@ -13,6 +13,7 @@
 
 #include <Autolock.h>
 #include <BufferAllocator.h>
+#include <Region.h>
 #include <OS.h>
 
 #ifdef HAVE_GBM
@@ -23,6 +24,8 @@
 #	include <GLES2/gl2.h>
 #	include <GLES2/gl2ext.h>
 #	include <linux/dma-buf.h>
+#	include <xf86drm.h>
+#	include <xf86drmMode.h>
 #endif
 
 using namespace BPrivate;
@@ -95,6 +98,151 @@ static bool
 has_modifier(uint64 modifier)
 {
 	return modifier != DRM_FORMAT_MOD_INVALID;
+}
+
+
+static void
+load_egl_functions()
+{
+	sCreateImage = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress(
+		"eglCreateImageKHR");
+	sDestroyImage = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress(
+		"eglDestroyImageKHR");
+	sImageTarget = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress(
+		"glEGLImageTargetTexture2DOES");
+	sCreateSync = (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress(
+		"eglCreateSyncKHR");
+	sClientWait = (PFNEGLCLIENTWAITSYNCKHRPROC)eglGetProcAddress(
+		"eglClientWaitSyncKHR");
+	sDestroySync = (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress(
+		"eglDestroySyncKHR");
+	sDupFence = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress(
+		"eglDupNativeFenceFDANDROID");
+}
+
+
+// A surfaceless GLES2 context on the device; null on success, else why not.
+// The display is set as soon as it exists.
+static const char*
+open_context(struct gbm_device* device, EGLDisplay* _display,
+	EGLContext* _context)
+{
+	PFNEGLGETPLATFORMDISPLAYEXTPROC getDisplay
+		= (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
+			"eglGetPlatformDisplayEXT");
+	if (getDisplay == NULL)
+		return "no EGL platform display";
+	EGLDisplay display = getDisplay(EGL_PLATFORM_GBM_MESA, device, NULL);
+	EGLint major, minor;
+	if (display == EGL_NO_DISPLAY || !eglInitialize(display, &major, &minor))
+		return "EGL display failed";
+	*_display = display;
+
+	const char* extensions = eglQueryString(display, EGL_EXTENSIONS);
+	if (extensions == NULL
+			|| strstr(extensions, "EGL_KHR_surfaceless_context") == NULL
+			|| strstr(extensions, "EGL_EXT_image_dma_buf_import") == NULL)
+		return "missing EGL extensions";
+
+	if (!eglBindAPI(EGL_OPENGL_ES_API))
+		return "no GLES";
+	const EGLint config[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+	EGLContext context = eglCreateContext(display, EGL_NO_CONFIG_KHR,
+		EGL_NO_CONTEXT, config);
+	if (context == EGL_NO_CONTEXT)
+		return "EGL context failed";
+	*_context = context;
+	return NULL;
+}
+
+
+// A dma-buf as a texture; context current. Leaves nothing behind on failure.
+static bool
+make_source(EGLDisplay display, int fd, int32 width, int32 height,
+	uint32 stride, uint64 modifier, void** _image, uint32* _texture)
+{
+	EGLImageKHR image = import_image(display, fd, width, height, stride,
+		modifier, has_modifier(modifier));
+	if (image == EGL_NO_IMAGE_KHR)
+		return false;
+
+	GLuint texture = 0;
+	glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	sImageTarget(GL_TEXTURE_2D, image);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	if (glGetError() != GL_NO_ERROR) {
+		glDeleteTextures(1, &texture);
+		sDestroyImage(display, image);
+		return false;
+	}
+	*_image = image;
+	*_texture = texture;
+	return true;
+}
+
+
+struct RenderTarget {
+	struct gbm_bo*	bo;
+	void*			image;
+	uint32			texture;
+	uint32			frameBuffer;
+};
+
+
+// A buffer the GPU renders to, as a framebuffer; context current.
+static bool
+make_target(EGLDisplay display, struct gbm_device* device, int32 width,
+	int32 height, const uint64* modifiers, int32 count, uint32 usage,
+	RenderTarget& target)
+{
+	memset(&target, 0, sizeof(target));
+	BufferAllocator* allocator = BufferAllocator::For(device);
+	if (allocator == NULL)
+		return false;
+
+	target.bo = allocator->Allocate(width, height, GBM_FORMAT_XRGB8888,
+		modifiers, count, usage);
+	if (target.bo == NULL)
+		return false;
+
+	bool done = false;
+	const int fd = BufferAllocator::Export(target.bo);
+	if (fd >= 0) {
+		buffer_info info;
+		BufferAllocator::Describe(target.bo, &info);
+		target.image = import_image(display, fd, width, height, info.stride,
+			info.modifier, has_modifier(info.modifier));
+		close(fd);
+		if (target.image == EGL_NO_IMAGE_KHR)
+			target.image = NULL;
+	}
+	if (target.image != NULL) {
+		glGenTextures(1, &target.texture);
+		glBindTexture(GL_TEXTURE_2D, target.texture);
+		sImageTarget(GL_TEXTURE_2D, target.image);
+		glGenFramebuffers(1, &target.frameBuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, target.frameBuffer);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+			GL_TEXTURE_2D, target.texture, 0);
+		done = glCheckFramebufferStatus(GL_FRAMEBUFFER)
+				== GL_FRAMEBUFFER_COMPLETE
+			&& glGetError() == GL_NO_ERROR;
+	}
+	if (!done) {
+		if (target.frameBuffer != 0)
+			glDeleteFramebuffers(1, &target.frameBuffer);
+		if (target.texture != 0)
+			glDeleteTextures(1, &target.texture);
+		if (target.image != NULL)
+			sDestroyImage(display, target.image);
+		BufferAllocator::Destroy(target.bo);
+		memset(&target, 0, sizeof(target));
+	}
+	return done;
 }
 
 #endif	// HAVE_GBM
@@ -186,52 +334,22 @@ bool
 SwapChainGpuCopy::_Setup(struct gbm_device* device)
 {
 	fDevice = device;
-	sCreateImage = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress(
-		"eglCreateImageKHR");
-	sDestroyImage = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress(
-		"eglDestroyImageKHR");
-	sImageTarget = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress(
-		"glEGLImageTargetTexture2DOES");
-	sCreateSync = (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress(
-		"eglCreateSyncKHR");
-	sClientWait = (PFNEGLCLIENTWAITSYNCKHRPROC)eglGetProcAddress(
-		"eglClientWaitSyncKHR");
-	sDestroySync = (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress(
-		"eglDestroySyncKHR");
-	sDupFence = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress(
-		"eglDupNativeFenceFDANDROID");
+	load_egl_functions();
 	if (sCreateImage == NULL || sDestroyImage == NULL || sImageTarget == NULL)
 		return _Fail("no EGL image support");
 
-	PFNEGLGETPLATFORMDISPLAYEXTPROC getDisplay
-		= (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
-			"eglGetPlatformDisplayEXT");
-	if (getDisplay == NULL)
-		return _Fail("no EGL platform display");
-	EGLDisplay display = getDisplay(EGL_PLATFORM_GBM_MESA, device, NULL);
-	EGLint major, minor;
-	if (display == EGL_NO_DISPLAY || !eglInitialize(display, &major, &minor))
-		return _Fail("EGL display failed");
-	fDisplay = display;
-
-	const char* extensions = eglQueryString(display, EGL_EXTENSIONS);
-	if (extensions == NULL
-			|| strstr(extensions, "EGL_KHR_surfaceless_context") == NULL
-			|| strstr(extensions, "EGL_EXT_image_dma_buf_import") == NULL)
-		return _Fail("missing EGL extensions");
+	EGLDisplay display = EGL_NO_DISPLAY;
+	EGLContext context = EGL_NO_CONTEXT;
+	const char* why = open_context(device, &display, &context);
+	if (display != EGL_NO_DISPLAY)
+		fDisplay = display;
+	if (why != NULL)
+		return _Fail(why);
+	fContext = context;
 	// Explicit release fences where the driver exports them.
+	const char* extensions = eglQueryString(display, EGL_EXTENSIONS);
 	fNativeFence = sDupFence != NULL && sCreateSync != NULL
 		&& strstr(extensions, "EGL_ANDROID_native_fence_sync") != NULL;
-
-	if (!eglBindAPI(EGL_OPENGL_ES_API))
-		return _Fail("no GLES");
-	const EGLint config[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-	fContext = eglCreateContext(display, EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT,
-		config);
-	if (fContext == EGL_NO_CONTEXT) {
-		fContext = NULL;
-		return _Fail("EGL context failed");
-	}
 	if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, fContext))
 		return _Fail("EGL make current failed");
 
@@ -350,24 +468,10 @@ SwapChainGpuCopy::_Source(ServerBitmap* bitmap, int32 width, int32 height)
 	}
 	buffer_info info;
 	BufferAllocator::Describe(bo, &info);
-	source.image = import_image(fDisplay, source.fd, width, height,
-		info.stride, info.modifier, has_modifier(info.modifier));
-	if (source.image == EGL_NO_IMAGE_KHR) {
-		source.image = NULL;
+	if (!make_source(fDisplay, source.fd, width, height, info.stride,
+			info.modifier, &source.image, &source.texture)) {
 		_FreeSource(source);
 		_Fail("source import failed");
-		return NULL;
-	}
-	glGenTextures(1, &source.texture);
-	glBindTexture(GL_TEXTURE_2D, source.texture);
-	sImageTarget(GL_TEXTURE_2D, source.image);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	if (glGetError() != GL_NO_ERROR) {
-		_FreeSource(source);
-		_Fail("source texture failed");
 		return NULL;
 	}
 	try {
@@ -405,39 +509,16 @@ bool
 SwapChainGpuCopy::_TryTarget(int32 width, int32 height,
 	const uint64* modifiers, int32 count)
 {
-	BufferAllocator* allocator = BufferAllocator::For(fDevice);
-	if (allocator == NULL)
-		return false;
-
 	// Read back through the detiling map, so any layout will do.
-	fBo = allocator->Allocate(width, height, GBM_FORMAT_XRGB8888, modifiers,
-		count, kBufferUsageRender);
-	if (fBo == NULL)
+	RenderTarget target;
+	if (!make_target(fDisplay, fDevice, width, height, modifiers, count,
+			kBufferUsageRender, target))
 		return false;
 
-	const int fd = BufferAllocator::Export(fBo);
-	if (fd < 0)
-		return false;
-	buffer_info info;
-	BufferAllocator::Describe(fBo, &info);
-	fTargetImage = import_image(fDisplay, fd, width, height, info.stride,
-		info.modifier, has_modifier(info.modifier));
-	close(fd);
-	if (fTargetImage == EGL_NO_IMAGE_KHR) {
-		fTargetImage = NULL;
-		return false;
-	}
-
-	glGenTextures(1, &fTexture);
-	glBindTexture(GL_TEXTURE_2D, fTexture);
-	sImageTarget(GL_TEXTURE_2D, fTargetImage);
-	glGenFramebuffers(1, &fFrameBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, fFrameBuffer);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-		GL_TEXTURE_2D, fTexture, 0);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE
-			|| glGetError() != GL_NO_ERROR)
-		return false;
+	fBo = target.bo;
+	fTargetImage = target.image;
+	fTexture = target.texture;
+	fFrameBuffer = target.frameBuffer;
 	return true;
 }
 
@@ -592,6 +673,536 @@ SwapChainGpuCopy::Copy(struct gbm_device* device, ServerBitmap* bitmap,
 	return true;
 }
 
+
+// #pragma mark - SwapChainCompose
+
+
+SwapChainCompose::SwapChainCompose(struct gbm_device* device)
+	:
+	fDevice(device),
+	fDisplay(NULL),
+	fContext(NULL),
+	fProgram(0),
+	fBuffer(0),
+	fRectLocation(-1),
+	fSwizzleLocation(-1),
+	fDesktop(0),
+	fDesktopWidth(0),
+	fDesktopHeight(0),
+	fDesktopValid(false),
+	fNextSource(1),
+	fTargetCount(0),
+	fWidth(0),
+	fHeight(0),
+	fLast(-1),
+	fOnScreen(-1),
+	fModifierCount(0),
+	fRefusedWarned(false),
+	fFailed(false)
+{
+	memset(fTargets, 0, sizeof(fTargets));
+}
+
+
+SwapChainCompose::~SwapChainCompose()
+{
+	if (fContext == NULL)
+		return;
+
+	if (eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, fContext)) {
+		_FreeTargets();
+		for (size_t i = 0; i < fSources.size(); i++) {
+			glDeleteTextures(1, &fSources[i].texture);
+			sDestroyImage(fDisplay, fSources[i].image);
+		}
+		fSources.clear();
+		if (fDesktop != 0)
+			glDeleteTextures(1, &fDesktop);
+		if (fProgram != 0)
+			glDeleteProgram(fProgram);
+		if (fBuffer != 0)
+			glDeleteBuffers(1, &fBuffer);
+		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			EGL_NO_CONTEXT);
+	}
+	eglDestroyContext(fDisplay, fContext);
+	eglReleaseThread();
+}
+
+
+bool
+SwapChainCompose::_Fail(const char* why)
+{
+	if (!fFailed)
+		fprintf(stderr, "swap chain compose: %s; using the CPU path\n", why);
+	fFailed = true;
+	if (fContext != NULL)
+		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			EGL_NO_CONTEXT);
+	return false;
+}
+
+
+bool
+SwapChainCompose::_Setup()
+{
+	load_egl_functions();
+	if (sCreateImage == NULL || sDestroyImage == NULL || sImageTarget == NULL)
+		return _Fail("no EGL image support");
+
+	EGLDisplay display = EGL_NO_DISPLAY;
+	EGLContext context = EGL_NO_CONTEXT;
+	const char* why = open_context(fDevice, &display, &context);
+	if (display != EGL_NO_DISPLAY)
+		fDisplay = display;
+	if (why != NULL)
+		return _Fail(why);
+	fContext = context;
+	if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, fContext))
+		return _Fail("EGL make current failed");
+
+	const char* vertex =
+		"attribute vec2 p;\n"
+		"uniform vec4 r;\n"
+		"varying vec2 uv;\n"
+		"void main() {\n"
+		"	uv = p;\n"
+		"	gl_Position = vec4(mix(r.xy, r.zw, p), 0.0, 1.0);\n"
+		"}\n";
+	const char* fragment =
+		"#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
+		"precision highp float;\n"
+		"#else\n"
+		"precision mediump float;\n"
+		"#endif\n"
+		"varying vec2 uv;\n"
+		"uniform sampler2D t;\n"
+		"uniform float swz;\n"
+		"void main() {\n"
+		"	vec3 c = texture2D(t, uv).rgb;\n"
+		"	gl_FragColor = vec4(swz > 0.5 ? c.bgr : c, 1.0);\n"
+		"}\n";
+	GLuint vs = compile(GL_VERTEX_SHADER, vertex);
+	GLuint fs = compile(GL_FRAGMENT_SHADER, fragment);
+	if (vs == 0 || fs == 0)
+		return _Fail("shader compile failed");
+	fProgram = glCreateProgram();
+	glAttachShader(fProgram, vs);
+	glAttachShader(fProgram, fs);
+	glBindAttribLocation(fProgram, 0, "p");
+	glLinkProgram(fProgram);
+	glDeleteShader(vs);
+	glDeleteShader(fs);
+	GLint ok = 0;
+	glGetProgramiv(fProgram, GL_LINK_STATUS, &ok);
+	if (!ok)
+		return _Fail("shader link failed");
+	fRectLocation = glGetUniformLocation(fProgram, "r");
+	fSwizzleLocation = glGetUniformLocation(fProgram, "swz");
+
+	const GLfloat quad[] = { 0, 0, 1, 0, 0, 1, 1, 1 };
+	glGenBuffers(1, &fBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, fBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+	return true;
+}
+
+
+// Context current on return; fLock held.
+bool
+SwapChainCompose::_Make()
+{
+	if (fFailed)
+		return false;
+	if (fContext == NULL && !_Setup())
+		return false;
+	if (!eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, fContext))
+		return _Fail("EGL make current failed");
+	// Whatever an earlier user left behind is not ours.
+	while (glGetError() != GL_NO_ERROR) {
+	}
+	return true;
+}
+
+
+void
+SwapChainCompose::_Release()
+{
+	if (fContext != NULL)
+		eglMakeCurrent(fDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
+			EGL_NO_CONTEXT);
+}
+
+
+SwapChainCompose::Texture*
+SwapChainCompose::_Find(int32 id)
+{
+	for (size_t i = 0; i < fSources.size(); i++) {
+		if (fSources[i].id == id)
+			return &fSources[i];
+	}
+	return NULL;
+}
+
+
+int32
+SwapChainCompose::AddSource(int fd, int32 width, int32 height, uint32 stride,
+	uint64 modifier)
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	if (!_Make())
+		return -1;
+
+	Texture source;
+	source.id = fNextSource;
+	source.image = NULL;
+	source.texture = 0;
+	const bool imported = make_source(fDisplay, fd, width, height, stride,
+		modifier, &source.image, &source.texture);
+	if (imported) {
+		try {
+			fSources.push_back(source);
+			fNextSource++;
+		} catch (...) {
+			glDeleteTextures(1, &source.texture);
+			sDestroyImage(fDisplay, source.image);
+			_Release();
+			return -1;
+		}
+	} else if (!fRefusedWarned) {
+		fRefusedWarned = true;
+		fprintf(stderr, "swap chain compose: buffer import refused (%dx%d, "
+			"modifier %#llx)\n", (int)width, (int)height,
+			(unsigned long long)modifier);
+	}
+	_Release();
+	return imported ? source.id : -1;
+}
+
+
+void
+SwapChainCompose::RemoveSource(int32 id)
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	for (size_t i = 0; i < fSources.size(); i++) {
+		if (fSources[i].id != id)
+			continue;
+
+		if (_Make()) {
+			glDeleteTextures(1, &fSources[i].texture);
+			sDestroyImage(fDisplay, fSources[i].image);
+			_Release();
+		}
+		fSources.erase(fSources.begin() + i);
+		return;
+	}
+}
+
+
+void
+SwapChainCompose::Invalidate()
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	fDesktopValid = false;
+}
+
+
+static void
+free_render_target(EGLDisplay display, RenderTarget& target)
+{
+	if (target.frameBuffer != 0)
+		glDeleteFramebuffers(1, &target.frameBuffer);
+	if (target.texture != 0)
+		glDeleteTextures(1, &target.texture);
+	if (target.image != NULL)
+		sDestroyImage(display, target.image);
+	BufferAllocator::Destroy(target.bo);
+	memset(&target, 0, sizeof(target));
+}
+
+
+// Context current.
+bool
+SwapChainCompose::_MakeTarget(Target& target, int32 width, int32 height,
+	const uint64* modifiers, int32 count)
+{
+	RenderTarget made;
+	if (!make_target(fDisplay, fDevice, width, height, modifiers, count,
+			kBufferUsageRender | kBufferUsageScanout, made))
+		return false;
+
+	buffer_info info;
+	BufferAllocator::Describe(made.bo, &info);
+	const uint32 handles[4] = { gbm_bo_get_handle(made.bo).u32, 0, 0, 0 };
+	const uint32 pitches[4] = { info.stride, 0, 0, 0 };
+	const uint32 offsets[4] = { 0, 0, 0, 0 };
+	const int fd = gbm_device_get_fd(fDevice);
+	uint32 fb = 0;
+	int result;
+	if (info.modifier != kBufferModifierLinear
+			&& info.modifier != kBufferModifierInvalid) {
+		const uint64 planeModifiers[4] = { info.modifier, 0, 0, 0 };
+		result = drmModeAddFB2WithModifiers(fd, width, height,
+			GBM_FORMAT_XRGB8888, handles, pitches, offsets, planeModifiers,
+			&fb, DRM_MODE_FB_MODIFIERS);
+	} else {
+		result = drmModeAddFB2(fd, width, height, GBM_FORMAT_XRGB8888,
+			handles, pitches, offsets, &fb, 0);
+	}
+	if (result != 0) {
+		free_render_target(fDisplay, made);
+		return false;
+	}
+
+	target.bo = made.bo;
+	target.image = made.image;
+	target.texture = made.texture;
+	target.frameBuffer = made.frameBuffer;
+	target.fb = fb;
+	return true;
+}
+
+
+// Context current.
+void
+SwapChainCompose::_FreeTargets()
+{
+	const int fd = gbm_device_get_fd(fDevice);
+	for (int32 i = 0; i < fTargetCount; i++) {
+		if (fTargets[i].fb != 0)
+			drmModeRmFB(fd, fTargets[i].fb);
+		RenderTarget made = { fTargets[i].bo, fTargets[i].image,
+			fTargets[i].texture, fTargets[i].frameBuffer };
+		free_render_target(fDisplay, made);
+	}
+	memset(fTargets, 0, sizeof(fTargets));
+	fTargetCount = 0;
+	fLast = -1;
+	fOnScreen = -1;
+}
+
+
+// Context current. A buffer the plane takes and the GPU renders to: the
+// renderer's tiling when both agree, else linear.
+bool
+SwapChainCompose::_Targets(int32 width, int32 height)
+{
+	if (fTargetCount == kTargets && fWidth == width && fHeight == height)
+		return true;
+
+	_FreeTargets();
+	BufferAllocator* allocator = BufferAllocator::For(fDevice);
+	if (allocator == NULL || fModifierCount <= 0)
+		return false;
+
+	uint64 render[kBufferMaxModifiers];
+	uint64 common[kBufferMaxModifiers];
+	const int32 renderCount = allocator->RenderModifiers(GBM_FORMAT_XRGB8888,
+		render, kBufferMaxModifiers);
+	const int32 commonCount = BufferAllocator::Intersect(fModifiers,
+		fModifierCount, render, renderCount, common, kBufferMaxModifiers);
+	bool tiled = false;
+	for (int32 i = 0; i < commonCount; i++)
+		tiled |= common[i] != kBufferModifierLinear;
+	bool linear = false;
+	for (int32 i = 0; i < fModifierCount; i++)
+		linear |= fModifiers[i] == kBufferModifierLinear;
+
+	const uint64 linearOnly = kBufferModifierLinear;
+	for (int attempt = 0; attempt < 2; attempt++) {
+		if ((attempt == 0 && !tiled) || (attempt == 1 && !linear))
+			continue;
+
+		for (int32 i = 0; i < kTargets; i++) {
+			if (!_MakeTarget(fTargets[i], width, height,
+					attempt == 0 ? common : &linearOnly,
+					attempt == 0 ? commonCount : 1))
+				break;
+			fTargetCount++;
+		}
+		if (fTargetCount == kTargets) {
+			fWidth = width;
+			fHeight = height;
+			return true;
+		}
+		_FreeTargets();
+	}
+	return false;
+}
+
+
+bool
+SwapChainCompose::Prepare(int32 width, int32 height, const uint64* modifiers,
+	int32 count, uint32* _fb)
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	if (!_Make())
+		return false;
+
+	fModifierCount = count < 64 ? count : 64;
+	for (int32 i = 0; i < fModifierCount; i++)
+		fModifiers[i] = modifiers[i];
+	const bool done = _Targets(width, height);
+	if (done)
+		*_fb = fTargets[0].fb;
+	_Release();
+	return done;
+}
+
+
+void
+SwapChainCompose::ReleaseTargets()
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	if (fTargetCount == 0 || !_Make())
+		return;
+
+	_FreeTargets();
+	_Release();
+}
+
+
+void
+SwapChainCompose::Shown()
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	fOnScreen = fLast;
+}
+
+
+// Context current.
+bool
+SwapChainCompose::_Desktop(int32 width, int32 height)
+{
+	if (fDesktop != 0 && fDesktopWidth == width && fDesktopHeight == height)
+		return true;
+
+	if (fDesktop == 0)
+		glGenTextures(1, &fDesktop);
+	glBindTexture(GL_TEXTURE_2D, fDesktop);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+		GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	fDesktopWidth = width;
+	fDesktopHeight = height;
+	fDesktopValid = false;
+	return glGetError() == GL_NO_ERROR;
+}
+
+
+// Context current; the area lies within the desktop.
+void
+SwapChainCompose::_Upload(const uint8* bits, uint32 stride, const BRect& area)
+{
+	const int32 x = (int32)area.left;
+	const int32 y = (int32)area.top;
+	const int32 width = (int32)area.right - x + 1;
+	const int32 height = (int32)area.bottom - y + 1;
+	const uint8* rows = bits + (size_t)y * stride + (size_t)x * 4;
+
+	// Without row length support the rect goes in tight.
+	if (x != 0 || (uint32)width * 4 != stride) {
+		const size_t row = (size_t)width * 4;
+		try {
+			fScratch.resize(row * height);
+		} catch (...) {
+			return;
+		}
+		for (int32 i = 0; i < height; i++)
+			memcpy(&fScratch[row * i], rows + (size_t)i * stride, row);
+		rows = &fScratch[0];
+	}
+	glBindTexture(GL_TEXTURE_2D, fDesktop);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA,
+		GL_UNSIGNED_BYTE, rows);
+}
+
+
+// Context current, program and quad bound.
+void
+SwapChainCompose::_Draw(uint32 texture, const BRect& area, bool swizzle,
+	int32 width, int32 height)
+{
+	const float x0 = 2.0f * (float)area.left / width - 1.0f;
+	const float y0 = 2.0f * (float)area.top / height - 1.0f;
+	const float x1 = 2.0f * ((float)area.right + 1.0f) / width - 1.0f;
+	const float y1 = 2.0f * ((float)area.bottom + 1.0f) / height - 1.0f;
+	glUniform4f(fRectLocation, x0, y0, x1, y1);
+	glUniform1f(fSwizzleLocation, swizzle ? 1.0f : 0.0f);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+
+int
+SwapChainCompose::Render(int32 width, int32 height, const uint8* bits,
+	uint32 stride, const BRegion* damage, int32 source,
+	const BRect& destination, uint32* _fb)
+{
+	std::lock_guard<std::mutex> guard(fLock);
+	if (!_Make())
+		return kFailed;
+
+	const Texture* texture = source >= 0 ? _Find(source) : NULL;
+	if (source >= 0 && texture == NULL) {
+		_Release();
+		return kGone;
+	}
+	if (!_Targets(width, height)) {
+		_Fail("scanout buffers failed");
+		return kFailed;
+	}
+	if (!_Desktop(width, height)) {
+		_Fail("desktop texture failed");
+		return kFailed;
+	}
+
+	const BRect bounds(0, 0, width - 1, height - 1);
+	if (damage == NULL || !fDesktopValid) {
+		_Upload(bits, stride, bounds);
+		fDesktopValid = true;
+	} else {
+		for (int32 i = 0; i < damage->CountRects(); i++) {
+			const BRect area = damage->RectAt(i) & bounds;
+			if (area.IsValid())
+				_Upload(bits, stride, area);
+		}
+	}
+
+	const int32 next = fOnScreen == 0 ? 1 : 0;
+	glBindFramebuffer(GL_FRAMEBUFFER, fTargets[next].frameBuffer);
+	glViewport(0, 0, width, height);
+	glDisable(GL_BLEND);
+	glDisable(GL_SCISSOR_TEST);
+	glActiveTexture(GL_TEXTURE0);
+	glUseProgram(fProgram);
+	glBindBuffer(GL_ARRAY_BUFFER, fBuffer);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+	_Draw(fDesktop, bounds, true, width, height);
+	if (texture != NULL) {
+		const BRect area = destination & bounds;
+		if (area.IsValid())
+			_Draw(texture->texture, area, false, width, height);
+	}
+	// The scanout waits on the buffer's own fence.
+	glFlush();
+	if (glGetError() != GL_NO_ERROR) {
+		_Fail("GL error");
+		return kFailed;
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+	_Release();
+
+	fLast = next;
+	*_fb = fTargets[next].fb;
+	return kOk;
+}
+
 #else	// !HAVE_GBM
 
 void SwapChainGpuCopy::Forget(const ServerBitmap*) {}
@@ -602,5 +1213,25 @@ bool SwapChainGpuCopy::Copy(struct gbm_device*, ServerBitmap*, const BRect*)
 {
 	return false;
 }
+
+SwapChainCompose::SwapChainCompose(struct gbm_device*) {}
+SwapChainCompose::~SwapChainCompose() {}
+int32 SwapChainCompose::AddSource(int, int32, int32, uint32, uint64)
+{
+	return -1;
+}
+void SwapChainCompose::RemoveSource(int32) {}
+bool SwapChainCompose::Prepare(int32, int32, const uint64*, int32, uint32*)
+{
+	return false;
+}
+void SwapChainCompose::Invalidate() {}
+int SwapChainCompose::Render(int32, int32, const uint8*, uint32,
+	const BRegion*, int32, const BRect&, uint32*)
+{
+	return kFailed;
+}
+void SwapChainCompose::Shown() {}
+void SwapChainCompose::ReleaseTargets() {}
 
 #endif

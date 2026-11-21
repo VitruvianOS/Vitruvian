@@ -23,6 +23,7 @@ extern "C" {
 
 struct drm_extra_card;
 struct DisplayProfile;
+class SwapChainCompose;
 
 #include "BufferAgeTracker.h"
 #include "DdcCi.h"
@@ -192,10 +193,12 @@ private:
 			BRect			fDestination;
 };
 
-// The primary plane scanning out a client's buffers instead of the desktop.
+// The primary plane scanning out a client's buffers instead of the desktop,
+// or, composed, a frame the GPU drew from the desktop and one buffer.
 class DrmScanout : public OverlayPlane {
 public:
-							DrmScanout(DrmHWInterface* interface, int fd);
+							DrmScanout(DrmHWInterface* interface, int fd,
+								bool compose = false);
 	virtual					~DrmScanout();
 
 			status_t		Adopt(int dmabufFd, uint32 width, uint32 height,
@@ -208,13 +211,14 @@ public:
 	virtual	uint32			Width() const { return fWidth; }
 	virtual	uint32			Height() const { return fHeight; }
 	virtual	color_space		ColorSpace() const { return B_RGB32; }
-	virtual	status_t		Configure(const BRect&, const BRect&)
-								{ return B_OK; }
+	virtual	status_t		Configure(const BRect& source,
+								const BRect& destination);
 	virtual	void			Disable() {}
 	virtual	status_t		AddBuffer(int dmabufFd, uint32 width,
 								uint32 height, uint32 fourcc, uint32 stride,
 								uint32 sharedHandle, int32* _index,
 								uint64 modifier = 0);
+	virtual	bool			Composed() const { return fCompose; }
 	virtual	status_t		Show(int32 index, uint64 serial,
 								const BRect& source,
 								const BRect& destination);
@@ -237,6 +241,12 @@ private:
 			uint32			fWidth;
 			uint32			fHeight;
 			OverlayPlaneListener* fListener;
+			// Composed: the sources in the compose object, the one shown
+			// and where; fDirtyMutex guards the three.
+			bool			fCompose;
+			std::vector<int32> fSources;
+			int32			fComposeIndex;
+			BRect			fComposeDest;
 };
 
 // A format and modifier a plane scans out (IN_FORMATS).
@@ -949,7 +959,29 @@ private:
 			// is on screen again.
 			std::vector<DrmScanout::Buffer>	fScanoutZombies;
 			status_t			_ScanoutShow(DrmScanout* scanout,
-									uint32_t fbId, uint64_t serial);
+									uint32_t fbId, uint64_t serial,
+									const BRect* destination = NULL);
+			status_t			_ScanoutMove(DrmScanout* scanout,
+									const BRect& destination);
+			status_t			_TestScanoutFb(uint32_t fbId, int32 width,
+									int32 height);
+			status_t			_AcquireDirect(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination);
+			// The GPU draws the desktop and one client buffer into the
+			// frame, on the display GPU of the first output.
+			status_t			_AcquireCompose(ServerBitmap* bitmap,
+									OverlayPlane** _plane,
+									const BRect& destination);
+			bool				_ComposeAllowed();
+			// Event thread, exclusive lock held; a SwapChainCompose result.
+			int					_ComposeSurface(int32 source,
+									const BRect& destination,
+									const BRegion& damage, uint32_t* _fb);
+			SwapChainCompose*	fCompose;
+			// Set when a composed scanout goes; the buffers follow once
+			// the desktop is on screen.
+			std::atomic<bool>	fComposeTrim;
 			void				_ScanoutDetach(DrmScanout* only, bool notify);
 			void				_CheckScanout();
 			void				_FlushScanoutZombies();

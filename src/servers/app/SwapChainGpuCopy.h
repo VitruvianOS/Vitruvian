@@ -6,12 +6,15 @@
 #define SWAP_CHAIN_GPU_COPY_H
 
 
+#include <atomic>
+#include <mutex>
+#include <vector>
+
 #include <Locker.h>
 #include <Rect.h>
 #include <SupportDefs.h>
 
-#include <vector>
-
+class BRegion;
 class ServerBitmap;
 struct gbm_device;
 struct gbm_bo;
@@ -83,6 +86,110 @@ private:
 			bigtime_t			fTime;
 			bool				fFailed;
 			bool				fNativeFence;
+};
+
+
+// Draws the desktop and one client buffer into scanout buffers on the
+// display GPU, so the buffer is never read back. The desktop stays a texture
+// that only takes the damaged rects. One context, used by whoever holds
+// the lock; any thread.
+class SwapChainCompose {
+public:
+	enum {
+		kOk,
+		// The source was removed meanwhile; nothing is wrong.
+		kGone,
+		kFailed
+	};
+
+								SwapChainCompose(struct gbm_device* device);
+								~SwapChainCompose();
+
+			// A latched failure: the GPU path is off for good.
+			bool				Failed() const { return fFailed; }
+
+			// Imports a client dma-buf; the id, or -1 when the GPU cannot
+			// use it (another GPU's tiling, say).
+			int32				AddSource(int fd, int32 width, int32 height,
+									uint32 stride, uint64 modifier);
+			void				RemoveSource(int32 id);
+
+			// Makes the scanout buffers; the modifiers are what the plane
+			// takes. The framebuffer of one of them is returned, to try.
+			bool				Prepare(int32 width, int32 height,
+									const uint64* modifiers, int32 count,
+									uint32* _fb);
+			// The desktop texture no longer matches the CPU buffer.
+			void				Invalidate();
+			// Renders a frame into the buffer that is not on screen.
+			// bits is the desktop, damage what changed since the last
+			// call (all when null or after Invalidate), source an id or
+			// -1 for the desktop alone.
+			int					Render(int32 width, int32 height,
+									const uint8* bits, uint32 stride,
+									const BRegion* damage, int32 source,
+									const BRect& destination, uint32* _fb);
+			// The frame last rendered is the one going on screen.
+			void				Shown();
+			// The buffers go once the desktop is on screen again.
+			void				ReleaseTargets();
+
+private:
+			struct Texture {
+				int32			id;
+				void*			image;
+				uint32			texture;
+			};
+			struct Target {
+				struct gbm_bo*	bo;
+				void*			image;
+				uint32			texture;
+				uint32			frameBuffer;
+				uint32			fb;
+			};
+			static const int32	kTargets = 2;
+
+			bool				_Setup();
+			bool				_Make();
+			void				_Release();
+			bool				_Fail(const char* why);
+			bool				_Targets(int32 width, int32 height);
+			bool				_MakeTarget(Target& target, int32 width,
+									int32 height, const uint64* modifiers,
+									int32 count);
+			void				_FreeTargets();
+			bool				_Desktop(int32 width, int32 height);
+			void				_Upload(const uint8* bits, uint32 stride,
+									const BRect& area);
+			void				_Draw(uint32 texture, const BRect& area,
+									bool swizzle, int32 width, int32 height);
+			Texture*			_Find(int32 id);
+
+			std::mutex			fLock;
+			struct gbm_device*	fDevice;
+			void*				fDisplay;
+			void*				fContext;
+			uint32				fProgram;
+			uint32				fBuffer;
+			int32				fRectLocation;
+			int32				fSwizzleLocation;
+			uint32				fDesktop;
+			int32				fDesktopWidth;
+			int32				fDesktopHeight;
+			bool				fDesktopValid;
+			std::vector<uint8>	fScratch;
+			std::vector<Texture> fSources;
+			int32				fNextSource;
+			Target				fTargets[kTargets];
+			int32				fTargetCount;
+			int32				fWidth;
+			int32				fHeight;
+			int32				fLast;
+			int32				fOnScreen;
+			uint64				fModifiers[64];
+			int32				fModifierCount;
+			bool				fRefusedWarned;
+			std::atomic<bool>	fFailed;
 };
 
 

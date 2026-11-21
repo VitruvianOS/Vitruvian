@@ -393,6 +393,7 @@ public:
 		fRegistered(0),
 		fRefused(0),
 		fScan(false),
+		fCompose(false),
 		fLost(false)
 	{
 	}
@@ -427,6 +428,12 @@ public:
 	bool Scanout() const
 	{
 		return fScan;
+	}
+
+	// The GPU draws the desktop with the buffer over it.
+	bool Composed() const
+	{
+		return fScan && fCompose;
 	}
 
 	virtual bool Show(SwapChainFrame& frame)
@@ -508,7 +515,7 @@ public:
 	bool Follow(const BRect& destination)
 	{
 		_CheckLost();
-		if (fPlane == NULL || fScan || fSource.Width() < 0)
+		if (fPlane == NULL || (fScan && !fCompose) || fSource.Width() < 0)
 			return false;
 
 		const BRect source = fSource;
@@ -536,6 +543,7 @@ public:
 		else
 			fHardware->ReleaseOverlayPlane(plane);
 		fScan = false;
+		fCompose = false;
 		fChain->NotifyReleased(keepFrom);
 	}
 
@@ -569,6 +577,7 @@ private:
 			fToken = 0;
 			fRegistered = 0;
 			fScan = false;
+			fCompose = false;
 			fLost = false;
 		}
 	}
@@ -624,15 +633,13 @@ private:
 #endif
 	}
 
-	// The whole output is this chain's: the primary plane takes it.
+	// The primary plane takes the whole output, or shows a frame the GPU
+	// composed from the desktop and this chain.
 	bool _ClaimScanout(const SwapChainFrame& frame)
 	{
 #ifndef HAVE_GBM
 		return false;
 #else
-		if (frame.destination != frame.outputFrame)
-			return false;
-
 		OverlayPlane* plane = NULL;
 		if (frame.hardware->AcquireScanoutForBitmap(frame.buffers[0], &plane,
 				frame.destination) != B_OK)
@@ -650,7 +657,9 @@ private:
 		fToken = frame.token;
 		fOutputFrame = frame.outputFrame;
 		fScan = true;
-		fprintf(stderr, "swap chain: direct scanout on (%dx%d)\n",
+		fCompose = plane->Composed();
+		fprintf(stderr, "swap chain: %s on (%dx%d)\n",
+			fCompose ? "gpu compose" : "direct scanout",
 			(int)frame.bitmap->Width(), (int)frame.bitmap->Height());
 		return true;
 #endif
@@ -663,6 +672,7 @@ private:
 	int32			fRegistered;
 	int32			fRefused;
 	bool			fScan;
+	bool			fCompose;
 	BRect			fDestination;
 	BRect			fSource;
 	BRect			fOutputFrame;
@@ -2080,7 +2090,8 @@ ViewSwapChain::_PathName() const
 {
 	PlaneConsumer* plane = fPlane;
 	if (plane != NULL && plane->Active())
-		return plane->Scanout() ? "scanout" : "plane";
+		return plane->Composed() ? "compose"
+			: plane->Scanout() ? "scanout" : "plane";
 	return fPath == kPathGpu || fPath == kTrialGpu ? "gpu" : "cpu";
 }
 

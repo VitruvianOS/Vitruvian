@@ -54,6 +54,8 @@ public:
 									const BRect& destination)
 									{ return B_UNSUPPORTED; }
 	virtual	void				SetListener(OverlayPlaneListener* listener) {}
+			// The primary plane shows a frame composed on the GPU.
+	virtual	bool				Composed() const { return false; }
 };
 
 #endif // OVERLAY_PLANE_H

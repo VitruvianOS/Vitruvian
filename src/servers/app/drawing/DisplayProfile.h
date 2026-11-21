@@ -58,6 +58,8 @@ struct DisplayGpuProfile {
 	bool		renders;
 	// A GPU copy of swap chain buffers can run on it.
 	bool		gpuCopy;
+	// A swap chain buffer can be composed with the desktop on it.
+	bool		compose;
 };
 
 struct DisplayOutputProfile {
@@ -92,7 +94,7 @@ struct DisplayOutputProfile {
 // Runtime state of one swap chain.
 struct DisplayChainProfile {
 	BString		view;
-	// "plane", "scanout", "gpu" or "cpu".
+	// "plane", "scanout", "compose", "gpu" or "cpu".
 	const char*	path;
 	bool		trial;
 	int32		left;

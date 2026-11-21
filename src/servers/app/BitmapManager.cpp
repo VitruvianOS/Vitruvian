@@ -389,6 +389,74 @@ BitmapManager::CloneFromClient(area_id clientArea, size_t areaOffset,
 }
 
 
+ServerBitmap*
+BitmapManager::ImportDmabuf(HWInterface& hwInterface, int fd, int32 width,
+	int32 height, uint32 fourcc, uint32 stride, uint32 offset,
+	uint64 modifier, const BRect& where)
+{
+#ifdef HAVE_GBM
+	struct gbm_device* device = hwInterface.GbmDeviceFor(where);
+	BufferAllocator* allocator = BufferAllocator::For(device);
+	if (allocator == NULL || width <= 0 || height <= 0)
+		return NULL;
+
+	struct gbm_bo* bo = allocator->Import(fd, width, height, fourcc, stride,
+		offset, modifier, kBufferUsageRender | kBufferUsageScanout);
+	// An implicit tiled layout may not scan out; the GPU still composes it.
+	if (bo == NULL) {
+		bo = allocator->Import(fd, width, height, fourcc, stride, offset,
+			modifier, kBufferUsageRender);
+	}
+	if (bo == NULL)
+		return NULL;
+
+	// A buffer the CPU cannot map is kept without pages, shown by the GPU
+	// or read through the allocator.
+	const off_t size = lseek(fd, 0, SEEK_END);
+	void* base = NULL;
+	area_id area = size > 0 ? _kern_create_gbm_area("imported dmabuf", &base,
+		B_ANY_ADDRESS, (size_t)size, B_NO_LOCK,
+		B_READ_AREA | B_WRITE_AREA | B_CLONEABLE_AREA, fd) : B_ERROR;
+	if (area < B_OK) {
+		if (gbm_bo_get_modifier(bo) == kBufferModifierLinear) {
+			BufferAllocator::Destroy(bo);
+			return NULL;
+		}
+		area = -1;
+		base = NULL;
+	}
+
+	GbmMemory* memory = new(std::nothrow) GbmMemory;
+	if (memory == NULL || memory->Adopt(bo, area, (uint8*)base, NULL) != B_OK) {
+		delete memory;
+		if (area >= B_OK)
+			delete_area(area);
+		BufferAllocator::Destroy(bo);
+		return NULL;
+	}
+	memory->KeepModifier();
+
+	BAutolock locker(fLock);
+	ServerBitmap* bitmap = new(std::nothrow) ServerBitmap(
+		BRect(0, 0, width - 1, height - 1), B_RGB32, B_BITMAP_SUPPORTS_GBM,
+		stride);
+	if (bitmap == NULL || !fBitmapList.AddItem(bitmap)) {
+		delete bitmap;
+		delete memory;
+		return NULL;
+	}
+
+	bitmap->fMemory = memory;
+	bitmap->fBytesPerRow = (int32)stride;
+	bitmap->fBuffer = base != NULL ? (uint8*)base + offset : NULL;
+	bitmap->fToken = gTokenSpace.NewToken(kBitmapToken, bitmap);
+	return bitmap;
+#else
+	return NULL;
+#endif
+}
+
+
 /*!	\brief Called when a ServerBitmap is deleted.
 */
 void

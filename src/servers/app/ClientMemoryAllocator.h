@@ -122,6 +122,9 @@ public:
 
 			status_t			Adopt(struct gbm_bo* bo, area_id area,
 									uint8* base, void* mapData);
+			// An imported buffer keeps the modifier its exporter gave:
+			// the device's own layout is not linear.
+			void				KeepModifier() { fKeepModifier = true; }
 
 	virtual	area_id				Area();
 	virtual	uint8*				Address();
@@ -149,6 +152,7 @@ private:
 			void*				fMapData;
 			area_id				fArea;
 			uint8*				fBase;
+			bool				fKeepModifier;
 };
 #endif	// HAVE_GBM
 

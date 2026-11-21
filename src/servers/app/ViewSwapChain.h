@@ -149,6 +149,9 @@ public:
 									const BRegion& damage, uint32 flags,
 									DrawingEngine* engine,
 									const BRegion* clipping);
+			// Takes in the dma-bufs the client queued; before a present
+			// that names an imported buffer.
+			void				ReceiveExternal();
 			// The view cannot show anything: free the buffer again.
 			void				Drop(int32 token, int32 index);
 			// The shown buffer under an exposed region.
@@ -187,6 +190,9 @@ private:
 			struct Pending;
 
 			Generation*			_Find(int32 token) const;
+			void				_ImportExternal(int fd, int32 slot,
+									const BPrivate::swap_chain_external& buffer);
+			void				_ResetExternal();
 			void				_Retire(Generation* generation, int32 index,
 									bigtime_t when);
 			void				_DropPending(uint64 below);
@@ -223,6 +229,11 @@ private:
 			mutable BLocker		fLock;
 			std::vector<Generation*> fGenerations;
 			Generation*			fCurrent;
+			// The client's imported buffers; its token is minus the
+			// chain's.
+			Generation*			fExternal;
+			port_id				fImportPort;
+			bool				fExternalWarned;
 			// Buffer on screen now.
 			Generation*			fShownGeneration;
 			int32				fShownIndex;

@@ -45,6 +45,14 @@ public:
 									color_space space, uint32 flags,
 									int32 bytesPerRow = -1);
 
+			// Wraps a client dma-buf for the card that shows where. The
+			// buffer is read in place; NULL when that card cannot import
+			// it or the pages cannot be mapped.
+			ServerBitmap*		ImportDmabuf(HWInterface& hwInterface, int fd,
+									int32 width, int32 height, uint32 fourcc,
+									uint32 stride, uint32 offset,
+									uint64 modifier, const BRect& where);
+
 			void				BitmapRemoved(ServerBitmap* bitmap);
 
 			void				SuspendOverlays();

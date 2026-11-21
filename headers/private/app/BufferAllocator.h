@@ -6,6 +6,7 @@
 #define _BUFFER_ALLOCATOR_H
 
 
+#include <pthread.h>
 #include <SupportDefs.h>
 
 
@@ -86,6 +87,11 @@ public:
 private:
 								BufferAllocator(struct gbm_device* device);
 
+	static	pthread_mutex_t*	_LockFor(struct gbm_bo* bo);
+
+			// Mesa keeps one internal context per device, not thread-safe:
+			// every call into gbm on this device holds it.
+			pthread_mutex_t		fLock;
 			struct gbm_device*	fDevice;
 			void*				fDisplay;
 			bool				fDisplayTried;

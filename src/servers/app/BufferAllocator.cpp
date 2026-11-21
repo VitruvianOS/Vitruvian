@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <new>
+
 #include <vector>
 
 #ifdef HAVE_GBM
@@ -32,6 +33,27 @@ struct Entry {
 pthread_mutex_t sLock = PTHREAD_MUTEX_INITIALIZER;
 std::vector<Entry>* sAllocators = NULL;
 
+
+namespace {
+
+struct DeviceLocker {
+	DeviceLocker(pthread_mutex_t* lock)
+		:
+		fLock(lock)
+	{
+		pthread_mutex_lock(fLock);
+	}
+
+	~DeviceLocker()
+	{
+		pthread_mutex_unlock(fLock);
+	}
+
+	pthread_mutex_t*	fLock;
+};
+
+}	// namespace
+
 }	// namespace
 
 
@@ -41,6 +63,11 @@ BufferAllocator::BufferAllocator(struct gbm_device* device)
 	fDisplay(NULL),
 	fDisplayTried(false)
 {
+	pthread_mutexattr_t attributes;
+	pthread_mutexattr_init(&attributes);
+	pthread_mutexattr_settype(&attributes, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&fLock, &attributes);
+	pthread_mutexattr_destroy(&attributes);
 }
 
 
@@ -180,6 +207,7 @@ struct gbm_bo*
 BufferAllocator::Allocate(uint32 width, uint32 height, uint32 fourcc,
 	const uint64* modifiers, int32 modifierCount, uint32 usage)
 {
+	DeviceLocker locker(&fLock);
 	if (fDevice == NULL || width == 0 || height == 0)
 		return NULL;
 
@@ -222,6 +250,7 @@ struct gbm_bo*
 BufferAllocator::Import(int fd, uint32 width, uint32 height, uint32 fourcc,
 	uint32 stride, uint32 offset, uint64 modifier, uint32 usage)
 {
+	DeviceLocker locker(&fLock);
 	if (fDevice == NULL || fd < 0)
 		return NULL;
 
@@ -244,9 +273,21 @@ BufferAllocator::Import(int fd, uint32 width, uint32 height, uint32 fourcc,
 }
 
 
+pthread_mutex_t*
+BufferAllocator::_LockFor(struct gbm_bo* bo)
+{
+	// A bo on a device without an allocator shares one fallback lock.
+	static pthread_mutex_t sNoDeviceLock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+	BufferAllocator* allocator = bo != NULL
+		? For(gbm_bo_get_device(bo)) : NULL;
+	return allocator != NULL ? &allocator->fLock : &sNoDeviceLock;
+}
+
+
 void
 BufferAllocator::Describe(struct gbm_bo* bo, buffer_info* info)
 {
+	DeviceLocker locker(_LockFor(bo));
 	info->width = gbm_bo_get_width(bo);
 	info->height = gbm_bo_get_height(bo);
 	info->fourcc = gbm_bo_get_format(bo);
@@ -259,6 +300,7 @@ BufferAllocator::Describe(struct gbm_bo* bo, buffer_info* info)
 int
 BufferAllocator::Export(struct gbm_bo* bo)
 {
+	DeviceLocker locker(_LockFor(bo));
 	return bo != NULL ? gbm_bo_get_fd(bo) : -1;
 }
 
@@ -266,6 +308,7 @@ BufferAllocator::Export(struct gbm_bo* bo)
 bool
 BufferAllocator::IsLinear(struct gbm_bo* bo)
 {
+	DeviceLocker locker(_LockFor(bo));
 	const uint64 modifier = gbm_bo_get_modifier(bo);
 	return modifier == kBufferModifierLinear
 		|| modifier == kBufferModifierInvalid;
@@ -276,6 +319,7 @@ void*
 BufferAllocator::Map(struct gbm_bo* bo, uint32 x, uint32 y, uint32 width,
 	uint32 height, bool write, uint32* stride, void** cookie)
 {
+	DeviceLocker locker(_LockFor(bo));
 	return gbm_bo_map(bo, x, y, width, height,
 		write ? (GBM_BO_TRANSFER_READ | GBM_BO_TRANSFER_WRITE)
 			: GBM_BO_TRANSFER_READ, stride, cookie);
@@ -285,6 +329,7 @@ BufferAllocator::Map(struct gbm_bo* bo, uint32 x, uint32 y, uint32 width,
 void
 BufferAllocator::Unmap(struct gbm_bo* bo, void* cookie)
 {
+	DeviceLocker locker(_LockFor(bo));
 	gbm_bo_unmap(bo, cookie);
 }
 
@@ -292,6 +337,7 @@ BufferAllocator::Unmap(struct gbm_bo* bo, void* cookie)
 void
 BufferAllocator::Destroy(struct gbm_bo* bo)
 {
+	DeviceLocker locker(_LockFor(bo));
 	if (bo != NULL)
 		gbm_bo_destroy(bo);
 }

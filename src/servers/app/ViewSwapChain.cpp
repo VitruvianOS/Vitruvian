@@ -31,6 +31,7 @@
 #include <Bitmap.h>
 
 #include <BufferAllocator.h>
+#include <PortFds.h>
 
 #include "BitmapManager.h"
 #include "Desktop.h"
@@ -63,6 +64,8 @@ struct ViewSwapChain::Generation {
 	size_t					bytes;
 	bool					presented;
 	bool					held[kSwapChainMaxBuffers];
+	// Buffers the client imported, shown without a copy.
+	bool					external;
 	BReference<ServerBitmap> buffers[kSwapChainMaxBuffers];
 	area_id					stateArea;
 	swap_chain_state*		state;
@@ -75,6 +78,7 @@ struct ViewSwapChain::Generation {
 		count(0),
 		bytes(0),
 		presented(false),
+		external(false),
 		stateArea(-1),
 		state(NULL)
 	{
@@ -292,8 +296,9 @@ read_rect(ServerBitmap* from, ServerBitmap* to, int32 left, int32 top,
 #ifdef HAVE_GBM
 	GbmMemory* memory = from->GbmBuffer();
 	// The pages of a tiled buffer are not rows: only the map detiles.
+	const bool pageless = from->Bits() == NULL;
 	if (memory != NULL && memory->BufferObject() != NULL
-			&& (gbmRead || !memory->IsLinear())) {
+			&& (gbmRead || pageless || !memory->IsLinear())) {
 		uint32 stride = 0;
 		void* mapData = NULL;
 		void* map = BufferAllocator::Map(memory->BufferObject(), left, top,
@@ -306,6 +311,8 @@ read_rect(ServerBitmap* from, ServerBitmap* to, int32 left, int32 top,
 			return;
 		}
 	}
+	if (pageless)
+		return;
 #else
 	(void)gbmRead;
 #endif
@@ -330,6 +337,8 @@ public:
 
 		ServerBitmap* source = frame.source != NULL
 			? frame.source : frame.bitmap;
+		if (source->Bits() == NULL)
+			return false;
 		SwapChainCpuRead reading(frame.source != NULL ? NULL : frame.bitmap);
 		if (frame.source == NULL)
 			frame.waitTime = reading.WaitTime();
@@ -381,6 +390,7 @@ public:
 		fPlane(NULL),
 		fHardware(NULL),
 		fToken(0),
+		fRegistered(0),
 		fRefused(0),
 		fScan(false),
 		fLost(false)
@@ -465,6 +475,15 @@ public:
 			}
 		}
 
+		// An imported set grows after the plane is claimed.
+		if (frame.count > fRegistered
+				&& !_AddBuffers(fPlane, frame, fRegistered)) {
+			fRefused = frame.token;
+			Release(frame.serial, "plane refused a buffer");
+			return false;
+		}
+		fRegistered = frame.count;
+
 		const BRect source(0, 0, frame.bitmap->Width() - 1,
 			frame.bitmap->Height() - 1);
 		if (fPlane->Show(frame.index, frame.serial, source, frame.destination)
@@ -511,6 +530,7 @@ public:
 		OverlayPlane* plane = fPlane;
 		fPlane = NULL;
 		fToken = 0;
+		fRegistered = 0;
 		if (fScan)
 			fHardware->ReleaseScanout(plane);
 		else
@@ -547,9 +567,35 @@ private:
 			}
 			fPlane = NULL;
 			fToken = 0;
+			fRegistered = 0;
 			fScan = false;
 			fLost = false;
 		}
+	}
+
+	// Registers buffers from..count-1; the plane numbers them in order.
+	bool _AddBuffers(OverlayPlane* plane, const SwapChainFrame& frame,
+		int32 from)
+	{
+#ifndef HAVE_GBM
+		return false;
+#else
+		for (int32 i = from; i < frame.count; i++) {
+			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
+			int fd = memory != NULL ? memory->ExportFd() : -1;
+			int32 index = -1;
+			status_t status = fd >= 0
+				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
+					memory->Format(), memory->Stride(), memory->Handle(),
+					&index, memory->Modifier())
+				: B_ERROR;
+			if (fd >= 0)
+				close(fd);
+			if (status != B_OK || index != i)
+				return false;
+		}
+		return true;
+#endif
 	}
 
 	bool _Claim(const SwapChainFrame& frame)
@@ -562,22 +608,11 @@ private:
 				&plane, frame.destination) != B_OK)
 			return _ClaimScanout(frame);
 
-		for (int32 i = 1; i < frame.count; i++) {
-			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
-			int fd = memory != NULL ? memory->ExportFd() : -1;
-			int32 index = -1;
-			status_t status = fd >= 0
-				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
-					memory->Format(), memory->Stride(), memory->Handle(),
-					&index, memory->Modifier())
-				: B_ERROR;
-			if (fd >= 0)
-				close(fd);
-			if (status != B_OK || index != i) {
-				frame.hardware->ReleaseOverlayPlane(plane);
-				return false;
-			}
+		if (!_AddBuffers(plane, frame, 1)) {
+			frame.hardware->ReleaseOverlayPlane(plane);
+			return false;
 		}
+		fRegistered = frame.count;
 
 		plane->SetListener(this);
 		fPlane = plane;
@@ -603,22 +638,11 @@ private:
 				frame.destination) != B_OK)
 			return false;
 
-		for (int32 i = 1; i < frame.count; i++) {
-			GbmMemory* memory = frame.buffers[i]->GbmBuffer();
-			int fd = memory != NULL ? memory->ExportFd() : -1;
-			int32 index = -1;
-			status_t status = fd >= 0
-				? plane->AddBuffer(fd, memory->Width(), memory->Height(),
-					memory->Format(), memory->Stride(), memory->Handle(),
-					&index, memory->Modifier())
-				: B_ERROR;
-			if (fd >= 0)
-				close(fd);
-			if (status != B_OK || index != i) {
-				frame.hardware->ReleaseScanout(plane);
-				return false;
-			}
+		if (!_AddBuffers(plane, frame, 1)) {
+			frame.hardware->ReleaseScanout(plane);
+			return false;
 		}
+		fRegistered = frame.count;
 
 		plane->SetListener(this);
 		fPlane = plane;
@@ -636,6 +660,7 @@ private:
 	OverlayPlane*	fPlane;
 	::HWInterface*	fHardware;
 	int32			fToken;
+	int32			fRegistered;
 	int32			fRefused;
 	bool			fScan;
 	BRect			fDestination;
@@ -658,6 +683,9 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fOwnerWindow(NULL),
 	fLock("view swap chain"),
 	fCurrent(NULL),
+	fExternal(NULL),
+	fImportPort(-1),
+	fExternalWarned(false),
 	fShownGeneration(NULL),
 	fShownIndex(-1),
 	fCpu(NULL),
@@ -748,6 +776,10 @@ ViewSwapChain::~ViewSwapChain()
 		delete fGenerations[i];
 	}
 	fGenerations.clear();
+	delete fExternal;
+	fExternal = NULL;
+	if (fImportPort >= 0)
+		delete_port(fImportPort);
 	if (fCounted)
 		fApp->ReleaseSwapChain(0, true);
 
@@ -936,6 +968,9 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	}
 
 	generation->token = atomic_add(&sNextToken, 1) + 1;
+	if (fImportPort < 0)
+		fImportPort = create_port(8, "swap chain import");
+	_ResetExternal();
 	fCurrent = generation;
 	if (!resize) {
 		fCounted = true;
@@ -970,6 +1005,7 @@ ViewSwapChain::Describe(BPrivate::PortLink& sender) const
 		sender.Attach<uint32>((uint32)bitmap->BytesPerRow());
 		sender.Attach<uint32>(memory != NULL ? memory->Offset() : 0);
 	}
+	sender.Attach<port_id>(fImportPort);
 }
 
 
@@ -1001,7 +1037,8 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 		BAutolock locker(fLock);
 		generation = _Find(token);
 		if (generation == NULL || index < 0 || index >= generation->count
-				|| generation->held[index]) {
+				|| generation->held[index]
+				|| generation->buffers[index].Get() == NULL) {
 			fprintf(stderr, "swap chain: present of buffer %d rejected\n",
 				(int)index);
 			return;
@@ -1023,7 +1060,7 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 			_Report(system_time());
 		}
 		frame.bitmap = generation->buffers[index].Get();
-		frame.token = token;
+		frame.token = generation->token;
 		frame.index = index;
 		frame.destination = _Destination(generation);
 		frame.damage = &damage;
@@ -1051,7 +1088,8 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	BRegion lazyClipping;
 	PlaneConsumer* plane = fPlane;
 	const bool steady = clipping == NULL && plane != NULL && plane->Active()
-		&& plane->Token() == token && plane->Destination() == frame.destination;
+		&& plane->Token() == frame.token
+		&& plane->Destination() == frame.destination;
 	if (steady) {
 		frame.outputFrame = plane->OutputFrame();
 		frame.fullyVisible = true;
@@ -1393,7 +1431,9 @@ ViewSwapChain::_FlushFrame(DrawingEngine* engine)
 		SwapChainGpuCopy* gpu = NULL;
 #ifdef HAVE_GBM
 		::HWInterface* hardware = fWindow->Desktop()->HWInterface();
-		const bool wantGpu = fPath == kTrialGpu || fPath == kPathGpu;
+		// A tiled import has no CPU pages: only the GPU reads it right.
+		const bool wantGpu = bitmap->Bits() == NULL
+			|| fPath == kTrialGpu || fPath == kPathGpu;
 		if (wantGpu && hardware != NULL && fGpu == NULL)
 			fGpu = new(std::nothrow) SwapChainGpuCopy();
 		if (wantGpu && fGpu != NULL && !fGpu->Failed()
@@ -1417,12 +1457,117 @@ ViewSwapChain::_FlushFrame(DrawingEngine* engine)
 			shadow = _FillShadow(bitmap.Get(), damage, NULL);
 		}
 		frame.readTime = system_time() - readStart;
-		if (shadow.Get() != NULL)
+		if (shadow.Get() != NULL && bitmap->Bits() != NULL)
 			_Measure(gpu != NULL, frame.readTime);
 	}
 	frame.source = shadow.Get();
 	fCpu->Show(frame);
 	_CountCopy(frame.waitTime, frame.readTime, frame.copyTime, gpuTime);
+}
+
+
+void
+ViewSwapChain::ReceiveExternal()
+{
+	if (fImportPort < 0)
+		return;
+
+	while (true) {
+		struct {
+			int32						slot;
+			swap_chain_external			buffer;
+		} message;
+		int fds[PORT_MAX_FDS];
+		int32 fdCount = PORT_MAX_FDS;
+		int32 code;
+		ssize_t size = read_port_fds(fImportPort, &code, &message,
+			sizeof(message), fds, &fdCount, B_RELATIVE_TIMEOUT, 0);
+		if (size < 0)
+			return;
+
+		if (size == (ssize_t)sizeof(message) && fdCount == 1)
+			_ImportExternal(fds[0], message.slot, message.buffer);
+		else if (size == (ssize_t)sizeof(message) && message.slot < 0) {
+			BAutolock locker(fLock);
+			_ResetExternal();
+		}
+		for (int32 i = 0; i < fdCount; i++)
+			close(fds[i]);
+	}
+}
+
+
+// Slots arrive in order; anything else the server cannot show is refused,
+// and the client keeps copying.
+void
+ViewSwapChain::_ImportExternal(int fd, int32 slot,
+	const swap_chain_external& buffer)
+{
+	::HWInterface* hardware = fWindow->Desktop()->HWInterface();
+	BAutolock locker(fLock);
+	if (fCurrent == NULL || hardware == NULL)
+		return;
+
+	const int32 have = fExternal != NULL ? fExternal->count : 0;
+	const bool valid = slot == have && slot < kSwapChainMaxExternal
+		&& buffer.fourcc == kSwapFormatXRGB8888
+		&& (int32)buffer.width == fCurrent->width
+		&& (int32)buffer.height == fCurrent->height
+		&& buffer.stride >= buffer.width * 4;
+
+	ServerBitmap* bitmap = NULL;
+	if (valid) {
+		bitmap = gBitmapManager->ImportDmabuf(*hardware, fd, buffer.width,
+			buffer.height, buffer.fourcc, buffer.stride, buffer.offset,
+			buffer.modifier, _DestinationFor(fCurrent->width,
+				fCurrent->height));
+	}
+
+	if (bitmap == NULL) {
+		if (!fExternalWarned) {
+			fExternalWarned = true;
+			fprintf(stderr, "swap chain: imported buffer refused (slot %d, "
+				"%ux%u, modifier %#llx)\n", (int)slot, (unsigned)buffer.width,
+				(unsigned)buffer.height, (unsigned long long)buffer.modifier);
+		}
+		__atomic_store_n(&fCurrent->state->externalRefused, (int32)1,
+			__ATOMIC_RELEASE);
+		return;
+	}
+
+	if (fExternal == NULL) {
+		fExternal = new(std::nothrow) Generation;
+		if (fExternal == NULL) {
+			BReference<ServerBitmap> release(bitmap, true);
+			return;
+		}
+		fExternal->token = atomic_add(&sNextToken, 1) + 1;
+		fExternal->width = fCurrent->width;
+		fExternal->height = fCurrent->height;
+		fExternal->external = true;
+	}
+	fExternal->buffers[slot].SetTo(bitmap, true);
+	fExternal->count = slot + 1;
+}
+
+
+// The set goes to the generation list, which frees it once nothing shows
+// or holds a buffer of it. fLock held.
+void
+ViewSwapChain::_ResetExternal()
+{
+	if (fExternal == NULL)
+		return;
+
+	Generation* old = fExternal;
+	fExternal = NULL;
+	try {
+		fGenerations.push_back(old);
+	} catch (std::bad_alloc&) {
+		// Still referenced when shown or pending; leak nothing otherwise.
+		if (old != fShownGeneration && fPending.empty())
+			delete old;
+	}
 }
 
 
@@ -1673,6 +1818,10 @@ ViewSwapChain::_Find(int32 token) const
 {
 	if (token == 0)
 		return NULL;
+	if (token < 0) {
+		return fExternal != NULL && fCurrent != NULL
+			&& -token == fCurrent->token ? fExternal : NULL;
+	}
 
 	for (size_t i = 0; i < fGenerations.size(); i++) {
 		if (fGenerations[i]->token == token)
@@ -1689,6 +1838,18 @@ ViewSwapChain::_Retire(Generation* generation, int32 index, bigtime_t when)
 	generation->held[index] = false;
 
 	const int32 period = fPeriod;
+	if (generation->external) {
+		// A replaced set has nobody left to tell.
+		if (generation == fExternal && fCurrent != NULL) {
+			swap_chain_state* state = fCurrent->state;
+			state->releaseTime = when;
+			state->refreshPeriod = period;
+			__atomic_store_n(&state->external[index], (int32)kSwapBufferFree,
+				__ATOMIC_RELEASE);
+		}
+		return;
+	}
+
 	swap_chain_state* state = generation->state;
 	state->releaseTime = when;
 	state->refreshPeriod = period;
@@ -1748,8 +1909,8 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage,
 		fSpare.Unset();
 	}
 
-	if (bitmap == NULL || bitmap->Bits() == NULL
-			|| bitmap->ColorSpace() != B_RGB32) {
+	if (bitmap == NULL || bitmap->ColorSpace() != B_RGB32
+			|| (bitmap->Bits() == NULL && bitmap->GbmBuffer() == NULL)) {
 		BAutolock locker(fShadowLock);
 		fShadowValid = false;
 		return BReference<ServerBitmap>();

@@ -30,6 +30,8 @@
 #include <gbm.h>
 #endif
 
+#include <BufferAllocator.h>
+
 #include "ServerApp.h"
 #include "ServerMemoryAllocator.h"
 
@@ -427,7 +429,8 @@ GbmMemory::GbmMemory()
 	fBo(NULL),
 	fMapData(NULL),
 	fArea(-1),
-	fBase(NULL)
+	fBase(NULL),
+	fKeepModifier(false)
 {
 }
 
@@ -439,9 +442,9 @@ GbmMemory::~GbmMemory()
 
 	if (fBo != NULL) {
 		if (fMapData != NULL)
-			gbm_bo_unmap(fBo, fMapData);
+			BPrivate::BufferAllocator::Unmap(fBo, fMapData);
 
-		gbm_bo_destroy(fBo);
+		BPrivate::BufferAllocator::Destroy(fBo);
 	}
 }
 
@@ -453,11 +456,11 @@ GbmMemory::~GbmMemory()
 status_t
 GbmMemory::Adopt(struct gbm_bo* bo, area_id area, uint8* base, void* mapData)
 {
-	if (fBo != NULL || bo == NULL || area < B_OK || base == NULL)
+	if (fBo != NULL || bo == NULL || (area < B_OK) != (base == NULL))
 		return B_BAD_VALUE;
 
 	fBo = bo;
-	fArea = area;
+	fArea = area >= B_OK ? area : -1;
 	fBase = base;
 	fMapData = mapData;
 	return B_OK;
@@ -488,7 +491,7 @@ GbmMemory::AreaOffset()
 int
 GbmMemory::ExportFd() const
 {
-	return fBo != NULL ? gbm_bo_get_fd(fBo) : -1;
+	return BPrivate::BufferAllocator::Export(fBo);
 }
 
 
@@ -528,7 +531,7 @@ GbmMemory::Modifier() const
 
 	// A buffer made without a list is linear, whatever the driver reports.
 	const uint64 modifier = gbm_bo_get_modifier(fBo);
-	return modifier == 0x00ffffffffffffffULL ? 0 : modifier;
+	return modifier == 0x00ffffffffffffffULL && !fKeepModifier ? 0 : modifier;
 }
 
 

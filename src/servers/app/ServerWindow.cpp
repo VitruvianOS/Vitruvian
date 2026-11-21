@@ -2750,6 +2750,8 @@ ServerWindow::_PresentSwapChain(BPrivate::LinkReceiver& link)
 		return;
 
 	ViewSwapChain* chain = view->SwapChain();
+	if (chain != NULL && (flags & kPresentExternal) != 0)
+		chain->ReceiveExternal();
 	if (chain == NULL || !chain->Accepts(token))
 		return;
 

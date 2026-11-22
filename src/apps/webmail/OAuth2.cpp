@@ -16,6 +16,7 @@
 #include <Message.h>
 #include <String.h>
 #include <WebView.h>
+#include <private/web/WebProfile.h>
 #include <Window.h>
 
 #include <curl/curl.h>
@@ -566,6 +567,8 @@ public:
 						fState(state)
 	{
 		fView = new BWebView(Bounds(), "consent");
+		BPrivate::SetWebViewProfile(fView,
+			BPrivate::B_WEB_PROFILE_MINIMAL);
 		fView->SetTarget(BMessenger(this));
 		fView->SetSession(NULL, true);
 		AddChild(fView);

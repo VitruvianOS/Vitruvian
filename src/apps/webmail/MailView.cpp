@@ -5,6 +5,7 @@
 
 #include "WebMailStrings.h"
 #include "MailView.h"
+#include <private/web/WebProfile.h>
 #include <MailProviders.h>
 #include "UnreadParser.h"
 #include "WebMailMessages.h"
@@ -92,6 +93,7 @@ MailView::MailView(const Account& account)
 	fNative(account.kind != WEB_ACCOUNT)
 {
 	fWebView = new BWebView(Bounds(), "mail-webview");
+	BPrivate::SetWebViewProfile(fWebView, BPrivate::B_WEB_PROFILE_MINIMAL);
 	fWebView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	AddChild(fWebView);
 }

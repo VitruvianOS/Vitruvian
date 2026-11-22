@@ -41,6 +41,8 @@ public:
 			void				Detach();
 
 			bool				IsReady() const;
+	// True once dma-buf presenting failed for good; the view is SHM only.
+			bool				Failed() const;
 
 	// GLib thread. The rects are the page damage, buffer coordinates.
 			Result				Present(WPEBuffer* buffer, int fd,
@@ -68,6 +70,7 @@ private:
 	};
 
 			void				_ForgetSlotsLocked();
+			void				_FailLocked(const char* why);
 			void				_Collect(std::vector<WPEBuffer*>& rendered,
 									std::vector<WPEBuffer*>& released);
 
@@ -75,6 +78,8 @@ private:
 			BPrivate::SwapChain*	fChain;
 			WPEBuffer*			fSlots[BPrivate::kSwapChainMaxExternal];
 			int					fSlotCount;
+			bool				fFailed;
+			int					fPresentErrors;
 			std::vector<Entry>	fEntries;
 			std::function<void(WPEBuffer*)>	fRendered;
 			std::function<void(WPEBuffer*)>	fReleased;

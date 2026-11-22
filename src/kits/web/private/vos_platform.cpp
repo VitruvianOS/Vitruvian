@@ -39,6 +39,8 @@ struct _VosDisplay {
 	// Set when frames can go to the swap chain as dma-bufs.
 	WPEDRMDevice*		drmDevice;
 	WPEBufferFormats*	formats;
+	// Withdrawn formats; WebKit may still hold the pointer.
+	WPEBufferFormats*	retiredFormats;
 };
 
 
@@ -164,6 +166,23 @@ _vos_view_copy_dmabuf(VosView* view, WPEBufferDMABuf* dmabuf, int width,
 }
 
 
+// After the swap chain gave up: advertise SHM only so WebKit stops
+// choosing dma-bufs for new buffers.
+static void
+_vos_display_withdraw_dmabuf(WPEDisplay* wpeDisplay)
+{
+	auto* display = VOS_DISPLAY(wpeDisplay);
+	if (display->formats == nullptr)
+		return;
+	if (display->retiredFormats == nullptr)
+		display->retiredFormats = display->formats;
+	else
+		g_object_unref(display->formats);
+	display->formats = nullptr;
+	display->retiredFormats = nullptr;
+}
+
+
 static gboolean
 _vos_view_render_dmabuf(VosView* view, WPEBuffer* buffer,
 	const WPERectangle* damage, guint damageCount)
@@ -206,6 +225,10 @@ _vos_view_render_dmabuf(VosView* view, WPEBuffer* buffer,
 				return TRUE;
 
 			case DmabufPresenter::kUnsupported:
+				if (presenter->Failed()) {
+					_vos_display_withdraw_dmabuf(
+						wpe_view_get_display(WPE_VIEW(view)));
+				}
 				break;
 		}
 	}
@@ -559,6 +582,7 @@ vos_display_dispose(GObject* object)
 {
 	auto* self = VOS_DISPLAY(object);
 	g_clear_pointer(&self->formats, g_object_unref);
+	g_clear_pointer(&self->retiredFormats, g_object_unref);
 	if (self->drmDevice != nullptr) {
 		wpe_drm_device_unref(self->drmDevice);
 		self->drmDevice = nullptr;

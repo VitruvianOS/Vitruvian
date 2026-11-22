@@ -17,7 +17,9 @@ using namespace BPrivate;
 DmabufPresenter::DmabufPresenter()
 	:
 	fChain(nullptr),
-	fSlotCount(0)
+	fSlotCount(0),
+	fFailed(false),
+	fPresentErrors(0)
 {
 	for (int i = 0; i < kSwapChainMaxExternal; i++)
 		fSlots[i] = nullptr;
@@ -74,6 +76,7 @@ DmabufPresenter::Resize(int width, int height)
 		fChain->Delete();
 		delete fChain;
 		fChain = nullptr;
+		fFailed = true;
 	}
 }
 
@@ -104,7 +107,27 @@ bool
 DmabufPresenter::IsReady() const
 {
 	std::lock_guard<std::mutex> lock(fMutex);
-	return fChain != nullptr;
+	return fChain != nullptr && !fFailed;
+}
+
+
+bool
+DmabufPresenter::Failed() const
+{
+	std::lock_guard<std::mutex> lock(fMutex);
+	return fFailed;
+}
+
+
+// fMutex held. Frames stop going to the chain for the rest of the view's life.
+void
+DmabufPresenter::_FailLocked(const char* why)
+{
+	if (fFailed)
+		return;
+	fFailed = true;
+	_ForgetSlotsLocked();
+	log_error("DmabufPresenter: %s, falling back to SHM", why);
 }
 
 
@@ -135,7 +158,9 @@ DmabufPresenter::Present(WPEBuffer* buffer, int fd,
 	Result result = kUnsupported;
 	{
 		std::lock_guard<std::mutex> lock(fMutex);
-		if (fChain == nullptr || fChain->ExternalRefused()
+		if (fChain != nullptr && fChain->ExternalRefused())
+			_FailLocked("swap chain refused dma-bufs");
+		if (fChain == nullptr || fFailed
 				|| (int32)description.width != fChain->Width()
 				|| (int32)description.height != fChain->Height())
 			return kUnsupported;
@@ -151,8 +176,10 @@ DmabufPresenter::Present(WPEBuffer* buffer, int fd,
 				_ForgetSlotsLocked();
 
 			int32 imported = -1;
-			if (fChain->ExternalImport(fd, description, &imported) != B_OK)
+			if (fChain->ExternalImport(fd, description, &imported) != B_OK) {
+				_FailLocked("dma-buf import refused");
 				return kUnsupported;
+			}
 			slot = imported;
 			fSlots[slot] = (WPEBuffer*)g_object_ref(buffer);
 			fSlotCount = slot + 1;
@@ -175,8 +202,12 @@ DmabufPresenter::Present(WPEBuffer* buffer, int fd,
 		status_t status = fChain->PresentExternal(slot, rects, count);
 		if (status == B_BUSY)
 			return kBusy;
-		if (status != B_OK)
+		if (status != B_OK) {
+			if (++fPresentErrors >= 3)
+				_FailLocked("present kept failing");
 			return kUnsupported;
+		}
+		fPresentErrors = 0;
 
 		Entry entry = { (WPEBuffer*)g_object_ref(buffer), slot, false };
 		fEntries.push_back(entry);

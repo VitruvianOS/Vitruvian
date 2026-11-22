@@ -43,7 +43,8 @@ struct WebKitBridge {
 									SessionAdapter* session = nullptr,
 									int autoplayPolicy = 0,
 									DmabufPresenter* presenter = nullptr,
-									int profile = 0);
+									int profile = 0,
+									const char* initialURL = nullptr);
 								~WebKitBridge();
 
 			bool				IsValid() const { return fValid; }
@@ -214,8 +215,14 @@ private:
 								SessionAdapter* session,
 								int autoplayPolicy,
 								DmabufPresenter* presenter,
-								int profile);
+								int profile, const char* initialURL);
 			void				_ConnectSignals();
+	static	WebKitWebView*		_FindRelatedView(SessionAdapter* session,
+									int profile, const char* initialURL);
+			void				_RegisterSite(SessionAdapter* session,
+									int profile, const char* initialURL);
+			void				_UnregisterSite();
+			void				_UpdateSite(const char* uri);
 			void				_UpdateCachedNavState();
 
 			// GLib thread only.

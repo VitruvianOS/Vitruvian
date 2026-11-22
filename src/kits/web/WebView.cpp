@@ -99,6 +99,7 @@ struct FileChooserState {
 // Profile per view, set before the view is attached.
 static std::mutex sProfileMutex;
 static std::map<const BWebView*, int> sProfiles;
+static std::map<const BWebView*, std::string> sInitialURLs;
 
 static int
 profile_of(const BWebView* view)
@@ -106,6 +107,26 @@ profile_of(const BWebView* view)
 	std::lock_guard<std::mutex> lock(sProfileMutex);
 	auto it = sProfiles.find(view);
 	return it != sProfiles.end() ? it->second : 0;
+}
+
+
+static std::string
+initial_url_of(const BWebView* view)
+{
+	std::lock_guard<std::mutex> lock(sProfileMutex);
+	auto it = sInitialURLs.find(view);
+	return it != sInitialURLs.end() ? it->second : std::string();
+}
+
+
+void
+BPrivate::SetWebViewInitialURL(BWebView* view, const char* url)
+{
+	std::lock_guard<std::mutex> lock(sProfileMutex);
+	if (url != NULL && url[0] != '\0')
+		sInitialURLs[view] = url;
+	else
+		sInitialURLs.erase(view);
 }
 
 
@@ -568,6 +589,7 @@ BWebView::~BWebView()
 	{
 		std::lock_guard<std::mutex> lock(sProfileMutex);
 		sProfiles.erase(this);
+		sInitialURLs.erase(this);
 	}
 	if (fImpl->fOwnsSession) {
 		SessionAdapter* session = fImpl->fSession;
@@ -731,8 +753,10 @@ BWebView::AttachedToWindow()
 	fImpl->fPresenter->Attach(this, w, h);
 	presenter = fImpl->fPresenter;
 #endif
+	std::string initialURL = initial_url_of(this);
 	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession,
-		(int)fImpl->fAutoplay, presenter, profile_of(this));
+		(int)fImpl->fAutoplay, presenter, profile_of(this),
+		initialURL.c_str());
 	if (!fImpl->fBridge->IsValid()) {
 		delete fImpl->fBridge;
 		fImpl->fBridge = NULL;

@@ -42,5 +42,9 @@ G_DECLARE_FINAL_TYPE(VosView, vos_view, VOS, VIEW, WPEView)
 // handing it to a WebKitWebView through its "display" property.
 WPEDisplay*		vos_display_new(VosPlatformHost* host);
 
+// The host the next view and toplevel of a shared display belong to;
+// GLib thread, set around the creation of a related view.
+void			vos_display_set_next_host(VosPlatformHost* host);
+
 
 #endif // VOS_WEB_PLATFORM_H

@@ -20,6 +20,7 @@
 #include <WebDefs.h>
 #include <WebExtensions.h>
 #include <WebView.h>
+#include <private/web/WebProfile.h>
 #include <WebBookmarks.h>
 #include <WebSettings.h>
 #include <UrlNormalize.h>
@@ -194,6 +195,9 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 	BWebSettings* settings = NetPlusApp::Settings();
 	fWebView->SetSession(NULL,
 		fPrivateWindow || settings->PrivateBrowsing());
+	const char* startup = (url != NULL && url[0] != '\0')
+		? url : settings->Homepage();
+	BPrivate::SetWebViewInitialURL(fWebView, startup);
 
 	if (!fPwaMode) {
 		_AddShortcuts();
@@ -224,8 +228,6 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow,
 
 	_ApplySettings();
 
-	const char* startup = (url != NULL && url[0] != '\0')
-		? url : settings->Homepage();
 	fWebView->LoadURL(startup);
 }
 

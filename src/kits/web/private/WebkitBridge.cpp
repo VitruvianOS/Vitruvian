@@ -28,6 +28,7 @@
 #include <UrlRequest.h>
 #include <HttpResult.h>
 #include <wpe/webkit.h>
+#include <libsoup/soup.h>
 #ifndef HAS_WPE_PLATFORM
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
@@ -50,11 +51,112 @@ struct WebKitBridge::ScriptMessageBinding {
 };
 
 
+//	#pragma mark - Site registry
+
+
+// Live views by site, GLib thread only. Views of one persistent session
+// and the same site share a web process; WebKit moves a related view to
+// a new process when it navigates to another site.
+namespace {
+
+struct SiteEntry {
+	WebKitBridge*	bridge;
+	SessionAdapter*	session;
+	std::string		site;
+};
+
+std::vector<SiteEntry> sSiteViews;
+
+
+// scheme://registrable-domain, empty for anything that must not share.
+std::string
+site_of(const char* uri)
+{
+	if (uri == nullptr || uri[0] == '\0')
+		return "";
+	GUri* parsed = g_uri_parse(uri, G_URI_FLAGS_PARSE_RELAXED, nullptr);
+	if (parsed == nullptr)
+		return "";
+	std::string site;
+	const char* scheme = g_uri_get_scheme(parsed);
+	const char* host = g_uri_get_host(parsed);
+	if (scheme != nullptr && host != nullptr && host[0] != '\0'
+		&& (strcmp(scheme, "http") == 0 || strcmp(scheme, "https") == 0)) {
+		char* lower = g_ascii_strdown(host, -1);
+		GError* error = nullptr;
+		const char* base = soup_tld_get_base_domain(lower, &error);
+		site = std::string(scheme) + "://" + (base != nullptr ? base : lower);
+		if (error != nullptr)
+			g_error_free(error);
+		g_free(lower);
+	}
+	g_uri_unref(parsed);
+	return site;
+}
+
+}	// namespace
+
+
+WebKitWebView*
+WebKitBridge::_FindRelatedView(SessionAdapter* session, int profile,
+	const char* initialURL)
+{
+#ifdef HAS_WPE_PLATFORM
+	if (profile != 0 || session == nullptr || session->IsEphemeral())
+		return nullptr;
+	std::string site = site_of(initialURL);
+	if (site.empty())
+		return nullptr;
+	for (const SiteEntry& entry : sSiteViews) {
+		if (entry.session == session && entry.site == site
+			&& entry.bridge->webView != nullptr)
+			return entry.bridge->webView;
+	}
+#endif
+	return nullptr;
+}
+
+
+void
+WebKitBridge::_RegisterSite(SessionAdapter* session, int profile,
+	const char* initialURL)
+{
+	if (profile != 0 || session == nullptr || session->IsEphemeral())
+		return;
+	sSiteViews.push_back({this, session, site_of(initialURL)});
+}
+
+
+void
+WebKitBridge::_UnregisterSite()
+{
+	for (size_t i = 0; i < sSiteViews.size(); i++) {
+		if (sSiteViews[i].bridge == this) {
+			sSiteViews.erase(sSiteViews.begin() + i);
+			return;
+		}
+	}
+}
+
+
+void
+WebKitBridge::_UpdateSite(const char* uri)
+{
+	for (SiteEntry& entry : sSiteViews) {
+		if (entry.bridge == this) {
+			entry.site = site_of(uri);
+			return;
+		}
+	}
+}
+
+
 //	#pragma mark - Constructor/Destructor
 
 
 WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
-	int autoplayPolicy, DmabufPresenter* presenter, int profile)
+	int autoplayPolicy, DmabufPresenter* presenter, int profile,
+	const char* initialURL)
 	:
 #ifdef HAS_WPE_PLATFORM
 	wpeView(nullptr),
@@ -83,14 +185,16 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
-		_Init(width, height, session, autoplayPolicy, presenter, profile);
+		_Init(width, height, session, autoplayPolicy, presenter, profile,
+			initialURL);
 	});
 }
 
 
 void
 WebKitBridge::_Init(int width, int height, SessionAdapter* session,
-	int autoplayPolicy, DmabufPresenter* presenter, int profile)
+	int autoplayPolicy, DmabufPresenter* presenter, int profile,
+	const char* initialURL)
 {
 
 	// 1. Compositor. The FDO build creates the wpe_view_backend through
@@ -165,9 +269,17 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 			onCursorNameChanged(std::string(name));
 	};
 
-	fDisplay = vos_display_new(fPlatformHost);
+	// A view opened for a site that is already live joins that view's
+	// web process; WebKit then hands it the related view's display too.
+	WebKitWebView* related = _FindRelatedView(session, profile, initialURL);
+	if (related != nullptr) {
+		fDisplay = WPE_DISPLAY(g_object_ref(
+			webkit_web_view_get_display(related)));
+	} else
+		fDisplay = vos_display_new(fPlatformHost);
 	GError* displayError = nullptr;
-	if (!wpe_display_connect(fDisplay, &displayError)) {
+	if (related == nullptr
+		&& !wpe_display_connect(fDisplay, &displayError)) {
 		log_error("WebKitBridge: display connect failed: %s",
 			displayError != nullptr ? displayError->message : "unknown");
 		if (displayError != nullptr)
@@ -201,13 +313,25 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		"autoplay", autoplay, nullptr);
 
 #ifdef HAS_WPE_PLATFORM
-	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
-		"display",          fDisplay,
-		"web-context",      context,
-		"network-session",  networkSession,
-		"settings",         settings,
-		"website-policies", policies,
-		nullptr));
+	if (related != nullptr) {
+		// Context, session and display come from the related view; the
+		// platform objects it creates belong to this window's host.
+		vos_display_set_next_host(fPlatformHost);
+		webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+			"related-view",     related,
+			"settings",         settings,
+			"website-policies", policies,
+			nullptr));
+		vos_display_set_next_host(nullptr);
+	} else {
+		webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+			"display",          fDisplay,
+			"web-context",      context,
+			"network-session",  networkSession,
+			"settings",         settings,
+			"website-policies", policies,
+			nullptr));
+	}
 #else
 	webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
 		"backend",          wkBackend,
@@ -298,6 +422,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 
 	// 11. Connect GObject signals.
 	_ConnectSignals();
+	_RegisterSite(session, profile, initialURL);
 
 	fValid = true;
 	log_info("WebKitBridge: created successfully");
@@ -311,6 +436,7 @@ WebKitBridge::~WebKitBridge()
 	if (downloadHandler != nullptr)
 		downloadHandler->RemoveListener(this);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([this]() {
+		_UnregisterSite();
 		for (auto& entry : fPageScripts) {
 			if (entry.second != nullptr) {
 				webkit_user_content_manager_remove_script(
@@ -512,6 +638,8 @@ WebKitBridge::_OnNotifyURI(WebKitWebView* view, GParamSpec*, gpointer data)
 		std::lock_guard<std::mutex> lock(self->fStateMutex);
 		if (!url.empty()) self->fCachedURL = url;
 	}
+	if (!url.empty())
+		self->_UpdateSite(url.c_str());
 	if (self->onURLChanged && !url.empty())
 		self->onURLChanged(url);
 }

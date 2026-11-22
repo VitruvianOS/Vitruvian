@@ -600,18 +600,29 @@ vos_display_connect(WPEDisplay*, GError**)
 }
 
 
+static VosPlatformHost* sNextHost = nullptr;
+
+
+void
+vos_display_set_next_host(VosPlatformHost* host)
+{
+	sNextHost = host;
+}
+
+
 static WPEView*
 vos_display_create_view(WPEDisplay* display)
 {
 	auto* self = VOS_DISPLAY(display);
 	auto* view = VOS_VIEW(g_object_new(VOS_TYPE_VIEW, "display", display,
 		nullptr));
-	view->host = self->host;
+	VosPlatformHost* host = sNextHost != nullptr ? sNextHost : self->host;
+	view->host = host;
 
-	if (self->host != nullptr && self->host->compositor != nullptr
-			&& self->host->compositor->Presenter() != nullptr) {
+	if (host != nullptr && host->compositor != nullptr
+			&& host->compositor->Presenter() != nullptr) {
 		WPEView* wpeView = WPE_VIEW(view);
-		self->host->compositor->Presenter()->SetCallbacks(
+		host->compositor->Presenter()->SetCallbacks(
 			[wpeView](WPEBuffer* buffer) {
 				wpe_view_buffer_rendered(wpeView, buffer);
 			},
@@ -629,7 +640,7 @@ vos_display_create_toplevel(WPEDisplay* display, guint)
 	auto* self = VOS_DISPLAY(display);
 	auto* toplevel = VOS_TOPLEVEL(g_object_new(VOS_TYPE_TOPLEVEL, "display",
 		display, nullptr));
-	toplevel->host = self->host;
+	toplevel->host = sNextHost != nullptr ? sNextHost : self->host;
 	return WPE_TOPLEVEL(toplevel);
 }
 

@@ -53,8 +53,11 @@ struct XcbApi {
 static bool
 load_xcb(XcbApi& api)
 {
+	// Clients that dlopen libX11 load libxcb locally: look in it directly.
+	void* xcb = dlopen("libxcb.so.1", RTLD_NOW | RTLD_NOLOAD);
+	void* scope = xcb != NULL ? xcb : RTLD_DEFAULT;
 #define RESOLVE(name) \
-	api.p_##name = (__typeof__(&name))dlsym(RTLD_DEFAULT, #name); \
+	api.p_##name = (__typeof__(&name))dlsym(scope, #name); \
 	if (api.p_##name == NULL) \
 		return false;
 	XCB_FUNCTIONS(RESOLVE)

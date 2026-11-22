@@ -8,6 +8,7 @@
 #include <web/WebView.h>
 #include <web/WebDefs.h>
 #include <web/WebExtensions.h>
+#include <private/web/WebProfile.h>
 
 #include <Alert.h>
 #include <Application.h>
@@ -66,6 +67,7 @@ static const bigtime_t kResizeSettleDelay = 150000;
 #include "url_scheme_adapter.h"
 #include "webkit_bridge.h"
 #include "process_manager.h"
+#include "WebEngine.h"
 
 
 // Private messages: view thread only, not part of WebDefs.
@@ -93,6 +95,27 @@ struct FileChooserState {
 	bool						cancelled;
 	BFilePanel*					panel;
 };
+
+// Profile per view, set before the view is attached.
+static std::mutex sProfileMutex;
+static std::map<const BWebView*, int> sProfiles;
+
+static int
+profile_of(const BWebView* view)
+{
+	std::lock_guard<std::mutex> lock(sProfileMutex);
+	auto it = sProfiles.find(view);
+	return it != sProfiles.end() ? it->second : 0;
+}
+
+
+void
+BPrivate::SetWebViewProfile(BWebView* view, web_profile profile)
+{
+	std::lock_guard<std::mutex> lock(sProfileMutex);
+	sProfiles[view] = (int)profile;
+}
+
 
 static SessionAdapter* sDefaultSession = NULL;
 static std::string sDefaultProfileDir;
@@ -542,6 +565,10 @@ BWebView::BWebView(BRect frame, const char* name)
 BWebView::~BWebView()
 {
 #ifdef HAS_WPE
+	{
+		std::lock_guard<std::mutex> lock(sProfileMutex);
+		sProfiles.erase(this);
+	}
 	if (fImpl->fOwnsSession) {
 		SessionAdapter* session = fImpl->fSession;
 		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
@@ -588,6 +615,13 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 	// The session is created on the GLib thread: make sure the
 	// loop is running before the first marshalled call.
 	ProcessManager::Instance().StartGLibLoop();
+
+	// The network process limits depend on the profile and must be set
+	// before the first session exists.
+	int profile = profile_of(this);
+	ProcessManager::Instance().InvokeOnGLibThreadSync([profile]() {
+		WebEngineInit(profile);
+	});
 
 	// WebKit objects live and die on the GLib thread.
 	if (fImpl->fOwnsSession) {
@@ -698,7 +732,7 @@ BWebView::AttachedToWindow()
 	presenter = fImpl->fPresenter;
 #endif
 	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession,
-		(int)fImpl->fAutoplay, presenter);
+		(int)fImpl->fAutoplay, presenter, profile_of(this));
 	if (!fImpl->fBridge->IsValid()) {
 		delete fImpl->fBridge;
 		fImpl->fBridge = NULL;
@@ -2353,6 +2387,8 @@ BWebView::NotifyFullScreen(bool entered)
 		fImpl->fBridge->NotifyDidExitFullscreen();
 }
 #else // !HAS_WPE
+void
+BPrivate::SetWebViewProfile(BWebView*, web_profile) {}
 void
 BWebView::SetDefaultProfileDir(const char*) {}
 void

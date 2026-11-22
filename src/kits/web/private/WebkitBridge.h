@@ -42,7 +42,8 @@ struct WebKitBridge {
 								WebKitBridge(int width, int height,
 									SessionAdapter* session = nullptr,
 									int autoplayPolicy = 0,
-									DmabufPresenter* presenter = nullptr);
+									DmabufPresenter* presenter = nullptr,
+									int profile = 0);
 								~WebKitBridge();
 
 			bool				IsValid() const { return fValid; }
@@ -212,7 +213,8 @@ private:
 			void				_Init(int width, int height,
 								SessionAdapter* session,
 								int autoplayPolicy,
-								DmabufPresenter* presenter);
+								DmabufPresenter* presenter,
+								int profile);
 			void				_ConnectSignals();
 			void				_UpdateCachedNavState();
 

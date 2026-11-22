@@ -54,7 +54,7 @@ struct WebKitBridge::ScriptMessageBinding {
 
 
 WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
-	int autoplayPolicy, DmabufPresenter* presenter)
+	int autoplayPolicy, DmabufPresenter* presenter, int profile)
 	:
 #ifdef HAS_WPE_PLATFORM
 	wpeView(nullptr),
@@ -82,14 +82,14 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
-		_Init(width, height, session, autoplayPolicy, presenter);
+		_Init(width, height, session, autoplayPolicy, presenter, profile);
 	});
 }
 
 
 void
 WebKitBridge::_Init(int width, int height, SessionAdapter* session,
-	int autoplayPolicy, DmabufPresenter* presenter)
+	int autoplayPolicy, DmabufPresenter* presenter, int profile)
 {
 
 	// 1. Compositor. The FDO build creates the wpe_view_backend through
@@ -121,10 +121,11 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	setenv("ALSOFT_DRIVERS", "pipewire", 0);
 	// A paused off-screen video never resumed after a scroll or resize.
 	setenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1", 0);
-	context = WebEngineContext();
+	context = WebEngineContext(profile);
 
 	// 3. Settings.
 	settings = webkit_settings_new();
+	WebEngineApplySettings(settings, profile);
 	webkit_settings_set_enable_javascript(settings, TRUE);
 	webkit_settings_set_auto_load_images(settings, TRUE);
 	webkit_settings_set_enable_fullscreen(settings, TRUE);

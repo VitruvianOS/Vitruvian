@@ -11,14 +11,18 @@
 
 // Sets the memory limits of the network process. Must run before the first
 // network session exists; later calls do nothing. GLib thread only, as is WebEngineContext().
-void						WebEngineInit();
+void						WebEngineInit(int profile = 0);
 
 // The one WebKitWebContext of the app, created on first use with the
 // sandbox path and the URI schemes; the caller owns a reference.
-WebKitWebContext*			WebEngineContext();
+WebKitWebContext*			WebEngineContext(int profile = 0);
+
+// Applies a profile's feature set to a view's settings.
+void						WebEngineApplySettings(WebKitSettings* settings,
+								int profile);
 
 // Per-process memory limits; the caller frees the result.
-WebKitMemoryPressureSettings*	WebEnginePressureSettings();
+WebKitMemoryPressureSettings*	WebEnginePressureSettings(int profile = 0);
 
 
 #endif // VOS_WEB_ENGINE_H

@@ -16,6 +16,7 @@
 #include "process_manager.h"
 #include "session_adapter.h"
 #include "url_scheme_adapter.h"
+#include "WebEngine.h"
 #ifdef HAS_WPE_PLATFORM
 #include "vos_platform.h"
 #endif
@@ -123,16 +124,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	setenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1", 0);
 	// The SHM path renders in software with a large footprint; the default
 	// thresholds released memory mid-video and deadlocked the compositor.
-	WebKitMemoryPressureSettings* pressure
-		= webkit_memory_pressure_settings_new();
-	long pages = sysconf(_SC_PHYS_PAGES);
-	long pageSize = sysconf(_SC_PAGESIZE);
-	if (pages > 0 && pageSize > 0) {
-		webkit_memory_pressure_settings_set_memory_limit(pressure,
-			(guint)((uint64_t)pages * pageSize / (1024 * 1024)));
-	}
-	webkit_memory_pressure_settings_set_conservative_threshold(pressure, 0.7);
-	webkit_memory_pressure_settings_set_strict_threshold(pressure, 0.85);
+	WebKitMemoryPressureSettings* pressure = WebEnginePressureSettings();
 	context = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
 		"memory-pressure-settings", pressure, NULL));
 	webkit_memory_pressure_settings_free(pressure);

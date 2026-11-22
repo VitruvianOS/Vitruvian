@@ -6,6 +6,7 @@
 #include "session_adapter.h"
 
 #include "logging.h"
+#include "WebEngine.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -20,6 +21,8 @@ SessionAdapter::SessionAdapter(const std::string& profileDir, bool ephemeral)
 	fEphemeral(ephemeral),
 	fNetworkSession(nullptr)
 {
+	WebEngineInit();
+
 	if (fEphemeral) {
 		fNetworkSession = webkit_network_session_new_ephemeral();
 		log_info("SessionAdapter: ephemeral session");

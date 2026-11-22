@@ -69,6 +69,7 @@ if(PKG_CONFIG_FOUND)
 			private/ProcessManager.cpp
 			private/SessionAdapter.cpp
 			private/UrlSchemeAdapter.cpp
+			private/WebEngine.cpp
 			private/WebkitBridge.cpp
 		)
 		if(VOS_WEB_BACKEND STREQUAL "platform")

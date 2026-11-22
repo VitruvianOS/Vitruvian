@@ -7,6 +7,7 @@ After=janus.service input_server.service notification_server.service
 Requires=janus.service
 
 [Service]
+ExecStartPre=-/usr/libexec/vos-rotate-log /var/log/deskbar.log
 Type=forking
 PIDFile=/run/vos/Deskbar.pid
 ExecStart=/system/servers/janus_launch Deskbar

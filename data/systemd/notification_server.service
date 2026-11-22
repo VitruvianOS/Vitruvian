@@ -7,6 +7,7 @@ After=janus.service app_server.service
 Requires=janus.service app_server.service
 
 [Service]
+ExecStartPre=-/usr/libexec/vos-rotate-log /var/log/notification_server.log
 Type=forking
 PIDFile=/run/vos/notification_server.pid
 ExecStart=/system/servers/janus_launch notification_server

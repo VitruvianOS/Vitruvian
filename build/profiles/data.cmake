@@ -24,6 +24,8 @@ install(FILES data/tmpfiles.d/vos.conf
 install(PROGRAMS data/libexec/vos-firstboot-commit
   DESTINATION /usr/libexec/)
 
+install(PROGRAMS data/libexec/vos-rotate-log
+  DESTINATION /usr/libexec/)
 install(PROGRAMS data/libexec/vos-pdf-printer
   DESTINATION /usr/libexec/)
 

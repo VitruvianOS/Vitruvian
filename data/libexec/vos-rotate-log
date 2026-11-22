@@ -1,0 +1,9 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+# V\OS: keep one old copy of a log that grew past 1 MB; run before the service starts.
+
+log=$1
+[ -f "$log" ] || exit 0
+[ "$(stat -c %s "$log")" -gt 1048576 ] && mv -f "$log" "$log.1"
+exit 0

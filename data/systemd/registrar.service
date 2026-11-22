@@ -5,6 +5,7 @@ After=janus.service
 Requires=janus.service
 
 [Service]
+ExecStartPre=-/usr/libexec/vos-rotate-log /var/log/registrar.log
 Type=forking
 PIDFile=/run/vos/registrar.pid
 ExecStart=/system/servers/janus_launch registrar

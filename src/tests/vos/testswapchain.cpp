@@ -4,7 +4,7 @@
  *
  * testswapchain: a moving colour bar through a view swap chain.
  *
- *   VOS_SWAP_CHAIN=1 testswapchain
+ *   testswapchain
  */
 
 

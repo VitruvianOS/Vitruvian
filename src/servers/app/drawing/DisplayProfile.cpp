@@ -136,6 +136,11 @@ DisplayProfile::Format(BString& text, const char* reason, bool verbose) const
 		}
 	}
 
+	append(text, "  policy: swap chains %s (%s); outputs %s (%s)\n",
+		policy.swapChains ? "on" : "off", policy.swapChainsReason,
+		policy.singleOutput ? "first only" : "all connected",
+		policy.singleOutputReason);
+
 	append(text, "  publish: %s, %s, %s; %u rects %u batches %u timeouts, "
 		"%u pending\n", publish.deferred ? "deferred" : "immediate",
 		publish.batchedCommit ? "batched commit" : "legacy flip",

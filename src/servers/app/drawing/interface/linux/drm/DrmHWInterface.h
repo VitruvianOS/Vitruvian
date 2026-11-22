@@ -23,6 +23,7 @@ extern "C" {
 
 struct drm_extra_card;
 struct DisplayProfile;
+struct DisplayPolicy;
 class SwapChainCompose;
 
 #include "BufferAgeTracker.h"
@@ -348,6 +349,7 @@ public:
 	virtual	void				GetMode(display_mode* mode);
 	virtual	bigtime_t			RefreshPeriod(const BRect& frame);
 	virtual	void				GetDisplayProfile(DisplayProfile& profile);
+	virtual	void				GetDisplayPolicy(DisplayPolicy& policy);
 	virtual	status_t			GetPreferredMode(display_mode* mode);
 			// Same mode policy, no connector probe; for the poll.
 			status_t			GetPreferredModeCurrent(display_mode* mode);

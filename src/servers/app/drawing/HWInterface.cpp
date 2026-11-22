@@ -1544,8 +1544,28 @@ HWInterface::_IsValidMode(const display_mode& mode)
 
 
 void
+HWInterface::GetDisplayPolicy(DisplayPolicy& policy)
+{
+	policy.swapChains = false;
+	policy.swapChainsReason = "backend has no buffer allocator";
+	policy.singleOutput = false;
+	policy.singleOutputReason = "backend drives one output";
+}
+
+
+bool
+HWInterface::SwapChainsEnabled()
+{
+	DisplayPolicy policy;
+	GetDisplayPolicy(policy);
+	return policy.swapChains;
+}
+
+
+void
 HWInterface::GetDisplayProfile(DisplayProfile& profile)
 {
+	GetDisplayPolicy(profile.policy);
 	display_mode mode;
 	GetMode(&mode);
 	DisplayOutputProfile output;

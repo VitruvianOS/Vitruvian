@@ -62,7 +62,7 @@ private:
 	void						_RecreateSurface(int32 width, int32 height);
 	void						_UpdateFramePeriod();
 
-	// VOS_SWAP_CHAIN=1: the GPU copies each frame into a buffer the server
+	// With swap chains on, the GPU copies each frame into a buffer the server
 	// scans out; nothing is read back. Any failure leaves the bitmap path.
 	bool						_ChainProbe();
 	void						_ChainStart();

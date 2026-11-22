@@ -13,7 +13,10 @@
 
 #include <linux/dma-buf.h>
 
+#include <Application.h>
 #include <AppMisc.h>
+#include <ServerLink.h>
+#include <AppServerLink.h>
 #include <PortFds.h>
 #include <GbmArea.h>
 #include <PortLink.h>
@@ -24,6 +27,32 @@
 
 
 namespace BPrivate {
+
+
+bool
+swap_chain_enabled()
+{
+	// 0 unknown, 1 offered, -1 not offered.
+	static int32 sPolicy = 0;
+	int32 policy = atomic_get(&sPolicy);
+	if (policy != 0)
+		return policy > 0;
+	if (be_app == NULL)
+		return false;
+
+	policy = -1;
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_SWAP_CHAIN_POLICY);
+	status_t status;
+	bool offered = false;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK
+			&& link.Read<bool>(&offered) == B_OK)
+		policy = offered ? 1 : -1;
+	else
+		return false;
+	atomic_set(&sPolicy, policy);
+	return policy > 0;
+}
 
 
 SwapChain::SwapChain()

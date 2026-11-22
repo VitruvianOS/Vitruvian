@@ -1554,6 +1554,15 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_GET_SWAP_CHAIN_POLICY:
+		{
+			fLink.StartMessage(B_OK);
+			fLink.Attach<bool>(fDesktop->HWInterface() != NULL
+				&& fDesktop->HWInterface()->SwapChainsEnabled());
+			fLink.Flush();
+			break;
+		}
+
 		case AS_GET_SHOW_ALL_DRAGGERS:
 		{
 			STRACE(("ServerApp %s: Get Show All Draggers\n", Signature()));
@@ -3709,7 +3718,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			BReference<ServerBitmap> bitmap(GetBitmap(token), true);
 			if (bitmap != NULL) {
 				// Window lock first, as drawing takes them.
-				const bool planes = BPrivate::swap_chain_enabled()
+				const bool planes = fDesktop->HWInterface()->SwapChainsEnabled()
 					|| Window::BitmapOverlayEnabled();
 				SwapChainRead overlay(fDesktop);
 				if (planes)

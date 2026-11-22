@@ -1674,9 +1674,9 @@ DrmHWInterface::GetConnectedOutputs(std::vector<uint32>& connectors)
 {
 	connectors.clear();
 
-	// VOS_DRM_SINGLE_OUTPUT keeps to the first output.
-	static const char* sSingle = getenv("VOS_DRM_SINGLE_OUTPUT");
-	if (fFd < 0 || fDev == NULL || (sSingle != NULL && sSingle[0] != '\0'))
+	DisplayPolicy policy;
+	GetDisplayPolicy(policy);
+	if (fFd < 0 || fDev == NULL || policy.singleOutput)
 		return;
 
 	for (size_t card = 0; card <= fCards.size(); card++) {
@@ -10038,6 +10038,37 @@ _FillGpuProfile(int fd, int32 index, DisplayGpuProfile& gpu, struct udev* udev)
 			udev_device_unref(dev);
 		}
 	}
+}
+
+
+void
+DrmHWInterface::GetDisplayPolicy(DisplayPolicy& policy)
+{
+#ifdef HAVE_GBM
+	// Probed once: a device can open gbm and still fail every allocation.
+	static int8 sCanAllocate = -1;
+	if (sCanAllocate < 0 && fFd >= 0) {
+		struct gbm_device* device = GbmDevice();
+		struct gbm_bo* bo = device != NULL ? gbm_bo_create(device, 64, 64,
+			GBM_FORMAT_XRGB8888, GBM_BO_USE_RENDERING | GBM_BO_USE_LINEAR)
+			: NULL;
+		if (bo != NULL)
+			gbm_bo_destroy(bo);
+		sCanAllocate = bo != NULL ? 1 : 0;
+	}
+	policy.swapChains = fFd >= 0 && sCanAllocate == 1;
+	if (fFd < 0)
+		policy.swapChainsReason = "no drm device";
+	else if (!policy.swapChains)
+		policy.swapChainsReason = "gbm cannot allocate buffers";
+	else
+		policy.swapChainsReason = "drm with gbm buffers";
+#else
+	policy.swapChains = false;
+	policy.swapChainsReason = "built without gbm";
+#endif
+	policy.singleOutput = false;
+	policy.singleOutputReason = "every connected output is driven";
 }
 
 

@@ -107,7 +107,7 @@ private:
 			float				fMinHeight;
 			float				fMaxHeight;
 			BBitmap*			fBuffer;
-			// Swap chain of the root view, when VOS_SWAP_CHAIN allows.
+			// Swap chain of the root view, when the display policy offers them.
 			SwapChain*			fChain;
 			BBitmap*			fChainBitmaps[4];
 			// Where each buffer differs from the one presented last.

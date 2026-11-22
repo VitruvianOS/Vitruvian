@@ -969,8 +969,6 @@ fill_new_buffer(ServerBitmap* bitmap, rgb_color color)
 status_t
 ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 {
-	if (!swap_chain_enabled())
-		return B_UNSUPPORTED;
 	if (resize && count == 0) {
 		BAutolock locker(fLock);
 		if (fCurrent != NULL)
@@ -988,6 +986,8 @@ ViewSwapChain::Allocate(int32 width, int32 height, int32 count, bool resize)
 	::HWInterface* hardware = desktop->HWInterface();
 	if (hardware == NULL)
 		return B_NO_INIT;
+	if (!hardware->SwapChainsEnabled())
+		return B_UNSUPPORTED;
 
 	BAutolock locker(fLock);
 	if (!resize && fCurrent != NULL)

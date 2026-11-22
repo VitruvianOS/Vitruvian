@@ -105,12 +105,9 @@ struct swap_chain_buffer {
 
 class PortLink;
 
-inline bool
-swap_chain_enabled()
-{
-	const char* value = getenv("VOS_SWAP_CHAIN");
-	return value != NULL && atoi(value) == 1;
-}
+// Whether app_server's display policy offers swap chains; asked once per
+// process. Client side only.
+bool swap_chain_enabled();
 
 
 class SwapChain {

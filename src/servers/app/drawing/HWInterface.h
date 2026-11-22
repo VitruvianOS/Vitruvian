@@ -30,6 +30,7 @@
 
 class BString;
 struct DisplayProfile;
+struct DisplayPolicy;
 class DrawingEngine;
 class EventStream;
 class Overlay;
@@ -97,6 +98,9 @@ public:
 
 	// Capabilities, current choices and measurements; read only.
 	virtual	void				GetDisplayProfile(DisplayProfile& profile);
+	// Choices the backend makes, each with its reason; cheap, no I/O.
+	virtual	void				GetDisplayPolicy(DisplayPolicy& policy);
+			bool				SwapChainsEnabled();
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info) = 0;
 	virtual status_t			GetModeList(display_mode** _modeList,
 									uint32* _count) = 0;

@@ -126,6 +126,23 @@ struct DisplayPublishProfile {
 	uint32		pending;
 };
 
+// Decisions taken by the backend, with the reason for each.
+struct DisplayPolicy {
+	DisplayPolicy()
+		:
+		swapChains(false),
+		swapChainsReason(""),
+		singleOutput(false),
+		singleOutputReason("")
+	{
+	}
+
+	bool		swapChains;
+	const char*	swapChainsReason;
+	bool		singleOutput;
+	const char*	singleOutputReason;
+};
+
 struct DisplayProfile {
 								DisplayProfile();
 
@@ -134,6 +151,7 @@ struct DisplayProfile {
 	std::vector<DisplayOutputProfile>	outputs;
 	std::vector<DisplayChainProfile>	chains;
 	DisplayPublishProfile		publish;
+	DisplayPolicy				policy;
 
 	// Human readable block; verbose adds the mode lists.
 			void				Format(BString& text, const char* reason,

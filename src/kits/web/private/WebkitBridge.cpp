@@ -78,7 +78,8 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 	fExtensionGeneration(0),
 	fBlockedCount(0),
 	fAlive(std::make_shared<std::atomic<bool> >(true)),
-	fGMExtensions(NULL)
+	fGMExtensions(NULL),
+	fGMHandlerRegistered(false)
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
@@ -281,15 +282,6 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	if (session != NULL && !session->ProfileDir().empty())
 		ContentFilterStore::Instance().SetCacheDir(
 			session->ProfileDir() + "/content-filters");
-	{
-		WebKitUserContentManager* ucm
-			= webkit_web_view_get_user_content_manager(webView);
-		// GM.* calls answer synchronously through the reply API.
-		webkit_user_content_manager_register_script_message_handler_with_reply(
-			ucm, "netplusGM", nullptr);
-		g_signal_connect(ucm, "script-message-with-reply-received::netplusGM",
-			G_CALLBACK(_OnGMMessage), this);
-	}
 
 #ifndef HAS_WPE_PLATFORM
 	// 9. Initial size dispatch. The platform path pushed it above while
@@ -1113,6 +1105,20 @@ void
 WebKitBridge::SetGMExtensions(BWebExtensions* extensions)
 {
 	fGMExtensions = extensions;
+	if (extensions == NULL || fGMHandlerRegistered)
+		return;
+	fGMHandlerRegistered = true;
+
+	// Only views with an extension registry get the GM.* channel.
+	ProcessManager::Instance().InvokeOnGLibThreadSync([this]() {
+		WebKitUserContentManager* ucm
+			= webkit_web_view_get_user_content_manager(webView);
+		// GM.* calls answer synchronously through the reply API.
+		webkit_user_content_manager_register_script_message_handler_with_reply(
+			ucm, "netplusGM", nullptr);
+		g_signal_connect(ucm, "script-message-with-reply-received::netplusGM",
+			G_CALLBACK(_OnGMMessage), this);
+	});
 }
 
 

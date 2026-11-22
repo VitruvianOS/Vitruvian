@@ -28,6 +28,7 @@
 
 #include <web/WebView.h>
 #include <web/WebDefs.h>
+#include <private/web/WebProfile.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -350,6 +351,16 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fWorker->Run();
 
 	fWebView = new BWebView(Bounds(), "store");
+	BPrivate::SetWebViewProfile(fWebView, BPrivate::B_WEB_PROFILE_MINIMAL);
+	{
+		// Own cookies and cache, apart from the browser's.
+		BPath profile;
+		if (find_directory(B_USER_SETTINGS_DIRECTORY, &profile, true) == B_OK
+			&& profile.Append("Store/profile") == B_OK) {
+			fWebView->SetSession(profile.Path(), false);
+		} else
+			fWebView->SetSession(NULL, true);
+	}
 	fWebView->SetTarget(BMessenger(this));
 	fWebView->AddScriptMessageHandler("store");
 

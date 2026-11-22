@@ -273,6 +273,7 @@ private:
 			std::shared_ptr<std::atomic<bool> >	fAlive;
 			// GM.* storage host; not owned.
 			BWebExtensions*		fGMExtensions;
+			bool				fGMHandlerRegistered;
 
 			std::function<bool(const std::string&)>
 									fNotificationPermissionHandler;

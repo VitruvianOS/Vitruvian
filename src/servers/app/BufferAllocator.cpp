@@ -364,3 +364,21 @@ void BufferAllocator::Destroy(struct gbm_bo*) {}
 #endif
 
 }	// namespace BPrivate
+
+
+extern "C" void
+buffer_allocator_lock(struct gbm_device* device)
+{
+	BPrivate::BufferAllocator* allocator = BPrivate::BufferAllocator::For(device);
+	if (allocator != NULL)
+		allocator->Lock();
+}
+
+
+extern "C" void
+buffer_allocator_unlock(struct gbm_device* device)
+{
+	BPrivate::BufferAllocator* allocator = BPrivate::BufferAllocator::For(device);
+	if (allocator != NULL)
+		allocator->Unlock();
+}

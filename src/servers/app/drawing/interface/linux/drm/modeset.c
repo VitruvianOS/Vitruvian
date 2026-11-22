@@ -1220,9 +1220,14 @@ create_scanout_bo(struct gbm_device* gbm, struct modeset_dev* dev)
 }
 
 
-int
-modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
-                      struct modeset_dev* dev, bool isBack)
+/* Same per-device lock BufferAllocator takes around its gbm calls. */
+extern void buffer_allocator_lock(struct gbm_device* gbm);
+extern void buffer_allocator_unlock(struct gbm_device* gbm);
+
+
+static int
+create_gbm_fb_locked(int fd, struct gbm_device* gbm,
+                     struct modeset_dev* dev, bool isBack)
 {
 	struct gbm_bo* bo = create_scanout_bo(gbm, dev);
 
@@ -1294,9 +1299,9 @@ modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
 }
 
 
-int
-modeset_create_render_fb(int fd, struct gbm_device* gbm,
-                       struct modeset_dev* dev)
+static int
+create_render_fb_locked(int fd, struct gbm_device* gbm,
+                        struct modeset_dev* dev)
 {
 	struct gbm_bo* bo = create_scanout_bo(gbm, dev);
 
@@ -1355,6 +1360,28 @@ modeset_create_render_fb(int fd, struct gbm_device* gbm,
 	dev->render_map_data = map_data;
 
 	return 0;
+}
+
+
+int
+modeset_create_render_fb(int fd, struct gbm_device* gbm,
+                       struct modeset_dev* dev)
+{
+	buffer_allocator_lock(gbm);
+	int ret = create_render_fb_locked(fd, gbm, dev);
+	buffer_allocator_unlock(gbm);
+	return ret;
+}
+
+
+int
+modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
+                      struct modeset_dev* dev, bool isBack)
+{
+	buffer_allocator_lock(gbm);
+	int ret = create_gbm_fb_locked(fd, gbm, dev, isBack);
+	buffer_allocator_unlock(gbm);
+	return ret;
 }
 #endif
 

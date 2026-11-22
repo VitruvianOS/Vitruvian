@@ -84,6 +84,9 @@ public:
 	static	void				Unmap(struct gbm_bo* bo, void* cookie);
 	static	void				Destroy(struct gbm_bo* bo);
 
+			void				Lock() { pthread_mutex_lock(&fLock); }
+			void				Unlock() { pthread_mutex_unlock(&fLock); }
+
 private:
 								BufferAllocator(struct gbm_device* device);
 

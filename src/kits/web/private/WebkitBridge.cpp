@@ -54,7 +54,7 @@ struct WebKitBridge::ScriptMessageBinding {
 
 
 WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
-	int autoplayPolicy)
+	int autoplayPolicy, DmabufPresenter* presenter)
 	:
 #ifdef HAS_WPE_PLATFORM
 	wpeView(nullptr),
@@ -82,20 +82,21 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session,
 {
 	log_info("WebKitBridge: creating (size %dx%d)", width, height);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
-		_Init(width, height, session, autoplayPolicy);
+		_Init(width, height, session, autoplayPolicy, presenter);
 	});
 }
 
 
 void
 WebKitBridge::_Init(int width, int height, SessionAdapter* session,
-	int autoplayPolicy)
+	int autoplayPolicy, DmabufPresenter* presenter)
 {
 
 	// 1. Compositor. The FDO build creates the wpe_view_backend through
 	// its exportable here; the platform build only sets up the bitmaps
 	// and lets the WPEView push frames into them.
 	compositor = std::make_unique<CompositorAdapter>(width, height);
+	compositor->SetPresenter(presenter);
 #ifndef HAS_WPE_PLATFORM
 	if (!compositor->Backend()) {
 		log_error("WebKitBridge: compositor failed to create FDO backend");

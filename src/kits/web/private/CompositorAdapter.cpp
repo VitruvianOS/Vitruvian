@@ -65,7 +65,9 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fWidth(w),
 	fHeight(h),
 	fFillColor(0xFFFFFFFF),
-	fFrameReady(false)
+	fFrameReady(false),
+	fDmabufActive(false),
+	fPresenter(nullptr)
 #ifndef HAS_WPE_PLATFORM
 	,
 	fClockRunning(false),
@@ -359,6 +361,7 @@ void
 CompositorAdapter::PresentSHMFrame(const uint8_t* data, int stride,
 	int srcW, int srcH)
 {
+	fDmabufActive.store(false);
 	std::function<void()> cb;
 	{
 		std::lock_guard<std::mutex> lock(fBitmapMutex);

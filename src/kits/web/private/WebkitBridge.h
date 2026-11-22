@@ -26,6 +26,7 @@ struct CompositorAdapter;
 struct FrameNotifier;
 struct DownloadEntry;
 struct VosPlatformHost;
+class DmabufPresenter;
 class DownloadHandler;
 class FocusAndCursorAdapter;
 class NotificationsBridge;
@@ -40,7 +41,8 @@ struct WebKitBridge {
 
 								WebKitBridge(int width, int height,
 									SessionAdapter* session = nullptr,
-									int autoplayPolicy = 0);
+									int autoplayPolicy = 0,
+									DmabufPresenter* presenter = nullptr);
 								~WebKitBridge();
 
 			bool				IsValid() const { return fValid; }
@@ -210,7 +212,8 @@ struct WebKitBridge {
 private:
 			void				_Init(int width, int height,
 								SessionAdapter* session,
-								int autoplayPolicy);
+								int autoplayPolicy,
+								DmabufPresenter* presenter);
 			void				_ConnectSignals();
 			void				_UpdateCachedNavState();
 

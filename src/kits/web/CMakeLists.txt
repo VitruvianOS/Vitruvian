@@ -72,7 +72,8 @@ if(PKG_CONFIG_FOUND)
 			private/WebkitBridge.cpp
 		)
 		if(VOS_WEB_BACKEND STREQUAL "platform")
-			list(APPEND WEB_PRIVATE_SOURCES private/vos_platform.cpp)
+			list(APPEND WEB_PRIVATE_SOURCES private/vos_platform.cpp
+				private/DmabufPresenter.cpp)
 			message(STATUS "web kit: backend WPEPlatform (native)")
 		else()
 			message(STATUS "web kit: backend wpebackend-fdo (legacy)")
@@ -133,6 +134,14 @@ if(WEB_PRIVATE_SOURCES)
 		${VOS_LIBWPE_LIBRARIES}
 		${VOS_GLIB_LIBRARIES}
 	)
+	if(VOS_WEB_BACKEND STREQUAL "platform")
+		# dma-buf frames: the swap chain, and the GPU the server shows.
+		target_include_directories(web PRIVATE
+			${PROJECT_SOURCE_DIR}/headers/private/interface
+			${PROJECT_SOURCE_DIR}/headers/private/opengl
+		)
+		target_link_libraries(web PRIVATE opengl ${EGL_LIBRARIES})
+	endif()
 	if(VOS_WEB_BACKEND STREQUAL "fdo")
 		target_link_libraries(web PRIVATE
 			${VOS_WPE_FDO_LIBRARIES}

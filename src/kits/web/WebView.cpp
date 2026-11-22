@@ -55,6 +55,9 @@ static const bigtime_t kResizeSettleDelay = 150000;
 #include "clipboard_dragdrop.h"
 #include "notifications_bridge.h"
 #include "compositor_adapter.h"
+#ifdef HAS_WPE_PLATFORM
+#include "DmabufPresenter.h"
+#endif
 #include "download_handler.h"
 #include "event_adapter.h"
 #include "frame_notifier.h"
@@ -330,6 +333,10 @@ struct BWebView::WebViewImpl {
 
 #ifdef HAS_WPE
 	CompositorAdapter*	fCompositor;
+#ifdef HAS_WPE_PLATFORM
+	// Swap chain for dma-buf frames; outlives the bridge that borrows it.
+	DmabufPresenter*	fPresenter;
+#endif
 	EventAdapter*		fEventAdapter;
 	WebKitBridge*		fBridge;
 	int					fPixelWidth;
@@ -378,6 +385,9 @@ struct BWebView::WebViewImpl {
 #ifdef HAS_WPE
 		,
 		fCompositor(NULL),
+#ifdef HAS_WPE_PLATFORM
+		fPresenter(NULL),
+#endif
 		fEventAdapter(NULL),
 		fBridge(NULL),
 		fPixelWidth(0),
@@ -495,6 +505,10 @@ sync_view_size(const BView* view, Impl* impl)
 	impl->fPixelHeight = h;
 	if (impl->fEventAdapter != NULL)
 		impl->fEventAdapter->SetViewSize(w, h);
+#ifdef HAS_WPE_PLATFORM
+	if (impl->fPresenter != NULL)
+		impl->fPresenter->Resize(w, h);
+#endif
 	impl->fBridge->Resize(w, h);
 }
 #endif
@@ -538,6 +552,9 @@ BWebView::~BWebView()
 	delete fImpl->fBridge;
 	delete fImpl->fEventAdapter;
 	delete fImpl->fClipboard;
+#ifdef HAS_WPE_PLATFORM
+	delete fImpl->fPresenter;
+#endif
 #endif
 	delete fImpl;
 }
@@ -671,8 +688,17 @@ BWebView::AttachedToWindow()
 	fImpl->fPixelWidth = w;
 	fImpl->fPixelHeight = h;
 
+	DmabufPresenter* presenter = NULL;
+#ifdef HAS_WPE_PLATFORM
+	// The chain is the window thread's: made here, before WebKit asks
+	// the display which buffers it may render into.
+	if (fImpl->fPresenter == NULL)
+		fImpl->fPresenter = new DmabufPresenter;
+	fImpl->fPresenter->Attach(this, w, h);
+	presenter = fImpl->fPresenter;
+#endif
 	fImpl->fBridge = new WebKitBridge(w, h, fImpl->fSession,
-		(int)fImpl->fAutoplay);
+		(int)fImpl->fAutoplay, presenter);
 	if (!fImpl->fBridge->IsValid()) {
 		delete fImpl->fBridge;
 		fImpl->fBridge = NULL;
@@ -1140,6 +1166,11 @@ BWebView::DetachedFromWindow()
 	delete fImpl->fBridge;
 	fImpl->fBridge = NULL;
 	fImpl->fCompositor = NULL;
+#ifdef HAS_WPE_PLATFORM
+	// The window is still locked here, which the chain needs to go.
+	delete fImpl->fPresenter;
+	fImpl->fPresenter = NULL;
+#endif
 	fImpl->fSelfMessenger = BMessenger();
 #endif
 
@@ -1609,6 +1640,10 @@ BWebView::Draw(BRect updateRect)
 	BView::Draw(updateRect);
 
 #ifdef HAS_WPE
+	// A dma-buf frame is shown by the server under the view: nothing to add.
+	if (fImpl->fCompositor && fImpl->fCompositor->DmabufActive())
+		return;
+
 	if (fImpl->fCompositor) {
 		BBitmap* front = fImpl->fCompositor->AcquireFront();
 		if (front && front->IsValid()) {

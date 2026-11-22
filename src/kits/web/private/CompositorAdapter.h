@@ -18,6 +18,9 @@
 #include <mutex>
 
 
+class DmabufPresenter;
+
+
 struct CompositorAdapter {
 								CompositorAdapter(int width, int height);
 								~CompositorAdapter();
@@ -36,6 +39,16 @@ struct CompositorAdapter {
 			// export callback goes through it too.
 			void				PresentSHMFrame(const uint8_t* data,
 									int stride, int srcW, int srcH);
+
+			// The window thread's swap chain for dma-buf frames; not owned.
+			void				SetPresenter(DmabufPresenter* presenter)
+									{ fPresenter = presenter; }
+			DmabufPresenter*	Presenter() const { return fPresenter; }
+			// The server shows the last frame itself; Draw adds nothing.
+			void				SetDmabufActive(bool active)
+									{ fDmabufActive.store(active); }
+			bool				DmabufActive() const
+									{ return fDmabufActive.load(); }
 
 			BBitmap*			AcquireFront();
 			void				ReleaseFront();
@@ -71,6 +84,8 @@ private:
 
 			std::mutex				fBitmapMutex;
 			std::atomic<bool>		fFrameReady;
+			std::atomic<bool>		fDmabufActive;
+			DmabufPresenter*		fPresenter;
 #ifndef HAS_WPE_PLATFORM
 			std::atomic<bool>		fClockRunning;
 			std::atomic<int64_t>	fLastActivity;

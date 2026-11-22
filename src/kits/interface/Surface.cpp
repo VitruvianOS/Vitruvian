@@ -129,9 +129,10 @@ BSurface::~BSurface()
 {
 	_ChainDelete();
 	if (fLink != NULL && fInitStatus == B_OK) {
+		// The server answers on receipt; waiting only queues behind the
+		// window's backlog.
 		fLink->StartMessage(AS_DELETE_WINDOW);
-		int32 code;
-		fLink->FlushWithReply(code);
+		fLink->Flush();
 	}
 
 	delete fBuffer;

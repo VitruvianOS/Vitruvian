@@ -31,7 +31,6 @@ class DownloadHandler;
 class FocusAndCursorAdapter;
 class NotificationsBridge;
 class SessionAdapter;
-class UrlSchemeAdapter;
 
 
 struct WebKitBridge {
@@ -149,7 +148,6 @@ struct WebKitBridge {
 
 			std::unique_ptr<CompositorAdapter>		compositor;
 			std::unique_ptr<FrameNotifier>			notifier;
-			std::unique_ptr<UrlSchemeAdapter>		schemeAdapter;
 			// Shared per network session; not owned.
 			DownloadHandler*						downloadHandler;
 			std::unique_ptr<FocusAndCursorAdapter>	focusAdapter;

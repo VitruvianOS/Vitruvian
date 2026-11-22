@@ -5,12 +5,19 @@
 
 #include "WebEngine.h"
 
+#include "logging.h"
+#include "url_scheme_adapter.h"
+
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <unistd.h>
 
 
 static bool sInitialised = false;
+static WebKitWebContext* sContext = NULL;
+// The scheme handlers keep this pointer for the life of the context.
+static UrlSchemeAdapter* sSchemes = NULL;
 
 
 // Per-process cap in MB. The thresholds are fractions of it, so it has to
@@ -52,4 +59,32 @@ WebEngineInit()
 	WebKitMemoryPressureSettings* pressure = WebEnginePressureSettings();
 	webkit_network_session_set_memory_pressure_settings(pressure);
 	webkit_memory_pressure_settings_free(pressure);
+}
+
+
+WebKitWebContext*
+WebEngineContext()
+{
+	if (sContext == NULL) {
+		WebEngineInit();
+
+		// The SHM path renders in software with a large footprint; the
+		// default thresholds released memory mid-video and deadlocked
+		// the compositor.
+		WebKitMemoryPressureSettings* pressure = WebEnginePressureSettings();
+		sContext = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
+			"memory-pressure-settings", pressure, NULL));
+		webkit_memory_pressure_settings_free(pressure);
+
+		if (const char* runtimeDir = g_getenv("XDG_RUNTIME_DIR")) {
+			std::string socket = std::string(runtimeDir) + "/pipewire-0";
+			webkit_web_context_add_path_to_sandbox(sContext, socket.c_str(),
+				FALSE);
+		}
+
+		sSchemes = new UrlSchemeAdapter;
+		sSchemes->RegisterSchemes(sContext);
+		log_info("WebEngine: shared context created");
+	}
+	return (WebKitWebContext*)g_object_ref(sContext);
 }

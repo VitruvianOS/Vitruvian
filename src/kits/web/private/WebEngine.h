@@ -10,8 +10,12 @@
 
 
 // Sets the memory limits of the network process. Must run before the first
-// network session exists; later calls do nothing. GLib thread only.
+// network session exists; later calls do nothing. GLib thread only, as is WebEngineContext().
 void						WebEngineInit();
+
+// The one WebKitWebContext of the app, created on first use with the
+// sandbox path and the URI schemes; the caller owns a reference.
+WebKitWebContext*			WebEngineContext();
 
 // Per-process memory limits; the caller frees the result.
 WebKitMemoryPressureSettings*	WebEnginePressureSettings();

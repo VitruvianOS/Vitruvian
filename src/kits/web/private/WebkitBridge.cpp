@@ -15,7 +15,6 @@
 #include "notifications_bridge.h"
 #include "process_manager.h"
 #include "session_adapter.h"
-#include "url_scheme_adapter.h"
 #include "WebEngine.h"
 #ifdef HAS_WPE_PLATFORM
 #include "vos_platform.h"
@@ -122,20 +121,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 	setenv("ALSOFT_DRIVERS", "pipewire", 0);
 	// A paused off-screen video never resumed after a scroll or resize.
 	setenv("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1", 0);
-	// The SHM path renders in software with a large footprint; the default
-	// thresholds released memory mid-video and deadlocked the compositor.
-	WebKitMemoryPressureSettings* pressure = WebEnginePressureSettings();
-	context = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT,
-		"memory-pressure-settings", pressure, NULL));
-	webkit_memory_pressure_settings_free(pressure);
-	if (const char* runtimeDir = g_getenv("XDG_RUNTIME_DIR")) {
-		std::string socket = std::string(runtimeDir) + "/pipewire-0";
-		webkit_web_context_add_path_to_sandbox(context, socket.c_str(),
-			FALSE);
-	}
-
-	schemeAdapter = std::make_unique<UrlSchemeAdapter>();
-	schemeAdapter->RegisterSchemes(context);
+	context = WebEngineContext();
 
 	// 3. Settings.
 	settings = webkit_settings_new();

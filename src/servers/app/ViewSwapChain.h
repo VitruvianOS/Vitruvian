@@ -290,6 +290,7 @@ private:
 			BReference<ServerBitmap> fShadow;
 			BReference<ServerBitmap> fSpare;
 			bool				fShadowValid;
+			uint32				fShadowEpoch;
 			bool				fGbmRead;
 			// GPU copy into cached memory; the window thread only.
 			SwapChainGpuCopy*	fGpu;

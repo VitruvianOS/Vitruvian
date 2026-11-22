@@ -783,6 +783,7 @@ ViewSwapChain::ViewSwapChain(ServerApp* app, ServerWindow* window, View* view)
 	fMailWhole(false),
 	fShadowLock("swap chain shadow"),
 	fShadowValid(false),
+	fShadowEpoch(0),
 	fGbmRead(getenv("VOS_SWAP_CHAIN_GBM_READ") != NULL
 		&& atoi(getenv("VOS_SWAP_CHAIN_GBM_READ")) != 0),
 	fGpu(NULL),
@@ -1223,9 +1224,11 @@ ViewSwapChain::Present(int32 token, int32 index, const BRegion& damage,
 	if (fPlane != NULL)
 		shown = fPlane->Show(frame);
 	if (shown) {
-		// The plane or layer shows it: the shadow no longer matches.
+		// The plane or layer shows it: the shadow no longer matches, and a
+		// fill still running for an older frame must not make it valid.
 		BAutolock shadowLocker(fShadowLock);
 		fShadowValid = false;
+		fShadowEpoch++;
 	}
 	if (!shown && fCpu != NULL) {
 		// Newest frame wins; the copy waits for the next refresh.
@@ -2051,9 +2054,11 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage,
 	BReference<ServerBitmap> shown;
 	BReference<ServerBitmap> back;
 	bool valid;
+	uint32 epoch;
 	{
 		BAutolock locker(fShadowLock);
 		valid = fShadowValid;
+		epoch = fShadowEpoch;
 		shown = fShadow;
 		back.SetTo(fSpare.Get());
 		fSpare.Unset();
@@ -2115,7 +2120,7 @@ ViewSwapChain::_FillShadow(ServerBitmap* bitmap, const BRegion& damage,
 	BAutolock locker(fShadowLock);
 	fSpare = fShadow;
 	fShadow = back;
-	fShadowValid = true;
+	fShadowValid = epoch == fShadowEpoch;
 	return back;
 }
 

@@ -126,6 +126,13 @@ _dataDir()
 }
 
 
+enum {
+	kCancelNone			= 0,
+	kCancelAvailable	= 1,
+	kCancelRequested	= 2
+};
+
+
 //	#pragma mark - Icons and installed state
 
 
@@ -336,6 +343,7 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fLimit(kPageSize),
 	fStateSeq(0),
 	fBusyPercent(-1),
+	fBusyCancel(kCancelNone),
 	fDryRun(dryRun)
 {
 	fWorker = new PackageWorker(BMessenger(this));
@@ -496,7 +504,9 @@ StoreWindow::MessageReceived(BMessage* message)
 		}
 
 		case kMsgSummaryApply:
+			fBusyCancel = kCancelAvailable;
 			fWorker->PostMessage(&fPendingApply);
+			_PushState();
 			break;
 
 		case kMsgSummaryCancel:
@@ -524,6 +534,16 @@ StoreWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgCancel:
+			// Takes effect between apt steps; a running step is never killed.
+			if (fBusyCancel == kCancelAvailable) {
+				fBusyCancel = kCancelRequested;
+				fWorker->PostMessage(kMsgCancel);
+				fBusyStatus = B_TRANSLATE("Cancelling after the current step");
+				_PushState();
+			}
+			break;
+
 		case kMsgTransactionDone:
 			_SetStatus(B_TRANSLATE("Transaction finished"));
 			_FinishBusy();
@@ -535,6 +555,12 @@ StoreWindow::MessageReceived(BMessage* message)
 			const char* detail = "";
 			message->FindInt32("error", &error);
 			message->FindString("detail", &detail);
+
+			if (error == kAptErrorInterrupted) {
+				_SetStatus(B_TRANSLATE("Cancelled"));
+				_FinishBusy();
+				break;
+			}
 
 			BString text = PackageErrorText(error);
 			// The page gets the headline; the details go in the alert.
@@ -759,6 +785,8 @@ StoreWindow::_DispatchPageAction(const char* payload)
 	} else if (action == "more") {
 		fLimit += kPageSize;
 		_PushState();
+	} else if (action == "cancel") {
+		PostMessage(kMsgCancel);
 	} else if (action == "install" || action == "remove") {
 		StoreEntry* entry = fCatalog.FindById(argument.String());
 		if (entry == NULL)
@@ -816,6 +844,7 @@ StoreWindow::_StartTransaction(bool install, StoreEntry* entry)
 
 	fBusyEntryId = entry->fId;
 	fBusyPercent = -1;
+	fBusyCancel = kCancelNone;
 	fBusyStatus = install
 		? B_TRANSLATE("Simulating installation")
 		: B_TRANSLATE("Simulating removal");
@@ -840,6 +869,7 @@ StoreWindow::_FinishBusy()
 	fBusyEntryId = "";
 	fBusyPercent = -1;
 	fBusyStatus = "";
+	fBusyCancel = kCancelNone;
 	_ReloadStates();
 }
 
@@ -1026,7 +1056,8 @@ StoreWindow::_BuildStateJSON(BMessage& missing)
 	if (!fBusyEntryId.IsEmpty()) {
 		json << "\"busy\":{\"id\":\"" << _jsonEscape(fBusyEntryId)
 			<< "\",\"percent\":" << fBusyPercent
-			<< ",\"status\":\"" << _jsonEscape(fBusyStatus) << "\"},";
+			<< ",\"status\":\"" << _jsonEscape(fBusyStatus)
+			<< "\",\"cancel\":" << fBusyCancel << "},";
 	} else
 		json << "\"busy\":null,";
 

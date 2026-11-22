@@ -74,6 +74,7 @@ private:
 			BString				fBusyEntryId;
 			int32				fBusyPercent;
 			BString				fBusyStatus;
+			int32				fBusyCancel;
 			BString				fLastState;
 			bool				fDryRun;
 };

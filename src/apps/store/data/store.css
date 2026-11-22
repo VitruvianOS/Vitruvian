@@ -158,6 +158,10 @@ body {
 #detail-action.remove { background: #fff; color: #b03030; border-color: #b03030; }
 #detail-action:disabled { background: #ccc; border-color: #bbb; color: #666; cursor: default; }
 
+#detail-cancel { margin-top: 8px; padding: 4px 14px; }
+#detail-cancel:disabled { color: #666; cursor: default; }
+#detail-cancel.hidden { display: none; }
+
 #progress {
 	margin-top: 10px;
 	height: 20px;

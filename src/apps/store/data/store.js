@@ -186,6 +186,7 @@
 		var detail = document.getElementById("detail");
 		var entry = currentEntry();
 		var key = entry ? JSON.stringify(entry) + "|" + (state.busy !== null)
+			+ "|" + (state.busy ? state.busy.cancel : "")
 			: null;
 		if (key !== null && key === keys.detail) {
 			renderProgress();
@@ -263,10 +264,21 @@
 		var progress = document.getElementById("progress");
 		var bar = document.getElementById("progress-bar");
 		var text = document.getElementById("progress-text");
+		var cancel = document.getElementById("detail-cancel");
 		if (!state.busy || state.busy.id !== selectedEntryId) {
 			progress.className = "hidden";
+			cancel.className = "hidden";
 			return;
 		}
+		cancel.className = "";
+		cancel.disabled = state.busy.cancel !== 1;
+		cancel.textContent = "Cancel";
+		cancel.title = state.busy.cancel === 2
+			? "Cancelling after the current step"
+			: state.busy.cancel === 0
+				? "Not available until the changes are confirmed"
+				: "Stops after the current step; a running step finishes";
+		cancel.onclick = function () { post("cancel", ""); };
 		progress.className = "";
 		var percent = state.busy.percent >= 0 ? state.busy.percent : 0;
 		bar.style.width = percent + "%";

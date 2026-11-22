@@ -70,6 +70,7 @@ private:
 			std::set<std::string> fInstalled;
 			int32				fStateSeq;
 			BString				fLastIconRequest;
+			std::set<std::string> fVisible;
 			// In-flight install/remove, if any.
 			BString				fBusyEntryId;
 			int32				fBusyPercent;

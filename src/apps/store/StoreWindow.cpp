@@ -8,6 +8,8 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Autolock.h>
+#include <Locker.h>
 #include <Looper.h>
 #include <Catalog.h>
 #include <Entry.h>
@@ -33,6 +35,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <set>
 #include <string>
 
@@ -70,7 +73,9 @@ static const struct {
 
 
 static const int32 kPageSize = 60;
-static const int32 kIconsNotifyEvery = 8;
+static const int32 kIconWorkers = 3;
+static const bigtime_t kIconRetryAfter = 10 * 60 * 1000000LL;
+static const char* kIconScheme = "vos-store";
 
 static const char* kCatalogURL = "https://store.v-os.dev/catalog.json";
 static const char* kSiteURL = "https://store.v-os.dev";
@@ -147,6 +152,41 @@ _iconCacheDir(BPath& path)
 }
 
 
+// What the workers share: the supersede counter and the failed URLs,
+// which are retried only after a while.
+struct IconShared {
+	BLocker						lock;
+	int32						generation;
+	std::map<std::string, bigtime_t> failed;
+
+	IconShared()
+		:
+		lock("store icon state"),
+		generation(0)
+	{
+	}
+
+	bool IsFailed(const BString& url)
+	{
+		BAutolock locker(lock);
+		std::map<std::string, bigtime_t>::iterator it
+			= failed.find(url.String());
+		if (it == failed.end())
+			return false;
+		if (system_time() - it->second < kIconRetryAfter)
+			return true;
+		failed.erase(it);
+		return false;
+	}
+
+	void SetFailed(const BString& url)
+	{
+		BAutolock locker(lock);
+		failed[url.String()] = system_time();
+	}
+};
+
+
 static BString
 _iconURL(const BString& icon)
 {
@@ -172,29 +212,16 @@ _iconFileName(const BString& url)
 }
 
 
-// The single icon download worker: requests are served in order, one
-// download at a time, at low priority. A newer request supersedes the
-// one in flight (the page moved on); failed URLs are not retried.
-class IconFetcher : public BLooper {
+// One icon download worker at low priority. A newer request supersedes
+// the one in flight (the page scrolled on).
+class IconWorker : public BLooper {
 public:
-	IconFetcher(const BMessenger& target)
+	IconWorker(const BMessenger& target, IconShared* shared)
 		:
 		BLooper("store icons", B_LOW_PRIORITY),
 		fTarget(target),
-		fGeneration(0)
+		fShared(shared)
 	{
-	}
-
-	void Fetch(BMessage* urls)
-	{
-		urls->what = kStoreMsgFetchIcons;
-		urls->AddInt32("gen", atomic_add(&fGeneration, 1) + 1);
-		PostMessage(urls);
-	}
-
-	void Cancel()
-	{
-		atomic_add(&fGeneration, 1);
 	}
 
 	virtual void MessageReceived(BMessage* message)
@@ -212,15 +239,14 @@ public:
 			return;
 		create_directory(dir.Path(), 0755);
 
-		int32 pending = 0;
 		const char* urlString;
 		for (int32 i = 0; message->FindString("url", i, &urlString) == B_OK;
 				i++) {
-			if (atomic_get(&fGeneration) != generation)
+			if (atomic_get(&fShared->generation) != generation)
 				return;
 
 			BString url(urlString);
-			if (fFailed.count(url.String()) > 0)
+			if (fShared->IsFailed(url))
 				continue;
 			BPath file(dir.Path(), _iconFileName(url).String());
 			BEntry existing(file.Path());
@@ -228,17 +254,10 @@ public:
 				continue;
 
 			if (_Download(url, file))
-				pending++;
-			else
-				fFailed.insert(url.String());
-
-			if (pending >= kIconsNotifyEvery) {
 				fTarget.SendMessage(kStoreMsgIconsFetched);
-				pending = 0;
-			}
+			else
+				fShared->SetFailed(url);
 		}
-		if (pending > 0)
-			fTarget.SendMessage(kStoreMsgIconsFetched);
 	}
 
 private:
@@ -276,8 +295,59 @@ private:
 	}
 
 	BMessenger			fTarget;
-	int32				fGeneration;
-	std::set<std::string> fFailed;
+	IconShared*			fShared;
+};
+
+
+// A few workers share the requested URLs round-robin.
+class IconFetcher {
+public:
+	IconFetcher(const BMessenger& target)
+	{
+		for (int32 i = 0; i < kIconWorkers; i++) {
+			fWorkers[i] = new IconWorker(target, &fShared);
+			fWorkers[i]->Run();
+		}
+	}
+
+	void Fetch(const BMessage& urls)
+	{
+		int32 generation = atomic_add(&fShared.generation, 1) + 1;
+		BMessage* parts[kIconWorkers];
+		for (int32 i = 0; i < kIconWorkers; i++) {
+			parts[i] = new BMessage(kStoreMsgFetchIcons);
+			parts[i]->AddInt32("gen", generation);
+		}
+		const char* url;
+		for (int32 i = 0; urls.FindString("url", i, &url) == B_OK; i++)
+			parts[i % kIconWorkers]->AddString("url", url);
+		for (int32 i = 0; i < kIconWorkers; i++)
+			fWorkers[i]->PostMessage(parts[i]);
+	}
+
+	void Cancel()
+	{
+		atomic_add(&fShared.generation, 1);
+	}
+
+	void Stop()
+	{
+		Cancel();
+		thread_id threads[kIconWorkers];
+		for (int32 i = 0; i < kIconWorkers; i++) {
+			threads[i] = fWorkers[i]->Thread();
+			if (fWorkers[i]->Lock())
+				fWorkers[i]->Quit();
+		}
+		for (int32 i = 0; i < kIconWorkers; i++) {
+			status_t exitValue;
+			wait_for_thread(threads[i], &exitValue);
+		}
+	}
+
+private:
+	IconShared			fShared;
+	IconWorker*			fWorkers[kIconWorkers];
 };
 
 
@@ -350,6 +420,13 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fWorker = new PackageWorker(BMessenger(this));
 	fWorker->Run();
 
+	{
+		BPath icons;
+		if (_iconCacheDir(icons) == B_OK) {
+			create_directory(icons.Path(), 0755);
+			BWebView::SetLocalSchemeDirectory(kIconScheme, icons.Path());
+		}
+	}
 	fWebView = new BWebView(Bounds(), "store");
 	BPrivate::SetWebViewProfile(fWebView, BPrivate::B_WEB_PROFILE_MINIMAL);
 	{
@@ -368,7 +445,6 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 		.Add(fWebView);
 
 	fFetcher = new IconFetcher(BMessenger(this));
-	fFetcher->Run();
 
 	_LoadCatalog();
 	_FetchCatalog();
@@ -388,12 +464,8 @@ StoreWindow::~StoreWindow()
 	delete fWorker;
 
 	if (fFetcher != NULL) {
-		thread_id thread = fFetcher->Thread();
-		fFetcher->Cancel();
-		if (fFetcher->Lock())
-			fFetcher->Quit();
-		status_t exitValue;
-		wait_for_thread(thread, &exitValue);
+		fFetcher->Stop();
+		delete fFetcher;
 	}
 }
 
@@ -776,6 +848,21 @@ StoreWindow::_DispatchPageAction(const char* payload)
 			fLimit = kPageSize;
 			_PushState();
 		}
+	} else if (action == "visible") {
+		fVisible.clear();
+		int32 start = 0;
+		while (start <= argument.Length()) {
+			int32 comma = argument.FindFirst(',', start);
+			if (comma < 0)
+				comma = argument.Length();
+			if (comma > start) {
+				BString id;
+				argument.CopyInto(id, start, comma - start);
+				fVisible.insert(id.String());
+			}
+			start = comma + 1;
+		}
+		_PushState();
 	} else if (action == "info") {
 		fInfoEntryId = argument;
 		_PushState();
@@ -941,8 +1028,8 @@ StoreWindow::_Matches(StoreEntry* entry) const
 }
 
 
-// Local cache path of an entry's icon as a file URL; if it is not
-// cached yet, the URL to download is added to missing.
+// Scheme URL of an entry's cached icon. An icon not cached yet is added
+// to missing, but only while its entry is on screen (or open).
 BString
 StoreWindow::_EntryIconURL(StoreEntry* entry, BMessage& missing)
 {
@@ -953,40 +1040,17 @@ StoreWindow::_EntryIconURL(StoreEntry* entry, BMessage& missing)
 	BPath dir;
 	if (_iconCacheDir(dir) != B_OK)
 		return BString();
-	BPath file(dir.Path(), _iconFileName(url).String());
+	BString name = _iconFileName(url);
+	BPath file(dir.Path(), name.String());
 	BEntry check(file.Path());
 	if (!check.Exists()) {
-		missing.AddString("url", url.String());
+		if (fVisible.count(entry->fId.String()) > 0
+				|| entry->fId == fInfoEntryId) {
+			missing.AddString("url", url.String());
+		}
 		return BString();
 	}
-
-	// Inline: the page has no origin that may read local files.
-	BFile icon(file.Path(), B_READ_ONLY);
-	off_t size;
-	if (icon.GetSize(&size) != B_OK || size <= 0 || size > 256 * 1024)
-		return BString();
-	BString raw;
-	char* buffer = raw.LockBuffer(size);
-	ssize_t read = icon.Read(buffer, size);
-	raw.UnlockBuffer(read > 0 ? read : 0);
-	if (read != size)
-		return BString();
-
-	static const char kAlphabet[]
-		= "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	const uint8* in = (const uint8*)raw.String();
-	BString uri("data:image/png;base64,");
-	for (off_t i = 0; i < size; i += 3) {
-		uint32 n = in[i] << 16;
-		if (i + 1 < size)
-			n |= in[i + 1] << 8;
-		if (i + 2 < size)
-			n |= in[i + 2];
-		uri << kAlphabet[(n >> 18) & 63] << kAlphabet[(n >> 12) & 63];
-		uri << (i + 1 < size ? kAlphabet[(n >> 6) & 63] : '=');
-		uri << (i + 2 < size ? kAlphabet[n & 63] : '=');
-	}
-	return uri;
+	return BString(kIconScheme) << ":/" << name;
 }
 
 
@@ -1115,7 +1179,7 @@ StoreWindow::_PushState()
 	if (wanted != fLastIconRequest) {
 		fLastIconRequest = wanted;
 		if (!wanted.IsEmpty())
-			fFetcher->Fetch(new BMessage(missing));
+			fFetcher->Fetch(missing);
 		else
 			fFetcher->Cancel();
 	}

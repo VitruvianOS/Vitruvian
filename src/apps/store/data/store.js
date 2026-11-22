@@ -17,11 +17,39 @@
 	// Per rendered entry: id and a key of what its node shows.
 	var rendered = [];
 	var moreRequested = -1;
+	// Entries on screen; only their icons are fetched.
+	var visible = {};
+	var visibleTimer = null;
+	var observer = null;
+
+	function reportVisible() {
+		visibleTimer = null;
+		var ids = Object.keys(visible).slice(0, 48);
+		post("visible", ids.join(","));
+	}
+
+	if (window.IntersectionObserver) {
+		observer = new IntersectionObserver(function (changes) {
+			changes.forEach(function (change) {
+				var id = change.target.getAttribute("data-id");
+				if (change.isIntersecting)
+					visible[id] = true;
+				else
+					delete visible[id];
+			});
+			if (visibleTimer === null)
+				visibleTimer = setTimeout(reportVisible, 120);
+		}, { rootMargin: "200px 0px" });
+	}
+
+	function letterNode(name) {
+		return el("div", "letter", name.charAt(0).toUpperCase());
+	}
 
 	function post(action, argument) {
 		// Any navigation drops the last result line.
 		if (action !== "install" && action !== "remove"
-				&& action !== "ready") {
+				&& action !== "ready" && action !== "visible") {
 			document.getElementById("status").textContent = "";
 		}
 		if (window.webkit && window.webkit.messageHandlers
@@ -91,16 +119,21 @@
 
 	function buildEntry(entry) {
 		var item = el("li", "");
+		item.setAttribute("data-id", entry.id);
+		if (observer)
+			observer.observe(item);
 
 		if (entry.icon) {
 			var img = el("img", "icon");
-			img.src = entry.icon;
 			img.alt = "";
+			img.onerror = function () {
+				if (img.parentNode)
+					img.parentNode.replaceChild(letterNode(entry.name), img);
+			};
+			img.src = entry.icon;
 			item.appendChild(img);
-		} else {
-			item.appendChild(el("div", "letter",
-				entry.name.charAt(0).toUpperCase()));
-		}
+		} else
+			item.appendChild(letterNode(entry.name));
 
 		var text = el("div", "text");
 		text.appendChild(el("div", "name", entry.name));
@@ -219,6 +252,10 @@
 		var icon = document.getElementById("detail-icon");
 		var letter = document.getElementById("detail-letter");
 		if (entry.icon) {
+			icon.onerror = function () {
+				icon.className = "icon hidden";
+				letter.className = "letter";
+			};
 			icon.src = entry.icon;
 			icon.className = "icon";
 			letter.className = "letter hidden";

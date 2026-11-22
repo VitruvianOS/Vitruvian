@@ -300,7 +300,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session,
 		// GM.* calls answer synchronously through the reply API.
 		webkit_user_content_manager_register_script_message_handler_with_reply(
 			ucm, "netplusGM", nullptr);
-		g_signal_connect(ucm, "script-message-received-with-reply::netplusGM",
+		g_signal_connect(ucm, "script-message-with-reply-received::netplusGM",
 			G_CALLBACK(_OnGMMessage), this);
 	}
 
@@ -398,8 +398,6 @@ WebKitBridge::_ConnectSignals()
 		G_CALLBACK(_OnMouseTargetChanged), this);
 	g_signal_connect(webView, "context-menu",
 		G_CALLBACK(_OnContextMenu), this);
-	g_signal_connect(webView, "web-process-crashed",
-		G_CALLBACK(_OnWebProcessCrashed), this);
 	g_signal_connect(webView, "web-process-terminated",
 		G_CALLBACK(_OnWebProcessTerminated), this);
 	g_signal_connect(webView, "enter-fullscreen",
@@ -412,8 +410,8 @@ WebKitBridge::_ConnectSignals()
 		G_CALLBACK(_OnShowNotification), this);
 	// Content-blocked and failed subresources both land here; the
 	// count is the page's "blocked or failed" tally.
-	g_signal_connect(webView, "resource-load-failed",
-		G_CALLBACK(_OnResourceLoadFailed), this);
+	g_signal_connect(webView, "resource-load-started",
+		G_CALLBACK(_OnResourceLoadStarted), this);
 }
 
 
@@ -757,30 +755,18 @@ WebKitBridge::_OnContextMenu(WebKitWebView*, WebKitContextMenu* menu,
 }
 
 
-gboolean
-WebKitBridge::_OnWebProcessCrashed(WebKitWebView*, gpointer data)
-{
-	auto* self = static_cast<WebKitBridge*>(data);
-	log_error("WebKitBridge: web process crashed");
-	if (self->fCrashReported)
-		return TRUE;
-	self->fCrashReported = true;
-	{
-		std::lock_guard<std::mutex> lock(self->fStateMutex);
-		self->fCachedIsLoading = false;
-	}
-	if (self->onWebProcessCrashed)
-		self->onWebProcessCrashed();
-	return TRUE;
-}
-
-
 void
 WebKitBridge::_OnWebProcessTerminated(WebKitWebView* view,
 	WebKitWebProcessTerminationReason reason, gpointer data)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
-	log_error("WebKitBridge: web process terminated (reason %d)", (int)reason);
+	if (reason == WEBKIT_WEB_PROCESS_TERMINATED_BY_API) {
+		log_info("WebKitBridge: web process terminated on request");
+		return;
+	}
+	log_error("WebKitBridge: web process %s",
+		reason == WEBKIT_WEB_PROCESS_EXCEEDED_MEMORY_LIMIT
+			? "exceeded its memory limit" : "crashed");
 	if (self->fCrashReported)
 		return;
 	self->fCrashReported = true;
@@ -1288,11 +1274,37 @@ WebKitBridge::_ApplyPageExtensions(
 }
 
 
+// Tied to a resource's "failed" signal; the alive flag guards against the
+// bridge going away while the resource is still around.
+struct WebKitBridge::ResourceWatch {
+	WebKitBridge*						bridge;
+	std::shared_ptr<std::atomic<bool> >	alive;
+};
+
+
 void
-WebKitBridge::_OnResourceLoadFailed(WebKitWebView*, WebKitWebResource*,
-	GError*, gpointer data)
+WebKitBridge::_OnResourceLoadStarted(WebKitWebView*, WebKitWebResource* resource,
+	WebKitURIRequest*, gpointer data)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
+	// The tally only matters while the host shows it.
+	if (!self->onBlockedCountChanged)
+		return;
+	auto* watch = new ResourceWatch{self, self->fAlive};
+	g_signal_connect_data(resource, "failed",
+		G_CALLBACK(_OnResourceFailed), watch,
+		[](gpointer d, GClosure*) { delete static_cast<ResourceWatch*>(d); },
+		(GConnectFlags)0);
+}
+
+
+void
+WebKitBridge::_OnResourceFailed(WebKitWebResource*, GError*, gpointer data)
+{
+	auto* watch = static_cast<ResourceWatch*>(data);
+	if (!watch->alive->load())
+		return;
+	WebKitBridge* self = watch->bridge;
 	int32_t count = ++self->fBlockedCount;
 	if (self->onBlockedCountChanged != nullptr)
 		self->onBlockedCountChanged(count);
@@ -1490,9 +1502,9 @@ WebKitBridge::_HandleGMCall(const std::string& body)
 }
 
 
-void
-WebKitBridge::_OnGMMessage(WebKitUserContentManager*,
-	WebKitScriptMessageReply* reply, JSCValue* value, gpointer data)
+gboolean
+WebKitBridge::_OnGMMessage(WebKitUserContentManager*, JSCValue* value,
+	WebKitScriptMessageReply* reply, gpointer data)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
 	gchar* text = jsc_value_to_string(value);
@@ -1504,6 +1516,7 @@ WebKitBridge::_OnGMMessage(WebKitUserContentManager*,
 	JSCValue* result = jsc_value_new_string(context, response.c_str());
 	webkit_script_message_reply_return_value(reply, result);
 	g_object_unref(result);
+	return TRUE;
 }
 
 

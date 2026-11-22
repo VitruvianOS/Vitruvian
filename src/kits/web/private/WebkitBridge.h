@@ -38,6 +38,7 @@ struct WebKitBridge {
 	// Completes in the .cpp; public so the GObject trampoline can
 	// name it.
 	struct	ScriptMessageBinding;
+	struct	ResourceWatch;
 
 								WebKitBridge(int width, int height,
 									SessionAdapter* session = nullptr,
@@ -283,10 +284,11 @@ private:
 	static void		_OnNotifyURI(WebKitWebView*, GParamSpec*, gpointer);
 	static gboolean	_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision*,
 						WebKitPolicyDecisionType, gpointer);
-	static void		_OnResourceLoadFailed(WebKitWebView*, WebKitWebResource*,
-						GError*, gpointer);
-	static void		_OnGMMessage(WebKitUserContentManager*,
-						WebKitScriptMessageReply*, JSCValue*, gpointer);
+	static void		_OnResourceLoadStarted(WebKitWebView*, WebKitWebResource*,
+						WebKitURIRequest*, gpointer);
+	static void		_OnResourceFailed(WebKitWebResource*, GError*, gpointer);
+	static gboolean	_OnGMMessage(WebKitUserContentManager*, JSCValue*,
+						WebKitScriptMessageReply*, gpointer);
 	static gboolean	_OnScriptDialog(WebKitWebView*, WebKitScriptDialog*,
 						gpointer);
 	static gboolean	_OnPermissionRequest(WebKitWebView*,
@@ -295,7 +297,6 @@ private:
 						WebKitHitTestResult*, guint, gpointer);
 	static gboolean	_OnContextMenu(WebKitWebView*, WebKitContextMenu*,
 						WebKitHitTestResult*, gpointer);
-	static gboolean	_OnWebProcessCrashed(WebKitWebView*, gpointer);
 	static void		_OnWebProcessTerminated(WebKitWebView*,
 						WebKitWebProcessTerminationReason, gpointer);
 	static bool		_OnBackendFullscreen(void* data, bool enable);

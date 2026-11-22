@@ -5,8 +5,9 @@
 	"use strict";
 
 	var sectionNames = { app: "Apps", component: "Components",
-		data: "Data" };
-	var state = { sections: ["app", "component", "data"], section: "app",
+		data: "Data", installed: "Installed" };
+	var state = { sections: ["app", "component", "data", "installed"],
+		section: "app",
 		categories: [], selected: "All", entries: [], total: 0,
 		detail: null, busy: null };
 	var selectedEntryId = null;
@@ -24,7 +25,7 @@
 	function post(action, argument) {
 		// Any navigation drops the last result line.
 		if (action !== "install" && action !== "remove"
-				&& action !== "ready" && action !== "visible") {
+				&& action !== "launch" && action !== "ready" && action !== "visible") {
 			document.getElementById("status").textContent = "";
 		}
 		if (window.webkit && window.webkit.messageHandlers
@@ -273,6 +274,13 @@
 			action.className = "";
 			action.onclick = function () { post("install", entry.id); };
 		}
+
+		var launch = document.getElementById("detail-launch");
+		if (entry.launch && !busy) {
+			launch.className = "";
+			launch.onclick = function () { post("launch", entry.id); };
+		} else
+			launch.className = "hidden";
 
 		renderProgress();
 	}

@@ -177,11 +177,36 @@ _InstalledThread(void* data)
 		fclose(file);
 	}
 
+	// Menu launchers by .desktop file name, from vos-desktop-sync.
+	std::map<std::string, std::string>* launchers
+		= new std::map<std::string, std::string>();
+	file = fopen("/var/lib/vos/desktop/manifest", "r");
+	if (file != NULL) {
+		char* line = NULL;
+		size_t capacity = 0;
+		while (getline(&line, &capacity, file) >= 0) {
+			char* desktop = strchr(line, '\t');
+			if (desktop == NULL)
+				continue;
+			*desktop++ = '\0';
+			char* end = strchr(desktop, '\t');
+			if (end != NULL)
+				*end = '\0';
+			const char* base = strrchr(desktop, '/');
+			(*launchers)[base != NULL ? base + 1 : desktop] = line;
+		}
+		free(line);
+		fclose(file);
+	}
+
 	BMessage reply(kStoreMsgInstalledLoaded);
 	reply.AddPointer("set", installed);
+	reply.AddPointer("launchers", launchers);
 	reply.AddInt32("seq", seq);
-	if (target.SendMessage(&reply) != B_OK)
+	if (target.SendMessage(&reply) != B_OK) {
 		delete installed;
+		delete launchers;
+	}
 	return B_OK;
 }
 
@@ -284,13 +309,18 @@ StoreWindow::MessageReceived(BMessage* message)
 				break;
 			}
 			std::set<std::string>* set = (std::set<std::string>*)pointer;
+			std::map<std::string, std::string>* launchers = NULL;
+			message->FindPointer("launchers", (void**)&launchers);
 			int32 seq = 0;
 			message->FindInt32("seq", &seq);
 			if (seq == fStateSeq) {
 				fInstalled.swap(*set);
+				if (launchers != NULL)
+					fLaunchers.swap(*launchers);
 				_PushState();
 			}
 			delete set;
+			delete launchers;
 			break;
 		}
 
@@ -610,7 +640,7 @@ StoreWindow::_DispatchPageAction(const char* payload)
 		_PushState();
 	} else if (action == "section") {
 		if (argument == "app" || argument == "component"
-			|| argument == "data") {
+			|| argument == "data" || argument == "installed") {
 			fSection = argument;
 			fSelectedCategory = "All";
 			fInfoEntryId = "";
@@ -637,6 +667,17 @@ StoreWindow::_DispatchPageAction(const char* payload)
 	} else if (action == "more") {
 		fLimit += kPageSize;
 		_PushState();
+	} else if (action == "launch") {
+		StoreEntry* entry = fCatalog.FindById(argument.String());
+		const char* launcher = entry != NULL ? _Launcher(entry) : NULL;
+		entry_ref ref;
+		if (launcher != NULL && get_ref_for_path(launcher, &ref) == B_OK) {
+			status_t status = be_roster->Launch(&ref);
+			if (status != B_OK && status != B_ALREADY_RUNNING) {
+				_SetStatus(BString(B_TRANSLATE("Could not launch %name%: "))
+					.ReplaceFirst("%name%", entry->fName) << strerror(status));
+			}
+		}
 	} else if (action == "cancel") {
 		PostMessage(kMsgCancel);
 	} else if (action == "install" || action == "remove") {
@@ -754,12 +795,26 @@ StoreWindow::_IsInstalled(StoreEntry* entry) const
 }
 
 
+const char*
+StoreWindow::_Launcher(StoreEntry* entry) const
+{
+	if (entry->fKind != "app")
+		return NULL;
+	std::map<std::string, std::string>::const_iterator found
+		= fLaunchers.find(entry->fId.String());
+	return found != fLaunchers.end() ? found->second.c_str() : NULL;
+}
+
+
 bool
 StoreWindow::_Matches(StoreEntry* entry) const
 {
-	// One section per kind; within the apps section the category
-	// filter applies.
-	if (entry->fKind != fSection)
+	// One section per kind plus one of everything installed; within
+	// the apps section the category filter applies.
+	if (fSection == "installed") {
+		if (!_IsInstalled(entry))
+			return false;
+	} else if (entry->fKind != fSection)
 		return false;
 	if (fSection == "app" && fSelectedCategory != "All"
 		&& fSelectedCategory != _categoryLabel(entry->fCategory)) {
@@ -829,7 +884,10 @@ StoreWindow::_AppendEntryJSON(BString& json, StoreEntry* entry)
 	json << ",\"summary\":\"" << _jsonEscape(entry->fSummary) << "\"";
 	json << ",\"category\":\""
 		<< _jsonEscape(_categoryLabel(entry->fCategory)) << "\"";
-	json << ",\"installed\":" << (_IsInstalled(entry) ? "true" : "false");
+	bool installed = _IsInstalled(entry);
+	json << ",\"installed\":" << (installed ? "true" : "false");
+	json << ",\"launch\":"
+		<< (installed && _Launcher(entry) != NULL ? "true" : "false");
 	BString needs;
 	for (int32 r = 0; r < entry->fRequires.CountItems(); r++) {
 		StoreEntry* component
@@ -859,7 +917,7 @@ BString
 StoreWindow::_BuildStateJSON()
 {
 	BString json("{");
-	json << "\"sections\":[\"app\",\"component\",\"data\"]";
+	json << "\"sections\":[\"app\",\"component\",\"data\",\"installed\"]";
 	json << ",\"section\":\"" << _jsonEscape(fSection) << "\"";
 	json << ",\"categories\":" << _BuildCategoriesJSON();
 	json << ",\"selected\":\"" << _jsonEscape(fSelectedCategory) << "\"";

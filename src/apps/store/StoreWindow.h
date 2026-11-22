@@ -9,6 +9,7 @@
 #include <String.h>
 #include <Window.h>
 
+#include <map>
 #include <set>
 #include <string>
 
@@ -48,6 +49,7 @@ private:
 									StoreEntry* entry);
 			bool				_Matches(StoreEntry* entry) const;
 			bool				_IsInstalled(StoreEntry* entry) const;
+			const char*			_Launcher(StoreEntry* entry) const;
 
 			BWebView*			fWebView;
 			PackageWorker*		fWorker;
@@ -63,6 +65,8 @@ private:
 			int32				fLimit;
 			// Debian package names installed, from the dpkg status file.
 			std::set<std::string> fInstalled;
+			// Deskbar menu launcher by .desktop file name.
+			std::map<std::string, std::string> fLaunchers;
 			int32				fStateSeq;
 			// In-flight install/remove, if any.
 			BString				fBusyEntryId;

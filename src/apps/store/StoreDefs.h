@@ -13,10 +13,11 @@
 // plain string "<action>|<argument>" (kept trivial so the C++ side
 // needs no JSON parser):
 //   ready              page loaded, wants the initial state
-//   section|<kind>     Apps/Components/Data tab pressed
+//   section|<kind>     Apps/Components/Data/Installed tab pressed
 //   select|<category>  category button pressed (apps section)
 //   install|<id>       Install pressed for a catalog entry
 //   remove|<id>        Remove pressed for a catalog entry
+//   launch|<id>        Launch pressed for an installed app
 //   search|<text>      search box (debounced by the page)
 //   more               next page of the current list
 //   info|<id>          detail view of an entry ("" to leave it)

@@ -158,6 +158,20 @@ body {
 	cursor: pointer;
 }
 
+#detail-buttons { display: flex; gap: 8px; }
+
+#detail-launch {
+	font-size: 14px;
+	padding: 6px 20px;
+	border: 1px solid #2060a0;
+	border-radius: 6px;
+	background: #3484e2;
+	color: #fff;
+	cursor: pointer;
+}
+
+#detail-launch.hidden { display: none; }
+
 #detail-action.remove { background: #fff; color: #b03030; border-color: #b03030; }
 #detail-action:disabled { background: #ccc; border-color: #bbb; color: #666; cursor: default; }
 

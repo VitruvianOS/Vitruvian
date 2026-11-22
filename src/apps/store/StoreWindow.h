@@ -18,7 +18,6 @@
 
 class BWebView;
 class PackageWorker;
-class IconFetcher;
 
 
 class StoreWindow : public BWindow {
@@ -43,19 +42,15 @@ private:
 			void				_FinishBusy();
 			void				_RunScript(const char* script);
 
-			BString				_BuildStateJSON(BMessage& missingIcons);
+			BString				_BuildStateJSON();
 			BString				_BuildCategoriesJSON();
 			void				_AppendEntryJSON(BString& json,
-									StoreEntry* entry,
-									BMessage& missingIcons);
-			BString				_EntryIconURL(StoreEntry* entry,
-									BMessage& missingIcons);
+									StoreEntry* entry);
 			bool				_Matches(StoreEntry* entry) const;
 			bool				_IsInstalled(StoreEntry* entry) const;
 
 			BWebView*			fWebView;
 			PackageWorker*		fWorker;
-			IconFetcher*		fFetcher;
 			StoreCatalog		fCatalog;
 			// Selected section kind: "app", "component" or "data".
 			BString				fSection;
@@ -69,8 +64,6 @@ private:
 			// Debian package names installed, from the dpkg status file.
 			std::set<std::string> fInstalled;
 			int32				fStateSeq;
-			BString				fLastIconRequest;
-			std::set<std::string> fVisible;
 			// In-flight install/remove, if any.
 			BString				fBusyEntryId;
 			int32				fBusyPercent;

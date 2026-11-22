@@ -75,6 +75,7 @@ body {
 	border-radius: 6px;
 	margin-bottom: 6px;
 	cursor: pointer;
+	position: relative;
 }
 
 #entries li:hover { border-color: #3484e2; }
@@ -97,6 +98,8 @@ body {
 }
 
 .icon { border-radius: 6px; object-fit: contain; }
+/* In the DOM so lazy loading applies, but not shown until loaded. */
+#entries .icon.pending { position: absolute; left: 12px; opacity: 0; pointer-events: none; }
 
 #entries .text .name { font-weight: 600; }
 #entries .text .summary { color: #666; font-size: 13px; }

@@ -16,7 +16,9 @@ enum web_profile {
 	B_WEB_PROFILE_BROWSER = 0,
 	// Embedded web app: no WebRTC, media stream, MSE/EME, WebGL, WebAudio,
 	// DNS prefetch; small cache.
-	B_WEB_PROFILE_MINIMAL = 1
+	B_WEB_PROFILE_MINIMAL = 1,
+	// Minimal, but the HTTP disk cache stays on (remote images).
+	B_WEB_PROFILE_MINIMAL_CACHED = 2
 };
 
 // Must run before SetSession() and before the view is attached. The first

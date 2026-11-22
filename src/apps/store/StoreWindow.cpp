@@ -73,9 +73,6 @@ static const struct {
 
 
 static const int32 kPageSize = 60;
-static const int32 kIconWorkers = 3;
-static const bigtime_t kIconRetryAfter = 10 * 60 * 1000000LL;
-static const char* kIconScheme = "vos-store";
 
 static const char* kCatalogURL = "https://store.v-os.dev/catalog.json";
 static const char* kSiteURL = "https://store.v-os.dev";
@@ -142,215 +139,6 @@ enum {
 //	#pragma mark - Icons and installed state
 
 
-static status_t
-_iconCacheDir(BPath& path)
-{
-	status_t status = find_directory(B_USER_CACHE_DIRECTORY, &path, true);
-	if (status != B_OK)
-		return status;
-	return path.Append("store/icons");
-}
-
-
-// What the workers share: the supersede counter and the failed URLs,
-// which are retried only after a while.
-struct IconShared {
-	BLocker						lock;
-	int32						generation;
-	std::map<std::string, bigtime_t> failed;
-
-	IconShared()
-		:
-		lock("store icon state"),
-		generation(0)
-	{
-	}
-
-	bool IsFailed(const BString& url)
-	{
-		BAutolock locker(lock);
-		std::map<std::string, bigtime_t>::iterator it
-			= failed.find(url.String());
-		if (it == failed.end())
-			return false;
-		if (system_time() - it->second < kIconRetryAfter)
-			return true;
-		failed.erase(it);
-		return false;
-	}
-
-	void SetFailed(const BString& url)
-	{
-		BAutolock locker(lock);
-		failed[url.String()] = system_time();
-	}
-};
-
-
-static BString
-_iconURL(const BString& icon)
-{
-	if (!icon.IsEmpty() && icon[0] == '/')
-		return BString(kSiteURL) << icon;
-	return icon;
-}
-
-
-// Cache file name for an icon URL: every non-alphanumeric byte (but the
-// extension dot) becomes an underscore.
-static BString
-_iconFileName(const BString& url)
-{
-	BString name;
-	for (int32 i = 0; i < url.Length(); i++) {
-		char c = url[i];
-		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-			|| (c >= '0' && c <= '9') || c == '.';
-		name << (ok ? c : '_');
-	}
-	return name;
-}
-
-
-// One icon download worker at low priority. A newer request supersedes
-// the one in flight (the page scrolled on).
-class IconWorker : public BLooper {
-public:
-	IconWorker(const BMessenger& target, IconShared* shared)
-		:
-		BLooper("store icons", B_LOW_PRIORITY),
-		fTarget(target),
-		fShared(shared)
-	{
-	}
-
-	virtual void MessageReceived(BMessage* message)
-	{
-		if (message->what != kStoreMsgFetchIcons) {
-			BLooper::MessageReceived(message);
-			return;
-		}
-
-		int32 generation = 0;
-		message->FindInt32("gen", &generation);
-
-		BPath dir;
-		if (_iconCacheDir(dir) != B_OK)
-			return;
-		create_directory(dir.Path(), 0755);
-
-		const char* urlString;
-		for (int32 i = 0; message->FindString("url", i, &urlString) == B_OK;
-				i++) {
-			if (atomic_get(&fShared->generation) != generation)
-				return;
-
-			BString url(urlString);
-			if (fShared->IsFailed(url))
-				continue;
-			BPath file(dir.Path(), _iconFileName(url).String());
-			BEntry existing(file.Path());
-			if (existing.Exists())
-				continue;
-
-			if (_Download(url, file))
-				fTarget.SendMessage(kStoreMsgIconsFetched);
-			else
-				fShared->SetFailed(url);
-		}
-	}
-
-private:
-	bool _Download(const BString& url, const BPath& file)
-	{
-		BMallocIO output;
-		BUrl remote(url.String(), true);
-		BHttpRequest* request = dynamic_cast<BHttpRequest*>(
-			BUrlProtocolRoster::MakeRequest(remote, &output));
-		if (request == NULL)
-			return false;
-
-		bool done = false;
-		thread_id requestThread = request->Run();
-		if (requestThread >= 0) {
-			status_t exitValue;
-			wait_for_thread(requestThread, &exitValue);
-			const BHttpResult& result
-				= static_cast<const BHttpResult&>(request->Result());
-			if (result.StatusCode() == 200 && output.BufferLength() > 0) {
-				BString temp(file.Path());
-				temp << ".part";
-				BFile out(temp.String(),
-					B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
-				if (out.InitCheck() == B_OK
-					&& out.Write(output.Buffer(), output.BufferLength())
-						== (ssize_t)output.BufferLength()) {
-					BEntry part(temp.String());
-					done = part.Rename(file.Path(), true) == B_OK;
-				}
-			}
-		}
-		delete request;
-		return done;
-	}
-
-	BMessenger			fTarget;
-	IconShared*			fShared;
-};
-
-
-// A few workers share the requested URLs round-robin.
-class IconFetcher {
-public:
-	IconFetcher(const BMessenger& target)
-	{
-		for (int32 i = 0; i < kIconWorkers; i++) {
-			fWorkers[i] = new IconWorker(target, &fShared);
-			fWorkers[i]->Run();
-		}
-	}
-
-	void Fetch(const BMessage& urls)
-	{
-		int32 generation = atomic_add(&fShared.generation, 1) + 1;
-		BMessage* parts[kIconWorkers];
-		for (int32 i = 0; i < kIconWorkers; i++) {
-			parts[i] = new BMessage(kStoreMsgFetchIcons);
-			parts[i]->AddInt32("gen", generation);
-		}
-		const char* url;
-		for (int32 i = 0; urls.FindString("url", i, &url) == B_OK; i++)
-			parts[i % kIconWorkers]->AddString("url", url);
-		for (int32 i = 0; i < kIconWorkers; i++)
-			fWorkers[i]->PostMessage(parts[i]);
-	}
-
-	void Cancel()
-	{
-		atomic_add(&fShared.generation, 1);
-	}
-
-	void Stop()
-	{
-		Cancel();
-		thread_id threads[kIconWorkers];
-		for (int32 i = 0; i < kIconWorkers; i++) {
-			threads[i] = fWorkers[i]->Thread();
-			if (fWorkers[i]->Lock())
-				fWorkers[i]->Quit();
-		}
-		for (int32 i = 0; i < kIconWorkers; i++) {
-			status_t exitValue;
-			wait_for_thread(threads[i], &exitValue);
-		}
-	}
-
-private:
-	IconShared			fShared;
-	IconWorker*			fWorkers[kIconWorkers];
-};
-
-
 // Reads the installed package names from the dpkg status file in one
 // pass and hands them to the window.
 static status_t
@@ -407,7 +195,6 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 		B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 	fWebView(NULL),
 	fWorker(NULL),
-	fFetcher(NULL),
 	fCatalog(),
 	fSection("app"),
 	fSelectedCategory("All"),
@@ -420,15 +207,8 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fWorker = new PackageWorker(BMessenger(this));
 	fWorker->Run();
 
-	{
-		BPath icons;
-		if (_iconCacheDir(icons) == B_OK) {
-			create_directory(icons.Path(), 0755);
-			BWebView::SetLocalSchemeDirectory(kIconScheme, icons.Path());
-		}
-	}
 	fWebView = new BWebView(Bounds(), "store");
-	BPrivate::SetWebViewProfile(fWebView, BPrivate::B_WEB_PROFILE_MINIMAL);
+	BPrivate::SetWebViewProfile(fWebView, BPrivate::B_WEB_PROFILE_MINIMAL_CACHED);
 	{
 		// Own cookies and cache, apart from the browser's.
 		BPath profile;
@@ -443,8 +223,6 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(fWebView);
-
-	fFetcher = new IconFetcher(BMessenger(this));
 
 	_LoadCatalog();
 	_FetchCatalog();
@@ -462,11 +240,6 @@ StoreWindow::~StoreWindow()
 			fWorker->Quit();
 	}
 	delete fWorker;
-
-	if (fFetcher != NULL) {
-		fFetcher->Stop();
-		delete fFetcher;
-	}
 }
 
 
@@ -502,10 +275,6 @@ StoreWindow::MessageReceived(BMessage* message)
 			}
 			break;
 		}
-
-		case kStoreMsgIconsFetched:
-			_PushState();
-			break;
 
 		case kStoreMsgInstalledLoaded:
 		{
@@ -848,21 +617,6 @@ StoreWindow::_DispatchPageAction(const char* payload)
 			fLimit = kPageSize;
 			_PushState();
 		}
-	} else if (action == "visible") {
-		fVisible.clear();
-		int32 start = 0;
-		while (start <= argument.Length()) {
-			int32 comma = argument.FindFirst(',', start);
-			if (comma < 0)
-				comma = argument.Length();
-			if (comma > start) {
-				BString id;
-				argument.CopyInto(id, start, comma - start);
-				fVisible.insert(id.String());
-			}
-			start = comma + 1;
-		}
-		_PushState();
 	} else if (action == "info") {
 		fInfoEntryId = argument;
 		_PushState();
@@ -1028,29 +782,13 @@ StoreWindow::_Matches(StoreEntry* entry) const
 }
 
 
-// Scheme URL of an entry's cached icon. An icon not cached yet is added
-// to missing, but only while its entry is on screen (or open).
-BString
-StoreWindow::_EntryIconURL(StoreEntry* entry, BMessage& missing)
+// Absolute icon URL; the page loads it itself.
+static BString
+_iconURL(const BString& icon)
 {
-	BString url = _iconURL(entry->fIcon);
-	if (url.IsEmpty())
-		return BString();
-
-	BPath dir;
-	if (_iconCacheDir(dir) != B_OK)
-		return BString();
-	BString name = _iconFileName(url);
-	BPath file(dir.Path(), name.String());
-	BEntry check(file.Path());
-	if (!check.Exists()) {
-		if (fVisible.count(entry->fId.String()) > 0
-				|| entry->fId == fInfoEntryId) {
-			missing.AddString("url", url.String());
-		}
-		return BString();
-	}
-	return BString(kIconScheme) << ":/" << name;
+	if (!icon.IsEmpty() && icon[0] == '/')
+		return BString(kSiteURL) << icon;
+	return icon;
 }
 
 
@@ -1081,10 +819,9 @@ StoreWindow::_BuildCategoriesJSON()
 
 
 void
-StoreWindow::_AppendEntryJSON(BString& json, StoreEntry* entry,
-	BMessage& missing)
+StoreWindow::_AppendEntryJSON(BString& json, StoreEntry* entry)
 {
-	BString icon = _EntryIconURL(entry, missing);
+	BString icon = _iconURL(entry->fIcon);
 
 	json << "{\"id\":\"" << _jsonEscape(entry->fId) << "\"";
 	json << ",\"kind\":\"" << _jsonEscape(entry->fKind) << "\"";
@@ -1117,9 +854,9 @@ StoreWindow::_AppendEntryJSON(BString& json, StoreEntry* entry,
 
 
 // Only the current page of the filtered list goes to the page, plus
-// the detail entry; icons missing for those are queued for download.
+// the detail entry.
 BString
-StoreWindow::_BuildStateJSON(BMessage& missing)
+StoreWindow::_BuildStateJSON()
 {
 	BString json("{");
 	json << "\"sections\":[\"app\",\"component\",\"data\"]";
@@ -1149,7 +886,7 @@ StoreWindow::_BuildStateJSON(BMessage& missing)
 		if (sent > 0)
 			list << ",";
 		sent++;
-		_AppendEntryJSON(list, entry, missing);
+		_AppendEntryJSON(list, entry);
 	}
 	json << "\"total\":" << total << ",\"entries\":[" << list << "]";
 
@@ -1157,7 +894,7 @@ StoreWindow::_BuildStateJSON(BMessage& missing)
 	StoreEntry* detail = fInfoEntryId.IsEmpty()
 		? NULL : fCatalog.FindById(fInfoEntryId.String());
 	if (detail != NULL)
-		_AppendEntryJSON(json, detail, missing);
+		_AppendEntryJSON(json, detail);
 	else
 		json << "null";
 	json << "}";
@@ -1168,21 +905,7 @@ StoreWindow::_BuildStateJSON(BMessage& missing)
 void
 StoreWindow::_PushState()
 {
-	BMessage missing;
-	BString state = _BuildStateJSON(missing);
-
-	// Ask for icons only when the set still to fetch changed.
-	BString wanted;
-	const char* url;
-	for (int32 i = 0; missing.FindString("url", i, &url) == B_OK; i++)
-		wanted << url << "\n";
-	if (wanted != fLastIconRequest) {
-		fLastIconRequest = wanted;
-		if (!wanted.IsEmpty())
-			fFetcher->Fetch(missing);
-		else
-			fFetcher->Cancel();
-	}
+	BString state = _BuildStateJSON();
 
 	if (state == fLastState)
 		return;

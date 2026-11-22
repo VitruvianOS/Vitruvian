@@ -37,8 +37,6 @@ enum {
 	kStoreMsgRefreshState	= 'stRf',
 	kStoreMsgScriptDone		= 'stJs',
 	kStoreMsgCatalogFetched	= 'stCf',
-	kStoreMsgIconsFetched	= 'stIf',
-	kStoreMsgFetchIcons		= 'stFi',
 	kStoreMsgInstalledLoaded	= 'stIl'
 };
 

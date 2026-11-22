@@ -17,31 +17,6 @@
 	// Per rendered entry: id and a key of what its node shows.
 	var rendered = [];
 	var moreRequested = -1;
-	// Entries on screen; only their icons are fetched.
-	var visible = {};
-	var visibleTimer = null;
-	var observer = null;
-
-	function reportVisible() {
-		visibleTimer = null;
-		var ids = Object.keys(visible).slice(0, 48);
-		post("visible", ids.join(","));
-	}
-
-	if (window.IntersectionObserver) {
-		observer = new IntersectionObserver(function (changes) {
-			changes.forEach(function (change) {
-				var id = change.target.getAttribute("data-id");
-				if (change.isIntersecting)
-					visible[id] = true;
-				else
-					delete visible[id];
-			});
-			if (visibleTimer === null)
-				visibleTimer = setTimeout(reportVisible, 120);
-		}, { rootMargin: "200px 0px" });
-	}
-
 	function letterNode(name) {
 		return el("div", "letter", name.charAt(0).toUpperCase());
 	}
@@ -120,17 +95,21 @@
 	function buildEntry(entry) {
 		var item = el("li", "");
 		item.setAttribute("data-id", entry.id);
-		if (observer)
-			observer.observe(item);
 
 		if (entry.icon) {
-			var img = el("img", "icon");
+			// The letter tile stays until the icon has loaded.
+			var tile = letterNode(entry.name);
+			var img = el("img", "icon pending");
 			img.alt = "";
-			img.onerror = function () {
-				if (img.parentNode)
-					img.parentNode.replaceChild(letterNode(entry.name), img);
+			img.loading = "lazy";
+			img.decoding = "async";
+			img.onload = function () {
+				img.className = "icon";
+				if (tile.parentNode)
+					tile.parentNode.removeChild(tile);
 			};
 			img.src = entry.icon;
+			item.appendChild(tile);
 			item.appendChild(img);
 		} else
 			item.appendChild(letterNode(entry.name));
@@ -252,13 +231,14 @@
 		var icon = document.getElementById("detail-icon");
 		var letter = document.getElementById("detail-letter");
 		if (entry.icon) {
-			icon.onerror = function () {
-				icon.className = "icon hidden";
-				letter.className = "letter";
+			icon.onload = function () {
+				icon.className = "icon";
+				letter.className = "letter hidden";
 			};
+			icon.className = "icon hidden";
+			letter.className = "letter";
+			letter.textContent = entry.name.charAt(0).toUpperCase();
 			icon.src = entry.icon;
-			icon.className = "icon";
-			letter.className = "letter hidden";
 		} else {
 			icon.className = "icon hidden";
 			letter.className = "letter";

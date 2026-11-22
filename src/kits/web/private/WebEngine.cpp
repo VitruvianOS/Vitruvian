@@ -24,10 +24,18 @@ static UrlSchemeAdapter* sSchemes = NULL;
 
 // Per-process cap in MB. The thresholds are fractions of it, so it has to
 // sit well under physical memory for pressure to ever trigger.
+static bool
+is_minimal(int profile)
+{
+	return profile == BPrivate::B_WEB_PROFILE_MINIMAL
+		|| profile == BPrivate::B_WEB_PROFILE_MINIMAL_CACHED;
+}
+
+
 static guint
 memory_limit_mb(int profile)
 {
-	if (profile == BPrivate::B_WEB_PROFILE_MINIMAL)
+	if (is_minimal(profile))
 		return 384;
 
 	long pages = sysconf(_SC_PHYS_PAGES);
@@ -84,7 +92,9 @@ WebEngineContext(int profile)
 		webkit_web_context_set_cache_model(sContext,
 			profile == BPrivate::B_WEB_PROFILE_MINIMAL
 				? WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER
-				: WEBKIT_CACHE_MODEL_WEB_BROWSER);
+				: profile == BPrivate::B_WEB_PROFILE_MINIMAL_CACHED
+					? WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER
+					: WEBKIT_CACHE_MODEL_WEB_BROWSER);
 
 		if (const char* runtimeDir = g_getenv("XDG_RUNTIME_DIR")) {
 			std::string socket = std::string(runtimeDir) + "/pipewire-0";
@@ -104,7 +114,7 @@ void
 WebEngineApplySettings(WebKitSettings* settings, int profile)
 {
 	webkit_settings_set_enable_page_cache(settings, FALSE);
-	if (profile != BPrivate::B_WEB_PROFILE_MINIMAL)
+	if (!is_minimal(profile))
 		return;
 
 	webkit_settings_set_enable_webrtc(settings, FALSE);

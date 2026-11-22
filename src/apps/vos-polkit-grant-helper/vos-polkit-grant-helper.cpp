@@ -344,6 +344,7 @@ regenerate_rules()
 		return -1;
 	}
 
+	mkdir("/run/polkit-1", 0755);
 	mkdir(kRulesDir, 0755);
 
 	char tmpPath[512];

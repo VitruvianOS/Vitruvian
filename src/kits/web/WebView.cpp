@@ -580,6 +580,9 @@ BWebView::BWebView(BRect frame, const char* name)
 		B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE),
 	fImpl(new WebViewImpl())
 {
+	// Otherwise the minimum is the current size: after full screen a
+	// layout could never shrink the view again.
+	SetExplicitMinSize(BSize(50, 50));
 }
 
 

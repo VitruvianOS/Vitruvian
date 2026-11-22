@@ -9,7 +9,7 @@
 	var state = { sections: ["app", "component", "data", "installed"],
 		section: "app",
 		categories: [], selected: "All", entries: [], total: 0,
-		detail: null, busy: null };
+		detail: null, busy: null, queue: [] };
 	var selectedEntryId = null;
 	var searchTimer = null;
 	// Cheap keys of what each region last rendered.
@@ -25,7 +25,8 @@
 	function post(action, argument) {
 		// Any navigation drops the last result line.
 		if (action !== "install" && action !== "remove"
-				&& action !== "launch" && action !== "ready" && action !== "visible") {
+				&& action !== "dequeue" && action !== "launch"
+				&& action !== "ready" && action !== "visible") {
 			document.getElementById("status").textContent = "";
 		}
 		if (window.webkit && window.webkit.messageHandlers
@@ -195,11 +196,39 @@
 		return null;
 	}
 
+	function queuedIndex(id) {
+		var queue = state.queue || [];
+		for (var i = 0; i < queue.length; i++) {
+			if (queue[i].id === id)
+				return i;
+		}
+		return -1;
+	}
+
+	function renderStatusBar() {
+		var bar = document.getElementById("statusbar");
+		var busy = state.busy;
+		if (!busy) {
+			bar.className = "hidden";
+			return;
+		}
+		bar.className = "";
+		var percent = busy.percent >= 0 ? busy.percent : 0;
+		document.getElementById("statusbar-text").textContent
+			= (busy.install ? "Installing " : "Removing ") + busy.name
+			+ (busy.percent >= 0 ? " " + percent + "%" : "");
+		var queued = (state.queue || []).length;
+		document.getElementById("statusbar-queue").textContent
+			= queued > 0 ? "+" + queued + " queued" : "";
+		document.getElementById("statusbar-fill").style.width = percent + "%";
+	}
+
 	function renderDetail() {
 		var detail = document.getElementById("detail");
 		var entry = currentEntry();
 		var key = entry ? JSON.stringify(entry) + "|" + (state.busy !== null)
-			+ "|" + (state.busy ? state.busy.cancel : "")
+			+ "|" + (state.busy ? state.busy.cancel + state.busy.id : "")
+			+ "|" + queuedIndex(selectedEntryId)
 			: null;
 		if (key !== null && key === keys.detail) {
 			renderProgress();
@@ -264,8 +293,13 @@
 
 		var action = document.getElementById("detail-action");
 		var busy = state.busy !== null;
-		action.disabled = busy;
-		if (entry.installed) {
+		var queued = queuedIndex(entry.id) >= 0;
+		var busyHere = busy && state.busy.id === entry.id;
+		action.disabled = queued || busyHere;
+		if (queued) {
+			action.textContent = "Queued";
+			action.className = "";
+		} else if (entry.installed) {
 			action.textContent = "Remove";
 			action.className = "remove";
 			action.onclick = function () { post("remove", entry.id); };
@@ -276,7 +310,7 @@
 		}
 
 		var launch = document.getElementById("detail-launch");
-		if (entry.launch && !busy) {
+		if (entry.launch && !busyHere) {
 			launch.className = "";
 			launch.onclick = function () { post("launch", entry.id); };
 		} else
@@ -290,6 +324,14 @@
 		var bar = document.getElementById("progress-bar");
 		var text = document.getElementById("progress-text");
 		var cancel = document.getElementById("detail-cancel");
+		var dequeue = document.getElementById("detail-dequeue");
+		if (queuedIndex(selectedEntryId) >= 0) {
+			dequeue.className = "";
+			dequeue.onclick = function () {
+				post("dequeue", selectedEntryId);
+			};
+		} else
+			dequeue.className = "hidden";
 		if (!state.busy || state.busy.id !== selectedEntryId) {
 			progress.className = "hidden";
 			cancel.className = "hidden";
@@ -316,6 +358,7 @@
 		renderCategories();
 		renderEntries();
 		renderDetail();
+		renderStatusBar();
 	}
 
 	window.Store = {
@@ -336,10 +379,20 @@
 				state.busy.status = text;
 			}
 			renderProgress();
+			renderStatusBar();
 		}
 	};
 
 	document.addEventListener("DOMContentLoaded", function () {
+		document.getElementById("statusbar").addEventListener("click",
+			function () {
+				if (!state.busy)
+					return;
+				selectedEntryId = state.busy.id;
+				post("info", state.busy.id);
+				renderDetail();
+				document.getElementById("content").scrollTop = 0;
+			});
 		var search = document.getElementById("search");
 		search.addEventListener("input", function () {
 			var value = this.value.trim().toLowerCase();

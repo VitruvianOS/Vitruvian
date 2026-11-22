@@ -17,6 +17,8 @@
 //   select|<category>  category button pressed (apps section)
 //   install|<id>       Install pressed for a catalog entry
 //   remove|<id>        Remove pressed for a catalog entry
+//                      (while another is busy it is queued, FIFO)
+//   dequeue|<id>       drop a queued install/remove
 //   launch|<id>        Launch pressed for an installed app
 //   search|<text>      search box (debounced by the page)
 //   more               next page of the current list

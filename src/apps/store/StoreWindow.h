@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <package/PackageDefs.h>
 
@@ -73,6 +74,13 @@ private:
 			int32				fBusyPercent;
 			BString				fBusyStatus;
 			int32				fBusyCancel;
+			bool				fBusyInstall;
+			// Install/remove requests waiting behind the busy one.
+			struct QueueItem {
+				BString				id;
+				bool				install;
+			};
+			std::vector<QueueItem> fQueue;
 			BString				fLastState;
 			bool				fDryRun;
 };

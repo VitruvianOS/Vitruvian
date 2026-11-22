@@ -227,6 +227,7 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fStateSeq(0),
 	fBusyPercent(-1),
 	fBusyCancel(kCancelNone),
+	fBusyInstall(true),
 	fDryRun(dryRun)
 {
 	fWorker = new PackageWorker(BMessenger(this));
@@ -684,7 +685,30 @@ StoreWindow::_DispatchPageAction(const char* payload)
 		StoreEntry* entry = fCatalog.FindById(argument.String());
 		if (entry == NULL)
 			return;
-		_StartTransaction(action == "install", entry);
+		bool install = action == "install";
+		if (!fBusyEntryId.IsEmpty()) {
+			if (fBusyEntryId == entry->fId)
+				return;
+			for (size_t i = 0; i < fQueue.size(); i++) {
+				if (fQueue[i].id == entry->fId)
+					return;
+			}
+			QueueItem item;
+			item.id = entry->fId;
+			item.install = install;
+			fQueue.push_back(item);
+			_PushState();
+			return;
+		}
+		_StartTransaction(install, entry);
+	} else if (action == "dequeue") {
+		for (size_t i = 0; i < fQueue.size(); i++) {
+			if (fQueue[i].id == argument) {
+				fQueue.erase(fQueue.begin() + i);
+				break;
+			}
+		}
+		_PushState();
 	}
 }
 
@@ -736,6 +760,7 @@ StoreWindow::_StartTransaction(bool install, StoreEntry* entry)
 		simulate.AddString(field, packages.ItemAt(i)->String());
 
 	fBusyEntryId = entry->fId;
+	fBusyInstall = install;
 	fBusyPercent = -1;
 	fBusyCancel = kCancelNone;
 	fBusyStatus = install
@@ -764,6 +789,16 @@ StoreWindow::_FinishBusy()
 	fBusyStatus = "";
 	fBusyCancel = kCancelNone;
 	_ReloadStates();
+
+	while (!fQueue.empty()) {
+		QueueItem item = fQueue.front();
+		fQueue.erase(fQueue.begin());
+		StoreEntry* entry = fCatalog.FindById(item.id.String());
+		if (entry != NULL) {
+			_StartTransaction(item.install, entry);
+			break;
+		}
+	}
 }
 
 
@@ -924,12 +959,29 @@ StoreWindow::_BuildStateJSON()
 	json << ",\"info\":\"" << _jsonEscape(fInfoEntryId) << "\",";
 
 	if (!fBusyEntryId.IsEmpty()) {
+		StoreEntry* busy = fCatalog.FindById(fBusyEntryId.String());
 		json << "\"busy\":{\"id\":\"" << _jsonEscape(fBusyEntryId)
-			<< "\",\"percent\":" << fBusyPercent
+			<< "\",\"name\":\"" << _jsonEscape(busy != NULL
+				? busy->fName : fBusyEntryId)
+			<< "\",\"install\":" << (fBusyInstall ? "true" : "false")
+			<< ",\"percent\":" << fBusyPercent
 			<< ",\"status\":\"" << _jsonEscape(fBusyStatus)
 			<< "\",\"cancel\":" << fBusyCancel << "},";
 	} else
 		json << "\"busy\":null,";
+
+	json << "\"queue\":[";
+	for (size_t i = 0; i < fQueue.size(); i++) {
+		StoreEntry* queued = fCatalog.FindById(fQueue[i].id.String());
+		if (i > 0)
+			json << ",";
+		json << "{\"id\":\"" << _jsonEscape(fQueue[i].id)
+			<< "\",\"name\":\"" << _jsonEscape(queued != NULL
+				? queued->fName : fQueue[i].id)
+			<< "\",\"install\":" << (fQueue[i].install ? "true" : "false")
+			<< "}";
+	}
+	json << "],";
 
 	BString list;
 	int32 total = 0;

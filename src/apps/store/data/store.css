@@ -216,3 +216,22 @@ body {
 	padding: 6px 16px;
 	cursor: pointer;
 }
+
+#statusbar {
+	position: fixed;
+	left: 201px;
+	right: 0;
+	bottom: 0;
+	padding: 6px 16px 8px;
+	background: #f2f2f2;
+	border-top: 1px solid #ccc;
+	font-size: 13px;
+	cursor: pointer;
+}
+#content { padding-bottom: 56px; }
+#statusbar.hidden { display: none; }
+#statusbar-queue { float: right; color: #666; }
+#statusbar-track { height: 3px; margin-top: 4px; background: #ddd; }
+#statusbar-fill { height: 100%; width: 0; background: #3a7bd5; }
+#detail-dequeue { margin-top: 8px; padding: 4px 14px; }
+#detail-dequeue.hidden { display: none; }

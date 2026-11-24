@@ -1,0 +1,39 @@
+#!/bin/sh
+# Read-only firewall queries for the Security preflet and its Deskbar
+# replicant. argv comes from a fixed verb table; no caller argument ever
+# reaches nft, ufw or iptables. Its polkit action allows an active
+# session without a prompt, so status reads never nag. Mutating verbs
+# live in vos-firewall-helper.
+set -eu
+
+die() {
+	echo "vos-firewall-status-helper: $*" >&2
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root (invoke via pkexec)"
+[ "$#" -eq 1 ] || die "usage: vos-firewall-status-helper <verb>"
+
+case "$1" in
+	nft-list-tables)
+		set -- nft list tables ;;
+	nft-list-table)
+		set -- nft -a list table inet vitruvian ;;
+	ufw-status)
+		set -- ufw status ;;
+	ufw-status-numbered)
+		set -- ufw status numbered ;;
+	iptables-list)
+		set -- iptables -S ;;
+	iptables-list-input)
+		set -- iptables -S INPUT ;;
+	iptables-list-output)
+		set -- iptables -S OUTPUT ;;
+	*)
+		die "unknown verb: $1" ;;
+esac
+
+tool="$1"
+shift
+bin="$(command -v "$tool")" || die "$tool not installed"
+exec "$bin" "$@"

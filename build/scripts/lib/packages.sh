@@ -58,6 +58,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager libmm-glib0 libre1 $(get_libvpx_runtime) mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
+                " nftables iptables" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -81,6 +82,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager libmm-glib0 libre1 $(get_libvpx_runtime) mobile-broadband-provider-info eg25-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-l2tp network-manager-openconnect" \
+                " nftables iptables" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -100,6 +102,7 @@ get_base_packages() {
                 "apt-utils dialog $(get_kernel_package arm32) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager libmm-glib0 libre1 $(get_libvpx_runtime) mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " nftables iptables" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
@@ -118,6 +121,7 @@ get_base_packages() {
                 "apt-utils dialog $(get_kernel_package riscv64) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session seatd zstd" \
                 " network-manager modemmanager libmm-glib0 libre1 $(get_libvpx_runtime) mobile-broadband-provider-info bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " nftables iptables" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \

@@ -1,0 +1,317 @@
+#!/bin/sh
+# Privileged firewall operations for the Security preflet, pkexec only.
+# The caller sends a structured verb plus validated parameters; this
+# helper builds the tool argv itself. No raw command and no caller
+# provided option ever crosses this boundary, so the polkit prompt
+# gates a fixed operations list instead of a root command runner.
+set -eu
+
+die() {
+	echo "vos-firewall-helper: $*" >&2
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root (invoke via pkexec)"
+[ "$#" -ge 1 ] || die "missing verb"
+verb="$1"
+shift
+
+# The private namespace the preflet owns in each tool.
+nft_family="inet"
+nft_table="vitruvian"
+in_chain="VITRUVIAN_IN"
+out_chain="VITRUVIAN_OUT"
+jump_comment="vitruvian-fw"
+
+_check_port() {
+	case "$1" in
+		''|*[!0-9]*) die "invalid port: $1" ;;
+	esac
+	[ "$1" -le 65535 ] || die "port out of range: $1"
+}
+
+_check_proto() {
+	case "$1" in
+		tcp|udp|any) ;;
+		*) die "invalid protocol: $1" ;;
+	esac
+}
+
+_check_action() {
+	case "$1" in
+		allow|deny) ;;
+		*) die "invalid action: $1" ;;
+	esac
+}
+
+_check_side() {
+	case "$1" in
+		in|out) ;;
+		*) die "invalid side: $1" ;;
+	esac
+}
+
+_check_policy() {
+	case "$1" in
+		accept|drop) ;;
+		*) die "invalid policy: $1" ;;
+	esac
+}
+
+_check_level() {
+	case "$1" in
+		on|off) ;;
+		*) die "invalid level: $1" ;;
+	esac
+}
+
+_check_profile() {
+	case "$1" in
+		home|public) ;;
+		*) die "invalid profile: $1" ;;
+	esac
+}
+
+# Fold the label to the charset the tool comment syntaxes accept; the
+# preflet sanitizes too, this is the privileged side's own guard.
+_check_label() {
+	label="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._+-' '-')"
+	label="$(printf '%.64s' "$label")"
+}
+
+case "$verb" in
+	nft-add-table)
+		[ "$#" -eq 0 ] || die "nft-add-table takes no parameters"
+		set -- nft add table "$nft_family" "$nft_table"
+		;;
+	nft-delete-table)
+		[ "$#" -eq 0 ] || die "nft-delete-table takes no parameters"
+		set -- nft delete table "$nft_family" "$nft_table"
+		;;
+	nft-add-chain)
+		[ "$#" -eq 2 ] || die "nft-add-chain takes side and policy"
+		_check_side "$1"
+		_check_policy "$2"
+		if [ "$1" = "in" ]; then
+			hook="input"
+		else
+			hook="output"
+		fi
+		spec="{ type filter hook $hook priority 0; policy $2; }"
+		set -- nft add chain "$nft_family" "$nft_table" "$hook" "$spec"
+		;;
+	nft-add-rule)
+		[ "$#" -eq 4 ] \
+			|| die "nft-add-rule takes action, protocol, port and label"
+		_check_action "$1"
+		_check_proto "$2"
+		_check_port "$3"
+		_check_label "$4"
+		if [ "$1" = "allow" ]; then
+			verdict="accept"
+		else
+			verdict="drop"
+		fi
+		if [ "$2" = "any" ]; then
+			set -- nft add rule "$nft_family" "$nft_table" input \
+				"$verdict" comment "\"$label\""
+		else
+			set -- nft add rule "$nft_family" "$nft_table" input \
+				meta l4proto "$2" "$2" dport "$3" \
+				"$verdict" comment "\"$label\""
+		fi
+		;;
+	nft-add-log-rule)
+		[ "$#" -eq 0 ] || die "nft-add-log-rule takes no parameters"
+		set -- nft add rule "$nft_family" "$nft_table" input log \
+			prefix "\"vitruvian-drop \""
+		;;
+	iptables-new-chain)
+		[ "$#" -eq 1 ] || die "iptables-new-chain takes a side"
+		_check_side "$1"
+		if [ "$1" = "in" ]; then
+			set -- iptables -N "$in_chain"
+		else
+			set -- iptables -N "$out_chain"
+		fi
+		;;
+	iptables-flush-chain)
+		[ "$#" -eq 1 ] || die "iptables-flush-chain takes a side"
+		_check_side "$1"
+		if [ "$1" = "in" ]; then
+			set -- iptables -F "$in_chain"
+		else
+			set -- iptables -F "$out_chain"
+		fi
+		;;
+	iptables-delete-chain)
+		[ "$#" -eq 1 ] || die "iptables-delete-chain takes a side"
+		_check_side "$1"
+		if [ "$1" = "in" ]; then
+			set -- iptables -X "$in_chain"
+		else
+			set -- iptables -X "$out_chain"
+		fi
+		;;
+	iptables-add-rule)
+		[ "$#" -eq 4 ] \
+			|| die "iptables-add-rule takes action, protocol, port and label"
+		_check_action "$1"
+		_check_proto "$2"
+		_check_port "$3"
+		_check_label "$4"
+		[ -n "$label" ] || label="rule"
+		if [ "$1" = "allow" ]; then
+			verdict="ACCEPT"
+		else
+			verdict="DROP"
+		fi
+		if [ "$2" != "tcp" ] && [ "$2" != "udp" ]; then
+			set -- iptables -A "$in_chain" -m comment \
+				--comment "$label" -j "$verdict"
+		elif [ "$3" -eq 0 ]; then
+			set -- iptables -A "$in_chain" -p "$2" -m comment \
+				--comment "$label" -j "$verdict"
+		else
+			set -- iptables -A "$in_chain" -p "$2" --dport "$3" \
+				-m comment --comment "$label" -j "$verdict"
+		fi
+		;;
+	iptables-add-log-rule)
+		[ "$#" -eq 0 ] || die "iptables-add-log-rule takes no parameters"
+		set -- iptables -A "$in_chain" -m limit --limit 5/min \
+			-j LOG --log-prefix "VITRUVIAN-DROP: "
+		;;
+	iptables-add-terminal)
+		[ "$#" -eq 2 ] || die "iptables-add-terminal takes side and policy"
+		_check_side "$1"
+		_check_policy "$2"
+		# ACCEPT is expressed as RETURN: a user chain cannot carry the
+		# ACCEPT policy keyword, and RETURN falls through to the parent.
+		if [ "$1" = "in" ]; then
+			chain="$in_chain"
+		else
+			chain="$out_chain"
+		fi
+		if [ "$2" = "drop" ]; then
+			set -- iptables -A "$chain" -j DROP
+		else
+			set -- iptables -A "$chain" -j RETURN
+		fi
+		;;
+	iptables-insert-jump)
+		[ "$#" -eq 1 ] || die "iptables-insert-jump takes a side"
+		_check_side "$1"
+		if [ "$1" = "in" ]; then
+			parent="INPUT"
+			chain="$in_chain"
+		else
+			parent="OUTPUT"
+			chain="$out_chain"
+		fi
+		set -- iptables -I "$parent" 1 -m comment \
+			--comment "$jump_comment" -j "$chain"
+		;;
+	iptables-delete-jump)
+		[ "$#" -eq 1 ] || die "iptables-delete-jump takes a side"
+		_check_side "$1"
+		if [ "$1" = "in" ]; then
+			parent="INPUT"
+			chain="$in_chain"
+		else
+			parent="OUTPUT"
+			chain="$out_chain"
+		fi
+		bin="$(command -v iptables)" || die "iptables not installed"
+		list="$("$bin" -S "$parent")" || die "cannot list $parent"
+		# Reconstruct the exact spec from -S so the delete matches; the
+		# tokens are this helper's own, never caller data.
+		while IFS= read -r line; do
+			case "$line" in
+				*"$jump_comment"*"$chain"*|*"$chain"*"$jump_comment"*)
+					spec="${line#-A $parent }"
+					set -- -D "$parent" $spec
+					"$bin" "$@" || die "cannot delete $parent jump"
+					;;
+			esac
+		done <<-EOF
+			$list
+		EOF
+		exit 0
+		;;
+	ufw-reset)
+		[ "$#" -eq 0 ] || die "ufw-reset takes no parameters"
+		set -- ufw --force reset
+		;;
+	ufw-enable)
+		[ "$#" -eq 0 ] || die "ufw-enable takes no parameters"
+		set -- ufw --force enable
+		;;
+	ufw-disable)
+		[ "$#" -eq 0 ] || die "ufw-disable takes no parameters"
+		set -- ufw --force disable
+		;;
+	ufw-logging)
+		[ "$#" -eq 1 ] || die "ufw-logging takes a level"
+		_check_level "$1"
+		set -- ufw logging "$1"
+		;;
+	ufw-default)
+		[ "$#" -eq 2 ] || die "ufw-default takes side and policy"
+		_check_side "$1"
+		_check_policy "$2"
+		if [ "$1" = "in" ]; then
+			direction="incoming"
+		else
+			direction="outgoing"
+		fi
+		if [ "$2" = "drop" ]; then
+			policy="deny"
+		else
+			policy="allow"
+		fi
+		set -- ufw --force default "$policy" "$direction"
+		;;
+	ufw-add-rule)
+		[ "$#" -eq 3 ] || die "ufw-add-rule takes action, protocol and port"
+		_check_action "$1"
+		_check_proto "$2"
+		_check_port "$3"
+		if [ "$2" = "any" ] && [ "$3" -eq 0 ]; then
+			set -- ufw "$1" from any to any
+		elif [ "$2" = "any" ]; then
+			set -- ufw "$1" "$3"
+		elif [ "$3" -eq 0 ]; then
+			set -- ufw "$1" proto "$2" from any to any
+		else
+			set -- ufw "$1" "$3/$2"
+		fi
+		;;
+	write-state)
+		[ "$#" -eq 2 ] || die "write-state takes level and profile"
+		_check_level "$1"
+		_check_profile "$2"
+		# World readable stamp the preflet and the shield watch.
+		stamp_dir="${VOS_FIREWALL_STAMP_DIR:-/run/vos-firewall}"
+		mkdir -p "$stamp_dir"
+		chmod 755 "$stamp_dir"
+		tmp="$stamp_dir/.state.$$"
+		printf 'enabled=%s\nprofile=%s\n' "$1" "$2" > "$tmp"
+		chmod 644 "$tmp"
+		mv -f "$tmp" "$stamp_dir/state"
+		exit 0
+		;;
+	unlock)
+		[ "$#" -eq 0 ] || die "unlock takes no arguments"
+		echo "unlocked"
+		exit 0
+		;;
+	*)
+		die "unknown verb: $verb"
+		;;
+esac
+
+tool="$1"
+shift
+bin="$(command -v "$tool")" || die "$tool not installed"
+exec "$bin" "$@"

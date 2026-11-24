@@ -84,6 +84,14 @@ install(FILES data/polkit-1/actions/org.vitruvian.power.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/actions/org.vitruvian.admin.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+install(PROGRAMS data/libexec/vos-firewall-helper
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-firewall-status-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.firewall.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+install(FILES data/polkit-1/actions/org.vitruvian.firewall-status.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules

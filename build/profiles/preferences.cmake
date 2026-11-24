@@ -21,6 +21,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Printers
 	Screen
 	ScreenSaver
+	Security
 	Shortcuts
 	Time
 	Tracker_prefs
@@ -50,6 +51,7 @@ set(SYSTEM_PREFERENCES
 	Printers
 	Screen
 	ScreenSaver
+	Security
 	Shortcuts
 	Time
 	Tracker

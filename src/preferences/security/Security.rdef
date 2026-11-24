@@ -1,0 +1,16 @@
+resource app_signature "application/x-vnd.Vitruvian-Security";
+
+resource app_name_catalog_entry
+	"x-vnd.Vitruvian-Security:System name:Security";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major     = 1,
+	middle    = 0,
+	minor     = 0,
+	variety   = B_APPV_FINAL,
+	internal  = 0,
+	short_info = "Security",
+	long_info  = "Firewall settings"
+};

@@ -1,5 +1,19 @@
 #!/bin/sh
 
+# Chroot script for the opt-in NVIDIA lane: $1 is its package list (empty
+# prints nothing), $2 the kernel version, literal or a chroot variable.
+# Debian's dkms.conf refuses PREEMPT_RT and --force does not bypass it.
+nvidia_dkms_stage() {
+    [ -n "$1" ] || return 0
+    cat <<EOF
+for _conf in /usr/src/nvidia-current-*/dkms.conf; do
+    if [ -f "\$_conf" ]; then sed -i 's|^BUILD_EXCLUSIVE_CONFIG=|#&|' "\$_conf"; fi
+done
+IGNORE_PREEMPT_RT_PRESENCE=1 dkms autoinstall -k "$2" || { dkms status; exit 1; }
+dkms status | grep -i nvidia || exit 1
+EOF
+}
+
 # Cleanup for the loop-device image builders. Reads _mnt, _loop, _raw; idempotent (success path + trap).
 _loop_image_cleanup() {
     # Deepest first, so lazy umounts on parents aren't blocked by children.
@@ -176,6 +190,8 @@ create_raw() {
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
+    _nvidia_pkgs="$(get_nvidia_image_packages "$_arch")"
+    [ -z "$_nvidia_pkgs" ] || _raw_pkgs="$_raw_pkgs $_nvidia_pkgs"
     _raw_dev_pkgs="$(get_dev_packages "$_arch")"
     _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
     sudo chroot "$_root_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
@@ -206,6 +222,8 @@ _kver=\$(ls -1 /lib/modules | sort -V | tail -1)
 apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
 
 apt-get install -y --no-install-recommends --reinstall --allow-downgrades /localdeb/*.deb
+
+$(nvidia_dkms_stage "$_nvidia_pkgs" '$_kver')
 
 # The root is a copy of the build chroot; drop its -dev packages, autoremove keeps what dkms needs.
 for _p in $_raw_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
@@ -477,6 +495,8 @@ create_iso() {
     fi
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
+    _nvidia_pkgs="$(get_nvidia_image_packages "$_arch")"
+    [ -z "$_nvidia_pkgs" ] || _iso_pkgs="$_iso_pkgs $_nvidia_pkgs"
     _iso_debs="$(cd "$_basedir" && ls *.deb | sed 's|^|/tmp/|' | tr '\n' ' ')"
     _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
@@ -491,6 +511,7 @@ mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 apt-get install -y --no-install-recommends dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
 apt-get install -y --no-install-recommends --reinstall --allow-downgrades $_iso_debs
+$(nvidia_dkms_stage "$_nvidia_pkgs" "$_imagekernelversion")
 # Purge the build-only -dev packages, and what earlier vos versions pulled in
 # (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
 for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done

@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-nvidia-dkms-hook: kernel postinst hook for the opt-in NVIDIA lane.
+# Copied into /etc/kernel/postinst.d by vos-nvidia-enable; inert otherwise.
+
+set -eu
+
+# $1 is the kernel version being installed. VOS_NVIDIA_DKMS_ETC and
+# VOS_NVIDIA_DKMS_SRC override the live paths (harness use only).
+ETC="${VOS_NVIDIA_DKMS_ETC:-/etc}"
+SRC="${VOS_NVIDIA_DKMS_SRC:-/usr/src}"
+
+[ -f "$ETC/vos/nvidia.conf" ] || exit 0
+[ -n "${1:-}" ] || exit 0
+
+# Debian's dkms.conf refuses PREEMPT_RT and dkms --force does not bypass
+# build_exclude; re-applied here for kernel installs and package upgrades
+# (the apt Post-Invoke in 90vos-nvidia-dkms calls this hook too).
+for _conf in "$SRC"/nvidia-current-*/dkms.conf; do
+	[ -f "$_conf" ] || continue
+	sed -i 's|^BUILD_EXCLUSIVE_CONFIG=|#&|' "$_conf"
+done
+
+IGNORE_PREEMPT_RT_PRESENCE=1 dkms autoinstall -k "$1" || \
+	echo "vos-nvidia-dkms: rebuild for $1 failed; check dkms status" >&2

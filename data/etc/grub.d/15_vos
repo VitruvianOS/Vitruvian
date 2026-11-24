@@ -43,12 +43,16 @@ if [ -f /etc/systemd/system/vos-sshdebug.service ]; then
 }"
 fi
 
+# Keep the opt-in NVIDIA KMS off in Safe Mode even without nomodeset.
+_nvidia_kms=""
+[ -f /etc/vos/nvidia.conf ] && _nvidia_kms=" nvidia-drm.modeset=0"
+
 cat <<EOF
 menuentry "Vitruvian (Safe Mode)" {
     prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
     insmod all_video
     set gfxpayload=1024x768x32,1024x768,800x600,auto
-    linux $_rel_vmlinuz root=UUID=$_root rw $_rf nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
+    linux $_rel_vmlinuz root=UUID=$_root rw $_rf nomodeset$_nvidia_kms acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd $_rel_initrd
 }
 menuentry "Vitruvian (Recovery)" {

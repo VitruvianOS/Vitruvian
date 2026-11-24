@@ -49,6 +49,22 @@ get_libvpx_runtime() {
     fi
 }
 
+# Opt-in NVIDIA proprietary lane: empty unless bake build gets --nvidia-proprietary.
+# Keep the list in sync with print-packages in nvidia-decide.sh.
+get_nvidia_image_packages() {
+    if [ "${VOS_NVIDIA_PROPRIETARY:-}" != "1" ]; then
+        return 0
+    fi
+    case "$1" in
+        amd64)
+            printf '%s' "nvidia-kernel-dkms nvidia-driver nvidia-egl-common firmware-nvidia-gsp"
+            ;;
+        *)
+            die "The NVIDIA proprietary lane is amd64 only (got $1)"
+            ;;
+    esac
+}
+
 get_base_packages() {
     _arch="$1"
     case "$_arch" in

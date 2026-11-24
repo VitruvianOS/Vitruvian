@@ -68,6 +68,16 @@ install(PROGRAMS data/etc/grub.d/15_vos
 install(FILES data/etc/default/grub
   DESTINATION /usr/share/vos/grub/ COMPONENT data)
 
+# NVIDIA opt-in: the decide tool, the enable helper and the kernel-postinst
+# hook ship (the hook only acts after vos-nvidia-enable installs it into
+# /etc/kernel/postinst.d); the modeset drop and /etc/vos/nvidia.conf never do.
+install(PROGRAMS build/scripts/lib/nvidia-decide.sh
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-nvidia-enable
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-nvidia-dkms-hook
+  DESTINATION /usr/libexec/)
+
 install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
 install(PROGRAMS data/libexec/vos-admin-helper

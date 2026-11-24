@@ -1,0 +1,123 @@
+#!/bin/sh
+#
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-nvidia-enable: operator opt-in for the NVIDIA proprietary lane on
+# V\OS. Writes the per-machine KMS drop and installs the driver; no image
+# ships this state, and the helper refuses machines the decide rule gates
+# out, plus PREEMPT_RT kernels unless --accept-rt is passed.
+# --disable removes the driver and every file the enable path wrote.
+
+set -eu
+
+# VOS_NVIDIA_ENABLE_PATH prepends stub directories (harness use only);
+# production keeps the standard system PATH first.
+PATH="${VOS_NVIDIA_ENABLE_PATH:+$VOS_NVIDIA_ENABLE_PATH:}/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+export PATH
+DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND
+
+die() {
+	echo "vos-nvidia-enable: $*" >&2
+	exit 1
+}
+
+ACCEPT_RT=0
+DISABLE=0
+for _arg in "$@"; do
+	case "$_arg" in
+		--accept-rt) ACCEPT_RT=1 ;;
+		--disable) DISABLE=1 ;;
+		*) die "unknown argument $_arg (usage: vos-nvidia-enable [--accept-rt|--disable])" ;;
+	esac
+done
+
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+
+# VOS_NVIDIA_DECIDE overrides the tool path, VOS_NVIDIA_ENABLE_ETC the /etc
+# root and VOS_NVIDIA_HOOK_SRC the hook source (harness use only).
+DECIDE="${VOS_NVIDIA_DECIDE:-/usr/libexec/nvidia-decide.sh}"
+ETC="${VOS_NVIDIA_ENABLE_ETC:-/etc}"
+HOOK_SRC="${VOS_NVIDIA_HOOK_SRC:-/usr/libexec/vos-nvidia-dkms-hook}"
+[ -x "$DECIDE" ] || die "missing $DECIDE"
+
+# Packages go first so a failed removal leaves the lane consistently enabled.
+if [ "$DISABLE" -eq 1 ]; then
+	apt-get remove --purge -y $("$DECIDE" print-packages)
+	rm -f "$ETC/modprobe.d/nvidia.conf" "$ETC/kernel/postinst.d/vos-nvidia-dkms" \
+		"$ETC/apt/apt.conf.d/90vos-nvidia-dkms" "$ETC/vos/nvidia.conf"
+	update-initramfs -u
+	update-grub
+	echo "NVIDIA proprietary lane disabled. Reboot to load the open driver."
+	exit 0
+fi
+
+# RT check: sysfs flag first, then the running kernel's config and version.
+# VOS_NVIDIA_ENABLE_RT=1|0 forces the answer (harness use only).
+_is_rt_kernel() {
+	if [ -n "${VOS_NVIDIA_ENABLE_RT:-}" ]; then
+		[ "$VOS_NVIDIA_ENABLE_RT" = "1" ]
+		return
+	fi
+	if [ -r /sys/kernel/realtime ] && grep -q '^1$' /sys/kernel/realtime; then
+		return 0
+	fi
+	if [ -r "/boot/config-$(uname -r)" ] && \
+		grep -q '^CONFIG_PREEMPT_RT=y' "/boot/config-$(uname -r)"; then
+		return 0
+	fi
+	case "$(uname -r)" in
+		*-rt*|*PREEMPT_RT*) return 0 ;;
+	esac
+	return 1
+}
+
+# Operator decision: keep the RT kernel. NVIDIA does not support PREEMPT_RT;
+# the build is proven but runtime on RT is unknown, so make the operator
+# own the risk instead of switching the flavour silently.
+if _is_rt_kernel && [ "$ACCEPT_RT" -ne 1 ]; then
+	die "this kernel is PREEMPT_RT; NVIDIA does not support RT and runtime on RT is unknown (the build is proven). Re-run with --accept-rt to opt in anyway"
+fi
+
+# Gate first: check --record refuses pre-Turing, non-amd64 and GPU-less boxes.
+"$DECIDE" check --record || die "this machine is not eligible for the opt-in"
+
+apt-get install -y --no-install-recommends $("$DECIDE" print-packages)
+
+# Debian's dkms.conf refuses PREEMPT_RT and dkms --force does not bypass
+# build_exclude; neutralise it and build for the running kernel explicitly.
+for _conf in /usr/src/nvidia-current-*/dkms.conf; do
+	[ -f "$_conf" ] || continue
+	sed -i 's|^BUILD_EXCLUSIVE_CONFIG=|#&|' "$_conf"
+done
+IGNORE_PREEMPT_RT_PRESENCE=1 dkms autoinstall -k "$(uname -r)"
+
+# The KMS drop lands only after the install and the dkms build succeeded:
+# with set -e an earlier write would blacklist nouveau on a failed install.
+mkdir -p "$ETC/modprobe.d" "$ETC/vos"
+printf 'options nvidia-drm modeset=1\nblacklist nouveau\n' > "$ETC/modprobe.d/nvidia.conf"
+
+mkdir -p "$ETC/kernel/postinst.d"
+install -m 755 "$HOOK_SRC" "$ETC/kernel/postinst.d/vos-nvidia-dkms"
+
+# A package upgrade ships a fresh /usr/src tree with a pristine dkms.conf
+# and Debian's dkms would skip the RT kernel again; re-run the rebuild after
+# every dpkg run while the lane is enabled.
+mkdir -p "$ETC/apt/apt.conf.d"
+cat > "$ETC/apt/apt.conf.d/90vos-nvidia-dkms" <<'EOF'
+DPkg::Post-Invoke { "[ ! -f /etc/vos/nvidia.conf ] || [ ! -x /usr/libexec/vos-nvidia-dkms-hook ] || /usr/libexec/vos-nvidia-dkms-hook $(uname -r) || true"; };
+EOF
+
+printf 'VOS_NVIDIA_PROPRIETARY=1\n' > "$ETC/vos/nvidia.conf"
+
+# nvidia stays out of the initrd; update-grub re-runs 40_vos, whose Safe Mode
+# entry keeps the opt-in KMS off.
+update-initramfs -u
+update-grub
+
+echo "NVIDIA proprietary lane enabled. Reboot to load the module."
+echo "Secure Boot: enroll MOK or disable it; V\\OS ships no enrollment flow."
+echo "After reboot verify:"
+echo "  cat /sys/module/nvidia_drm/parameters/modeset   # expect Y"
+echo "  dkms status | grep nvidia                       # expect installed"

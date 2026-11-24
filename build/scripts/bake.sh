@@ -71,6 +71,7 @@ Build options:
   --legacy-boot          amd64 iso/disk: boot with legacy BIOS (SeaBIOS)
                           instead of the default UEFI firmware (OVMF)
   --smp=N                Give the VM N CPUs (e.g. 1 to expose one-CPU races)
+  --nvidia-proprietary   amd64: add the NVIDIA proprietary driver (dkms) to the image
   --size=SIZE            raw: disk size, e.g. 12G or 6144M (default 4608M)
   --regenerate-chroot    Recreate the chroot before building
   --arch=ARCH            Target architecture: amd64, arm64, arm32, riscv64
@@ -173,6 +174,10 @@ cmd_build() {
             --legacy-boot)
                 VOS_QEMU_FIRMWARE=bios
                 export VOS_QEMU_FIRMWARE
+                ;;
+            --nvidia-proprietary)
+                VOS_NVIDIA_PROPRIETARY=1
+                export VOS_NVIDIA_PROPRIETARY
                 ;;
             --smp=*)
                 VOS_QEMU_SMP="${arg#*=}"

@@ -155,6 +155,39 @@ endif()
 # Two DEB components: runtime -> vos.deb (OS image), dev -> vos-dev.deb
 # (public headers, link libraries, vos.pc).
 
+# Bump on any library ABI break.
+set(VOS_ABI_VERSION "0.6.3")
+
+# Shared kits only, SYSTEM_LIBS also lists static archives.
+set(_vos_abi_libs "")
+foreach(_kit IN LISTS SYSTEM_LIBS)
+	get_target_property(_kit_type ${_kit} TYPE)
+	if(_kit_type STREQUAL "SHARED_LIBRARY")
+		list(APPEND _vos_abi_libs ${_kit})
+	endif()
+endforeach()
+list(REMOVE_DUPLICATES _vos_abi_libs)
+
+set(_vos_abi_libfiles "")
+foreach(_kit IN LISTS _vos_abi_libs)
+	list(APPEND _vos_abi_libfiles "$<TARGET_FILE:${_kit}>")
+endforeach()
+
+# A symbols file matches the unversioned sonames (libbe.so) literally,
+# which a shlibs file cannot.
+set(_vos_symbols "${CMAKE_BINARY_DIR}/vos-debian/symbols")
+add_custom_command(OUTPUT "${_vos_symbols}"
+	COMMAND ${CMAKE_COMMAND}
+		"-DVOS_ABI_VERSION=${VOS_ABI_VERSION}"
+		"-DOUTPUT=${_vos_symbols}"
+		"-DLIBS=$<JOIN:${_vos_abi_libfiles},@>"
+		-P "${CMAKE_CURRENT_SOURCE_DIR}/build/gen-vos-symbols.cmake"
+	DEPENDS ${_vos_abi_libs}
+		"${CMAKE_CURRENT_SOURCE_DIR}/build/gen-vos-symbols.cmake"
+	COMMENT "Generating vos symbols control file"
+)
+add_custom_target(vos-symbols ALL DEPENDS "${_vos_symbols}")
+
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_ARCHITECTURE ${VITRUVIAN_TARGET_ARCH})
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
@@ -168,7 +201,8 @@ set(CPACK_DEBIAN_RUNTIME_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm"
-	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/triggers")
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/triggers"
+	"${_vos_symbols}")
 
 # CPACK_PACKAGE_VERSION is only defined once CPack itself is included, so
 # the strict dependency has to name the version computed above.
@@ -242,7 +276,7 @@ set(CPACK_DEBIAN_DATA_PACKAGE_DESCRIPTION
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_NAME "netplus-extensions")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_ARCHITECTURE "all")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_PACKAGE_DEPENDS
-	"vos (= ${_vos_runtime_version})")
+	"vos (>= ${VOS_ABI_VERSION})")
 set(CPACK_DEBIAN_NETPLUS-EXTENSIONS_DESCRIPTION
 	"NetPlus starter extensions: adblock lists, dark mode, reader mode and the cookie banner hider")
 
@@ -314,6 +348,7 @@ set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-netplus-extensions.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-buildtools.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dh-vos.deb"
+		"${CMAKE_BINARY_DIR}/vos-debian"
 )
 
 # vos-dev component: public headers + pkg-config. The shared libraries are

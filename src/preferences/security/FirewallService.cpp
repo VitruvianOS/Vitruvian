@@ -210,22 +210,6 @@ _FirewallThread(void* data)
 	result.AddInt32("op", job->op);
 
 	PrivilegedFirewallRunner runner;
-	if (job->op == kFirewallOpUnlock) {
-		FirewallCommand command;
-		command.verb = "unlock";
-		BString output;
-		int32 exitCode = -1;
-		status_t status = runner.Run(command, output, exitCode);
-		if (status == B_OK && exitCode != 0)
-			status = B_ERROR;
-		if (status != B_OK && output.Length() > 0)
-			result.AddString("error", output.String());
-		result.AddInt32("status", status);
-		job->replyTo.SendMessage(&result);
-		delete job;
-		return 0;
-	}
-
 	const char* prefer = NULL;
 	job->args.FindString("prefer", &prefer);
 	FirewallBackend* backend = create_firewall_backend(&runner, prefer);
@@ -268,6 +252,8 @@ _FirewallThread(void* data)
 			}
 		}
 		result.AddInt32("status", status);
+		if (status != B_OK && runner.Canceled())
+			result.AddBool("canceled", true);
 	}
 
 	delete backend;

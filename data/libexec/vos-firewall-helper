@@ -301,11 +301,6 @@ case "$verb" in
 		mv -f "$tmp" "$stamp_dir/state"
 		exit 0
 		;;
-	unlock)
-		[ "$#" -eq 0 ] || die "unlock takes no arguments"
-		echo "unlocked"
-		exit 0
-		;;
 	*)
 		die "unknown verb: $verb"
 		;;

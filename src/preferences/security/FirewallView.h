@@ -45,7 +45,6 @@ private:
 
 			BStringView*		fStateLabel;
 			BStringView*		fHintLabel;
-			BButton*			fUnlockButton;
 			BCheckBox*			fEnabledCheck;
 			BMenuField*			fProfileField;
 			BPopUpMenu*			fProfileMenu;
@@ -66,10 +65,10 @@ private:
 			BString				fBackend;
 			bool				fPopulating;
 			bool				fBusy;
-			bool				fUnlocked;
 			bool				fHasBackend;
 			bool				fSeeded;
 			bool				fFetchPending;
+			bool				fKeepStatus;
 };
 
 

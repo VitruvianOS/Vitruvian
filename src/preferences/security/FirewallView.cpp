@@ -116,19 +116,16 @@ FirewallView::FirewallView()
 	BView("firewall", B_WILL_DRAW),
 	fPopulating(false),
 	fBusy(false),
-	fUnlocked(false),
 	fHasBackend(true),
 	fSeeded(false),
-	fFetchPending(false)
+	fFetchPending(false),
+	fKeepStatus(false)
 {
 	fState = _DefaultsState();
 
 	fStateLabel = new BStringView("state", "");
 	fStateLabel->SetFont(be_bold_font);
 	fHintLabel = new BStringView("hint", "");
-
-	fUnlockButton = new BButton("unlock",
-		B_TRANSLATE("Unlock" B_UTF8_ELLIPSIS), new BMessage(kMsgUnlock));
 
 	fEnabledCheck = new BCheckBox("enabled", B_TRANSLATE("Firewall on"),
 		new BMessage(kMsgFirewallEnabled));
@@ -195,7 +192,6 @@ FirewallView::FirewallView()
 				.Add(fHintLabel)
 			.End()
 			.AddGlue()
-			.Add(fUnlockButton)
 		.End()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(fEnabledCheck)
@@ -232,7 +228,6 @@ FirewallView::AttachedToWindow()
 
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	fUnlockButton->SetTarget(this);
 	fEnabledCheck->SetTarget(this);
 	fProfileMenu->SetTargetForItems(this);
 	fAddButton->SetTarget(this);
@@ -285,20 +280,15 @@ FirewallView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgProfile:
-			if (!fPopulating && fUnlocked && !fBusy) {
+			if (!fPopulating && !fBusy) {
 				fState.profile = fProfileMenu->IndexOf(
 					fProfileMenu->FindMarked());
 				_Submit(kFirewallOpApply, fState);
 			}
 			break;
 
-		case kMsgUnlock:
-			if (!fBusy)
-				_Submit(kFirewallOpUnlock, fState);
-			break;
-
 		case kMsgFirewallEnabled:
-			if (!fPopulating && fUnlocked && !fBusy) {
+			if (!fPopulating && !fBusy) {
 				fState.enabled = fEnabledCheck->Value() == B_CONTROL_ON;
 				if (fState.enabled) {
 					fState.inPolicy = FIREWALL_POLICY_DROP;
@@ -312,7 +302,7 @@ FirewallView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgOutPolicy:
-			if (!fPopulating && fUnlocked && !fBusy) {
+			if (!fPopulating && !fBusy) {
 				int32 index = fOutPolicyMenu->IndexOf(
 					fOutPolicyMenu->FindMarked());
 				fState.outPolicy = index == 1 ? FIREWALL_POLICY_DROP
@@ -322,24 +312,24 @@ FirewallView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgLogging:
-			if (!fPopulating && fUnlocked && !fBusy) {
+			if (!fPopulating && !fBusy) {
 				fState.logging = fLoggingCheck->Value() == B_CONTROL_ON;
 				_Submit(kFirewallOpApply, fState);
 			}
 			break;
 
 		case kMsgAddRule:
-			if (fUnlocked && !fBusy)
+			if (!fBusy)
 				new AddRuleWindow(Window(), BMessenger(this));
 			break;
 
 		case kMsgRulesChosen:
-			if (fUnlocked && !fBusy)
+			if (!fBusy)
 				_AddRules(message);
 			break;
 
 		case kMsgRuleRemove:
-			if (fUnlocked && !fBusy && fRuleList->CurrentSelection() >= 0) {
+			if (!fBusy && fRuleList->CurrentSelection() >= 0) {
 				fState.rules.erase(fState.rules.begin()
 					+ fRuleList->CurrentSelection());
 				_Submit(kFirewallOpApply, fState);
@@ -347,7 +337,7 @@ FirewallView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgRestoreDefaults:
-			if (fUnlocked && !fBusy) {
+			if (!fBusy) {
 				fSeeded = false;
 				_Submit(kFirewallOpApply, _DefaultsState());
 			}
@@ -432,7 +422,7 @@ FirewallView::_Submit(int32 op, const FirewallState& state)
 	_UpdateControls();
 	if (op == kFirewallOpApply)
 		fStatusLabel->SetText(B_TRANSLATE("Applying" B_UTF8_ELLIPSIS));
-	else if (op == kFirewallOpFetch)
+	else if (op == kFirewallOpFetch && !fKeepStatus)
 		fStatusLabel->SetText(B_TRANSLATE("Reading state" B_UTF8_ELLIPSIS));
 	FirewallAsyncRun(op, args, BMessenger(this));
 }
@@ -453,12 +443,8 @@ FirewallView::_RefreshRuleList()
 void
 FirewallView::_UpdateControls()
 {
-	bool edit = fUnlocked && !fBusy && fHasBackend;
+	bool edit = !fBusy && fHasBackend;
 
-	fUnlockButton->SetEnabled(!fUnlocked && !fBusy && fHasBackend);
-	fUnlockButton->SetLabel(fUnlocked ? B_TRANSLATE("Unlocked")
-		: B_TRANSLATE("Unlock" B_UTF8_ELLIPSIS));
-	fUnlockButton->SetEnabled(!fUnlocked && !fBusy && fHasBackend);
 	fEnabledCheck->SetEnabled(edit);
 	fProfileField->SetEnabled(edit);
 	bool home = fState.profile != FIREWALL_PROFILE_PUBLIC;
@@ -483,10 +469,8 @@ FirewallView::_UpdateHeader()
 		: B_TRANSLATE("Firewall is off"));
 
 	if (!fState.enabled) {
-		fHintLabel->SetText(fUnlocked
-			? B_TRANSLATE("Turn the firewall on to block incoming "
-				"connections.")
-			: B_TRANSLATE("Unlock to change settings."));
+		fHintLabel->SetText(B_TRANSLATE("Turn the firewall on to block "
+			"incoming connections."));
 	} else if (fState.profile == FIREWALL_PROFILE_PUBLIC) {
 		fHintLabel->SetText(B_TRANSLATE("Public network: all incoming "
 			"connections are blocked."));
@@ -512,27 +496,32 @@ FirewallView::_ApplyResult(BMessage* message)
 	const char* error = NULL;
 	message->FindString("error", &error);
 
-	if (op == kFirewallOpUnlock) {
-		fUnlocked = status == B_OK;
-		_UpdateHeader();
-		_UpdateControls();
-		fStatusLabel->SetText(fUnlocked ? "" : B_TRANSLATE("Settings stay "
-			"locked."));
-		return;
-	}
-
 	if (status != B_OK) {
+		fKeepStatus = false;
 		if (message->FindBool("noBackend")) {
 			fHasBackend = false;
 			_UpdateHeader();
 			fStatusLabel->SetText("");
 		} else {
-			BString text(B_TRANSLATE("Firewall error"));
-			if (error != NULL && error[0] != '\0')
-				text << ": " << error;
-			fStatusLabel->SetText(text.String());
+			// A plain cancel stays silent; either way show the real state.
+			if (message->FindBool("canceled"))
+				fStatusLabel->SetText("");
+			else {
+				BString text(B_TRANSLATE("Firewall error"));
+				if (error != NULL && error[0] != '\0')
+					text << ": " << error;
+				fStatusLabel->SetText(text.String());
+			}
+			if (op == kFirewallOpApply)
+				fFetchPending = true;
 		}
 		_UpdateControls();
+		if (fFetchPending && fHasBackend) {
+			fFetchPending = false;
+			fKeepStatus = true;
+			_ReadStamp();
+			_Submit(kFirewallOpFetch, fState);
+		}
 		return;
 	}
 
@@ -554,7 +543,9 @@ FirewallView::_ApplyResult(BMessage* message)
 	}
 
 	_SaveSettings();
-	fStatusLabel->SetText("");
+	if (!fKeepStatus)
+		fStatusLabel->SetText("");
+	fKeepStatus = false;
 
 	if (fFetchPending) {
 		fFetchPending = false;

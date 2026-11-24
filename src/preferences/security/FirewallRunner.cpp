@@ -30,6 +30,7 @@ PrivilegedFirewallRunner::Run(const FirewallCommand& command,
 {
 	output = "";
 	exitCode = -1;
+	fCanceled = false;
 
 	if (command.verb.Length() == 0)
 		return B_BAD_VALUE;
@@ -89,6 +90,7 @@ PrivilegedFirewallRunner::Run(const FirewallCommand& command,
 	if (exitCode == 126 || exitCode == 127) {
 		// pkexec uses 126 for a dismissed auth prompt and 127 when the
 		// helper is missing; both need a readable message.
+		fCanceled = exitCode == 126;
 		if (output.Length() == 0)
 			output = "Authentication was cancelled or failed.";
 		return B_ERROR;

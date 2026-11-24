@@ -16,7 +16,6 @@ enum {
 	kMsgReplicantPoll = 'fwpl',
 	kMsgReplicantToggle = 'fwtg',
 	kMsgOpenSecurity = 'fwop',
-	kMsgUnlock = 'fwul',
 	kMsgAddRule = 'fwar',
 	kMsgRulesChosen = 'fwrc',
 	kMsgAdvanced = 'fwav',

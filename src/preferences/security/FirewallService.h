@@ -19,12 +19,11 @@
 enum {
 	kFirewallOpFetch = 'fwfs',
 	kFirewallOpApply = 'fwap',
-	kFirewallOpUnlock = 'fwun',
 };
 
 const uint32 kFirewallResultWhat = 'fwrs';
 
-// Unlock asks the admin helper once so later edits do not prompt again.
+// A dismissed password prompt adds "canceled" to the result.
 // args: "op"; plus "prefer" (backend name override); when applying, the
 // state fields written by FirewallPutState().
 status_t FirewallAsyncRun(int32 op, const BMessage& args,

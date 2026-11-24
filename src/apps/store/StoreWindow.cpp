@@ -13,6 +13,7 @@
 #include <Looper.h>
 #include <Catalog.h>
 #include <Entry.h>
+#include <Invoker.h>
 #include <File.h>
 #include <LayoutBuilder.h>
 #include <Messenger.h>
@@ -228,6 +229,7 @@ StoreWindow::StoreWindow(BRect frame, bool dryRun)
 	fBusyPercent(-1),
 	fBusyCancel(kCancelNone),
 	fBusyInstall(true),
+	fRepairing(false),
 	fDryRun(dryRun)
 {
 	fWorker = new PackageWorker(BMessenger(this));
@@ -428,9 +430,36 @@ StoreWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgTransactionDone:
+			if (fRepairing) {
+				// Retry the install or removal that hit the broken state.
+				fRepairing = false;
+				StoreEntry* entry = fCatalog.FindById(fRetryEntryId.String());
+				fBusyEntryId = "";
+				if (entry != NULL) {
+					_StartTransaction(fBusyInstall, entry);
+					break;
+				}
+			}
 			_SetStatus(B_TRANSLATE("Transaction finished"));
 			_FinishBusy();
 			break;
+
+		case kStoreMsgRepairAnswer:
+		{
+			int32 button = 0;
+			message->FindInt32("which", &button);
+			if (button == 1) {
+				fRepairing = true;
+				fRetryEntryId = fBusyEntryId;
+				fBusyPercent = -1;
+				fBusyCancel = kCancelNone;
+				fBusyStatus = B_TRANSLATE("Repairing packages");
+				_PushState();
+				fWorker->PostMessage(kMsgRepair);
+			} else
+				_FinishBusy();
+			break;
+		}
 
 		case kMsgError:
 		{
@@ -450,6 +479,23 @@ StoreWindow::MessageReceived(BMessage* message)
 			_SetStatus(text);
 			if (detail[0] != '\0')
 				text << "\n\n" << detail;
+
+			bool wasRepairing = fRepairing;
+			fRepairing = false;
+			if (error == kAptErrorBrokenDeps && !wasRepairing
+					&& !fBusyEntryId.IsEmpty()) {
+				// Stay busy until the user answers.
+				text << "\n\n"
+					<< B_TRANSLATE("The package system may be in a broken "
+						"state. Repair it and try again?");
+				BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
+					text.String(), B_TRANSLATE("Cancel"),
+					B_TRANSLATE("Repair"), NULL, B_WIDTH_AS_USUAL,
+					B_WARNING_ALERT);
+				alert->Go(new BInvoker(new BMessage(kStoreMsgRepairAnswer),
+					this));
+				break;
+			}
 
 			_FinishBusy();
 			BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),

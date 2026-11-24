@@ -103,6 +103,10 @@ PackageWorker::MessageReceived(BMessage* message)
 			_DoAptUpdate();
 			break;
 
+		case kMsgRepair:
+			_DoRepair();
+			break;
+
 		case kMsgSourceAdd:
 		case kMsgSourceRemove:
 		case kMsgSourceSetEnabled:
@@ -692,6 +696,53 @@ int32
 PackageWorker::_AptUpdateThread(void* data)
 {
 	((PackageWorker*)data)->_RunAptUpdate();
+	return 0;
+}
+
+
+void
+PackageWorker::_DoRepair()
+{
+	if (fTransactionRunning) {
+		_ReportError(kAptErrorUnknown, "A transaction is already running.");
+		return;
+	}
+
+	fTransactionRunning = true;
+	fTransactionThread = spawn_thread(_RepairThread,
+		"package repair", B_NORMAL_PRIORITY, this);
+	if (fTransactionThread < 0 || resume_thread(fTransactionThread) != B_OK) {
+		fTransactionRunning = false;
+		_ReportError(kAptErrorUnknown, "Could not start repair thread.");
+	}
+}
+
+
+void
+PackageWorker::_RunRepair()
+{
+	_ReportProgress(-1, "Repairing packages...", "");
+
+	fBackend->SetProgressHook(worker_progress, this);
+	status_t result = fBackend->Repair();
+	fBackend->SetProgressHook(NULL, NULL);
+
+	if (result != B_OK) {
+		_ReportError(fBackend->LastError(),
+			fBackend->LastErrorDetail().String());
+	} else {
+		BMessage done(kMsgTransactionDone);
+		fOwner.SendMessage(&done);
+	}
+
+	BMessenger(this).SendMessage(kMsgWorkerJobDone);
+}
+
+
+int32
+PackageWorker::_RepairThread(void* data)
+{
+	((PackageWorker*)data)->_RunRepair();
 	return 0;
 }
 

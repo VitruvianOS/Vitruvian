@@ -49,6 +49,7 @@ private:
 			void				_DoSimulate(BMessage* request);
 			void				_DoApplyChanges(BMessage* request);
 			void				_DoAptUpdate();
+			void				_DoRepair();
 			void				_DoSourceOp(BMessage* request);
 
 			void				_RunSimulate(
@@ -60,11 +61,13 @@ private:
 									const BObjectList<BString, true>* remove,
 									const BObjectList<BString, true>* purge);
 			void				_RunAptUpdate();
+			void				_RunRepair();
 			void				_RunSourceOp(source_job* job);
 
 	static	int32				_SimulateThread(void* data);
 	static	int32				_ApplyChangesThread(void* data);
 	static	int32				_AptUpdateThread(void* data);
+	static	int32				_RepairThread(void* data);
 	static	int32				_SourceOpThread(void* data);
 
 			void				_OnPackageListReply(BMessage* message);

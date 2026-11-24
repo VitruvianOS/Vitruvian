@@ -40,7 +40,8 @@ enum {
 	kStoreMsgRefreshState	= 'stRf',
 	kStoreMsgScriptDone		= 'stJs',
 	kStoreMsgCatalogFetched	= 'stCf',
-	kStoreMsgInstalledLoaded	= 'stIl'
+	kStoreMsgInstalledLoaded	= 'stIl',
+	kStoreMsgRepairAnswer	= 'stRa'
 };
 
 

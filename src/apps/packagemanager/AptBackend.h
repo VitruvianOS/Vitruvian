@@ -35,6 +35,7 @@ public:
 			status_t			ConfigurePending();
 
 			status_t			Update();
+			status_t			Repair();
 			status_t			Upgrade(bool full);
 
 			// Sources: all three run the corresponding vos-apt-helper

@@ -262,6 +262,17 @@ AptBackend::ConfigurePending()
 
 
 status_t
+AptBackend::Repair()
+{
+	if (!_CheckDpkgLock())
+		return B_ERROR;
+
+	BObjectList<BString> none;
+	return _RunVerb("fix-broken", none);
+}
+
+
+status_t
 AptBackend::Update()
 {
 	if (!_CheckDpkgLock())

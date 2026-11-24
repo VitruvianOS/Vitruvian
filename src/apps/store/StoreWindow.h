@@ -75,6 +75,9 @@ private:
 			BString				fBusyStatus;
 			int32				fBusyCancel;
 			bool				fBusyInstall;
+			// Set while a repair runs; the failed entry is retried after.
+			bool				fRepairing;
+			BString				fRetryEntryId;
 			// Install/remove requests waiting behind the busy one.
 			struct QueueItem {
 				BString				id;

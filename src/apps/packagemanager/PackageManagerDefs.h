@@ -22,7 +22,8 @@ enum {
 	kMsgSimulate			= 'pmsm',
 	kMsgApplyChanges		= 'pmac',
 	kMsgAptUpdate			= 'pmau',
-	kMsgCancel				= 'pmcn'
+	kMsgCancel				= 'pmcn',
+	kMsgRepair				= 'pmrp'
 };
 
 enum {

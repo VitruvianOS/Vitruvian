@@ -531,6 +531,15 @@ case "$verb" in
         [ $# -eq 0 ] || { echo "vos-apt-helper: configure-pending takes no packages" >&2; exit 2; }
         exec dpkg --configure -a
         ;;
+    fix-broken)
+        [ $# -eq 0 ] || { echo "vos-apt-helper: fix-broken takes no packages" >&2; exit 2; }
+        dpkg --configure -a || true
+        exec apt-get -y \
+            -o Dpkg::Options::=--force-confdef \
+            -o Dpkg::Options::=--force-confold \
+            -o APT::Status-Fd=1 \
+            --fix-broken install
+        ;;
     source-add)
         do_source_add "$@"
         ;;

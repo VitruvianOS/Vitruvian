@@ -17,8 +17,9 @@ class BStringView;
 class BTextView;
 
 
-// Hardware Acceleration preferences: GL renderer priority list and the GPU
-// policy selector (Automatic, Power saving, High performance).
+// Hardware Acceleration preferences: GL renderer priority list, the GPU
+// policy selector (Automatic, Power saving, High performance) and, where the
+// hardware offers a choice, the display driver.
 class RenderingView : public BView {
 public:
 								RenderingView();
@@ -40,6 +41,10 @@ private:
 			void				_SavePolicy();
 			void				_RefreshStatus();
 
+			void				_LoadDriver();
+			void				_ApplyDriver(bool enable, bool acceptRealtime);
+			void				_DriverResult(BMessage* message);
+
 			BStringList			fPriority;
 
 			BListView*			fListView;
@@ -47,6 +52,7 @@ private:
 			BButton*			fDownButton;
 			BButton*			fResetButton;
 			BMenuField*			fPolicyField;
+			BMenuField*			fDriverField;
 			BStringView*		fStatusLabel;
 			BTextView*			fStatusView;
 };

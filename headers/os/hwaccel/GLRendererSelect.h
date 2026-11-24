@@ -33,7 +33,7 @@ extern const char* kOverrideKey;
 
 // The device fingerprint ("vsos-fp1"): arch | drm nodes | veno nodes |
 // PCI vendor:device pairs of display controllers. Documented format:
-//   vsos-fp1|<machine>|drm=<a,b>|veno=<a,b>|pci=<vvvv:dddd,...>
+//   vsos-fp1|<machine>|drm=<a,b>|veno=<a,b>|pci=<vvvv:dddd/driver,...>
 // Subsequent boots skip re-probing while this matches the cached stamp.
 extern const char* kStampPrefix;
 

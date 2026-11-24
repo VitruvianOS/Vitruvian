@@ -174,8 +174,8 @@ _ReadHexId(const char* path, unsigned int* value)
 }
 
 
-// Primary GPU PCI ids (class 0x03, display controller), lower-case hex
-// pairs joined by ','. Absent /sys or no display device yields "-".
+// Primary GPU PCI ids (class 0x03, display controller) with the bound
+// driver, lower-case hex pairs joined by ','. Absent /sys or no display device yields "-".
 static void
 _GpuPciIds(BString& ids)
 {
@@ -218,6 +218,20 @@ _GpuPciIds(BString& ids)
 		char pair[16];
 		snprintf(pair, sizeof(pair), "%04x:%04x", vendor, device);
 		ids << pair;
+
+		// The bound kernel driver, so a driver switch drops the cache.
+		char linkPath[PATH_MAX];
+		char target[PATH_MAX];
+		snprintf(linkPath, sizeof(linkPath),
+			"/sys/bus/pci/devices/%s/driver", entry->d_name);
+		ssize_t length = readlink(linkPath, target, sizeof(target) - 1);
+		const char* driver = "none";
+		if (length > 0) {
+			target[length] = '\0';
+			driver = strrchr(target, '/');
+			driver = driver != NULL ? driver + 1 : target;
+		}
+		ids << "/" << driver;
 	}
 
 	closedir(dir);
@@ -228,7 +242,7 @@ _GpuPciIds(BString& ids)
 
 
 // The documented fingerprint format:
-//   vsos-fp1|<machine>|drm=<a,b>|veno=<a,b>|pci=<vvvv:dddd,...>
+//   vsos-fp1|<machine>|drm=<a,b>|veno=<a,b>|pci=<vvvv:dddd/driver,...>
 static void
 _ComputeStamp(BString& stamp)
 {

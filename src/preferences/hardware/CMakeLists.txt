@@ -14,6 +14,7 @@ Application(Hardware
 	HwdataDatabase.cpp
 	MachineInfoReader.cpp
 	ModaliasParser.cpp
+	NvidiaDriver.cpp
 	OverclockTemperatures.cpp
 	OverclockView.cpp
 	RenderingView.cpp

@@ -77,6 +77,8 @@ install(PROGRAMS data/libexec/vos-nvidia-enable
   DESTINATION /usr/libexec/)
 install(PROGRAMS data/libexec/vos-nvidia-dkms-hook
   DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.nvidia.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)

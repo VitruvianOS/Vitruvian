@@ -6,19 +6,26 @@
 
 #include "RenderingView.h"
 
+#include <Alert.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <Invoker.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <ScrollView.h>
 #include <StringItem.h>
+#include <String.h>
 #include <StringView.h>
 #include <TextView.h>
 
+#include <string.h>
+
 #include <GLRendererPriority.h>
 #include <opengl/GlDeviceSelect.h>
+
+#include "NvidiaDriver.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -30,6 +37,8 @@ static const uint32 kMsgMoveDown = 'hwDn';
 static const uint32 kMsgReset = 'hwRs';
 static const uint32 kMsgSelectionChanged = 'hwSc';
 static const uint32 kMsgPolicyChanged = 'hwPc';
+static const uint32 kMsgDriverChanged = 'hwDc';
+static const uint32 kMsgDriverRealtimeAnswer = 'hwDr';
 
 
 RenderingView::RenderingView()
@@ -40,6 +49,7 @@ RenderingView::RenderingView()
 	fDownButton(NULL),
 	fResetButton(NULL),
 	fPolicyField(NULL),
+	fDriverField(NULL),
 	fStatusLabel(NULL),
 	fStatusView(NULL)
 {
@@ -74,6 +84,23 @@ RenderingView::RenderingView()
 		policyMenu);
 	fPolicyField->Menu()->SetTargetForItems(this);
 
+	BMenu* driverMenu = new BMenu(B_TRANSLATE("Driver"));
+	driverMenu->SetLabelFromMarked(true);
+	static const char* kDriverValues[2] = { "open", "nvidia" };
+	static const char* kDriverLabels[2] = {
+		B_TRANSLATE("Open source (nouveau)"),
+		B_TRANSLATE("NVIDIA proprietary")
+	};
+	for (int32 i = 0; i < 2; i++) {
+		BMessage* message = new BMessage(kMsgDriverChanged);
+		message->AddString("value", kDriverValues[i]);
+		driverMenu->AddItem(new BMenuItem(kDriverLabels[i], message));
+	}
+	fDriverField = new BMenuField("driver", B_TRANSLATE("Driver"),
+		driverMenu);
+	fDriverField->Menu()->SetTargetForItems(this);
+	fDriverField->Hide();
+
 	fStatusView = new BTextView("gpustatus");
 	fStatusView->MakeEditable(false);
 	fStatusView->MakeSelectable(false);
@@ -91,6 +118,7 @@ RenderingView::RenderingView()
 			.Add(fResetButton, 2, 0)
 		.End()
 		.Add(fPolicyField)
+		.Add(fDriverField)
 		.Add(statusScroll)
 		.Add(fStatusLabel)
 		.SetInsets(B_USE_DEFAULT_SPACING);
@@ -122,6 +150,7 @@ RenderingView::AttachedToWindow()
 	_LoadList();
 	_UpdateButtons();
 	_LoadPolicy();
+	_LoadDriver();
 	_RefreshStatus();
 }
 
@@ -151,6 +180,36 @@ RenderingView::MessageReceived(BMessage* message)
 		case kMsgPolicyChanged:
 			_SavePolicy();
 			_RefreshStatus();
+			break;
+		case kMsgDriverChanged:
+		{
+			bool enable = strcmp(message->GetString("value", ""), "nvidia")
+				== 0;
+			if (enable == NvidiaDriverEnabled())
+				break;
+			if (!enable || !NvidiaKernelIsRealtime()) {
+				_ApplyDriver(enable, false);
+				break;
+			}
+			BAlert* alert = new BAlert(B_TRANSLATE("NVIDIA driver"),
+				B_TRANSLATE("This kernel is a real-time kernel. NVIDIA does "
+					"not support real-time kernels, and the driver may not "
+					"work correctly on it."),
+				B_TRANSLATE("Cancel"), B_TRANSLATE("Install anyway"), NULL,
+				B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->SetShortcut(0, B_ESCAPE);
+			alert->Go(new BInvoker(new BMessage(kMsgDriverRealtimeAnswer),
+				this));
+			break;
+		}
+		case kMsgDriverRealtimeAnswer:
+			if (message->GetInt32("which", 0) == 1)
+				_ApplyDriver(true, true);
+			else
+				_LoadDriver();
+			break;
+		case kMsgNvidiaDriverResult:
+			_DriverResult(message);
 			break;
 		default:
 			BView::MessageReceived(message);
@@ -323,4 +382,70 @@ RenderingView::_RefreshStatus()
 	}
 
 	fStatusView->SetText(text.String());
+}
+
+
+void
+RenderingView::_LoadDriver()
+{
+	bool available = NvidiaDriverAvailable();
+	if (available && fDriverField->IsHidden())
+		fDriverField->Show();
+	else if (!available && !fDriverField->IsHidden())
+		fDriverField->Hide();
+
+	const char* value = NvidiaDriverEnabled() ? "nvidia" : "open";
+	BMenu* menu = fDriverField->Menu();
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (strcmp(item->Message()->GetString("value", ""), value) == 0) {
+			item->SetMarked(true);
+			break;
+		}
+	}
+}
+
+
+void
+RenderingView::_ApplyDriver(bool enable, bool acceptRealtime)
+{
+	if (NvidiaDriverApplyAsync(enable, acceptRealtime, BMessenger(this))
+			!= B_OK) {
+		fStatusLabel->SetText(B_TRANSLATE("Changing the driver failed."));
+		_LoadDriver();
+		return;
+	}
+
+	fDriverField->SetEnabled(false);
+	fStatusLabel->SetText(B_TRANSLATE(
+		"Changing the driver. This can take several minutes."));
+}
+
+
+void
+RenderingView::_DriverResult(BMessage* message)
+{
+	fDriverField->SetEnabled(true);
+	_LoadDriver();
+
+	if (message->GetBool("ok", false)) {
+		NvidiaDriverForgetRendererSelection();
+		fStatusLabel->SetText(B_TRANSLATE(
+			"The driver change takes effect after restart."));
+		return;
+	}
+
+	if (message->GetBool("cancelled", false)) {
+		fStatusLabel->SetText("");
+		return;
+	}
+
+	fStatusLabel->SetText(B_TRANSLATE("Changing the driver failed."));
+	BString text = message->GetString("text", "");
+	if (text.Length() == 0)
+		text = B_TRANSLATE("The helper did not report an error.");
+	BAlert* alert = new BAlert(B_TRANSLATE("NVIDIA driver"), text.String(),
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+	alert->SetShortcut(0, B_ESCAPE);
+	alert->Go(NULL);
 }

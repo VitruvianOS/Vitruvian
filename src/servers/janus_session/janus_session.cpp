@@ -1726,6 +1726,7 @@ static bigtime_t sXStarted = 0;
 static char   sXSockPath[64] = "";
 static char   sXLockPath[64] = "";
 static char   sXAuthPath[PATH_MAX] = "";
+static pid_t  sXAlertPid = -1;
 
 
 static bool
@@ -2005,6 +2006,41 @@ x_start_server()
 }
 
 
+// Tells the user why the X client got no display; one alert at a time.
+static void
+x_alert_missing_server()
+{
+	if (sXAlertPid > 0)
+		return;
+
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (!resolve_user_groups(&groups, &ngroups))
+		return;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		free(groups);
+		return;
+	}
+	if (pid == 0) {
+		apply_session_env("alert");
+		if (!drop_to_user(groups, ngroups))
+			_exit(126);
+		if (chdir(sUserHome) != 0 && chdir("/") != 0)
+			_exit(126);
+		execl("/bin/alert", "alert", "--warning",
+			"This application needs the X Window System, which is not "
+			"installed.\n\nInstall the X Window System component from the "
+			"Store, or run \"sudo apt install xvitruvian-launcher\" in "
+			"Terminal.", "OK", (char*)NULL);
+		_exit(127);
+	}
+	free(groups);
+	sXAlertPid = pid;
+}
+
+
 // A client connected: start the server, or refuse the client without one.
 static void
 x_client_pending()
@@ -2013,6 +2049,7 @@ x_client_pending()
 		x_start_server();
 		return;
 	}
+	x_alert_missing_server();
 	int flags = fcntl(sXSocket, F_GETFL);
 	fcntl(sXSocket, F_SETFL, flags | O_NONBLOCK);
 	int fd;
@@ -2432,6 +2469,10 @@ daemon_loop()
 		while ((reaped = waitpid(-1, &status, WNOHANG)) > 0) {
 			if (reaped == sXPid) {
 				sXPid = -1;
+				continue;
+			}
+			if (reaped == sXAlertPid) {
+				sXAlertPid = -1;
 				continue;
 			}
 			// A zero exit is the registrar's logout quit dance; only

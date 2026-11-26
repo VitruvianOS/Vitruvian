@@ -533,6 +533,15 @@ TTracker::MessageReceived(BMessage* message)
 			run_add_printer_panel();
 			break;
 
+		case kConnectToServer:
+		{
+			// Network shares preflet; same pattern as Add printer.
+			be_roster->Launch("application/x-vnd.vos-NetworkShares");
+			BMessenger shares("application/x-vnd.vos-NetworkShares");
+			shares.SendMessage('NSOA');
+			break;
+		}
+
 		case kMakeActivePrinter:
 			// get the current selection
 			SetDefaultPrinter(message);

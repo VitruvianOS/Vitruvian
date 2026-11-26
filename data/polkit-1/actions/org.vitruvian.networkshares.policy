@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Vitruvian</vendor>
+  <vendor_url>https://vitruvian.dev/</vendor_url>
+
+  <action id="org.vitruvian.networkshares.modify">
+    <description>Add, change, remove or mount V\OS network shares</description>
+    <message>Authentication is required to manage network shares.</message>
+    <!--
+      auth_admin_keep matches the Users preflet helper. The helper writes
+      systemd units and root-only credential files, so this must never
+      drop to allow_active=yes.
+    -->
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/vos-network-shares-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

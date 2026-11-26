@@ -16,6 +16,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Location
 	Media
 	Network
+	NetworkShares
 	Power
 	Printers
 	Screen
@@ -45,6 +46,7 @@ set(SYSTEM_PREFERENCES
 	Location
 	Media
 	Network
+	NetworkShares
 	Power
 	Printers
 	Screen

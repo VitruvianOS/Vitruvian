@@ -151,6 +151,12 @@ install(PROGRAMS data/libexec/vos-set-proxy
 install(FILES data/polkit-1/actions/org.vitruvian.network.proxy.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
+# Network shares preflet helper; writes systemd units and credential files.
+install(TARGETS vos-network-shares-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.networkshares.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+
 # Consulted only when /etc/vos/live exists; Installer strips it on commit.
 install(FILES data/sudoers.d/vos-live
   DESTINATION /etc/sudoers.d/

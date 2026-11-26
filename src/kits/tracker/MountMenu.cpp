@@ -232,6 +232,10 @@ MountMenu::AddDynamicItem(add_state)
 	BMenuItem* mountAll = new BMenuItem(B_TRANSLATE("Mount all"),
 		new BMessage(kMountAllNow));
 	AddItem(mountAll);
+	BMenuItem* connectServer = new BMenuItem(
+		B_TRANSLATE("Connect to server" B_UTF8_ELLIPSIS),
+		new BMessage(kConnectToServer));
+	AddItem(connectServer);
 	BMenuItem* mountSettings = new BMenuItem(
 		B_TRANSLATE("Settings" B_UTF8_ELLIPSIS),
 		new BMessage(kRunAutomounterSettings));

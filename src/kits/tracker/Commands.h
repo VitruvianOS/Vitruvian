@@ -84,6 +84,7 @@ const uint32 kRebuildAddOnMenus = 'Trba';
 const uint32 kEmptyTrash = 'Tetr';
 const uint32 kAddPrinter = 'Tadp';
 const uint32 kMakeActivePrinter = 'Tmap';
+const uint32 kConnectToServer = 'Tcsv';
 
 const uint32 kRunAutomounterSettings = 'Tram';
 

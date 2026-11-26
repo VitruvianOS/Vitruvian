@@ -2771,6 +2771,10 @@ BPoseView::MessageReceived(BMessage* message)
 			be_app->PostMessage(message);
 			break;
 
+		case kConnectToServer:
+			be_app->PostMessage(message);
+			break;
+
 		case kMakeActivePrinter:
 			SetDefaultPrinter();
 			break;

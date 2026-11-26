@@ -63,7 +63,8 @@ PipeWireBackend::PipeWireBackend()
 	fCore(NULL),
 	fRegistry(NULL),
 	fInitStatus(B_NO_INIT),
-	fMetadata(NULL)
+	fMetadata(NULL),
+	fMonoModule(NULL)
 {
 	memset(&fRegistryListener, 0, sizeof(fRegistryListener));
 	memset(&fMetadataListener, 0, sizeof(fMetadataListener));
@@ -2905,6 +2906,82 @@ PipeWireBackend::SetDeviceMute(uint32 deviceId, bool mute)
 	}
 
 	_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::SetDeviceMono(uint32 deviceId, bool mono)
+{
+	if (fContext == NULL || fCore == NULL)
+		return B_ERROR;
+
+	// Writing SPA_PROP_channelMap on the sink only pairs volumes with
+	// channels; it is not a downmix control. Route through a mono
+	// loopback sink instead: apps play into a MONO capture node and the
+	// module forwards the result to the real default sink.
+	if (mono) {
+		if (fMonoModule != NULL)
+			return B_OK;
+
+		uint32 defaultId = GetDefaultSinkId();
+		if (defaultId == 0)
+			defaultId = deviceId;
+
+		std::string targetName;
+		{
+			std::lock_guard<std::mutex> _(fDevicesLock);
+			for (auto& d : fDevices) {
+				if (d.id == defaultId && d.isSink) {
+					targetName = d.nodeName;
+					break;
+				}
+			}
+		}
+		if (targetName.empty())
+			return B_DEVICE_NOT_FOUND;
+
+		fMonoPreviousDefault = targetName;
+
+		std::string args = "capture.props={\n"
+			"  node.name=vos-mono-a11y-sink\n"
+			"  media.class=Audio/Sink\n"
+			"  audio.position=[ MONO ]\n"
+			"}\n"
+			"playback.props={\n"
+			"  node.name=vos-mono-a11y-playback\n"
+			"  node.target=" + targetName + "\n"
+			"}\n";
+
+		Lock();
+		fMonoModule = pw_context_load_module(fContext,
+			"libpipewire-module-loopback", args.c_str(), NULL);
+		if (fMonoModule != NULL && fMetadata != NULL)
+			SetDefaultMetadataNode(fMetadata, "default.audio.sink",
+				"vos-mono-a11y-sink");
+		Unlock();
+		if (fMonoModule == NULL)
+			return B_ERROR;
+
+		fDefaultSinkName = "vos-mono-a11y-sink";
+		_Broadcast(BMediaGraph::B_MEDIA_DEFAULTS_CHANGED);
+		return B_OK;
+	}
+
+	if (fMonoModule == NULL)
+		return B_OK;
+
+	Lock();
+	pw_impl_module_destroy(fMonoModule);
+	fMonoModule = NULL;
+	if (!fMonoPreviousDefault.empty() && fMetadata != NULL)
+		SetDefaultMetadataNode(fMetadata, "default.audio.sink",
+			fMonoPreviousDefault);
+	Unlock();
+
+	fDefaultSinkName = fMonoPreviousDefault;
+	fMonoPreviousDefault.clear();
+	_Broadcast(BMediaGraph::B_MEDIA_DEFAULTS_CHANGED);
 	return B_OK;
 }
 

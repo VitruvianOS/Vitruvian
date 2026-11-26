@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <pipewire/pipewire.h>
+#include <pipewire/impl-module.h>
 #include <pipewire/stream.h>
 
 #include <Messenger.h>
@@ -144,6 +145,7 @@ public:
 		status_t				SetDeviceVolume(uint32 deviceId,
 									const float* volumes, size_t count);
 		status_t				SetDeviceMute(uint32 deviceId, bool mute);
+		status_t				SetDeviceMono(uint32 deviceId, bool mono);
 
 		enum TestChannel {
 			kTestChannelFrontLeft	= 0,
@@ -476,6 +478,10 @@ private:
 				BMessenger			messenger;
 				int32				mask;
 			};
+			// Mono downmix: loopback module plus the default to restore.
+			struct pw_impl_module*	fMonoModule;
+			std::string				fMonoPreviousDefault;
+
 			std::mutex				fWatchersLock;
 			std::vector<Watcher>	fWatchers;
 

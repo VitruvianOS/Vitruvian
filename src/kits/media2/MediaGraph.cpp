@@ -917,6 +917,16 @@ BMediaGraph::SetDeviceMute(media_client_id id, bool mute)
 
 
 status_t
+BMediaGraph::SetDeviceMono(media_client_id id, bool mono)
+{
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+	return backend->SetDeviceMono((uint32)id, mono);
+}
+
+
+status_t
 BMediaGraph::GetDevicePorts(media_client_id id,
 	BObjectList<DevicePortInfo, true>* outPorts)
 {

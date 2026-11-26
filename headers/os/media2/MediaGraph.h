@@ -99,6 +99,8 @@ public:
 			status_t				SetDeviceChannelVolumes(media_client_id id,
 										const float* volumes, size_t count);
 			status_t				SetDeviceMute(media_client_id id, bool mute);
+			status_t				SetDeviceMono(media_client_id id,
+										bool mono);
 			status_t				SetDefaultDeviceVolume(float master);
 
 	struct DevicePortInfo {

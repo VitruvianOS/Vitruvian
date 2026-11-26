@@ -18,6 +18,7 @@
 
 #include "LinuxVolume.h"
 #include "KernelDebug.h"
+#include "errno_status.h"
 
 
 // "dir" may itself be "/" here: unlike Haiku, Vitruvian mounts the boot
@@ -79,11 +80,11 @@ _kern_read_statx(int fd, const char* path, bool traverseLink,
 	// Kernel/filesystem without statx (pre-4.11 or unusual FS): fall back to
 	// fstatat and synthesize a struct statx without STATX_BTIME.
 	if (errno != ENOSYS)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	struct stat st;
 	if (fstatat(fd, path, &st, flags) < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	memset(stx, 0, sizeof(*stx));
 	stx->stx_mask = STATX_BASIC_STATS;
@@ -174,7 +175,7 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 		(openMode & O_CREAT) != 0 ? perms : 0);
 
 	if (ret < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	return ret;
 }
@@ -185,7 +186,7 @@ _kern_close(int fd)
 {
 	CALLED();
 
-	return (close(fd) < 0) ? -errno : B_OK;
+	return (close(fd) < 0) ? vos_status_from_errno(errno) : B_OK;
 }
 
 
@@ -218,7 +219,7 @@ _kern_open_dir(int fd, const char* path)
 				return B_NOT_A_DIRECTORY;
 			return B_ENTRY_NOT_FOUND;
 		}
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	return ret;
@@ -235,7 +236,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 
 	int dirfd = _kern_open_dir(fd, "..");
 	if (dirfd < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	if (name != NULL) {
 		if (length <= 0) {
@@ -317,7 +318,7 @@ _kern_open_dir_virtual_ref(vref_id id, const char* name)
 
 	int ret = openat(fd, name, O_DIRECTORY | O_CLOEXEC);
 	close(fd);
-	return (ret < 0) ? -errno : ret;
+	return (ret < 0) ? vos_status_from_errno(errno) : ret;
 }
 
 
@@ -343,7 +344,7 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 	}
 
 	int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-	return (fd < 0) ? -errno : fd;
+	return (fd < 0) ? vos_status_from_errno(errno) : fd;
 }
 
 
@@ -367,7 +368,7 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 	if (retFd < 0 && errno == EISDIR)
 		retFd = openat(fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
 	close(fd);
-	return (retFd < 0) ? -errno : retFd;
+	return (retFd < 0) ? vos_status_from_errno(errno) : retFd;
 }
 
 
@@ -393,7 +394,7 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 	int fd = open_at_mode(AT_FDCWD, path, openMode, perms);
 	if (fd < 0 && errno == EISDIR)
 		fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
-	return (fd < 0) ? -errno : fd;
+	return (fd < 0) ? vos_status_from_errno(errno) : fd;
 }
 
 
@@ -441,7 +442,7 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	const char* mntDir = mountEntry.mount_point.String();
 	struct stat st;
 	if (stat(mntDir, &st) < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	if (node != st.st_ino)
 		return B_ENTRY_NOT_FOUND;
@@ -526,7 +527,7 @@ _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
 
 	ssize_t size = readlink(procPath, buffer, bufferSize - 1);
 	if (size < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	buffer[size] = '\0';
 
@@ -558,7 +559,7 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	char target[PATH_MAX];
 	ssize_t size = readlinkat(fd, path, target, sizeof(target));
 	if (size < 0)
-		return (errno == ENOENT && path[0] == '\0') ? B_BAD_VALUE : -errno;
+		return (errno == ENOENT && path[0] == '\0') ? B_BAD_VALUE : vos_status_from_errno(errno);
 
 	memcpy(buffer, target, (size_t)size < *_bufferSize ? (size_t)size : *_bufferSize);
 	if ((size_t)size < *_bufferSize)
@@ -576,7 +577,7 @@ _kern_fsync(int fd)
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	return (fsync(fd) < 0) ? -errno : B_OK ;
+	return (fsync(fd) < 0) ? vos_status_from_errno(errno) : B_OK ;
 }
 
 
@@ -602,13 +603,13 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		// When path is NULL we operate directly on the fd.
 		if (path == NULL) {
 			if (fchmod(fd, st->st_mode) < 0)
-				return (errno == EBADF) ? B_NOT_SUPPORTED : -errno;
+				return (errno == EBADF) ? B_NOT_SUPPORTED : vos_status_from_errno(errno);
 		} else {
 			if (fchmodat(fd, path, st->st_mode,
 					traverseLink ? 0 : AT_SYMLINK_NOFOLLOW) < 0) {
 				if (errno == EOPNOTSUPP || errno == ENOTSUP)
 					return B_NOT_SUPPORTED;
-				return -errno;
+				return vos_status_from_errno(errno);
 			}
 		}
 	}
@@ -620,17 +621,17 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 			if (fchown(fd, uid, gid) < 0) {
 				if (errno != EBADF || fchownat(fd, "", uid, gid,
 						AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW) < 0)
-					return -errno;
+					return vos_status_from_errno(errno);
 			}
 		} else {
 			if (fchownat(fd, path, uid, gid, flags) < 0)
-				return -errno;
+				return vos_status_from_errno(errno);
 		}
 	}
 
 	if (statMask & B_STAT_SIZE && S_ISREG(st->st_mode)) {
 		if (ftruncate64(fd, st->st_size) < 0)
-			return -errno;
+			return vos_status_from_errno(errno);
 	}
 
 	// Linux has no userspace API to set the inode birth time (btime). statx
@@ -663,11 +664,11 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 			if (futimens(fd, times) < 0) {
 				if (errno != EBADF
 					|| utimensat(fd, "", times, AT_EMPTY_PATH) < 0)
-					return -errno;
+					return vos_status_from_errno(errno);
 			}
 		} else {
 			if (utimensat(fd, path, times, flags) < 0)
-				return -errno;
+				return vos_status_from_errno(errno);
 		}
 	}
 
@@ -774,7 +775,7 @@ _kern_read_dents(int fd, void* buffer, size_t bufferSize)
 		return B_FILE_ERROR;
 
 	ssize_t ret = syscall(SYS_getdents64, fd, buffer, bufferSize);
-	return ret < 0 ? -errno : ret;
+	return ret < 0 ? vos_status_from_errno(errno) : ret;
 }
 
 
@@ -787,7 +788,7 @@ _kern_seek(int fd, off_t pos, int seekType)
 		return B_FILE_ERROR;
 
 	off_t size = lseek(fd, pos, seekType);
-	return (size < 0) ? -errno : size;
+	return (size < 0) ? vos_status_from_errno(errno) : size;
 }
 
 
@@ -801,7 +802,7 @@ _kern_read(int fd, off_t pos, void* buffer, size_t bufferSize)
 
 	ssize_t size = (pos < 0) ? read(fd, buffer, bufferSize)
 		: pread(fd, buffer, bufferSize, pos);
-	return (size < 0) ? -errno : size;
+	return (size < 0) ? vos_status_from_errno(errno) : size;
 }
 
 
@@ -815,7 +816,7 @@ _kern_write(int fd, off_t pos, const void* buffer, size_t bufferSize)
 
 	ssize_t size = (pos < 0) ? write(fd, buffer, bufferSize)
 		: pwrite(fd, buffer, bufferSize, pos);
-	return (size < 0) ? -errno : size;
+	return (size < 0) ? vos_status_from_errno(errno) : size;
 }
 
 
@@ -848,7 +849,7 @@ _kern_remove_dir(int fd, const char* path)
 		flags |= AT_EMPTY_PATH;
 
 	if (unlinkat(fd, path, flags) < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	return B_OK;
 }
@@ -871,7 +872,7 @@ _kern_rename(int oldDir, const char* oldPath,
 	if (newDir < 0)
 		newDir = AT_FDCWD;
 
-	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? -errno : B_OK;
+	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? vos_status_from_errno(errno) : B_OK;
 }
 
 
@@ -883,7 +884,7 @@ _kern_dup(int fd)
 		return B_FILE_ERROR;
 
 	int ret = dup(fd);
-	return (ret < 0) ? -errno : ret;
+	return (ret < 0) ? vos_status_from_errno(errno) : ret;
 }
 
 
@@ -895,7 +896,7 @@ _kern_create_dir(int fd, const char* path, int perms)
 	if (path == NULL)
 		return B_BAD_VALUE;
 
-	return (mkdirat((fd < 0 ? AT_FDCWD : fd), path, perms) < 0) ? -errno : B_OK;
+	return (mkdirat((fd < 0 ? AT_FDCWD : fd), path, perms) < 0) ? vos_status_from_errno(errno) : B_OK;
 }
 
 
@@ -908,7 +909,7 @@ _kern_create_symlink(int fd, const char* path,
 	if (path == NULL || toPath == NULL)
 		return B_BAD_VALUE;
 
-	return (symlinkat(toPath, (fd < 0 ? AT_FDCWD : fd), path) < 0) ? -errno : B_OK;
+	return (symlinkat(toPath, (fd < 0 ? AT_FDCWD : fd), path) < 0) ? vos_status_from_errno(errno) : B_OK;
 }
 
 
@@ -924,8 +925,8 @@ _kern_unlink(int fd, const char* path)
 		fd = AT_FDCWD;
 
 	if (path == NULL)
-		return (unlinkat(fd, "", AT_EMPTY_PATH) < 0) ? -errno : B_OK;
-	return (unlinkat(fd, path, 0) < 0) ? -errno : B_OK;
+		return (unlinkat(fd, "", AT_EMPTY_PATH) < 0) ? vos_status_from_errno(errno) : B_OK;
+	return (unlinkat(fd, path, 0) < 0) ? vos_status_from_errno(errno) : B_OK;
 }
 
 
@@ -943,11 +944,11 @@ _kern_lock_node(int fd)
 
 	if (fcntl(fd, F_SETLK, &lock) == -1) {
 		if (errno != EBADF)
-			return -errno;
+			return vos_status_from_errno(errno);
 
 		lock.l_type = F_RDLCK;
 		if (fcntl(fd, F_SETLK, &lock) == -1)
-			return -errno;
+			return vos_status_from_errno(errno);
 	}
 
 	return B_OK;
@@ -967,7 +968,7 @@ _kern_unlock_node(int fd)
 	lock.l_len = 0;
 
 	if (fcntl(fd, F_SETLK, &lock) == -1)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	return B_OK;
 }

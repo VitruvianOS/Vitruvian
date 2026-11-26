@@ -23,6 +23,7 @@
 
 #include "KernelDebug.h"
 #include "Team.h"
+#include "errno_status.h"
 
 #include "../../kernel/nexus/nexus/nexus.h"
 
@@ -77,7 +78,7 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 		close(targetFd);
 
 	if (ret < 0)
-		return -errno;
+		return vos_status_from_errno(errno);
 
 	return ret;
 }
@@ -141,7 +142,7 @@ fs_read_attr(int fd, const char *attribute, uint32 type,
 			return B_ENTRY_NOT_FOUND;
 		if (errno == ERANGE)
 			return B_BUFFER_OVERFLOW;
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	return (ssize_t)ret;
@@ -182,7 +183,7 @@ fs_write_attr(int fd, const char *attribute, uint32 type,
 	if (ret < 0) {
 		if (errno == ENODATA)
 			return B_ENTRY_NOT_FOUND;
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	return (ssize_t)ret;
@@ -218,7 +219,7 @@ fs_stat_attr(int fd, const char *attribute, struct attr_info *attrInfo)
 	if (ret < 0) {
 		if (errno == ENODATA)
 			return B_ENTRY_NOT_FOUND;
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	if (attrInfo != NULL) {
@@ -259,7 +260,7 @@ _kern_remove_attr(int fd, const char *attribute)
 	if (ret < 0) {
 		if (errno == ENODATA)
 			return B_ENTRY_NOT_FOUND;
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	return B_OK;
@@ -305,7 +306,7 @@ _kern_rename_attr(int fromFile, const char *fromName,
 	if (ret < 0) {
 		if (errno == ENODATA)
 			return B_ENTRY_NOT_FOUND;
-		return -errno;
+		return vos_status_from_errno(errno);
 	}
 
 	return B_OK;

@@ -8,6 +8,7 @@
 #include "KernelDebug.h"
 #include "syscalls.h"
 #include "Team.h"
+#include "errno_status.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
 
@@ -29,7 +30,7 @@ create_vref(int fd, vref_key* outKey)
 	struct nexus_vref_create req = { fd, 0, 0 };
 	long ret = nexus_io(nexus, NEXUS_VREF_CREATE, &req);
 	if (ret < 0)
-		return (vref_id)ret;
+		return vos_status_from_errno((int)ret);
 
 	*outKey = req.key;
 	return req.id;
@@ -49,7 +50,7 @@ acquire_vref(vref_id id, vref_key* outKey)
 	struct nexus_vref_op req = { id, 0 };
 	long ret = nexus_io(nexus, NEXUS_VREF_ACQUIRE, &req);
 	if (ret < 0)
-		return (status_t)ret;
+		return vos_status_from_errno((int)ret);
 
 	*outKey = req.key;
 	return B_OK;
@@ -71,7 +72,7 @@ open_vref(vref_id id, vref_key key)
 	struct nexus_vref_open req = { id, key, 0, -1 };
 	long ret = nexus_io(nexus, NEXUS_VREF_OPEN, &req);
 	if (ret < 0)
-		return (int)ret;
+		return vos_status_from_errno((int)ret);
 	return req.fd_out;
 }
 
@@ -108,7 +109,7 @@ release_vref(vref_id id, vref_key key)
 
 	struct nexus_vref_op req = { id, key };
 	long ret = nexus_io(nexus, NEXUS_VREF_RELEASE, &req);
-	return (status_t)ret;
+	return vos_status_from_errno((int)ret);
 }
 
 

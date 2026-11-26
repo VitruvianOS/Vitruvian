@@ -418,6 +418,10 @@ enum {
 	AS_INTERNAL_FLUSH_SWAP_CHAINS,
 	AS_GET_SWAP_CHAIN_POLICY,
 
+	// Appended at the end: inserting mid-enum renumbers later codes.
+	AS_SET_CURSOR_SCALE,
+	AS_GET_CURSOR_SCALE,
+
 	AS_LAST_CODE
 };
 

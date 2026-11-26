@@ -66,6 +66,9 @@ public:
 			bool				ShowAllDraggers() const;
 			bool				VariableRefresh() const;
 
+			// 0 means the cursor scale follows the default bold font size.
+			float				CursorScale() const;
+
 			int32				WorkspacesCount() const;
 			int32				WorkspacesColumns() const;
 			int32				WorkspacesRows() const;
@@ -104,6 +107,9 @@ public:
 
 			void				SetShowAllDraggers(bool show);
 			void				SetVariableRefresh(bool enable);
+
+			// scale <= 0 clears the override and returns to font-derived size.
+			void				SetCursorScale(float scale);
 
 			void				SetUIColors(const BMessage& colors,
 									bool* changed = NULL);

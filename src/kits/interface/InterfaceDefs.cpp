@@ -1469,6 +1469,38 @@ set_ui_colors(const BMessage* colors)
 }
 
 
+status_t
+set_cursor_scale(float scale)
+{
+	BPrivate::DesktopLink link;
+	if (link.InitCheck() != B_OK)
+		return link.InitCheck();
+
+	link.StartMessage(AS_SET_CURSOR_SCALE);
+	link.Attach<float>(scale);
+	status_t result = link.Flush();
+	return result;
+}
+
+
+status_t
+get_cursor_scale(float* scale)
+{
+	if (scale == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::DesktopLink link;
+	if (link.InitCheck() != B_OK)
+		return link.InitCheck();
+
+	link.StartMessage(AS_GET_CURSOR_SCALE);
+	int32 code = B_ERROR;
+	if (link.FlushWithReply(code) != B_OK || code != B_OK)
+		return B_ERROR;
+	return link.Read<float>(scale);
+}
+
+
 rgb_color
 tint_color(rgb_color color, float tint)
 {

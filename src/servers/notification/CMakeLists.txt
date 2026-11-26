@@ -11,7 +11,7 @@ Server(
 	RDEF notification_server.rdef
 )
 
-UsePrivateHeaders(notification_server app notification)
+UsePrivateHeaders(notification_server app notification interface)
 
 AddOn(
 	notification

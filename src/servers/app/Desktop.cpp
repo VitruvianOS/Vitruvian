@@ -732,7 +732,7 @@ Desktop::Init()
 	}
 #endif
 
-	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
+	fCursorManager.InitializeCursors(_CursorScale());
 
 	Screen* mainScreen = fVirtualScreen.ScreenByID(fMainScreenID);
 	const BRect mainFrame = mainScreen != NULL
@@ -2756,7 +2756,26 @@ Desktop::FontsChanged(Window* window)
 
 	RebuildAndRedrawAfterWindowChange(window, dirty);
 
-	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
+	fCursorManager.InitializeCursors(_CursorScale());
+}
+
+
+float
+Desktop::_CursorScale() const
+{
+	// Accessibility override wins; otherwise follow the default bold font.
+	float scale = fSettings->CursorScale();
+	if (scale > 0.0f)
+		return scale;
+	return fSettings->DefaultBoldFont().Size() / 12.0f;
+}
+
+
+void
+Desktop::RefreshCursors()
+{
+	AutoWriteLocker _(fWindowLock);
+	fCursorManager.InitializeCursors(_CursorScale());
 }
 
 

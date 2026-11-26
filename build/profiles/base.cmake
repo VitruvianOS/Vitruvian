@@ -28,6 +28,7 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 # Every filter runs on every input message, so this list is hot-path.
 # shortcut_catcher still stays out until its feature is wired up.
 set(INPUT_SERVER_FILTERS
+	a11y
 	switch_workspace
 	minimize_all
 	screen_saver

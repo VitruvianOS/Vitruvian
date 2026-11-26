@@ -27,6 +27,7 @@ private:
 			void				_Run();
 			void				_LoadSettings();
 			void				_SetIdleHint(bool idle);
+			void				_ApplyTemperatureSchedule();
 
 			Desktop*			fDesktop;
 			thread_id			fThread;

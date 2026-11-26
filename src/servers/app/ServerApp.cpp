@@ -1563,6 +1563,39 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_SET_CURSOR_SCALE:
+		{
+			STRACE(("ServerApp %s: Set Cursor Scale\n", Signature()));
+
+			float scale;
+			if (link.Read<float>(&scale) == B_OK) {
+				LockedDesktopSettings settings(fDesktop);
+				settings.SetCursorScale(scale);
+			}
+			fLink.StartMessage(B_OK);
+			fLink.Flush();
+			fDesktop->RefreshCursors();
+			break;
+		}
+
+		case AS_GET_CURSOR_SCALE:
+		{
+			STRACE(("ServerApp %s: Get Cursor Scale\n", Signature()));
+
+			if (fDesktop->LockSingleWindow()) {
+				DesktopSettings settings(fDesktop);
+
+				fLink.StartMessage(B_OK);
+				fLink.Attach<float>(settings.CursorScale());
+
+				fDesktop->UnlockSingleWindow();
+			} else
+				fLink.StartMessage(B_ERROR);
+
+			fLink.Flush();
+			break;
+		}
+
 		case AS_GET_SHOW_ALL_DRAGGERS:
 		{
 			STRACE(("ServerApp %s: Get Show All Draggers\n", Signature()));

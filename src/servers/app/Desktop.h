@@ -280,6 +280,10 @@ public:
 			void				ColorUpdated(Window* window, color_which which,
 									rgb_color color);
 
+			// Re-applies the cursor scale from DesktopSettings.
+			void				RefreshCursors();
+			float				_CursorScale() const;
+
 			void				SetWindowLook(Window* window, window_look look);
 			void				SetWindowFeel(Window* window, window_feel feel);
 			void				SetWindowFlags(Window* window, uint32 flags);

@@ -18,6 +18,7 @@
 #include <PropertyInfo.h>
 #include <Roster.h>
 
+#include "AccessibilitySettings.h"
 #include "NotificationWindow.h"
 
 
@@ -59,12 +60,13 @@ NotificationServer::MessageReceived(BMessage* message)
 			if (!fWindow)
 				return;
 
-			// Emit a sound for this event
+			// Emit a sound unless accessibility visual alerts replace it.
 			// Progress notifications only emit a sound if the visible percentage changed
 			int32 type = 0;
 			if (message->FindInt32("_type", &type) == B_OK) {
 				if (type < (int32)(sizeof(kSoundNames) / sizeof(const char*))
-					&& type != B_PROGRESS_NOTIFICATION)
+					&& type != B_PROGRESS_NOTIFICATION
+					&& !accessibility_visual_alerts_enabled())
 					system_beep(kSoundNames[type]);
 			}
 

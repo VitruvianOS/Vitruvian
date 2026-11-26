@@ -38,6 +38,8 @@ All rights reserved.
 
 #include <float.h>
 #include <stdlib.h>
+
+#include "AccessibilitySettings.h"
 #include <strings.h>
 
 #include <Bitmap.h>
@@ -1917,6 +1919,20 @@ TIconView::KeyDown(const char* /*bytes*/, int32 /*numBytes*/)
 void
 TIconView::AnimateIcon(const BBitmap* start, const BBitmap* end)
 {
+	if (accessibility_reduce_motion_enabled()) {
+		// Draw the end icon without the morph animation.
+		BRect destRect = fOffBitmap->Bounds();
+		fOffBitmap->Lock();
+		fOffView->SetDrawingMode(B_OP_COPY);
+		fOffView->FillRect(fOffView->Bounds());
+		fOffView->SetDrawingMode(B_OP_ALPHA);
+		fOffView->DrawBitmap(end, end->Bounds());
+		fOffView->Sync();
+		DrawBitmap(fOffBitmap, destRect);
+		fOffBitmap->Unlock();
+		return;
+	}
+
 	BRect centerRect(fManager->CenterRect());
 	BRect bounds = Bounds();
 	float off = 0;
@@ -2005,10 +2021,13 @@ TIconView::Update(int32 previous, int32 current,
 	BList* groupList = fManager->GroupList();
 	ASSERT(groupList);
 
+	bool reduceMotion = accessibility_reduce_motion_enabled();
+
 	// animate shrinking previously centered icon
 	TTeamGroup* previousGroup = (TTeamGroup*)groupList->ItemAt(previous);
 	ASSERT(previousGroup);
-	AnimateIcon(previousGroup->LargeIcon(), previousGroup->SmallIcon());
+	if (!reduceMotion)
+		AnimateIcon(previousGroup->LargeIcon(), previousGroup->SmallIcon());
 
 	int32 nslots = abs(previousSlot - currentSlot);
 	int32 stepSize = fManager->ScrollStep();
@@ -2032,7 +2051,8 @@ TIconView::Update(int32 previous, int32 current,
 	fAutoScrolling = true;
 	while (total < (nslots * fManager->SlotSize())) {
 		ScrollBy(scrollValue, 0);
-		snooze(1000);
+		if (!reduceMotion)
+			snooze(1000);
 		total += stepSize;
 		Window()->UpdateIfNeeded();
 	}

@@ -59,6 +59,7 @@ DesktopSettingsPrivate::_SetDefaults()
 	fAcceptFirstClick = true;
 	fShowAllDraggers = true;
 	fVariableRefresh = false;
+	fCursorScale = 0.0f;
 
 	// init scrollbar info
 	fScrollBarInfo.proportional = true;
@@ -225,6 +226,10 @@ DesktopSettingsPrivate::_Load()
 					== B_OK) {
 				fAcceptFirstClick = acceptFirstClick;
 			}
+
+			float cursorScale;
+			if (settings.FindFloat("cursor scale", &cursorScale) == B_OK)
+				fCursorScale = cursorScale;
 		}
 	}
 
@@ -424,6 +429,7 @@ DesktopSettingsPrivate::Save(uint32 mask)
 			settings.AddInt32("focus follows mouse mode",
 				(int32)fFocusFollowsMouseMode);
 			settings.AddBool("accept first click", fAcceptFirstClick);
+			settings.AddFloat("cursor scale", fCursorScale);
 
 			BFile file;
 			status = file.SetTo(path.Path(), B_CREATE_FILE | B_ERASE_FILE
@@ -658,6 +664,21 @@ bool
 DesktopSettingsPrivate::VariableRefresh() const
 {
 	return fVariableRefresh;
+}
+
+
+void
+DesktopSettingsPrivate::SetCursorScale(float scale)
+{
+	fCursorScale = scale;
+	Save(kMouseSettings);
+}
+
+
+float
+DesktopSettingsPrivate::CursorScale() const
+{
+	return fCursorScale;
 }
 
 
@@ -962,6 +983,13 @@ DesktopSettings::VariableRefresh() const
 }
 
 
+float
+DesktopSettings::CursorScale() const
+{
+	return fSettings->CursorScale();
+}
+
+
 int32
 DesktopSettings::WorkspacesCount() const
 {
@@ -1125,6 +1153,13 @@ LockedDesktopSettings::SetVariableRefresh(bool enable)
 	fSettings->SetVariableRefresh(enable);
 	if (fDesktop != NULL && fDesktop->HWInterface() != NULL)
 		fDesktop->HWInterface()->SetVariableRefresh(enable);
+}
+
+
+void
+LockedDesktopSettings::SetCursorScale(float scale)
+{
+	fSettings->SetCursorScale(scale);
 }
 
 

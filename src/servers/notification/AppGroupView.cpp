@@ -21,6 +21,7 @@
 
 #include "AppGroupView.h"
 
+#include "AccessibilitySettings.h"
 #include "NotificationWindow.h"
 #include "NotificationView.h"
 
@@ -225,7 +226,8 @@ AppGroupView::AddInfo(NotificationView* view)
 			if (id == fInfo[i]->MessageID()) {
 				NotificationView* oldView = fInfo[i];
 				if(view->ProgressPercent() != oldView->ProgressPercent()
-					&& view->ProgressPercent() >= 0) {
+					&& view->ProgressPercent() >= 0
+					&& !accessibility_visual_alerts_enabled()) {
 					system_beep("Notification progress");
 				}
 				oldView->RemoveSelf();
@@ -245,7 +247,8 @@ AppGroupView::AddInfo(NotificationView* view)
 	}
 
 	if (!found) {
-		if(view->ProgressPercent() >= 0)
+		if(view->ProgressPercent() >= 0
+			&& !accessibility_visual_alerts_enabled())
 			system_beep("Notification progress");
 		fInfo.push_back(view);
 	}

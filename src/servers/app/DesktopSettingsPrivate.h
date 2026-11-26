@@ -68,6 +68,10 @@ public:
 			void				SetVariableRefresh(bool enable);
 			bool				VariableRefresh() const;
 
+			// 0 means the cursor scale follows the default bold font size.
+			void				SetCursorScale(float scale);
+			float				CursorScale() const;
+
 			void				SetWorkspacesLayout(int32 columns,
 									int32 rows, bool save = true);
 			int32				WorkspacesCount() const;
@@ -121,6 +125,7 @@ private:
 			bool				fAcceptFirstClick;
 			bool				fShowAllDraggers;
 			bool				fVariableRefresh;
+			float				fCursorScale;
 			int32				fWorkspacesColumns;
 			int32				fWorkspacesRows;
 			BMessage			fWorkspaceMessages[kMaxWorkspaces];

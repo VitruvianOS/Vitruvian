@@ -1,4 +1,5 @@
 add_subdirectory(aboutsystem)
+add_subdirectory(accessibility_replicant)
 add_subdirectory(activitymonitor)
 add_subdirectory(autoraise)
 add_subdirectory(camera)

@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include <systemd/sd-bus.h>
 
@@ -19,6 +20,7 @@
 #include <Message.h>
 #include <Path.h>
 
+#include "AccessibilitySettings.h"
 #include "Desktop.h"
 #include "EventDispatcher.h"
 #include "HWInterface.h"
@@ -104,7 +106,27 @@ PowerManager::_Run()
 		bool idleHint = idle >= kIdleHintAfter;
 		if (idleHint != fIdleHint)
 			_SetIdleHint(idleHint);
+
+		_ApplyTemperatureSchedule();
 	}
+}
+
+
+void
+PowerManager::_ApplyTemperatureSchedule()
+{
+	accessibility_settings a11y;
+	accessibility_load_settings(a11y);
+
+	float kelvin;
+	if (!accessibility_temperature_for_now(a11y, time(NULL), kelvin))
+		return;
+
+	// Only apply when the target differs so DRM gamma is not rewritten
+	// every poll.
+	if (fDesktop->Temperature(0) == kelvin)
+		return;
+	fDesktop->SetTemperature(0, kelvin);
 }
 
 

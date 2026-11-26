@@ -1,5 +1,6 @@
 # Target names (cmake-unique): used for ImageInclude and DEPENDS
 set(SYSTEM_PREFERENCES_TARGETS
+	Accessibility
 	Accounts
 	Appearance
 	Backgrounds
@@ -30,6 +31,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 
 # Installed binary names (OUTPUT_NAME where it differs): used for symlinks and staging
 set(SYSTEM_PREFERENCES
+	Accessibility
 	Accounts
 	Appearance
 	Backgrounds

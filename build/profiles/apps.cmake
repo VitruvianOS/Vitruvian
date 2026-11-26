@@ -108,6 +108,7 @@ set(DESKBAR_APPLETS
 	Phone
 	PhoneSignal
 	PowerStatus
+	AccessibilityReplicant
 	ProcessController
 	Pulse
 )

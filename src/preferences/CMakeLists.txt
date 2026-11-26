@@ -1,5 +1,6 @@
 UsePrivateHeaders(GLOBAL app interface libroot kernel shared storage support system tracker)
 
+add_subdirectory(accessibility)
 add_subdirectory(accounts)
 add_subdirectory(appearance)
 add_subdirectory(backgrounds)

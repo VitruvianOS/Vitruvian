@@ -399,6 +399,7 @@ EOF
     { printf '# GRUB Environment Block\n'; head -c 999 /dev/zero | tr '\0' '#'; } \
         | sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null
 
+    _seal_machine_identity "$_root_dir"
     qemu_eject "$_root_dir" "$_arch"
 
     _assembly_cleanup
@@ -523,6 +524,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
 
     _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
 
+    _seal_machine_identity "$_chroot_dir"
     qemu_eject "$_chroot_dir" "$_arch"
 
     _iso_cleanup
@@ -846,6 +848,46 @@ ln -sf /dev/null /etc/systemd/system-generators/systemd-ssh-generator" || die "_
     sudo rm -f "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io"
 }
 
+# Last step before sealing: strip per-machine identity so no two installs share it,
+# and stage the unit that regenerates host keys before sshd on every boot path.
+_seal_machine_identity() {
+    _sr="$1"
+    sudo tee "$_sr/etc/systemd/system/vos-ssh-hostkeys.service" >/dev/null <<'KEYEOF'
+[Unit]
+Description=Generate missing SSH host keys
+DefaultDependencies=no
+After=local-fs.target
+Before=ssh.service ssh.socket sshd.service vos-sshdebug.service
+ConditionFileIsExecutable=/usr/bin/ssh-keygen
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/ssh-keygen -A
+
+[Install]
+WantedBy=ssh.service ssh.socket
+KEYEOF
+    sudo chmod 0644 "$_sr/etc/systemd/system/vos-ssh-hostkeys.service"
+    for _t in ssh.service ssh.socket; do
+        sudo mkdir -p "$_sr/etc/systemd/system/$_t.wants"
+        sudo ln -sf /etc/systemd/system/vos-ssh-hostkeys.service \
+            "$_sr/etc/systemd/system/$_t.wants/vos-ssh-hostkeys.service"
+    done
+    sudo mkdir -p "$_sr/etc/systemd/system/vos-sshdebug.service.wants"
+    sudo ln -sf /etc/systemd/system/vos-ssh-hostkeys.service \
+        "$_sr/etc/systemd/system/vos-sshdebug.service.wants/vos-ssh-hostkeys.service"
+
+    sudo rm -f "$_sr"/etc/ssh/ssh_host_*
+    sudo rm -f "$_sr/etc/machine-id" "$_sr/var/lib/dbus/machine-id" \
+        "$_sr/var/lib/systemd/random-seed"
+    sudo touch "$_sr/etc/machine-id"
+    sudo chmod 0444 "$_sr/etc/machine-id"
+    if [ -d "$_sr/var/lib/dbus" ]; then
+        sudo ln -s /etc/machine-id "$_sr/var/lib/dbus/machine-id"
+    fi
+}
+
 _debug_ssh_setup() {
     # Stage the opt-in debug SSH path: vos-sshdebug.service, inert unless the Debug GRUB entry sets
     # vitruvian.sshdebug. Shipped from staging since the vos deb carries it only when built Debug.
@@ -1155,6 +1197,7 @@ UUID=$_root_fsuuid  /               ext4  defaults,noatime  0 1
 UUID=$_boot_fsuuid  /boot/firmware  vfat  defaults          0 2
 FSTAB
 
+    _seal_machine_identity "$_mnt"
     qemu_eject "$_mnt" "$_board_arch"
 
     _loop_image_cleanup
@@ -1541,6 +1584,7 @@ FSTAB
         fi
     fi
 
+    _seal_machine_identity "$_mnt"
     qemu_eject "$_mnt" "$_board_arch"
 
     sudo umount -l "$_mnt/dev"  2>/dev/null || true

@@ -1,0 +1,78 @@
+/*
+ * Kit groups for the API reference. Headers are assigned to these by
+ * kitfilter.sh based on their headers/os/<dir>/ directory. The order here
+ * is the order in the sidebar.
+ */
+
+/** \defgroup kit_app Application Kit
+ *  \brief Applications, messaging, loopers, handlers and the roster.
+ */
+
+/** \defgroup kit_interface Interface Kit
+ *  \brief Windows, views, controls, layouts and drawing.
+ */
+
+/** \defgroup kit_storage Storage Kit
+ *  \brief Files, directories, entries, attributes, MIME types and queries.
+ */
+
+/** \defgroup kit_support Support Kit
+ *  \brief Basic types, strings, lists, archiving and data I/O.
+ */
+
+/** \defgroup kit_kernel Kernel Kit
+ *  \brief Threads, teams, ports, semaphores, areas and file system calls.
+ */
+
+/** \defgroup kit_locale Locale Kit
+ *  \brief Localization, catalogs, formatting and time zones.
+ */
+
+/** \defgroup kit_media2 Media Kit
+ *  \brief Audio and video playback, recording and media nodes.
+ */
+
+/** \defgroup kit_net Network Kit
+ *  \brief Network addresses, interfaces, sockets and URLs.
+ */
+
+/** \defgroup kit_game Game Kit
+ *  \brief Full screen drawing, sound playback and game input.
+ */
+
+/** \defgroup kit_translation Translation Kit
+ *  \brief Converting data between formats through translator add-ons.
+ */
+
+/** \defgroup kit_mail Mail Kit
+ *  \brief Mail encoding and decoding.
+ */
+
+/** \defgroup kit_bluetooth Bluetooth Kit
+ *  \brief Local and remote Bluetooth devices and device discovery.
+ */
+
+/** \defgroup kit_opengl OpenGL Kit
+ *  \brief OpenGL rendering in a view.
+ */
+
+/** \defgroup kit_experimental Package Kit (experimental)
+ *  \brief Package information, versions and the package roster.
+ */
+
+/** \defgroup kit_be_apps Tracker
+ *  \brief Interfaces for working with Tracker.
+ */
+
+/** \defgroup kit_add_ons Add-on Interfaces
+ *  \brief Base classes and hooks for input server, Tracker, screen saver and
+ *  other add-ons.
+ */
+
+/** \defgroup kit_drivers Device Drivers
+ *  \brief Driver, module and file system interfaces.
+ */
+
+/** \defgroup kit_arch Architecture
+ *  \brief CPU specific debugger definitions.
+ */

@@ -8,6 +8,7 @@
 
 #include "SetupPanels.h"
 
+#include <Bitmap.h>
 #include <Box.h>
 #include <Alert.h>
 #include <Application.h>
@@ -151,10 +152,26 @@ public:
 		:
 		BView("preview", B_WILL_DRAW | B_FRAME_EVENTS),
 		fPaper(0, 0, 595, 841),
-		fPrintable(18, 18, 577, 823)
+		fPrintable(18, 18, 577, 823),
+		fContent(NULL)
 	{
 		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-		SetExplicitMinSize(BSize(160, 160));
+		SetExplicitMinSize(BSize(200, 240));
+	}
+
+	virtual ~PreviewView()
+	{
+		delete fContent;
+	}
+
+	// Takes ownership of the bitmap.
+	void SetContent(BBitmap* content)
+	{
+		if (fContent != content) {
+			delete fContent;
+			fContent = content;
+		}
+		Invalidate();
 	}
 
 	void SetPaper(BRect paper, BRect printable)
@@ -192,13 +209,31 @@ public:
 			page.top + fPrintable.top * scale,
 			page.left + fPrintable.right * scale,
 			page.top + fPrintable.bottom * scale);
+
+		// What the document looks like, fitted inside the printable area and
+		// centred, the way applications place a page.
+		if (fContent != NULL && fContent->IsValid()) {
+			BRect source = fContent->Bounds();
+			float fit = printable.Width() / source.Width();
+			if (printable.Height() / source.Height() < fit)
+				fit = printable.Height() / source.Height();
+			BRect target(0, 0, source.Width() * fit, source.Height() * fit);
+			target.OffsetTo(
+				printable.left + (printable.Width() - target.Width()) / 2,
+				printable.top + (printable.Height() - target.Height()) / 2);
+			SetDrawingMode(B_OP_COPY);
+			DrawBitmap(fContent, source, target,
+				B_FILTER_BITMAP_BILINEAR);
+		}
+
 		SetHighColor(128, 128, 255);
 		StrokeRect(printable);
 	}
 
 private:
-	BRect	fPaper;
-	BRect	fPrintable;
+	BRect		fPaper;
+	BRect		fPrintable;
+	BBitmap*	fContent;
 };
 
 
@@ -226,7 +261,15 @@ PageSetupWindow::PageSetupWindow(BMessage* settings, bool* canceled,
 	const char* media = NULL;
 	if (settings != NULL) {
 		settings->FindString("media", &media);
-		settings->FindInt32(PSRV_FIELD_ORIENTATION, &fOrientation);
+		if (settings->FindInt32(PSRV_FIELD_ORIENTATION, &fOrientation)
+				!= B_OK) {
+			// Nothing chosen yet: follow the document, if the application
+			// told us what it looks like.
+			BRect content;
+			if (settings->FindRect(PRINTCUPS_FIELD_CONTENT_RECT, &content)
+					== B_OK && content.Width() > content.Height())
+				fOrientation = 1;
+		}
 	}
 
 	fPaperMenu = new BPopUpMenu("paper");
@@ -259,6 +302,16 @@ PageSetupWindow::PageSetupWindow(BMessage* settings, bool* canceled,
 		B_TRANSLATE("Orientation:"), fOrientationMenu);
 
 	fPreview = new PreviewView();
+	BMessage archivedPreview;
+	if (settings != NULL
+		&& settings->FindMessage(PRINTCUPS_FIELD_PREVIEW, &archivedPreview)
+			== B_OK) {
+		BBitmap* content = new BBitmap(&archivedPreview);
+		if (content->IsValid())
+			fPreview->SetContent(content);
+		else
+			delete content;
+	}
 	BBox* box = new BBox("previewBox");
 	box->SetLabel(B_TRANSLATE("Preview"));
 	BLayoutBuilder::Group<>(box, B_VERTICAL)
@@ -350,6 +403,12 @@ PageSetupWindow::_Release(bool canceled)
 		return;
 
 	fFinished = true;
+	// The hints are only for this dialog; keep them out of the settings the
+	// application stores and the spool file carries.
+	if (fSettings != NULL) {
+		fSettings->RemoveName(PRINTCUPS_FIELD_PREVIEW);
+		fSettings->RemoveName(PRINTCUPS_FIELD_CONTENT_RECT);
+	}
 	*fCanceled = canceled;
 	if (fDone >= 0) {
 		sem_id id = fDone;

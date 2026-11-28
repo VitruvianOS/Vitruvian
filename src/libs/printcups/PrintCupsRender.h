@@ -28,9 +28,13 @@ struct SpooledPage {
 };
 
 
+// offsetX/offsetY: where the printable area starts on the paper (the page
+// margins). Apps draw into the printable rect and hand BPrintJob::DrawView()
+// a position relative to its top left, so pictures are placed at
+// offset + where.
 extern status_t	printcups_render_pages_pdf(const char* pdfPath, BList* pages,
 					float paperWidth, float paperHeight, float scale,
-					const char* title);
+					const char* title, float offsetX = 0, float offsetY = 0);
 extern status_t	printcups_render_bitmap_fallback(const char* pdfPath,
 					BBitmap* bitmap, float paperWidth, float paperHeight,
 					float scale);

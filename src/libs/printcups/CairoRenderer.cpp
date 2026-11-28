@@ -23,6 +23,10 @@
 #include <cairo/cairo.h>
 #include <cairo/cairo-pdf.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <PicturePlayer.h>
 #include <Shape.h>
 
@@ -30,9 +34,25 @@
 #include "printcups.h"
 
 
+// What PushState()/PopState() save besides cairo's own state.
+struct SavedState {
+	rgb_color	foreColor;
+	rgb_color	backColor;
+	float		penSize;
+	drawing_mode drawingMode;
+	float		fontSize;
+	pattern		stipple;
+	float		scale;
+};
+
+static const int kMaxSavedStates = 32;
+
+
 struct CairoState {
 	cairo_t*	cairo;
+	// Device scale times the scale the picture asked for with SetScale().
 	float		scale;
+	float		baseScale;
 	float		penX;
 	float		penY;
 	float		originX;
@@ -42,6 +62,9 @@ struct CairoState {
 	float		penSize;
 	drawing_mode drawingMode;
 	float		fontSize;
+	pattern		stipple;
+	SavedState	saved[kMaxSavedStates];
+	int			savedCount;
 };
 
 
@@ -55,11 +78,51 @@ ToX(const CairoState* s, float x)
 static double
 ToY(const CairoState* s, float y)
 {
-	// BeOS y grows downward; the page transform flips y at show_page time.
+	// BeOS y grows downward, and so does a cairo PDF surface (origin at the
+	// top left): no flip anywhere.
 	return (y - s->originY) * s->scale;
 }
 
 
+// Paint for fills and strokes: the pattern picks the high colour (solid
+// high), the low colour (solid low) or a blend of the two. Fills such as
+// FillRect(rect, B_SOLID_LOW) clear a background; painting them in the high
+// colour instead blacks the page out.
+static void
+SetSourcePaint(CairoState* s)
+{
+	int bits = 0;
+	for (int i = 0; i < 8; i++) {
+		for (int bit = 0; bit < 8; bit++) {
+			if ((s->stipple.data[i] & (1 << bit)) != 0)
+				bits++;
+		}
+	}
+
+	if (bits == 0) {
+		cairo_set_source_rgba(s->cairo,
+			s->backColor.red / 255.0, s->backColor.green / 255.0,
+			s->backColor.blue / 255.0, s->backColor.alpha / 255.0);
+		return;
+	}
+	if (bits == 64) {
+		cairo_set_source_rgba(s->cairo,
+			s->foreColor.red / 255.0, s->foreColor.green / 255.0,
+			s->foreColor.blue / 255.0, s->foreColor.alpha / 255.0);
+		return;
+	}
+
+	double high = bits / 64.0;
+	double low = 1.0 - high;
+	cairo_set_source_rgba(s->cairo,
+		(s->foreColor.red * high + s->backColor.red * low) / 255.0,
+		(s->foreColor.green * high + s->backColor.green * low) / 255.0,
+		(s->foreColor.blue * high + s->backColor.blue * low) / 255.0,
+		1.0);
+}
+
+
+// Text is always drawn in the high colour; the pattern does not apply.
 static void
 SetSourceFore(CairoState* s)
 {
@@ -91,7 +154,7 @@ static void
 cb_stroke_line(void* user, BPoint start, BPoint end)
 {
 	CairoState* s = static_cast<CairoState*>(user);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_move_to(s->cairo, ToX(s, start.x), ToY(s, start.y));
 	cairo_line_to(s->cairo, ToX(s, end.x), ToY(s, end.y));
@@ -107,7 +170,7 @@ cb_stroke_rect(void* user, BRect rect)
 	CairoState* s = static_cast<CairoState*>(user);
 	cairo_rectangle(s->cairo, ToX(s, rect.left), ToY(s, rect.top),
 		rect.Width() * s->scale, rect.Height() * s->scale);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -119,7 +182,7 @@ cb_fill_rect(void* user, BRect rect)
 	CairoState* s = static_cast<CairoState*>(user);
 	cairo_rectangle(s->cairo, ToX(s, rect.left), ToY(s, rect.top),
 		rect.Width() * s->scale, rect.Height() * s->scale);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
 }
 
@@ -150,7 +213,7 @@ cb_stroke_round_rect(void* user, BRect rect, BPoint radii)
 	cairo_arc(s->cairo, x + w - rx, y + h - ry, rx, 0, 0.5 * M_PI);
 	cairo_arc(s->cairo, x + rx, y + h - ry, rx, 0.5 * M_PI, M_PI);
 	cairo_close_path(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -183,7 +246,7 @@ cb_fill_round_rect(void* user, BRect rect, BPoint radii)
 	cairo_arc(s->cairo, x + w - rx, y + h - ry, rx, 0, 0.5 * M_PI);
 	cairo_arc(s->cairo, x + rx, y + h - ry, rx, 0.5 * M_PI, M_PI);
 	cairo_close_path(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
 }
 
@@ -197,7 +260,7 @@ cb_stroke_bezier(void* user, BPoint* control)
 		ToX(s, control[1].x), ToY(s, control[1].y),
 		ToX(s, control[2].x), ToY(s, control[2].y),
 		ToX(s, control[3].x), ToY(s, control[3].y));
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -212,7 +275,7 @@ cb_fill_bezier(void* user, BPoint* control)
 		ToX(s, control[1].x), ToY(s, control[1].y),
 		ToX(s, control[2].x), ToY(s, control[2].y),
 		ToX(s, control[3].x), ToY(s, control[3].y));
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
 }
 
@@ -234,7 +297,7 @@ cb_stroke_arc(void* user, BPoint center, BPoint radii, float startTheta,
 	cairo_arc(s->cairo, 0, 0, 1.0, cairoStart * M_PI / 180.0,
 		(cairoStart + cairoExtent) * M_PI / 180.0);
 	cairo_restore(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -257,7 +320,7 @@ cb_fill_arc(void* user, BPoint center, BPoint radii, float startTheta,
 	cairo_arc(s->cairo, 0, 0, 1.0, cairoStart * M_PI / 180.0,
 		(cairoStart + cairoExtent) * M_PI / 180.0);
 	cairo_restore(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
 }
 
@@ -275,7 +338,7 @@ cb_stroke_ellipse(void* user, BPoint center, BPoint radii)
 	cairo_scale(s->cairo, rx, ry);
 	cairo_arc(s->cairo, 0, 0, 1.0, 0, 2 * M_PI);
 	cairo_restore(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -294,7 +357,7 @@ cb_fill_ellipse(void* user, BPoint center, BPoint radii)
 	cairo_scale(s->cairo, rx, ry);
 	cairo_arc(s->cairo, 0, 0, 1.0, 0, 2 * M_PI);
 	cairo_restore(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
 }
 
@@ -312,7 +375,7 @@ cb_stroke_polygon(void* user, int32 numPoints, const BPoint* points,
 		cairo_line_to(s->cairo, ToX(s, points[i].x), ToY(s, points[i].y));
 	if (isClosed)
 		cairo_close_path(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_set_line_width(s->cairo, s->penSize * s->scale);
 	cairo_stroke(s->cairo);
 }
@@ -331,8 +394,15 @@ cb_fill_polygon(void* user, int32 numPoints, const BPoint* points,
 		cairo_line_to(s->cairo, ToX(s, points[i].x), ToY(s, points[i].y));
 	if (isClosed)
 		cairo_close_path(s->cairo);
-	SetSourceFore(s);
+	SetSourcePaint(s);
 	cairo_fill(s->cairo);
+}
+
+
+static void
+SetTextFont(CairoState* s)
+{
+	cairo_set_font_size(s->cairo, s->fontSize * s->scale);
 }
 
 
@@ -345,7 +415,7 @@ cb_draw_string(void* user, const char* string, float deltax, float deltay)
 
 	cairo_select_font_face(s->cairo, "sans-serif",
 		CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(s->cairo, s->fontSize * s->scale);
+	SetTextFont(s);
 	SetSourceFore(s);
 	cairo_move_to(s->cairo, ToX(s, s->penX), ToY(s, s->penY));
 	cairo_show_text(s->cairo, string);
@@ -435,8 +505,6 @@ cb_draw_pixels(void* user, BRect src, BRect dest, int32 width, int32 height,
 	cairo_translate(s->cairo, ToX(s, dest.left), ToY(s, dest.top));
 	cairo_scale(s->cairo, (dest.Width() * s->scale) / width,
 		(dest.Height() * s->scale) / height);
-	cairo_translate(s->cairo, 0, height);
-	cairo_scale(s->cairo, 1, -1);
 	cairo_set_source_surface(s->cairo, image, 0, 0);
 	cairo_paint(s->cairo);
 	cairo_restore(s->cairo);
@@ -466,6 +534,16 @@ cb_push_state(void* user)
 {
 	CairoState* s = static_cast<CairoState*>(user);
 	cairo_save(s->cairo);
+	if (s->savedCount < kMaxSavedStates) {
+		SavedState& saved = s->saved[s->savedCount++];
+		saved.foreColor = s->foreColor;
+		saved.backColor = s->backColor;
+		saved.penSize = s->penSize;
+		saved.drawingMode = s->drawingMode;
+		saved.fontSize = s->fontSize;
+		saved.stipple = s->stipple;
+		saved.scale = s->scale;
+	}
 }
 
 
@@ -474,6 +552,16 @@ cb_pop_state(void* user)
 {
 	CairoState* s = static_cast<CairoState*>(user);
 	cairo_restore(s->cairo);
+	if (s->savedCount > 0) {
+		const SavedState& saved = s->saved[--s->savedCount];
+		s->foreColor = saved.foreColor;
+		s->backColor = saved.backColor;
+		s->penSize = saved.penSize;
+		s->drawingMode = saved.drawingMode;
+		s->fontSize = saved.fontSize;
+		s->stipple = saved.stipple;
+		s->scale = saved.scale;
+	}
 }
 
 
@@ -586,15 +674,19 @@ cb_set_back_color(void* user, rgb_color color)
 static void
 cb_set_stipple_pattern(void* user, pattern p)
 {
-	(void)user;
-	(void)p;
+	CairoState* s = static_cast<CairoState*>(user);
+	s->stipple = p;
 }
 
 
 static void
-cb_set_scale(void* /*user*/, float /*scale*/)
+cb_set_scale(void* user, float scale)
 {
-	// Picture scale is handled by the page transform; ignore per-picture.
+	// Apps such as BePDF draw at a higher resolution and shrink the view
+	// with SetScale(1 / n); every coordinate and size that follows is in
+	// that scaled space.
+	CairoState* s = static_cast<CairoState*>(user);
+	s->scale = s->baseScale * (scale > 0 ? scale : 1.0f);
 }
 
 
@@ -764,7 +856,7 @@ cb_draw_string_locations(void* user, const char* string,
 
 	cairo_select_font_face(s->cairo, "sans-serif",
 		CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(s->cairo, s->fontSize * s->scale);
+	SetTextFont(s);
 	SetSourceFore(s);
 	for (size_t i = 0; i < locationCount; i++) {
 		cairo_move_to(s->cairo, ToX(s, locations[i].x), ToY(s, locations[i].y));
@@ -1044,6 +1136,7 @@ InitCairoState(CairoState* s, cairo_t* cairo, float scale)
 	*s = CairoState();
 	s->cairo = cairo;
 	s->scale = scale > 0 ? scale : 1.0f;
+	s->baseScale = s->scale;
 	s->foreColor.red = 0;
 	s->foreColor.green = 0;
 	s->foreColor.blue = 0;
@@ -1055,12 +1148,15 @@ InitCairoState(CairoState* s, cairo_t* cairo, float scale)
 	s->penSize = 1.0f;
 	s->drawingMode = B_OP_COPY;
 	s->fontSize = 12.0f;
+	s->stipple = B_SOLID_HIGH;
+	s->savedCount = 0;
 }
 
 
 status_t
 printcups_render_pages_pdf(const char* pdfPath, BList* pages,
-	float paperWidth, float paperHeight, float scale, const char* title)
+	float paperWidth, float paperHeight, float scale, const char* title,
+	float offsetX, float offsetY)
 {
 	if (pdfPath == NULL || pages == NULL)
 		return B_BAD_VALUE;
@@ -1106,10 +1202,9 @@ printcups_render_pages_pdf(const char* pdfPath, BList* pages,
 		if (i > 0)
 			cairo_show_page(cairo);
 
-		// Flip BeOS y-down into PDF y-up.
+		// The callbacks apply `scale` themselves; cairo's PDF surface is
+		// already y-down like BeOS, so the page needs no transform.
 		cairo_save(cairo);
-		cairo_translate(cairo, 0, paperHeight * scale);
-		cairo_scale(cairo, scale, -scale);
 
 		cairo_set_source_rgb(cairo, 1, 1, 1);
 		cairo_paint(cairo);
@@ -1124,8 +1219,11 @@ printcups_render_pages_pdf(const char* pdfPath, BList* pages,
 				continue;
 
 			cairo_save(cairo);
-			cairo_translate(cairo, pic->where.x * scale, pic->where.y * scale);
+			cairo_translate(cairo, (offsetX + pic->where.x) * scale,
+				(offsetY + pic->where.y) * scale);
 
+			state.scale = state.baseScale;
+			state.savedCount = 0;
 			state.originX = 0;
 			state.originY = 0;
 			state.penX = 0;
@@ -1166,8 +1264,7 @@ printcups_render_bitmap_fallback(const char* pdfPath, BBitmap* bitmap,
 	cairo_t* cairo = cairo_create(surface);
 	cairo_show_page(cairo);
 	cairo_save(cairo);
-	cairo_translate(cairo, 0, paperHeight * scale);
-	cairo_scale(cairo, scale, -scale);
+	cairo_scale(cairo, scale, scale);
 
 	int32 w = bitmap->Bounds().IntegerWidth() + 1;
 	int32 h = bitmap->Bounds().IntegerHeight() + 1;
